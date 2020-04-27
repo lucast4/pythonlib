@@ -10,6 +10,7 @@ def aggreg(df, group, values, aggmethod=["mean","std"]):
 	e.g., group = ["worker_model", "worker_dat"]
 	e.g. values = ["score", "cond_is_same"]
 	NOTE: will change name of balues filed, e.g. to score_mean.
+	OBSOLETE - USE aggregGeneral]
 	"""
 	# this version did not deal with non-numeric stuff that would liek to preset
 	# but was useful in taking both mean and std.
@@ -24,6 +25,7 @@ def aggregMean(df, group, values, nonnumercols=[]):
 	e.g., group = ["worker_model", "worker_dat"]
 	e.g. values = ["score", "cond_is_same"]
 	e.g. nonnumercols=["sequence", "name"] i.e., will take the first item it encounters.
+	[OBSOLETE - USE aggregGeneral]
 	"""
 	agg = {c:"mean" for c in df.columns if c in values }
 	agg.update({c:"first" for c in df.columns if c in nonnumercols})
@@ -61,3 +63,8 @@ def aggregGeneral(df, group, values, nonnumercols=[], aggmethod=["mean"]):
 
 def df2dict(df):
 	return df.to_dict("records")
+
+
+def applyFunctionToAllRows(df, F, newcolname="newcol"):
+    """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
+    return df.merge(df.apply(lambda x: F(x), axis=1).reset_index(), left_index=True, right_index=True).rename(columns={0:newcolname})

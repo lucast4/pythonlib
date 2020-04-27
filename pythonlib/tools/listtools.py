@@ -45,3 +45,16 @@ def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
 def concatStringsInList(mylist):
     """given list """
     pass
+
+
+def tabulate_list(l):
+    """outputs dict with unique entries as keys, and num
+    occurances as entries
+    like tabulate() in matlab"""
+    l_unique = set(l);
+    outdict = {}
+    for key in l_unique:
+        outdict[key] = len([ll for ll in l if ll==key])
+    return outdict
+
+
