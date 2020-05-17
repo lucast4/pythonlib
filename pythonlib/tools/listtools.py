@@ -39,6 +39,10 @@ def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
 #     print(permutedlists)
    
     return permutedlists
+if False:
+    # mylist = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T']
+    mylist = ["0","1","2","3","4","5", "6", "7", "8"]
+    permuteRand(mylist, 7*720)
 
 
 

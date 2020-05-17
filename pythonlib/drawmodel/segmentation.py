@@ -1,6 +1,7 @@
 """ useful code to take strokes (or trialstrokes in a datflat object) and segment into useful things.
 used extensively for human drawgood - cogsci paper."""
 import numpy as np
+import math
 from ..tools.stroketools import getOnOff
 
 def getxgrid(datseg_single, appendExtreme=False):

@@ -68,3 +68,5 @@ def df2dict(df):
 def applyFunctionToAllRows(df, F, newcolname="newcol"):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
     return df.merge(df.apply(lambda x: F(x), axis=1).reset_index(), left_index=True, right_index=True).rename(columns={0:newcolname})
+
+

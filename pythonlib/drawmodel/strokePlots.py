@@ -1,15 +1,20 @@
 """ things that take in strokes (list of np arrays) and plots """
 import numpy as np
 import matplotlib.pyplot as plt
+from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
-    add_stroke_number=True, markersize=6, pcol=None, alpha=0.55):
+    add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
+    interpN=None):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
     to plot (e.g., can plot timelapse running this multiple times..)
     - pcol, overwrites any gradation in color with one color
+    - interpN = 20, then interpolates to fill each stroke.
     """
+    
+    from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate
     # this code to deal with single dot problems.
     for i, s in enumerate(strokes):
         if len(s.shape)==1:
@@ -23,6 +28,13 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     # convert all times to the mean time for each stroek, so that is diff color
     import copy
     strokes2 = copy.deepcopy(strokes)
+
+    # append fake times
+    if strokes2[0].shape[1]<3:
+        strokes2 = fakeTimesteps(strokes2, None, "in_order")
+    if not interpN is None:
+        strokes2 =strokesInterpolate(strokes2, interpN)
+
     CMAP = "plasma"
     if plotver=="strokes":
         # make color reflect stroke number
@@ -61,7 +73,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         strokescat = strokescat[:int(np.ceil(fraction_of_stroke * T)),:]
         
         # get timepoints
-        tvals = np.array([ss for s in strokes for ss in s])[:,2]
+        tvals = np.array([ss for s in strokes2 for ss in s])[:,2]
         timeon = tvals[0]
         timeoff = tvals[int(np.ceil(fraction_of_stroke * T))-1]
     # print(strokescat)
@@ -76,7 +88,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if add_stroke_number:
         for i, s in enumerate(strokes2):
             ax.plot(s[0,0], s[0,1], 'o', color=[0.7, 0.7, 0.7], markersize=11)
-            ax.text(s[0,0]-10, s[0,1]-11, f"{i+1}", color='k', fontsize=12)
+            # ax.text(s[0,0]-10, s[0,1]-11, f"{i+1}", color='k', fontsize=12)
+            ax.text(s[0,0], s[0,1], f"{i+1}", color='k', fontsize=12)
     if not isinstance(fraction_of_stroke, list):
         return (timeon, timeoff)
 

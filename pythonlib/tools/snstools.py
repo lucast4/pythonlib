@@ -8,3 +8,10 @@ def rotateLabel(ax, rotation=45, horizontalalignment="right"):
     for a in ax.axes.flat:
         a.set_xticklabels(a.get_xticklabels(), rotation=rotation, 
             horizontalalignment=horizontalalignment)
+
+
+def addLabel(ax):
+    """ seaborn, maek sure to add labels for catplot"""
+    for a in ax.axes.flat:
+        a.set_xticklabels(a.get_xticklabels(), rotation=45, 
+            horizontalalignment="right")
