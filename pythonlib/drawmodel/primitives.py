@@ -15,7 +15,6 @@ from itertools import permutations
 from matplotlib import pyplot as plt
 import imageio
 import random
-print("dfgasdgdgdfg")
 if False:
         from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
         matplotlib.use('TkAgg')
