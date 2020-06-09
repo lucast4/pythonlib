@@ -14,6 +14,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     - interpN = 20, then interpolates to fill each stroke.
     """
     
+    if len(strokes)==0:
+        print("[pythonlib/plotDatStrokes] EMPTY STROKES - not plotting")
+        return 
+        
     from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate
     # this code to deal with single dot problems.
     for i, s in enumerate(strokes):
