@@ -80,8 +80,22 @@ def get_angle(v):
         a = 2*pi-a
     return a
 
+def angle_diff(a1, a2):
+    """ get difference between two angles.
+    will give smallest absolute difference.
+    - a1 and a2 in radians. can be - or +
+    """
+    from math import pi
+    
+    a = abs(a1-a2)
+    a = a%(2*pi)
+    if a <= pi:
+        return a
+    elif a > pi:
+        assert a <= 2*pi
+        return 2*pi - a
 
-def modHausdorffDistance(itemA, itemB, dims=[0,1]):
+def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max"):
     """
     Modified Hausdorff Distance.
 
@@ -102,7 +116,19 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1]):
         D = cdist(itemA, itemB)
     mindist_A = D.min(axis=1)
     mindist_B = D.min(axis=0)
-    mean_A = np.mean(mindist_A)
-    mean_B = np.mean(mindist_B)
-    dist = max(mean_A,mean_B)
+    if ver1=="mean":
+        mean_A = np.mean(mindist_A)
+        mean_B = np.mean(mindist_B)
+    elif ver1=="median":
+        mean_A = np.median(mindist_A)
+        mean_B = np.median(mindist_B)
+    elif ver1=="max":
+        mean_A = np.max(mindist_A)
+        mean_B = np.max(mindist_B)
+
+    if ver2=="mean":
+        dist = np.mean((mean_A,mean_B))
+    elif ver2=="max":
+        dist = np.max((mean_A,mean_B))
     return dist
+

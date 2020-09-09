@@ -39,7 +39,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if not interpN is None:
         strokes2 =strokesInterpolate(strokes2, interpN)
 
-    CMAP = "plasma"
+    CMAP = "jet"
+    # CMAP = "plasma"
+    # CMAP = "winter"
+    ax.set_facecolor((0.9, 0.9, 0.9))
     if plotver=="strokes":
         # make color reflect stroke number
         for s in strokes2:
@@ -58,7 +61,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
                 s[:,2] = 0
         CMAP="coolwarm"
     elif plotver=="randcolor":
-        pcol = np.random.rand(1,3)
+        pcol = np.random.rand(1,3) * 0.7
     elif isinstance(plotver, list) and len(plotver)==3:
         pcol = np.array(plotver).reshape(1,3)
     elif plotver=="raw":

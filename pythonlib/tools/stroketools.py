@@ -5,7 +5,7 @@ import numpy as np
 
 def strokesInterpolate(strokes, N):
     """interpoaltes each stroke, such that there are 
-    N timesteps. uses the actual time to interpoatle
+    N timesteps in each stroke. uses the actual time to interpoatle
     strokes must be list of T x 3 np ararys) """
     strokes_new = []
     for s in strokes:
@@ -20,7 +20,7 @@ def strokesInterpolate(strokes, N):
     return strokes_new
 
 
-def distanceDTW(strokes_beh, strokes_model, ver="timepoints"):
+def distanceDTW(strokes_beh, strokes_model, ver="timepoints", asymmetric=True):
     """inputs are lists of strokes. this first flattens the lists
     into single arrays each. then does dtw betweeen Nx2 and Mx2 arrays.
     uses euclidian distance in space as the distance function. 
@@ -38,13 +38,13 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints"):
         A = np.concatenate(strokes_beh, axis=0)[:,:2]
         B = np.concatenate(strokes_model, axis=0)[:,:2]
         distfun = lambda x,y: np.linalg.norm(x-y)
-        output = DTW(A, B, distfun)
+        output = DTW(A, B, distfun, asymmetric=asymmetric)
     elif ver=="segments":
         # distances is between pairs of np arrays, so this
         # ignores the timesteps within each arrays.
         from pythonlib.tools.vectools import modHausdorffDistance
         distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
-        output = DTW(strokes_beh,strokes_model,distfun)
+        output = DTW(strokes_beh,strokes_model,distfun, asymmetric=asymmetric)
     elif ver=="split_segments":
         # distances is between pairs of np arrays, so this
         # ignores the timesteps within each arrays.
@@ -54,7 +54,7 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints"):
         distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
         A = splitStrokesOneTime(strokes_beh, num=NUM1)
         B = splitStrokesOneTime(strokes_model, num=NUM2)
-        output = DTW(A,B,distfun)
+        output = DTW(A,B,distfun, asymmetric=asymmetric)
     else:
         assert False, "not coded"
     return output
@@ -501,3 +501,26 @@ def standardizeStrokes(strokes):
     # assert False
 
     return [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
+
+def alignStrokes(strokes, strokes_template, ver = "translate"):
+    """ transforms strokes so that aligns with strokes_template, 
+    based on method in ver.
+    - ver:
+    -- translate: strokes center will be aligned to center of strokes_template.
+    will take center over all points across all arrays in strokes.
+    """
+
+    if ver == "translate":
+        smean = np.mean(np.concatenate(strokes, axis=0), axis=0)[0:2]
+        stmean = np.mean(np.concatenate(strokes_template, axis=0), axis=0)[0:2]
+        delta = stmean - smean
+        strokes_aligned = []
+        for i, s in enumerate(strokes):
+            s[:, [0,1]] = s[:, [0,1]] + delta
+            strokes_aligned.append(s)
+        # strokes = [ss+delta for ss in strokes]
+    else:
+        assert False, "not coded!!"
+
+    return strokes_aligned
+

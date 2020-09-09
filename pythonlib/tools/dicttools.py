@@ -8,10 +8,14 @@ def printOverviewKeyValues(summarydict_all, keystoget=[]):
 
     out = {}
     for key in keystoget:
-        if key not in ["planner", "res", "cost", "x0", "x1", "x2", "x3", "x4", "x5", "x6"]:
+        if key not in ["planner", "res", "cost", "x0", "x1", "x2", "x3", "x4", "x5", "x6", "filedata", "fd"]:
             try:
                 values = set([s[key] for s in summarydict_all])
             except:
+                set([s[key] for s in summarydict_all])
+
+                for s in summarydict_all:
+                    print(s[key])
                 values = set([", ".join(s[key]) for s in summarydict_all])
             N = len(values)
             print("-----")

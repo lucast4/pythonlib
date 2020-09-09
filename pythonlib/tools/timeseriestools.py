@@ -74,6 +74,7 @@ def DTW(x, y, distfun, asymmetric=True):
           optimalAlignment(len(x) - 1,
                            len(y) - 1))
     
+    # print(table)
     if asymmetric:
         D = np.array([table[(m, j)] for j in range(n+1)])
         distmin = np.min(D)
