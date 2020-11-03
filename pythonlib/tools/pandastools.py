@@ -69,4 +69,39 @@ def applyFunctionToAllRows(df, F, newcolname="newcol"):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
     return df.merge(df.apply(lambda x: F(x), axis=1).reset_index(), left_index=True, right_index=True).rename(columns={0:newcolname})
 
+############3333 SCRATCH NOTES
 
+# Apoply function to group-wise:
+# Note; I was unsure whether the index pulled out is the global index or within the group.
+# I think it is glocal.
+# F = lambda x: x.iloc[x["distance"].idxmin()]
+# F = lambda x: SF.iloc[x["distance"].idxmin()]
+# # F = lambda x: SF.iloc[1]
+# SF.groupby(["task", "epoch"]).apply(F)
+
+######### take rows based on max/min of for values of some column:
+# SF.loc[SF.groupby(["task", "epoch"])["distance"].idxmax()]
+
+
+# pivoting (to take multiple rows and make them colums)
+# Y = SFagg.pivot(index="task", columns="epoch", values="distance_median")
+
+
+def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
+    """ filter df so that each group has at
+    least one item for each of the desired values
+    for the column of interest. useful for removing
+    data which don't have data for all days, for eg...
+    -- e.g., this only keeps tasks that have data for
+    both epochs:
+	    values_to_check = [1,2]
+		colname = "epoch"
+		group = "unique_task_name"
+    """
+    def F(x):
+        """ True if has data for all values"""
+        checks  = []
+        for v in values_to_check:
+            checks.append(v in x[colname].values)
+        return all(checks)
+    return df.groupby(group).filter(F)

@@ -1,6 +1,8 @@
 """ working with vectors, generally 2d, generally realted to drawing stuff"""
 import numpy as np
 
+from pythonlib.tools.distfunctools import modHausdorffDistance
+
 # def _convert_to_rel_units(x,y):
 #     # converts from x,y to relative units from top-left corner
 #     # top left = (0,0)
@@ -95,40 +97,4 @@ def angle_diff(a1, a2):
         assert a <= 2*pi
         return 2*pi - a
 
-def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max"):
-    """
-    Modified Hausdorff Distance.
-
-    M.-P. Dubuisson, A. K. Jain (1994). A modified hausdorff distance for object matching.
-     International Conference on Pattern Recognition, pp. 566-568.
-
-    :param itemA: [(n,2) array] coordinates of "inked" pixels
-    :param itemB: [(m,2) array] coordinates of "inked" pixels
-    :return dist: [float] distance
-
-    dims = [0,1] means will use itemA[:,[0,1]] and so on.
-    From Reuben Feynman and Brenden Lake
-    """
-    from scipy.spatial.distance import cdist 
-    if dims:
-        D = cdist(itemA[:,dims], itemB[:,dims])
-    else:
-        D = cdist(itemA, itemB)
-    mindist_A = D.min(axis=1)
-    mindist_B = D.min(axis=0)
-    if ver1=="mean":
-        mean_A = np.mean(mindist_A)
-        mean_B = np.mean(mindist_B)
-    elif ver1=="median":
-        mean_A = np.median(mindist_A)
-        mean_B = np.median(mindist_B)
-    elif ver1=="max":
-        mean_A = np.max(mindist_A)
-        mean_B = np.max(mindist_B)
-
-    if ver2=="mean":
-        dist = np.mean((mean_A,mean_B))
-    elif ver2=="max":
-        dist = np.max((mean_A,mean_B))
-    return dist
 

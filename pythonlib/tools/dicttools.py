@@ -9,14 +9,18 @@ def printOverviewKeyValues(summarydict_all, keystoget=[]):
     out = {}
     for key in keystoget:
         if key not in ["planner", "res", "cost", "x0", "x1", "x2", "x3", "x4", "x5", "x6", "filedata", "fd"]:
-            try:
-                values = set([s[key] for s in summarydict_all])
-            except:
-                set([s[key] for s in summarydict_all])
-
-                for s in summarydict_all:
-                    print(s[key])
-                values = set([", ".join(s[key]) for s in summarydict_all])
+            if not isinstance(summarydict_all[0][key], dict):
+                try:
+                    values = set([s[key] for s in summarydict_all])
+                except:
+                    try:
+                        set([s[key] for s in summarydict_all])
+                        # for s in summarydict_all:
+                        #     print(s[key])
+                        values = set([", ".join(s[key]) for s in summarydict_all])
+                    except Exception:
+                        print(f"=== skipping {key}, because of Exception: {Exception}")
+                        continue
             N = len(values)
             print("-----")
             print("- {} (N = {})".format(key, N))
@@ -38,4 +42,26 @@ def filterSummary(summarydict, filterdict):
     for key in filterdict.keys():
         df = df[df[key].isin(filterdict[key])]
     return df
+
+def filterDict(dat, filt):
+    """ filter is dict, which says which items in 
+    dat to keep. dat is list of dicts. e..g, if
+    filter = {"key1":[list of vals], key2:val, ...}
+    then will keep only items in dat which are consisteth
+    with filter.
+    """
+    datout = []
+    for d in dat:
+        keep=True
+        for k, v in filt.items():
+            if isinstance(v, list):
+                if d[k] not in v:
+                    keep=False
+            else:
+                if d[k]!=v:
+                    keep=False
+        if keep:
+            datout.append(d)
+    return datout
+
 

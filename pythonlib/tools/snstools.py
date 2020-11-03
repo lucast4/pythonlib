@@ -1,5 +1,5 @@
 """ for seaborn plotting"""
-
+import seaborn as sns
 
 def rotateLabel(ax, rotation=45, horizontalalignment="right"):
     """ seaborn, maek sure to add labels for catplot
@@ -30,3 +30,15 @@ def addTextLabelToPoints(ax, df, x, y, name):
         ax.text(df[x][line], df[y][line], df[name][line], 
                  horizontalalignment='left', size='medium', color='black',
                 alpha=0.6)
+
+def relplotOverlaid(df, line_category, color, **relplotkwargs):
+    """ if want to plot single lines for each cataegory in 
+    line_category, and all the same color. sns I think forces you to 
+    either average over all categories in line_category (i.e., one
+    output per facet, or hue, etc, or they will be different colors if
+    use hue=line_category. Here can make all the same color. 
+    """
+    catlist = set(df[line_category])
+    palette = {n:color for n in catlist}
+    relplotkwargs["palette"]= palette
+    return sns.relplot(**relplotkwargs)

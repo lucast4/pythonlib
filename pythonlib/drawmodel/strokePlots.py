@@ -3,16 +3,68 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate
 
+def getStrokeColors(strokes, CMAP="jet"):
+    """
+    a fixed set of colors, always mapping to stroke nums
+    will also apply to stroke onset markers and text.
+    Returns:
+    - color_order is N x 4, where N is max([5, Nstrokes])
+    - color_order_by_pt is expanded to match each timepoint in 
+    strokes.
+    - easy mode: if want just want stanadard lsit of coloors, 
+    pass strokes = 5 (e.g., if 5 is max num colors)
+    """
+    from pythonlib.tools.plottools import makeColors
+    NCOL = 5
+    assert NCOL==5, "if you chage this, lose stroke-num standandd"
+    if isinstance(strokes, int):
+        if strokes>NCOL:
+            color_order = makeColors(strokes, cmap=CMAP)
+        else:
+            color_order = makeColors(NCOL, cmap=CMAP)
+        color_order_by_pt = None
+    else:
+        if len(strokes)>NCOL:
+            color_order = makeColors(len(strokes), cmap=CMAP)
+        else:
+            color_order = makeColors(NCOL, cmap=CMAP)
+
+    # -- make strokes 1 and 2 most perceptulaly different
+    # color_order = np.concatenate((color_order[0].reshape(1,-1), color_order[::-1]))
+    # color_order = np.concatenate((color_order[0].reshape(1,-1), color_order[-1].reshape(1,-1), color_order[1:-1]))
+    color_order = np.concatenate((color_order[0].reshape(1,-1), color_order[::-1]))
+
+    # color_order = color_order[2:]
+    if not isinstance(strokes, int):
+        color_order_by_pt = []
+        for i, s in enumerate(strokes):
+            # print(i)
+            color_order_by_pt.extend([color_order[i] for _ in range(len(s))])
+        # pcol = np.array(pcol)
+        # print(
+        # assert False
+        else:
+            color_order_by_pt = None
+    return color_order, color_order_by_pt
+
+
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
-    interpN=None):
+    interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
+    mark_stroke_onset=True):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
     to plot (e.g., can plot timelapse running this multiple times..)
     - pcol, overwrites any gradation in color with one color
     - interpN = 20, then interpolates to fill each stroke.
+    - strokenums_to_plot, list of strokenums to plot. if None then plots all.
+    e.g., [0,2], then plots 1st and 34d strokes. This only applies if 
+    each_stroke_separate is True, so will force the latter.
     """
+    import numpy as np
+    if strokenums_to_plot is not None:
+        each_stroke_separate=True
     
     if len(strokes)==0:
         print("[pythonlib/plotDatStrokes] EMPTY STROKES - not plotting")
@@ -31,7 +83,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
 
     # convert all times to the mean time for each stroek, so that is diff color
     import copy
-    strokes2 = copy.deepcopy(strokes)
+    strokes2 = [s.copy() for s in strokes]
 
     # append fake times
     if strokes2[0].shape[1]<3:
@@ -39,97 +91,420 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if not interpN is None:
         strokes2 =strokesInterpolate(strokes2, interpN)
 
+
+
     CMAP = "jet"
     # CMAP = "plasma"
     # CMAP = "winter"
     ax.set_facecolor((0.9, 0.9, 0.9))
-    if plotver=="strokes":
-        # make color reflect stroke number
-        for s in strokes2:
-            if len(s)>0:
-                s[:,2] = np.mean(s[:,2])
-    elif plotver=="strokes_order":
-        # same as storke,s, but ignore time, use order of arrays
-        count = 0
-        for s in strokes2:
-            if len(s)>0:
-                s[:,2] = count
-                count+=1
-    elif plotver=="onecolor":
-        for s in strokes2:
-            if len(s.shape)>1:
-                s[:,2] = 0
-        CMAP="coolwarm"
-    elif plotver=="randcolor":
-        pcol = np.random.rand(1,3) * 0.7
-    elif isinstance(plotver, list) and len(plotver)==3:
+    if isinstance(plotver, list) and len(plotver)==3:
         pcol = np.array(plotver).reshape(1,3)
-    elif plotver=="raw":
-        # keep as is, so that color reflects time.
-        pass
+    elif isinstance(plotver, np.ndarray):
+        pcol = plotver.reshape(1,3)
+    elif isinstance(plotver, str):
+        if plotver=="strokes":
+            # make color reflect stroke number
+            for s in strokes2:
+                if len(s)>0:
+                    s[:,2] = np.mean(s[:,2])
+        elif plotver=="strokes_order":
+            # same as storke,s, but ignore time, use order of arrays
+            count = 0
+            for s in strokes2:
+                if len(s)>0:
+                    s[:,2] = count
+                    count+=1
+        elif plotver=="order":
+            # a fixed set of colors, always mapping to stroke nums
+            # will also apply to stroke onset markers and text.
+            color_order, pcol = getStrokeColors(strokes2, CMAP)
+        elif plotver=="onecolor":
+            for s in strokes2:
+                if len(s.shape)>1:
+                    s[:,2] = 0
+            CMAP="coolwarm"
+        elif plotver=="randcolor":
+            pcol = np.random.rand(1,3) * 0.7
+        elif plotver=="raw":
+            # keep as is, so that color reflects time.
+            pass
+        else:
+            print(plotver)
+            print(type(plotver))
+            assert False, "dont know this"
     else:
+        print(plotver)
+        print(type(plotver))
         assert False, "dont know this"
 
-    # print(strokes2)
-    strokescat = np.array([ss for s in strokes2 for ss in s])
-    # print(strokescat[0])
-    # print(len(strokescat))
-    # print(strokescat)
     if fraction_of_stroke:
-        T = strokescat.shape[0]
-        strokescat = strokescat[:int(np.ceil(fraction_of_stroke * T)),:]
-        
-        # get timepoints
-        tvals = np.array([ss for s in strokes2 for ss in s])[:,2]
-        timeon = tvals[0]
-        timeoff = tvals[int(np.ceil(fraction_of_stroke * T))-1]
-    # print(strokescat)
-    # print(strokescat[:,0])
-    if not pcol is None:
-        ax.scatter(strokescat[:,0], strokescat[:,1], c=pcol, 
-            marker="o", alpha=alpha, s=markersize)
-    else:
-        ax.scatter(strokescat[:,0], strokescat[:,1], c=strokescat[:,2], 
-            marker="o", cmap=CMAP, alpha=alpha, s=markersize)
+        each_stroke_separate = False
 
-    if add_stroke_number:
+    # print(pcol)
+    if each_stroke_separate:
+        # markersize = (3/5)*markersize
+        # color scheme must be different for each stroke.
+        if isinstance(plotver, str):
+            if plotver in ["strokes", "strokes_order", "order"]:
+                color_order, pcol = getStrokeColors(strokes2, CMAP)
+            elif plotver in ["onecolor", "randcolor"]:
+                color_order = [pcol[0] for _ in range(len(strokes2))]
+            else:
+                color_order, pcol = getStrokeColors(strokes2, CMAP)            
+        else:
+            color_order = [pcol[0] for _ in range(len(strokes2))]
+        # else:
+        #     color_order, pcol = getStrokeColors(strokes2, CMAP)
+
         for i, s in enumerate(strokes2):
-            ax.plot(s[0,0], s[0,1], 'o', color=[0.7, 0.7, 0.7], markersize=11)
+            if strokenums_to_plot is not None:
+                if i not in strokenums_to_plot:
+                    continue
+            ax.plot(s[:,0], s[:,1], color=color_order[i], linewidth=(3/5)*markersize,
+                alpha=min([1, 1.5*alpha]))
+    else:
+        # Then concatenate and then plot. useful if want to define
+        # color based on position along entire task
+
+        # print(strokes2)
+        strokescat = np.array([ss for s in strokes2 for ss in s])
+        # print(strokescat[0])
+        # print(len(strokescat))
+        # print(strokescat)
+        if fraction_of_stroke:
+            T = strokescat.shape[0]
+            strokescat = strokescat[:int(np.ceil(fraction_of_stroke * T)),:]
+            
+            # get timepoints
+            tvals = np.array([ss for s in strokes2 for ss in s])[:,2]
+            timeon = tvals[0]
+            timeoff = tvals[int(np.ceil(fraction_of_stroke * T))-1]
+        # print(strokescat)
+        # print(strokescat[:,0])
+        if not pcol is None:
+            # print(pcol.shape)
+            ax.scatter(strokescat[:,0], strokescat[:,1], c=pcol, 
+                marker="o", alpha=alpha, s=markersize)
+        else:
+            ax.scatter(strokescat[:,0], strokescat[:,1], c=strokescat[:,2], 
+                marker="o", cmap=CMAP, alpha=alpha, s=markersize)
+
+
+    # ==== ADD MARKER AT STROKE ONSET.
+    if mark_stroke_onset:
+        for i, s in enumerate(strokes2):
+            if strokenums_to_plot is not None:
+                if i not in strokenums_to_plot:
+                    continue
+            if plotver=="order":
+                col = color_order[i]
+                tcol = color_order[i]
+                # tcol = "k"
+            elif each_stroke_separate:
+                col = color_order[i]
+                tcol = color_order[i]
+            else:
+                col = [0.7, 0.7, 0.7]
+                tcol = "k"
+                tcol = [0.7, 0.7, 0.7]
+
+            # ax.plot(s[0,0], s[0,1], mfc=col, mec= [0.7, 0.7, 0.7], markersize=markersize+3, 
+                # marker="s")
+            ax.plot(s[0,0], s[0,1], mec=col, mfc= "w", markersize=markersize+1.5, 
+                marker="o", alpha= 0.75)
             # ax.text(s[0,0]-10, s[0,1]-11, f"{i+1}", color='k', fontsize=12)
-            ax.text(s[0,0], s[0,1], f"{i+1}", color='k', fontsize=12)
+
+            if add_stroke_number:
+                ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
+                # ax.text(s[0,0], s[0,1], f"{i+1}", color=col, fontsize=12)
     if not isinstance(fraction_of_stroke, list):
         return (timeon, timeoff)
 
+# def plotDatStrokesVelSpeed(strokes, ax, plotver="speed"):
+#     """  pass in strokes and will autoamtically differnetiate to 
+#     get speed/vecopiotu. 
+#     """
+#     from ..tools.stroketools import 
+#     strokes_vel, strokes_speed = 
 
-def plotDatStrokesTimecourse(strokes, ax, plotver="raw"):
+
+def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=5,
+                          overlay_stroke_periods=False, pcol=None, alpha=0.8,
+                          nolegend=False):
+    """  wrapper, which both processes storkes and plots.
+    pass in strokes and will autoamtically differnetiate to 
+    get speed/vecopiotu. 
+    - lowpass_freq is the final smoothing. around 5 is good for clear bell-shaped.
+    around 
+    - [NOT FUNCTIONAL] pcol
+    """
+    from ..tools.stroketools import strokesVelocity
+
+    if plotver=="speed":
+        i=1
+    elif plotver=="vel":
+        i=0
+    S = strokesVelocity(strokes, fs, lowpass_freq=lowpass_freq)[i]
+
+    plotDatStrokesTimecourse(S, ax=ax, plotver=plotver, 
+        overlay_stroke_periods=overlay_stroke_periods, alpha=alpha, 
+        nolegend=nolegend, color=pcol)
+
+def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
+    label=None, overlay_stroke_periods=True, alpha=0.8, nolegend=False):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
-    various ways of plotting, with time on the x axis"""
+    various ways of plotting, with time on the x axis
+    - if color, then will overwrite color which is naturally different fro 
+    dim 1 and 2. pass in length 2 list to aply to dim1 and 2.
+    """
     YLIM = []
+    if label is None:
+        label = plotver
+
     if len(strokes)>0:
-        if plotver=="raw":
+        xyt = np.array([ss for s in strokes for ss in s])
+        YLIM = (np.nanmin(xyt[:,(0,1)].reshape((-1,1)))-50, 
+                np.nanmax(xyt[:,(0,1)].reshape((-1,1)))+50)
+        if plotver in ["raw", "vel"]:
             # then is standard. plot timecourse of strokes
             tdim = 2
-            xyt = np.array([ss for s in strokes for ss in s])
-            YLIM = (np.nanmin(xyt[:,(0,1)].reshape((-1,1)))-50, 
-                    np.nanmax(xyt[:,(0,1)].reshape((-1,1)))+50)
-            for s in strokes:
-                ax.plot(s[:,tdim], s[:,0], ".b-", label='x')
-                ax.plot(s[:,tdim], s[:,1], ".r-", label='y')
-        if plotver=="speed":
-            # then is standard. plot timecourse of strokes
-            tdim =1
-            xyt = np.array([ss for s in strokes for ss in s])
-            YLIM = (np.nanmin(xyt[:,(0)].reshape((-1,1)))-50, 
-                    np.nanmax(xyt[:,(0)].reshape((-1,1)))+50)
-            for s in strokes:
-                # print(s)
-                ax.plot(s[:,tdim], s[:,0], ".b-", label='speed')
+            if color is None:
+                color=["b", "r"]
+            else: 
+                color=[color, color]
+            # elif len(color)!=2:
+            #     color=[color, color]
+        elif plotver =="speed":
+            tdim = 1
+            if color is None:
+                color=["b"]
+            else:
+                color=[color]
+        else:
+            assert False, "not coded"
+                
+        for i, s in enumerate(strokes):
+            for j in range(tdim):
+                if i==0:
+                    ax.plot(s[:,tdim], s[:,j], ".b-", color=color[j], label=f"dim{j}", alpha=alpha)
+                    # ax.plot(s[:,tdim], s[:,1], ".r-", color=col2, label='y')
+                else:
+                    ax.plot(s[:,tdim], s[:,j], ".b-", color=color[j], alpha=alpha)
+                    # ax.plot(s[:,tdim], s[:,1], ".r-", color=col2)
+
+        # elif plotver=="speed":
+        #     # then is standard. plot timecourse of strokes
+        #     tdim =1
+        #     xyt = np.array([ss for s in strokes for ss in s])
+        #     YLIM = (np.nanmin(xyt[:,(0)].reshape((-1,1)))-50, 
+        #             np.nanmax(xyt[:,(0)].reshape((-1,1)))+50)
+        #     for i, s in enumerate(strokes):
+        #         # print(s)
+        #         if i==0:
+        #             L=label
+        #         else:
+        #             L = None
+        #         ax.plot(s[:,tdim], s[:,0], ".-", color=color, label=L)
+
+
         # -- overlay extracted strokes
-        for s in strokes:
-            if len(s)>0:
-                plt.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
-        ax.legend()
+        if overlay_stroke_periods:
+            for s in strokes:
+                if len(s)>0:
+                    plt.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
+        if not nolegend:
+            ax.legend() 
+            ax.set_title(plotver)
+
         ax.set_xlim((-0.1, strokes[-1][-1,tdim]+0.1))
+        # ---
+        ax.axhline(color="k", linestyle = "--", alpha=0.5)
 
     return YLIM
+
+
+
+def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1., color=[0,0,0], alpha=0.6, overlay_elipses=False):
+    """ given list of strokes (i.e., list of list of nparray)
+    plots for  strokenum a single stroke representing mean.
+    optioanlykl adds covariance elipses.
+    - interpolates based on timepoints to first align strokes.
+    - covariance is taken at particular dinices after alginement. by
+    default takes onset, midpt, and offset.
+    - if a strokes in strokelist is shorter than strokenum, then will
+    ignore it. up to you to make sure passing in reasonable strokenums.
+    """
+    from pythonlib.drawmodel.strokePlots import plotDatStrokes
+    from pythonlib.tools.stroketools import strokesInterpolate
+    from pythonlib.tools.plottools import confidence_ellipse
+
+    # pick out that desired stroke num
+    stroklist = [s[strokenum] for s in strokeslist if len(s)>strokenum]
+    if len(stroklist)==0:
+        print(f"[plotStrokesMean] no trials had enough strokes for strokenum={strokenum} - not doing antyhing")
+        return
+
+    # interpolate each strokes (using actual time)
+    # stack the arrays and then take average
+    stroklist_interp = strokesInterpolate(stroklist, Ninterp)    
+    stroklist_interp_stack = np.stack(stroklist_interp)
+    
+    # == PLOT MEAN
+    strok_mean = np.mean(stroklist_interp_stack, axis=0)
+    plotDatStrokes([strok_mean], ax=ax, plotver=color, each_stroke_separate=True, alpha=alpha, add_stroke_number=False, markersize=7)
+
+    # == overlay confidence elipses
+    if overlay_elipses:
+        pts_to_get_elipse = [0, int(np.round(Ninterp/2)), Ninterp-1]
+        for pt in pts_to_get_elipse:
+            x = stroklist_interp_stack[:,pt,0]
+            y = stroklist_interp_stack[:,pt,1]
+            confidence_ellipse(x,y, ax=ax, n_std=ellipse_std, edgecolor=color, facecolor=color, alpha=alpha/2)
+            ax.plot(np.mean(x), np.mean(y), "o", color=color, alpha=alpha)
+
+        # if False:
+        #     # sanity check, plot
+        #     plt.figure(figsize=(10,10))
+        #     from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        #     ax = plt.subplot(211)
+        #     plotDatStrokes(slist, ax=ax, plotver="order", each_stroke_separate=False)
+
+
+        #     ax = plt.subplot(212)
+        #     plotDatStrokes(slist_interp, ax=ax, plotver="order", each_stroke_separate=False)
+        #     plotDatStrokes([strok_mean], ax=ax, plotver=[0,0,0], each_stroke_separate=True)
+
+
+def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_time=False, 
+                    normalize_strok_lengths=False, ylabels=None, xaxis="time", fakegapdist=100., 
+                    flipxy=False, align_all_strok=False, trialorder="asinput", 
+                    plotkwargs = {"marker":"o", "alpha":0.8, "s":10}):
+    """ low-lebvel waterfall plot, i.e., like raster, 
+    where y is trials and x is time in trial.
+    each strokes_colors in strokes_colors_list must be same dimensions as
+    the corresponding strokes in strokes_list, since it
+    a color to each timepoint in strokes.
+    - if any strokes is empty, leaveas a blank row (skips)
+    === 
+    - strokes_list is lsit of strokes, where strokes is
+    is llist of N x 3 (xyt) arrays
+    - strokescolors_list is list of strokescolors, where
+    strokes_colors is list of N x 3 arrays (rgb)
+    - xaxis,
+    -- "time", then is default, time
+    -- "dist", then is distance traveled (will add fake gap dist using fakegapdist)
+    - flipxy, then trials on x axis, time on y axis.
+    - align_all_strok, then strokes place next to each other, all attached to the same axis.
+    - trialorder, how to order trials. 
+    -- "fromone", means no gaps, and astart numbnering from 1, 2, ...
+    -- "asinput", "means incluers gaops, and as inputed."
+    -- "nogaps", means as inputed, but skip gaps.
+    """
+    # yticks = []
+    row_nogaps = 0
+    row = 1
+    for k, (strokes, strokescolors) in enumerate(zip(strokes_list, strokescolors_list)):
+        
+
+        if len(strokes)==0:
+            continue
+
+        if trialorder=="asinput":
+            # ylabels_actual.append(ylabels[k])
+            row=k
+        elif trialorder=="nogaps":
+            row = row_nogaps
+            row_nogaps+=1
+
+        if xaxis=="time":
+            pass    
+        elif xaxis=="dist":
+            from pythonlib.tools.stroketools import convertTimeCoord
+            strokes = convertTimeCoord(strokes, fakegapdist=fakegapdist)
+
+        
+        # - plot each stroke separately
+        if align_by_firsttouch_time:
+            t0 = strokes[0][0,2]
+        else:
+            t0 = 0.
+
+        # == Plot each single strok
+        for i, (strok, strokcols) in enumerate(zip(strokes, strokescolors)):
+            
+            tvals = strok[:,2] - t0
+
+            if normalize_strok_lengths:
+                if xaxis=="time":
+                    ontime = (i) + 0.5*i
+                    tvals = np.linspace(ontime, ontime+1, len(tvals))
+                elif xaxis=="dist":
+                    # then need to do interpolation, since x vals not
+                    # yet evenly sampled.
+                    assert False, " not done!! need to interpolate teh colors so matches strok after strok is interpolated..."
+                    strok = strokesInterpolate2([strok], ["npts", 100])[0]
+                    strokcols = strokesInterpolate2([strokcols], ["npts", 100])[0]
+                    tvals = strok[:,2] - t0
+                    ontime = (i) + 0.5*i
+                    tvals = np.linspace(ontime, ontime+1, len(tvals))
+
+
+            if align_all_strok:
+                tvals -= tvals[0]
+                N = len(strokes)-1
+                W = 0.5
+                rowthis = row - W/2 + i*W/N
+            else:
+                rowthis = row
+
+
+
+    #         plt.plot(tvals, t*np.ones_like(tvals), color=pcols[i])
+    #         try:
+            if flipxy:
+                x = rowthis*np.ones_like(tvals)
+                y = tvals
+            else:
+                x = tvals
+                y = rowthis*np.ones_like(tvals)
+            # ax.scatter(tvals, row*np.ones_like(tvals), c=strokcols,  cmap="plasma", 
+            #     **plotkwargs)
+            if flipxy:
+                marker = "_"
+            else:
+                marker = "|"
+            marker = "o"
+            if False:
+                ax.plot(x[0], y[0], mec="k", mfc= strokcols[0][:3],
+                    markersize=plotkwargs["s"], marker=marker, alpha= 1)
+            else:
+                ax.plot(x[0], y[0], mec="k", mfc= "none",
+                    markersize=plotkwargs["s"], marker=marker, alpha= 1)
+            # print(strokcols)
+            ax.scatter(x, y, c=strokcols,  cmap="plasma", 
+                **plotkwargs)
+    #         except:
+    #             plt.scatter(tvals, t*np.ones_like(tvals), c="k")
+
+        if False:
+            # flatten strokes into timepoints of samples
+            tvals = np.concatenate([s[:,2] for s in strokes], axis=0)
+            plt.plot(tvals, t*np.ones_like(tvals), color=col)
+    
+    if True:
+        if flipxy==False:
+            ax.set_yticks(range(row+1))
+            # ax.set_yticks(yticks)
+            if trialorder=="asinput":
+                if ylabels is not None:
+                    ax.set_yticklabels(ylabels)
+            #         ax.ylabels("trial")
+        else:
+            ax.set_xticks(range(row+1))
+            # ax.set_yticks(yticks)
+            if trialorder=="asinput":
+                if ylabels is not None:
+                    ax.set_xticks(ylabels)
+            #         ax.ylabels("trial")
 

@@ -1,14 +1,17 @@
 """ verious functions useful for running experiemnts/analysis"""
 
 
-def makeTimeStamp(exptID=""):
+def makeTimeStamp(exptID="", datefirst=True):
     """useful for saving things, 
     gives yymmdd_hhmmss_{exptID}"""
     import time
     ts = time.localtime()
     tstamp = time.strftime("%y%m%d_%H%M%S", ts)
 
-    return f"{tstamp}_{exptID}"
+    if datefirst==False:
+        return f"{exptID}-{tstamp}"
+    else:
+        return f"{tstamp}-{exptID}"
 
 
 def getDateList(sdate=None, edate=None):

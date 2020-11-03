@@ -1,6 +1,98 @@
 
 import numpy as np
 
+def smoothDat(x, window_len=11, window='hanning', flip_at_edges=False):
+    """smooth the data using a window with requested size.
+    
+    This method is based on the convolution of a scaled window with the signal.
+    Deals with edges by assuming that is flat at edges (appends enough based on window size)
+    
+    input:
+        x: the input signal 
+        window_len: the dimension of the smoothing window; should be an odd integer
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+        
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+    
+    see also: 
+    
+    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    scipy.signal.lfilter
+ 
+    TODO: the window parameter could be the window itself if an array instead of a string
+    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
+    """
+    assert window_len-int(window_len)==0
+    if window_len%2==0:
+        window_len+=1
+    if x.ndim != 1:
+        raise ValueError("smooth only accepts 1 dimension arrays.")
+
+    if x.size < window_len:
+        raise ValueError("Input vector needs to be bigger than window size.")
+
+    if window_len<3:
+        return x
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+
+    if np.any(np.isnan(x)):
+        raise ValueError("does nto deal with nans well! will leave a gap where there is nan, without appending to data at each end of nan. better to first segment then pass in each segment")
+        
+    if flip_at_edges:
+        # The signal is prepared by introducing reflected copies of the signal (with the window size) in both ends so that transient parts are minimized in the begining and end part of the output signal.
+        s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+        assert False, "need to modify, since the output length of y will be N+2*((windowsize-1)/2)"
+    else:
+        # signal prepared by repeating the endpoint value 
+        s = np.r_[np.ones(int((window_len-1)/2))*x[0], x, np.ones(int((window_len-1)/2))*x[-1]]
+        
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    # print("--")
+    # print(len(x))
+    # print(len(s))
+    # print(window_len)
+    # print("==")
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    # print(len(y))
+    return y
+
+
+def getSampleTimesteps(T, fs, force_T=False):
+    """ get timesteps from 0, ..., T, 
+    where T is in sec, and sample rate
+    of fs. if T is not a whole number of 
+    samples, then returns shorter sequence,
+    up to last sample before T.
+    - if force_T, then will allow slight change in fs
+    to make sure t is 0, ..., T. will also return fs_new
+    """
+    
+    if force_T:
+        nsamp = int(np.round(T*fs))
+        t = np.linspace(0, T, nsamp+1)
+        fs_new = 1/(T/nsamp)
+        return t, fs_new
+    else:
+        nsamp = int(np.floor(T*fs))
+        Tnew = nsamp/fs
+        t = np.linspace(0, Tnew, nsamp+1)
+        return t
+
+
 
 def DTW(x, y, distfun, asymmetric=True):
     """ dynamic time warping between two arrays x and y. can be 
@@ -84,6 +176,7 @@ def DTW(x, y, distfun, asymmetric=True):
         alignment = optimalAlignment(m, n)
 
     return distmin, alignment
+
 
                
 

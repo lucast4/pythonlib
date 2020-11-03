@@ -102,9 +102,12 @@ def rose_plot(ax, angles, bins=16, density="frequency_radius", offset=0, lab_uni
 #     polar_ax.set_rlabel_position(90)
 
 
-def annotate(s, color="k"):
+def annotate(s, ax=None, color="k"):
     """ puts on top left corner"""
-    plt.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
+    if ax is None:
+        plt.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
+    else:
+        ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
 def makeColors(numcol, alpha=1, cmap="plasma"):
@@ -117,3 +120,106 @@ def makeColors(numcol, alpha=1, cmap="plasma"):
         pcols = pl.cm.jet(np.linspace(0,1, numcol), alpha=alpha)
     # cool
     return pcols
+
+def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
+    """ pos between 0 and 1, gets a value between gradient btw
+    col1 and col2. altenratively if leave both col1 and 2 None, 
+    then will use camp, if pos <0 or >1 wil clamp to this range"""
+
+    if pos<0:
+        pos=0.
+    elif pos>1:
+        pos =1.
+
+    if col1 is None and col2 is None:
+        pcols = makeColors(2, cmap=cmap)
+        col1=pcols[0]
+        col2 = pcols[1]
+    elif col1 is None or col2 is None:
+        assert False, "either give me both col1 and 2, or neither"
+    else:
+        col1=np.array(col1)
+        col2 = np.array(col2)
+    return (pos*(col2-col1) + col1)[:3]
+
+
+
+def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
+    """
+    Create a plot of the covariance confidence ellipse of `x` and `y`
+
+    Parameters
+    ----------
+    x, y : array_like, shape (n, )
+        Input data.
+
+    ax : matplotlib.axes.Axes
+        The axes object to draw the ellipse into.
+
+    n_std : float
+        The number of standard deviations to determine the ellipse's radiuses.
+
+    Returns
+    -------
+    matplotlib.patches.Ellipse
+
+    Other parameters
+    ----------------
+    kwargs : `~matplotlib.patches.Patch` properties
+
+    FROM: https://matplotlib.org/devdocs/gallery/statistics/confidence_ellipse.html
+    """
+    from matplotlib.patches import Ellipse
+    import matplotlib.transforms as transforms
+
+    if x.size != y.size:
+        raise ValueError("x and y must be the same size")
+
+    cov = np.cov(x, y)
+    pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+    # Using a special case to obtain the eigenvalues of this
+    # two-dimensionl dataset.
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    ellipse = Ellipse((0, 0),
+        width=ell_radius_x * 2,
+        height=ell_radius_y * 2,
+        facecolor=facecolor,
+        **kwargs)
+
+    # Calculating the stdandard deviation of x from
+    # the squareroot of the variance and multiplying
+    # with the given number of standard deviations.
+    scale_x = np.sqrt(cov[0, 0]) * n_std
+    mean_x = np.mean(x)
+
+    # calculating the stdandard deviation of y ...
+    scale_y = np.sqrt(cov[1, 1]) * n_std
+    mean_y = np.mean(y)
+
+    transf = transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(mean_x, mean_y)
+
+    ellipse.set_transform(transf + ax.transData)
+    return ax.add_patch(ellipse)
+
+def get_correlated_dataset(n, dependency, mu, scale):
+    """ see above, confidence_ellipse (helper function for that)"""
+    latent = np.random.randn(n, 2)
+    dependent = latent.dot(dependency)
+    scaled = dependent * scale
+    scaled_with_offset = scaled + mu
+    # return x and y of the new, correlated dataset
+    return scaled_with_offset[:, 0], scaled_with_offset[:, 1]
+
+
+def saveMultToPDF(path, figs):
+    """ saved multiple figs (list of fig obejcts)
+    to path as pdf. path should not have pdf in the name"""
+    import matplotlib.backends.backend_pdf
+    pdf = matplotlib.backends.backend_pdf.PdfPages(f"{path}.pdf")
+    for fig in figs:
+        pdf.savefig(fig, dpi=100)
+    pdf.close()
