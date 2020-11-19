@@ -118,6 +118,9 @@ def makeColors(numcol, alpha=1, cmap="plasma"):
         pcols = pl.cm.plasma(np.linspace(0,1, numcol), alpha=alpha)
     elif cmap=="jet":
         pcols = pl.cm.jet(np.linspace(0,1, numcol), alpha=alpha)
+    else:
+        print(cmaps)
+        assert False, "dont know this CMAP"
     # cool
     return pcols
 

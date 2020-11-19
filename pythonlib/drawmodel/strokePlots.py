@@ -3,6 +3,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate
 
+def overlayStrokeTimes(ax, strokes, yfrac=0.9, color="k"):
+    """ timecourse plots, overlay times of strokes
+    - puts line at ypos defined by yfrac, where 0 is bottom
+    and 1 is top
+    """
+    YLIM = ax.get_ylim()
+    y = YLIM[0] + (YLIM[1] - YLIM[0])*yfrac
+    for s in strokes:
+        on = s[0,2]
+        off = s[-1,2]
+        ax.hlines(y, on, off, color=color)
+
+
 def getStrokeColors(strokes, CMAP="jet"):
     """
     a fixed set of colors, always mapping to stroke nums
@@ -43,15 +56,13 @@ def getStrokeColors(strokes, CMAP="jet"):
         # pcol = np.array(pcol)
         # print(
         # assert False
-        else:
-            color_order_by_pt = None
     return color_order, color_order_by_pt
 
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
-    mark_stroke_onset=True):
+    mark_stroke_onset=True, centerize=False, onsets_by_order=True):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -91,6 +102,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if not interpN is None:
         strokes2 =strokesInterpolate(strokes2, interpN)
 
+    # ---- centerize
+    if centerize:
+        c = np.mean(np.concatenate(strokes2), axis=0)[:2]
+        strokes2 = [s-np.r_[c,0] for s in strokes2]
 
 
     CMAP = "jet"
@@ -122,7 +137,9 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
             for s in strokes2:
                 if len(s.shape)>1:
                     s[:,2] = 0
-            CMAP="coolwarm"
+
+            # CMAP="coolwarm"
+            pcol = [[0.3, 0.3, 0.3]]
         elif plotver=="randcolor":
             pcol = np.random.rand(1,3) * 0.7
         elif plotver=="raw":
@@ -196,6 +213,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
             if strokenums_to_plot is not None:
                 if i not in strokenums_to_plot:
                     continue
+            if onsets_by_order:
+                color_order, pcol = getStrokeColors(strokes2, CMAP)
+                col = color_order[i]
+                tcol = color_order[i]
             if plotver=="order":
                 col = color_order[i]
                 tcol = color_order[i]
@@ -208,9 +229,15 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
                 tcol = "k"
                 tcol = [0.7, 0.7, 0.7]
 
+            if plotver == "onecolor":
+                mfc = col
+                markersize = markersize + 0.5
+            else:
+                mfc = "w"
+
             # ax.plot(s[0,0], s[0,1], mfc=col, mec= [0.7, 0.7, 0.7], markersize=markersize+3, 
                 # marker="s")
-            ax.plot(s[0,0], s[0,1], mec=col, mfc= "w", markersize=markersize+1.5, 
+            ax.plot(s[0,0], s[0,1], mec=col, mfc= mfc, markersize=markersize+1.5, 
                 marker="o", alpha= 0.75)
             # ax.text(s[0,0]-10, s[0,1]-11, f"{i+1}", color='k', fontsize=12)
 

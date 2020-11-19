@@ -105,3 +105,12 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
             checks.append(v in x[colname].values)
         return all(checks)
     return df.groupby(group).filter(F)
+
+
+def getCount(df, group, colname):
+	""" return df grouped by group, and with one count value
+	for each level in group, the name of that will be colname
+	- colname must be a valid column from df
+	"""
+
+	return df.groupby(group)[colname].count().reset_index()

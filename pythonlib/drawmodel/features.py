@@ -73,6 +73,7 @@ def strokeDurations(strokes):
 
 def strokeDistances(strokes):
     """ cumulative distance traveled along stroke
+    resturns one scalar for each strok in strokes.
     """
     def D(s):
         # s is one np.array, N by 3, N = timepoints.

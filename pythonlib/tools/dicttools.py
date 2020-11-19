@@ -50,18 +50,21 @@ def filterDict(dat, filt):
     then will keep only items in dat which are consisteth
     with filter.
     """
-    datout = []
-    for d in dat:
-        keep=True
-        for k, v in filt.items():
-            if isinstance(v, list):
-                if d[k] not in v:
-                    keep=False
-            else:
-                if d[k]!=v:
-                    keep=False
-        if keep:
-            datout.append(d)
-    return datout
+    if filt is None or len(filt)==0:
+        return dat
+    else:
+        datout = []
+        for d in dat:
+            keep=True
+            for k, v in filt.items():
+                if isinstance(v, list):
+                    if d[k] not in v:
+                        keep=False
+                else:
+                    if d[k]!=v:
+                        keep=False
+            if keep:
+                datout.append(d)
+        return datout
 
 

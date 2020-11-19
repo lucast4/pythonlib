@@ -1,7 +1,10 @@
 """general purpose thing that works with stroke objects, whicha re generally lists of arrays (T x 2) (sometimes Tx3 is there is time)
-and each element in a list being a stroke."""
+and each element in a list being a stroke.
+- takes in single strokes and outputs transformed strokse or some feature...
+"""
 import numpy as np
 from pythonlib.drawmodel.features import *
+from pythonlib.drawmodel.strokedists import distanceDTW, distanceBetweenStrokes
 
 def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
     """interpoaltes each stroke, such that there are 
@@ -432,198 +435,6 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
 
 
 
-def distanceDTW(strokes_beh, strokes_model, ver="timepoints", 
-    asymmetric=True, norm_by_numstrokes=True):
-    """inputs are lists of strokes. this first flattens the lists
-    into single arrays each. then does dtw betweeen Nx2 and Mx2 arrays.
-    uses euclidian distance in space as the distance function. 
-    Allows to not use up all of strokes_model, but must use up all of strokes_beh
-    - NOTE: a given point in strokes_beh is allowed to map onto multipe 
-    points in strokes_model
-    - RETURNS: (distscalar, best alignemnt.)
-    - NOTE: this should make distanceBetweenStrokes() obsolete
-    - norm_by_numstrokes, divide by num strokes (beh only if assyum,.
-    max of task and beh if syummeteric)
-    """
-    from pythonlib.tools.timeseriestools import DTW
-    if ver=="timepoints":
-        # consider each timepoint vs. timepoint. 
-        # concatenate all strokes together.
-        # ignore timepoints, just go in chron order
-        A = np.concatenate(strokes_beh, axis=0)[:,:2]
-        B = np.concatenate(strokes_model, axis=0)[:,:2]
-        distfun = lambda x,y: np.linalg.norm(x-y)
-        output = DTW(A, B, distfun, asymmetric=asymmetric)
-        lengths = (len(A), len(B))
-    elif ver=="segments":
-        # distances is between pairs of np arrays, so this
-        # ignores the timesteps within each arrays.
-        from pythonlib.tools.vectools import modHausdorffDistance
-        distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
-        # print(len(strokes_beh), len(strokes_model))
-        output = DTW(strokes_beh,strokes_model,distfun, asymmetric=asymmetric)
-        lengths = (len(strokes_beh), len(strokes_model))
-    elif ver=="split_segments":
-        # distances is between pairs of np arrays, so this
-        # ignores the timesteps within each arrays.
-        from pythonlib.tools.vectools import modHausdorffDistance
-        NUM1 = 5 
-        NUM2 = 2 
-        distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
-        A = splitStrokesOneTime(strokes_beh, num=NUM1)
-        B = splitStrokesOneTime(strokes_model, num=NUM2)
-        output = DTW(A,B,distfun, asymmetric=asymmetric)
-        lengths = (len(A), len(B))
-    else:
-        assert False, "not coded"
-
-    if norm_by_numstrokes:
-        output = list(output)
-        if asymmetric:
-            output[0] = output[0]/lengths[0]
-        else:
-            output[0] = output[0]/min(lengths)
-    return output
-
-    if False:
-        # === DEBUGGING PLOTS - takes one dataspojtna nd compares to a
-        # bunch of random permutations, and plots distances on those plots.
-        # NOTE: best to make a dset object, and getting both directions.
-        from pythonlib.tools.stroketools import distanceDTW
-        s1 = strokes_all[0]
-        s2 = strokes_all[1]
-        distanceDTW(s1, s2, ver="segments")[0]
-
-
-
-        # =============== plot overview of distances
-        if False:
-            stroke1 = strokes_all[1]
-            strokeothers = random.sample([strokes_all[i] for i in range(len(strokes_all))], 8)
-        else:
-            t = 10
-            stroke1=dset.trials[t]["behavior"]["strokes"]
-            strokes_model = [d["strokes"] for d in dset.trials[t]["model_parses"]]
-            strokeothers = random.sample([strokes_model[i] for i in range(len(strokes_model))], 8)
-        VER = "segments"
-
-        plt.figure(figsize=(10,10))
-        ax = plt.subplot(3,3,1)
-        plotDatStrokes(stroke1, ax, plotver="raw")
-        plt.xlim([-400, 400])
-        plt.ylim([-400, 400])
-
-        distances = []
-        for i, S in enumerate(strokeothers):
-            # get distance
-        #     d1 = distanceDTW(stroke1, S, ver="segments")[0]
-        #     d2 = distanceDTW(stroke1, S, ver="timepoints")[0]
-            d3, tmp = distanceDTW(stroke1, S, ver="split_segments")
-            print(tmp)
-        #     d4 = distanceBetweenStrokes(stroke1, S)
-            distances.append(d3)
-            ax = plt.subplot(3,3,i+2)
-            plt.title(f"seg{d1:.0f}, tp{d2/1000:.0f}\n split{d3:.0f}, old{d4:.0f}")
-            plotDatStrokes(S, ax=ax, plotver="raw")
-            plt.xlim([-400, 400])
-            plt.ylim([-400, 400])
-        plt.figure()
-        plt.plot(np.sort(distances), 'o-k');
-        plt.ylim(bottom=0)
-
-
-
-def distanceBetweenStrokes(strokes_beh, strokes_model, include_timesteps=False,
-                          long_output=False):
-    """ gets distance bewteen two sequences of strokes. takes into account
-    order of strokes, but not of timepoint within the storkes.
-    effectively maps on each beh stroke to a corresponding model stroke with 
-    constraint that not allowed to go backwards for beh strokes.
-
-    strokes_beh and strokes_mod are both lists of np arrays, each of which is T x 3 (if include time) or T x 2.
-    
-    My notes on this:
-    let's say you have two ordered lists of objects, here let's say objects are strokes. 
-    I'll call these lists: (a,b,c,...) and (1,2,3,...). so "a", and "1" represent different strokes. 
-    So you can make a distance matrix (using modified Haussdorf distance). 
-    let's say this matrix has (a,b,c...) in dim 0 (indexing rows) - behaviora strokes
-    and (1,2,3).. on dim 1 (indexing columns).
-    I want to find the path, starting from the top-left entry, going down and to the right, that, 
-    if you sum over the values along the path, minimizes this sum distance. 
-    You are not allowed to go left or up. You don't necessarily have to end up in the bottom-right entry. 
-    So a1, b1, c2, d4, e4, ... is a valid sequence. But a1, b2, c1, ... is not.
-
-    I'm currently doing this in a greedy manner, stepping from top left towards bottom right, 
-    and this is OK, but can miss some cases where you should "stay" in a column and keep going down, 
-    so that you can minimize a lower row.
-    """
-
-    # 2) get the minimum distance between strokes_beh and strokes_model
-    from pythonlib.pythonlib.tools.vectools import modHausdorffDistance as hd
-
-    if include_timesteps:
-        # also include time..
-        dims = [0,1,2]
-    else:
-        dims = [0,1]
-        
-    distances= []
-    strokes_assigned = []
-    
-    # 1) first strokes are always compared to each other
-    distances.append(hd(strokes_beh[0], strokes_model[0], dims))
-    strokes_assigned.append(0)
-
-    # 2) the next strokes to the end
-    if len(strokes_beh)==1:
-        # only one comparison needed - DONE
-        pass
-    elif len(strokes_model)==1:
-        # then every beh stroke is compared to this same stroke
-        for s in strokes_beh[1:]:
-            distances.append(hd(s, strokes_model[0], dims))
-            strokes_assigned.append(0)
-    else:
-        # go thru all beh strokes
-        model_strokes_being_considered=[0,1]
-        model_stroke_list = list(range(len(strokes_model)))
-        for s in strokes_beh[1:]:
-            distances_to_compare = [hd(s, strokes_model[i], dims) for i in model_strokes_being_considered]
-
-            # take the minimum distance
-            distances.append(min(distances_to_compare))
-            strokes_assigned.append(model_strokes_being_considered[np.argmin(distances_to_compare)])
-
-            # update the strokes being considered
-            if np.argmin(distances_to_compare)==0:
-                # then don't update anything
-                pass
-            else:
-                # remove the first index from consideration. add a new index
-                model_strokes_being_considered = [model_strokes_being_considered[1], model_strokes_being_considered[1]+1]
-            # make sure the last stroke being considered is not past the length of the model strokes
-            model_strokes_being_considered = [i for i in model_strokes_being_considered if i in model_stroke_list]
-    
-    # --------
-    if long_output:
-        return distances, strokes_assigned
-    else:
-        return np.mean(distances)
-
-if False:
-    DOTIME = False
-    LONG = True
-    print(distanceBetweenStrokes(strokes_beh, strokes_model, include_timesteps=DOTIME, long_output=LONG))
-    print(distanceBetweenStrokes(strokes_beh[::-1], strokes_model[::-1], include_timesteps=DOTIME, long_output=LONG))
-    print(np.mean(distanceBetweenStrokes(strokes_beh, strokes_model, long_output=LONG)[0]))
-    # TODO:
-    # not symmetric
-    # is greedy, should run back and forth.
-    # fixed at 2, but should allow for not 2?
-
-    plotDictCanvasOverlay(stroke_dict, filedata, "strokes_all_task", strokes_to_plot="all", plotver="strokes")
-    plotDictCanvasOverlay(stroke_dict, filedata, "strokes_all", plotver="strokes")
-    plotTrialSimple(filedata, trials_list[trial])
 
 
 def getStrokesFeatures(strokes):
@@ -864,13 +675,28 @@ def getOnOff(strokes, relativetimesec=False):
     return (onsets, offsets)
 
 
-def standardizeStrokes(strokes):
+def standardizeStrokes(strokes, onlydemean=False, ver="xonly"):
     """ standardize in space (so centered at 0, and x range is from -1 to 1
     ) """
-    center = np.mean(getCentersOfMass(strokes, method="use_mean"))
-    xvals = [s[0] for S in strokes for s in S]
-    xlims = np.percentile(xvals, [2.5, 97.5])
-    x_scale = xlims[1]-xlims[0]
+    if ver=="xonly":
+        center = np.mean(getCentersOfMass(strokes, method="use_mean"))
+        xvals = [s[0] for S in strokes for s in S]
+        xlims = np.percentile(xvals, [2.5, 97.5])
+        x_scale = xlims[1]-xlims[0]
+        if onlydemean:
+            x_scale = 1.
+        return [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
+    elif ver=="centerize":
+        center = np.mean(np.concatenate(strokes), axis=0)[:2]
+        if strokes[0].shape[1]==3:
+            strokes = [s-np.r_[center,0] for s in strokes]
+        else:
+            strokes = [s-center for s in strokes]
+        return strokes
+    else:
+        print(ver)
+        assert False, "not coded"
+
 
     # print(x_scale)
     # print(xvals)
@@ -881,7 +707,6 @@ def standardizeStrokes(strokes):
     # print(new_strokes)
     # assert False
 
-    return [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
 
 def alignStrokes(strokes, strokes_template, ver = "translate"):
     """ transforms strokes so that aligns with strokes_template, 

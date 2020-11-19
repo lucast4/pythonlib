@@ -1,8 +1,11 @@
+""" related to taskmodel - analysis functions"""
+
 from pythonlib.tools.stroketools import *
 import matplotlib.pyplot as plt
 import numpy as np
 from .taskmodel import Model, Dataset 
         
+
 ################### HELPER FUNCTIONS
 
 
@@ -26,7 +29,6 @@ def makeModel(PARAMS_MODEL):
     mod = Model(PARAMS_MODEL["modelname"], priorFunction, likeliFunction,
                 parse_ver=PARAMS_MODEL["parse_ver"], chunkmodel=PARAMS_MODEL["chunkmodel"])
     return mod
-
 
 ############# (11/2/20 ADDED)
 

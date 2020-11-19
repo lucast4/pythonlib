@@ -45,3 +45,30 @@ def writeStringsToFile(fname, stringlist, silent=True):
             if not silent:
                 print(s)
             f.write(f"{s}\n")
+
+
+def extractStrFromFname(fname, sep, pos):
+    """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
+    pull out arc2 if give me sep="_" and pos = "2"
+    - pos is 0,1, ...
+    """
+    import os
+    import re
+    
+    # 1) get the filename without leading dir, or training extension
+    # e.g., gets 201030_164324_arc2_Pancho_3
+    path = os.path.split(fname)[1]
+    path = os.path.splitext(path)[0]
+
+    # 2) get posoptions of the separator
+    idxs = [m.start() for m in re.finditer(sep, path)]
+    idxs.append(len(path)) # to allow getting of last substr
+    idxs.insert(0, -1) # to allow getting of first
+    
+    # 2) get substring
+#     print(idxs)
+    if len(idxs)<pos+2:
+        print("this pos otu of bounds (returning None)")
+        return None
+    else:
+        return path[idxs[pos]+1:idxs[pos+1]]

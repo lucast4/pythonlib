@@ -114,10 +114,17 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max"):
     elif ver1=="max":
         mean_A = np.max(mindist_A)
         mean_B = np.max(mindist_B)
+    elif ver1=="min":
+        mean_A = np.min(mindist_A)
+        mean_B = np.min(mindist_B)
+        assert mean_A==mean_B, "min should be like this..."
 
     if ver2=="mean":
         dist = np.mean((mean_A,mean_B))
     elif ver2=="max":
         dist = np.max((mean_A,mean_B))
+
     return dist
+
+
 

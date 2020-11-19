@@ -1,4 +1,6 @@
 from pythonlib.tools.stroketools import *
+from .tasks import convertTask2Strokes
+from .strokedists import distscalarStrokes
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -8,8 +10,6 @@ import numpy as np
 
 """ general purpose analyusis, including model-based analysis .
 """
-
-
 
 # takes in a task, and computes parses, prior probabilities.
 # if given the behavior, will also compute likelihood.
@@ -461,6 +461,24 @@ class Dataset(object):
             self.things_done.append("getPosterior")
 
 
+
+    ##################### ANALYSIS STUFF
+    def getTaskStrokes(self, trial, ver="default"):
+        """ get task strokes, and could be chunked in diff ways
+        dependign on ver"""
+        if ver=="default":
+            strokes = self.trials[trial]["task"]["strokes"]
+        elif ver=="maxlikeli":
+            # parse with max posterior
+            likelis = [p["likeli"] for p in self.trials[trial]["model_parses"]]
+            idx = np.argmax(likelis)
+            strokes = self.trials[trial]["model_parses"][idx]["strokes"]
+        else:
+            print(ver)
+            assert False, "not coded"
+        return strokes
+
+
     ####################### PLOTS
     def plotPosteriorHist(self):
         posteriors = [t["posterior"] for t in self.trials]
@@ -473,12 +491,27 @@ class Dataset(object):
         # plt.ylim(top=0)
         # plt.xlim()
 
+    def plotTrialStrokes(self, trial, ax=None, ver="beh"):
+        """ strokes for this trial"""
+        if ax is None:
+            fig, ax = plt.subplots()
+        if ver=="beh":
+            strokes = self.trials[trial]["behavior"]["strokes"]
+        elif ver=="task":
+            strokes = self.getTaskStrokes(trial)
+        elif ver=="task_maxlikeli":
+            strokes = self.getTaskStrokes(trial, ver="maxlikeli")
+        else:
+            print(ver)
+            assert False, "not coded"
+        self.plotStrokes(strokes, ax=ax)
+
+
     def plotExampleTrial(self, trialind, max_parses = 34, sort_by_likeli=False):
         """ useful plots of beahviora nd scores/priors/likelies, for a given trial
         trial inds are from 0, 1, 2, ... (i.e,. not to original trial indices in 
         filedata)"""
         print("NOTE: the x and y lims are hacky, should change")
-        from .strokePlots import plotDatStrokes
         ncols = 6
         nparse = len(self.trials[trialind]["model_parses"])
         nparse = min(max_parses, nparse)
@@ -494,7 +527,7 @@ class Dataset(object):
         ax = axes[0,0]
         # ax = plotTrialSimple(filedata, 1, ax=ax, plotver="empty", nakedplot=True, plot_task_stimulus=False, plot_drawing_behavior=False)
         ax.plot(1,1)
-        plotDatStrokes(strokes_beh, ax=ax, plotver="strokes", add_stroke_number=False, each_stroke_separate=True)
+        self.plotStrokes(strokes_beh, ax)
         # plt.xlim([-400, 400])
         # plt.ylim([-600, 600])
         ax.set_title("behavior")
@@ -504,7 +537,7 @@ class Dataset(object):
         post = self.trials[trialind]["posterior"]
         # ax = plt.subplot(nrows, ncols, 2)
         ax = axes[0,1]
-        plotDatStrokes(strokes, ax=ax, plotver="strokes", add_stroke_number=False, each_stroke_separate=True)
+        self.plotStrokes(strokes, ax)
         ax.plot(1,1,'o')
         # plt.xlim([-400, 400])
         # plt.ylim([-600, 600])
@@ -520,11 +553,16 @@ class Dataset(object):
                 ax = axes.flatten()[i+2]
                 # ax = plt.subplot(nrows,ncols,i+3)
                 S = P["strokes"]
-                plotDatStrokes(S, ax=ax, plotver="strokes", add_stroke_number=False, each_stroke_separate=True)
+                self.plotStrokes(S, ax)
                 ax.set_title(f"sc{P['score']:.2f}, pr{P['prob']:.2f}, li{P['likeli']:.2f}")
                 # plt.xlim([-400, 400])
                 # plt.ylim([-400, 400])
 
+    def plotStrokes(self, strokes, ax):
+        """ wrapper"""
+        from .strokePlots import plotDatStrokes
+
+        plotDatStrokes(strokes, ax=ax, plotver="order", add_stroke_number=False, each_stroke_separate=False)
 
     ################## PRINT THINGS
     def printTrialsWithPostInRange(self, post_range):
@@ -651,3 +689,84 @@ def makePriorFunction(ver="uniform"):
         assert False, "not coded"
     
     return priorFunction, NORM_VER
+
+def makeParseFunction(ver="linePlusL"):
+    """ make function to parse tasks.
+    function(task, ...) --> chunklist, list of chunks,
+    where chunk is [[0,1], 2] for exmaple.
+    """
+
+    if ver=="linePlusL":
+        def parsefun(task, threshdist="adaptive", returnkeeplist=False):
+            """ get all partitions that have at least one
+            chunk of 2 strokes or more, and no chunks of
+            3 strokes or more.
+            - only chunks strokes if they are close"""
+            from pythonlib.drawmodel.strokedists import distmatStrokes    
+
+            # -- get stroke indices
+            strokes_task = convertTask2Strokes(task)
+            tmp = [i for i in range(len(strokes_task))]
+
+            # -- threshdist make mean of stroke lengths
+            if threshdist=="adaptive":
+                td = 0.75*np.mean(strokeDistances(strokes_task))
+            else:
+                td = threshdist
+
+            # -- get all partitions.
+            from pythonlib.tools.listtools import partition
+            A = list(partition(tmp))
+
+            # -- keep only partitions that have at least one multi-stroke chunk
+            A = [a for a in A if len(a)<len(tmp)]
+            # -- dont keep if have a chunk with >2 strokes chunked
+            def tmp(x):
+                return [len(xx)>2 for xx in x]
+            A = [a for a in A if not any(tmp(a))]
+
+            # -- check each chunk proximitiy - only keep if close.
+            Anew = []
+            keeplist = []
+            for a in A:
+                keep = True
+                for chunk in a:
+                    if len(chunk)>1:
+                        # check if strokes in this chunk are close
+                        # for all pairs of strok, compute min dist.
+                        # throw out chunk if any pair has dist greater than some thresh
+                        strokes1 = [strokes_task[n] for n in chunk]
+                        d = distscalarStrokes(strokes1, strokes1, ver="mindist_offdiag")
+                        if d>td:
+                            keep=False
+        #                     f, ax = plt.subplots()
+        #                     plotDatStrokes(strokes1, ax)
+        #                     assert False
+
+                if keep:
+                    Anew.append(a)
+                keeplist.append(keep)
+            A = Anew
+
+            if returnkeeplist:
+                return A, keeplist
+            else:
+                return A
+    else:
+        print(ver)
+        assert False, "nmot coded"
+    return parsefun
+
+## =====
+def transferParams(datamodel, strokes, tasks):
+    """ apply model in datamodel to a new datsaet (
+    strokes, tasks)
+    - returns a new datamodel object, already scored.
+    """
+    # 1) transfer params from one dataset/model to another dataset, same model
+    mod = Model(PARAMS = datamodel.model.PARAMS)
+    dataout = Dataset(strokes, tasks, PARAMS=datamodel.PARAMS)
+    dataout.applyModel(mod)
+    return dataout
+
+
