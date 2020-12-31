@@ -596,7 +596,7 @@ class Taskset(object):
         self.tasks = tasks # list of dicts.
 
 
-def makeLikeliFunction(ver="split_segments", norm_by_num_strokes=True, 
+def makeLikeliFunction(ver="segments", norm_by_num_strokes=True, 
     standardize_strokes=False, asymmetric=False):
     """ returns a function that can pass into Model,
     which does the job of computing likeli (ie., model human dist) 
@@ -606,6 +606,7 @@ def makeLikeliFunction(ver="split_segments", norm_by_num_strokes=True,
     - norm_by_num_strokes this default, shoudl be, for cases where distance is
     summed over strokes. This is true for distanceDTW.
     - standardize_strokes, then will subtract mean and divide by x liomits range
+    - combine_beh_segments, then combines all segments for animal into a single stroke.
     """
     if ver in ["split_segments", "timepoints"]:
         # these differ depending on direction fo strokes
@@ -619,10 +620,19 @@ def makeLikeliFunction(ver="split_segments", norm_by_num_strokes=True,
                 dist = -distanceBetweenStrokes(t["behavior"]["strokes"], strokes_parse)
                 if norm_by_num_strokes:
                     dist = dist/len(t["behavior"]["strokes"])
-            else:
+            elif ver in ["segments", "combine_segments"]:
                 from pythonlib.tools.stroketools import distanceDTW
-                dist = -distanceDTW(t["behavior"]["strokes"], strokes_parse, 
-                    ver=ver, norm_by_numstrokes=norm_by_num_strokes, asymmetric=asymmetric)[0]
+                if ver=="combine_segments":
+                    S = [np.concatenate(t["behavior"]["strokes"], axis=0)]
+                    v = "segments"
+                else:
+                    S = t["behavior"]["strokes"]
+                    v = "segments"
+                dist = -distanceDTW(S, strokes_parse, 
+                    ver=v, norm_by_numstrokes=norm_by_num_strokes, asymmetric=asymmetric)[0]
+            else:
+                assert False, "not coded"
+
             dists_all.append(dist)
         return dists_all
     return likeliFunction
@@ -696,7 +706,7 @@ def makeParseFunction(ver="linePlusL"):
     where chunk is [[0,1], 2] for exmaple.
     """
 
-    if ver=="linePlusL":
+    if "linePlusL" in ver:
         def parsefun(task, threshdist="adaptive", returnkeeplist=False):
             """ get all partitions that have at least one
             chunk of 2 strokes or more, and no chunks of
@@ -752,6 +762,13 @@ def makeParseFunction(ver="linePlusL"):
                 return A, keeplist
             else:
                 return A
+    elif ver=="onechunk":
+        def parsefun(task):
+            """ chunk into single stroke"""
+            strokes_task = convertTask2Strokes(task)
+            A = [[list(range(len(strokes_task)))]]
+            return A
+
     else:
         print(ver)
         assert False, "nmot coded"

@@ -119,6 +119,9 @@ class PopAnal():
         
         # === save
         self.Saved["pca"]={"w":w, "u":u}
+        if ploton:
+            return fig
+
 
     def reproject(self, Ndim=3):
         """ reprojects neural pop onto subspace.
@@ -126,6 +129,12 @@ class PopAnal():
         not then autoamitcalyl extracst those axes
         - Ndim is num axes to take."""
         
+        maxdim = self.X.shape[0] # max number of neurons
+        if Ndim>maxdim:
+            print(f"not enough actual neurons ({maxdim}) to match desired Ndim ({Ndim})")
+            print(f"reducing Ndim to {maxdim}")
+            Ndim = min((maxdim, Ndim))
+
         # - get old saved
         if "pca" not in self.Saved:
             print(f"- running {ver} for first time")
@@ -141,6 +150,13 @@ class PopAnal():
         # - reshape back to (nunits, ..., ...)
         sh = list(self.X.shape)
         sh[0] = Ndim
+        # print(self.X.shape)
+        # print(Ndim)
+        # print(Xsub.shape)
+        # print(self.Xcentered.shape)
+        # print(usub.T.shape)
+        # print(u.shape)
+        # print(u.)
         Xsub = np.reshape(Xsub, sh)
         # Ysub = Ysub.transpose((1, 0, 2))
 
