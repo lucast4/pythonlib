@@ -62,7 +62,8 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints",
     - RETURNS: (distscalar, best alignemnt.)
     - NOTE: this should make distanceBetweenStrokes() obsolete
     - norm_by_numstrokes, divide by num strokes (beh only if assyum,.
-    max of task and beh if syummeteric)
+    min of task and beh if syummeteric) [note, this fixed, taking min
+    is better than max, since if take max this can be cheated]
     """
     from pythonlib.tools.timeseriestools import DTW
     if ver=="timepoints":

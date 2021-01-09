@@ -3,6 +3,10 @@
 # In general functions will take in a strokes obejct, which is a 
 # list of np arrays, each a stroke (N x 2). in general will
 # return a list of features, one for each stroke.
+# NOTE Confirmed that have moved everything here from the following
+# places where I also tend to put feature analyuses:
+# drawmonkey.calc , ...
+
 
 
 import numpy as np
@@ -25,7 +29,8 @@ def getCentersOfMass(strokes, method="use_median"):
         assert False, "not coded"
 
 
-def stroke2angle(strokes, stroke_to_use="all_strokes", force_use_two_points=False):
+def stroke2angle(strokes, stroke_to_use="all_strokes", 
+    force_use_two_points=False):
     """ get angles. outputs a list.
     - "first", then takes first stroke and gets vector
     from first to last point, and gets

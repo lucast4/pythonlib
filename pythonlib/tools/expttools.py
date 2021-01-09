@@ -72,3 +72,23 @@ def extractStrFromFname(fname, sep, pos):
         return None
     else:
         return path[idxs[pos]+1:idxs[pos+1]]
+
+def checkIfDirExistsAndHasFiles(dirname):
+    """ returns (exists?, hasfiles?), 
+    - hasfiles is obviously always False if exists
+    is False
+    """
+    import os
+    if os.path.isdir(dirname):
+        exists = True
+        if len(os.listdir(dirname))>0:
+            hasfiles = True
+        else:
+            hasfiles = False
+    else:
+        exists = False
+        hasfiles = False
+
+    return (exists, hasfiles)
+
+    

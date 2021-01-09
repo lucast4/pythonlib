@@ -675,8 +675,11 @@ def getOnOff(strokes, relativetimesec=False):
     return (onsets, offsets)
 
 
-def standardizeStrokes(strokes, onlydemean=False, ver="xonly"):
+def standardizeStrokes(strokes, onlydemean=False, ver="xonly",
+    return_tform_func=False):
     """ standardize in space (so centered at 0, and x range is from -1 to 1
+    - if return_tform_func, then returns function that can apply to any 
+    strokes, giving the same transformation: tform(strokes)
     ) """
     if ver=="xonly":
         center = np.mean(getCentersOfMass(strokes, method="use_mean"))
@@ -685,17 +688,27 @@ def standardizeStrokes(strokes, onlydemean=False, ver="xonly"):
         x_scale = xlims[1]-xlims[0]
         if onlydemean:
             x_scale = 1.
-        return [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
+
+        def tform(strokes):
+            strokes = [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
+            return strokes
+
     elif ver=="centerize":
         center = np.mean(np.concatenate(strokes), axis=0)[:2]
-        if strokes[0].shape[1]==3:
-            strokes = [s-np.r_[center,0] for s in strokes]
-        else:
-            strokes = [s-center for s in strokes]
-        return strokes
+        def tform(strokes):
+            if strokes[0].shape[1]==3:
+                strokes = [s-np.r_[center,0] for s in strokes]
+            else:
+                strokes = [s-center for s in strokes]
+            return strokes
     else:
         print(ver)
         assert False, "not coded"
+
+    if return_tform_func:
+        return tform(strokes), tform
+    else:
+        return tform(strokes)
 
 
     # print(x_scale)

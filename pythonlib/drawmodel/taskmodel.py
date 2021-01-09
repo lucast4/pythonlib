@@ -40,12 +40,16 @@ class Model(object):
 
         self.PARAMS = PARAMS
         self.name = PARAMS["name"]
+
+        # parsing
         self.use_presaved_parses = PARAMS["use_presaved_parses"]
         self.parse_ver = PARAMS["parse_ver"]
-        self.chunkmodel = PARAMS["chunkmodel"]
 
+        # chunking
+        self.chunkmodel = PARAMS["chunkmodel"]
         if self.parse_ver == "chunks":
             assert isinstance(self.chunkmodel, str) or callable(self.chunkmodel), "tell which model to use (e..g, 3lines)"
+
 
         self.priorFunction, self.prior_norm_ver_optional = makePriorFunction(ver=PARAMS["priorver"])
         self.likeliFunction = makeLikeliFunction(ver=PARAMS["likeliver"])
@@ -194,13 +198,16 @@ class Model(object):
         for p in parses:
             p["score"] = self.priorFunction(p, trial=trial)
 
-
     def getPriorProb(self, trial, NORM_VER = "divide", PARAMS=None):
         """ conver to rpobs"""
         parses = trial["model_parses"]
         scores = np.array([p["score"] for p in parses])
         probs = self.normscore(scores, ver=NORM_VER, params=PARAMS["normscore"])
-
+        # print(scores)
+        # print(probs)
+        # print(NORM_VER)
+        # print(PARAMS["normscore"])
+        # assert False
         for p, r in zip(parses, probs):
             p["prob"] = r
 
@@ -376,7 +383,7 @@ class Dataset(object):
 ###################################
     def checkifrun(self, process):
         """ process is string name
-        - returns False not run, True if shuld run"""
+        - returns False if should not run, True if shuld run"""
         if process in self.run_only_once and process in self.things_done:
             return False
         else:
@@ -385,15 +392,15 @@ class Dataset(object):
     def run(self):
         self.things_done = list(set(self.things_done))
 
-        # ====== PREPARE DATA - DO THIS ONCE for combo of model and data
-        if self.checkifrun("standardize"):
-            self.standardize()
-            self.things_done.append("standardize")
-
         # e.g., get parses, etc.
         if self.checkifrun("parse"):
             self.parse()
             self.things_done.append("parse")
+
+        # ====== PREPARE DATA - DO THIS ONCE for combo of model and data
+        if self.checkifrun("standardize"):
+            self.standardize()
+            self.things_done.append("standardize")
 
         # == 2) Evaluate
         self.score()
@@ -406,10 +413,12 @@ class Dataset(object):
             # if standardize_strokes:
                 from pythonlib.tools.stroketools import standardizeStrokes
                 # for each stroke object, center and subtract range (X)
-                t["behavior"]["strokes"] = standardizeStrokes(t["behavior"]["strokes"])
-                t["task"]["strokes"] = standardizeStrokes(t["task"]["strokes"])
+                # use task to standardize, then apply that transfomation to all other things
+                t["task"]["strokes"], tform_func = standardizeStrokes(t["task"]["strokes"], ver="centerize", 
+                                  return_tform_func=True)
+                t["behavior"]["strokes"] = tform_func(t["behavior"]["strokes"])
                 for p in t["model_parses"]:
-                    p["strokes"] = standardizeStrokes(p["strokes"])
+                    p["strokes"] = tform_func(p["strokes"])
                 # t["model_parses"]["strokes"] = standardizeStrokes(t["task"]["strokes"])
 
 
@@ -431,35 +440,45 @@ class Dataset(object):
                 self.model.getParses(t, split=parses_split, both_direction=parses_bothdir)
 
 
-    def score(self):
-        """ EVALUATE POSTERIOR SCORE """
+    def score(self, force_run = None):
+        """ EVALUATE POSTERIOR SCORE 
+        - force_run, list of things. if this is not None, then the items
+        in this (and only these items) will be run"""
         prior_ver = self.PARAMS["prior_norm_ver"]
         posterior_ver = self.PARAMS["posterior_ver"]
 
-        if self.checkifrun("prior_score"):
+        def check(op):
+            """ returns False to not run, True to run
+            - op is a string, see below fior uasage."""
+            if force_run is None:
+                return self.checkifrun(op)
+            else:
+                return op in force_run
+
+
+        if check("prior_score"):
             # print("[prior scoring]")
             for t in self.trials:
                 self.model.getPriorScore(t, PARAMS=self.PARAMS["getPriors"])
             self.things_done.append("prior_score")
 
-        if self.checkifrun("prior_probs"):
+        if check("prior_probs"):
             # print("[prior score2prob]")
             for t in self.trials:
                 self.model.getPriorProb(t, NORM_VER = prior_ver, PARAMS=self.PARAMS["getPriors"])
             self.things_done.append("prior_probs")
 
-        if self.checkifrun("getLikelis"):
+        if check("getLikelis"):
             # print("[likelis]")
             for t in self.trials:
                 self.model.getLikelis(t, PARAMS=self.PARAMS["getLikelis"])
             self.things_done.append("getLikelis")
 
-        if self.checkifrun("getPosterior"):
+        if check("getPosterior"):
             # print("[posteriors]")
             for t in self.trials:
                 self.model.getPosterior(t, ver=posterior_ver, PARAMS=self.PARAMS["getPosteriors"])
             self.things_done.append("getPosterior")
-
 
 
     ##################### ANALYSIS STUFF
@@ -507,11 +526,17 @@ class Dataset(object):
         self.plotStrokes(strokes, ax=ax)
 
 
-    def plotExampleTrial(self, trialind, max_parses = 34, sort_by_likeli=False):
+    def plotExampleTrial(self, trialind, max_parses = 34, sort_by_likeli=False,
+        sort_by = None):
         """ useful plots of beahviora nd scores/priors/likelies, for a given trial
         trial inds are from 0, 1, 2, ... (i.e,. not to original trial indices in 
         filedata)"""
         print("NOTE: the x and y lims are hacky, should change")
+
+        if sort_by_likeli: 
+            # legacy code
+            sort_by = "likeli"
+        
         ncols = 6
         nparse = len(self.trials[trialind]["model_parses"])
         nparse = min(max_parses, nparse)
@@ -544,9 +569,15 @@ class Dataset(object):
 
         ax.set_title(f"task|post={post:.2f}")
         parses = self.trials[trialind]["model_parses"]
-        if sort_by_likeli:
-            # print(sorted(parses, key=lambda x:x["likeli"])[0])
-            parses = sorted(parses, key=lambda x:-x["likeli"])
+        if sort_by is not None:
+            if sort_by == "likeli":
+                # print(sorted(parses, key=lambda x:x["likeli"])[0])
+                parses = sorted(parses, key=lambda x:-x["likeli"])
+            elif sort_by == "prior":
+                parses = sorted(parses, key=lambda x:-x["prob"])
+            else:
+                print(sort_by)
+                assert False, "not coded"
 
         for i, P in enumerate(parses):
             if i<max_parses:
@@ -645,59 +676,64 @@ def makePriorFunction(ver="uniform"):
     - convention: positive is better
     """
     NORM_VER = "softmax"
-        
-    if ver=="uniform":
-        # just give it a constant
-        priorFunction = lambda x, trial:1
-    elif ver=="prox_to_origin":
-        # first find closest line, then touch closest poitn
-        # on that line, and so on.
-        def getDistFromOrig(point, orig):
-            return np.linalg.norm(point-orig)
 
-        def priorFunction(p, trial):
-            strokes = p["strokes"]
-            centers = getCentersOfMass(strokes)
-            orig = trial["task"]["fixpos"]
-            distances = [getDistFromOrig(c, orig) for c in centers]
-            s = np.sum(np.diff(distances)) # this is most positive when strokes are ordered from close to far
-            return s
-    elif ver=="distance_travel":
-        from pythonlib.tools.stroketools import computeDistTraveled
-        def priorFunction(p, trial):
-            strokes = p["strokes"]
-            orig = trial["task"]["fixpos"]
-            cumdist = computeDistTraveled(strokes, orig, include_lift_periods=True)
-            s = -cumdist # better if distance traveled is shorter
-            return s
-    elif ver=="angle_test":
-        # qwuickly putting together fake angles, e.g, empirical distrubtion
-        # based on single stroke tasks.
+    if isinstance(ver, str):
+        # pre-coded prior models
+        if ver=="uniform":
+            # just give it a constant
+            priorFunction = lambda x, trial:1
+        elif ver=="prox_to_origin":
+            # first find closest line, then touch closest poitn
+            # on that line, and so on.
+            def getDistFromOrig(point, orig):
+                return np.linalg.norm(point-orig)
 
-        from math import pi
-        probs_empirical = {
-            (0, pi/2):1,
-            (pi/2, pi):0.25,
-            (pi, 3*pi/2):0.25,
-            (3*pi/2, 2*pi):1
-        }
+            def priorFunction(p, trial):
+                strokes = p["strokes"]
+                centers = getCentersOfMass(strokes)
+                orig = trial["task"]["fixpos"]
+                distances = [getDistFromOrig(c, orig) for c in centers]
+                s = np.sum(np.diff(distances)) # this is most positive when strokes are ordered from close to far
+                return s
+        elif ver=="distance_travel":
+            from pythonlib.tools.stroketools import computeDistTraveled
+            def priorFunction(p, trial):
+                strokes = p["strokes"]
+                orig = trial["task"]["fixpos"]
+                cumdist = computeDistTraveled(strokes, orig, include_lift_periods=True)
+                s = -cumdist # better if distance traveled is shorter
+                return s
+        elif ver=="angle_test":
+            # qwuickly putting together fake angles, e.g, empirical distrubtion
+            # based on single stroke tasks.
 
-        def _getprob(dat):
-            for angles, prob in probs_empirical.items():
-                if dat>=angles[0] and dat<angles[1]:
-                    return prob
-                
-        def priorFunction(p, trial):
-            from pythonlib.tools.stroketools import stroke2angle
-            strokes = p["strokes"]
-            angles = stroke2angle(strokes)
-            probs = [_getprob(A) for A in angles]
-            s = np.sum(probs) # for now take sum over all strokes
-            return s      
-        NORM_VER = "divide" # since this is already in units of probabilti.
+            from math import pi
+            probs_empirical = {
+                (0, pi/2):1,
+                (pi/2, pi):0.25,
+                (pi, 3*pi/2):0.25,
+                (3*pi/2, 2*pi):1
+            }
+
+            def _getprob(dat):
+                for angles, prob in probs_empirical.items():
+                    if dat>=angles[0] and dat<angles[1]:
+                        return prob
+                    
+            def priorFunction(p, trial):
+                from pythonlib.tools.stroketools import stroke2angle
+                strokes = p["strokes"]
+                angles = stroke2angle(strokes)
+                probs = [_getprob(A) for A in angles]
+                s = np.sum(probs) # for now take sum over all strokes
+                return s      
+            NORM_VER = "divide" # since this is already in units of probabilti.
+        else:
+            assert False, "not coded"
     else:
-        assert False, "not coded"
-    
+        # Then this needs to be the function. I won't check but assume so.
+        priorFunction = ver
+
     return priorFunction, NORM_VER
 
 def makeParseFunction(ver="linePlusL"):
@@ -786,4 +822,38 @@ def transferParams(datamodel, strokes, tasks):
     dataout.applyModel(mod)
     return dataout
 
+## === WRAPPERS
+def getParamsWrapper(priorver="distance_travel", parse_ver="permutations",
+              chunkmodel = None, name="test", posterior_ver="weighted",
+              likeliver="segments"):
+    """ Wrapper to get default + 
+    modified model params (based on user inputs)
+    - Returned params can be passed into model like:
+        mod = Model(PARAMS_MODEL)
+        data = Dataset(strokes, tasks, PARAMS=PARAMS_DATA)
+        data.applyModel(mod)
+    """
+
+    # ---1) Build model
+    PARAMS_DATA = {
+        "getPriors":{"normscore":[4, True]}, # softmax (temp, centerize?)
+        "getLikelis":None,
+        "getPosteriors":None,
+        "parse":{"parses_split":False, "parses_bothdir":False},
+        "posterior_ver":posterior_ver,
+        "prior_norm_ver":"softmax",
+        "standardize":{"standardize_strokes":False},
+        "run_only_once":['parse', 'prior_score', 'getLikelis']
+    }
+
+    # 3) Prepare model
+    PARAMS_MODEL = {
+        "use_presaved_parses":False,
+        "priorver":priorver,
+        "likeliver":likeliver,
+        "parse_ver":parse_ver,
+        "chunkmodel":chunkmodel,
+        "name":name
+    }
+    return PARAMS_DATA, PARAMS_MODEL
 
