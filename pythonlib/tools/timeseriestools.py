@@ -1,6 +1,54 @@
 
 import numpy as np
 
+def stackTrials(Xlist, ver="append_nan"):
+    """ 
+    take list of neural activations, stack into single matrix. 
+    Useful if, e.g., each trial different length, and want to 
+    preprocess in standard ways to make them all one stack.
+    - Xlist, list, length trials, each element (nunits, timebins).
+    can have diff timebine, but shoudl have same nunits.
+    RETURNS:
+    - Xout, (ntrials, nunits, timebins), array
+    """
+
+    assert len(list(set([X.shape[0] for X in Xlist])))==1, "all need to have same n units"
+    nunits = Xlist[0].shape[0]
+    
+    if ver=="append_nan":
+        # appends nans to each trial so they all length same as max
+        
+        # 1) max length
+        lens = [X.shape[1] for X in Xlist]
+        maxlen = max(lens)
+        print(f"appending nans to each trial timebins so match max time: {maxlen}")
+        # 2) append nans
+        Xlistout = []
+        for X in Xlist:
+            nt = X.shape[1]
+            nanarray = np.empty_like(X, shape=(nunits, maxlen-nt))
+            nanarray[:] = np.nan
+            
+            Xout = np.concatenate((X, nanarray), axis=1)
+            Xlistout.append(Xout)
+        
+        # 3) stack
+        Xout = np.array(Xlistout)
+        
+        
+    elif ver=="cut_to_min":
+        # cuts length of all trials to min len over trials
+        assert False
+    elif ver=="time_warp":
+        # time warp
+        assert False, "not coded"
+    else:
+        assert False, "not coded"
+    
+    print(f"shape of output X: {Xout.shape}")
+    return Xout
+
+
 def smoothDat(x, window_len=11, window='hanning', flip_at_edges=False):
     """smooth the data using a window with requested size.
     

@@ -4,6 +4,71 @@ specifically for tasks in monkeylogic
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
 
+class TaskClass(object):
+    """ Holds a single task object.
+    """
+
+    def __init__(self, task):
+        """ task can be formated in several ways:
+        (1) ML2 task, which is a dict. 
+        i.e., task = getTrialsTask(fd, 1), or
+        _, tasklist = Probedat.pd2strokes(Probedat.Probedat) [this
+        is same, but has also "strokes" and "fixpos"
+        ... (nothing else coded so far)
+        """
+        self.Task = task
+        if "strokes" not in self.Task.keys():
+            assert False, "see Probedat.pd2strokes for how to get this."
+
+
+    ####################### ASSIGN EACH TASK STROKE A LABEL
+    def assignLabelToEachStroke(self, method):
+        """ label is generally string, but is like a class
+        - method is either string, or a function, i..e,
+        func(self.Task) --> <list of labels>.
+        """
+        if isinstance(method, str):
+            assert False, "not coded yet"
+        else:
+            # assume method is a function
+            lab = method(self.Task)
+            if len(lab)==0:
+                assert False
+            self.TaskLabels = lab
+
+
+
+    ####################### GET FEATURES
+    # (see efficiency cost model)
+
+
+    ####################### GET PARSES
+    # (see taskmodel and below)
+
+
+    ####################### TAKE IN A BEHAVIORAL TRIAL AND DO SOMETHING
+    def behAssignClosestTaskStroke(self, strokes_beh):
+        """ for each beh stroke, it is "assigned" a task stroke (not vice versa)
+        assign each stroke the task stroke that is the closest
+        """
+        from pythonlib.tools.vectools import modHausdorffDistance
+        if len(strokes_beh)==0:
+            assert False, "strokes_beh is empty" 
+        strokes_task = self.Task["strokes"]
+        assignments =[]
+        for s_beh in strokes_beh:
+            
+            # get distnaces from this behavioal stroke to task strokes
+            distances = [modHausdorffDistance(s_beh, s_task) for s_task in strokes_task]
+
+            # if len(distances)==0:
+            #     asdfasfsdf
+            # assign the closest stroke
+            assignments.append(np.argmin(distances))
+        return assignments
+
+
+
 def task2chunklist(task):
     """
     """

@@ -28,13 +28,30 @@ class PopAnal():
     """ for analysis of population state spaces
     """
 
-    def __init__(self, X, axislabels=None, dim_units=0):
-        """ X is (nunits, cond1, cond2, ...)
-        axislabels = list of strings
+    def __init__(self, X, axislabels=None, dim_units=0, stack_trials_ver="append_nan"):
+        """ 
+        Options for X:
+        - array, where one dimensions is nunits. by dfefualt that should 
+        be dim 0. if not, then tell me in dim_units which it is.
+        - list, length trials, each element (nunits, timebins).
+        can have diff timebine, but shoudl have same nunits. 
+        Useful if, e.g., each trial different length, and want to 
+        preprocess in standard ways to make them all one stack.
+        - axislabels = list of strings
         - dim_units, dimeision holding units. if is not
         0 then will transpose to do all analyses.
+        ATTRIBUTES:
+        - X, (nunits, cond1, cond2, ...). NOTE, can enter different
+        shape, but tell me in dim_units which dimension is units. will then
+        reorder.
+
         """
-        self.X = X
+        if isinstance(X, list):
+            from ..tools.timeseriestools import stackTrials
+            self.X = stackTrials(X, ver=stack_trials_ver)
+            assert dim_units==1, "are you sure? usually output of stackTrials puts trials as dim0."
+        else:
+            self.X = X
         self.Saved = {}
         self.dim_units = dim_units
         self.preprocess()

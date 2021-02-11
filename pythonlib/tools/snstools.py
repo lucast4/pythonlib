@@ -40,5 +40,14 @@ def relplotOverlaid(df, line_category, color, **relplotkwargs):
     """
     catlist = set(df[line_category])
     palette = {n:color for n in catlist}
+    relplotkwargs["legend"]= False # since all same color, legend is useulse..
     relplotkwargs["palette"]= palette
     return sns.relplot(**relplotkwargs)
+
+
+def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=None):
+    g = sns.FacetGrid(data, row="block", sharex=True, sharey=True, height=3, aspect=3,
+                     legend_out=True)
+    g = g.map(sns.scatterplot, x, y, hue, palette=palette)
+    g = g.map(sns.lineplot, x, y, hue, palette=palette, legend="full")
+    return g
