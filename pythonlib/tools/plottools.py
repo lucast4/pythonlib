@@ -226,3 +226,37 @@ def saveMultToPDF(path, figs):
     for fig in figs:
         pdf.savefig(fig, dpi=100)
     pdf.close()
+
+def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None):
+    """ Draw plot with error band and extra formatting to match seaborn style
+    - pass eitehr yerr (symmetric) or ylowupp, a list of [yupper, ylower], or neither,
+    if no plot error
+    from https://stackoverflow.com/questions/56203420/how-to-use-custom-error-bar-in-seaborn-lineplot
+    """
+    a = yerr is not None
+    b = ylowupp is not None
+    if a or b:
+        assert a!=b, "only guive me one of them"
+
+    if a:
+        lower = y - yerr
+        upper = y + yerr
+    elif b:
+        lower, upper = ylowupp
+    else:
+        lower, upper = None, None
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(9,5))
+
+    ax.plot(x, y, label='')
+    if a or b:
+        ax.plot(x, lower, color='tab:blue', alpha=0.1)
+        ax.plot(x, upper, color='tab:blue', alpha=0.1)
+        ax.fill_between(x, lower, upper, alpha=0.2)
+    # ax.set_xlabel('timepoint')
+    # ax.set_ylabel('signal')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    # plt.show()
+    return ax
