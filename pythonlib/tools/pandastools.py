@@ -161,7 +161,20 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     - groupby, hwo to group
     - new_col_name, what to call new col.
     output will be same size as df, but with extra column.
+    - If groupby is [], then will apply to all rows
     """
+
+    if len(groupby)==0:
+        # then add dummy column
+        dummyname="dummy"
+        while dummyname in df.columns:
+            dummyname+="1"
+        df[dummyname] = 0
+        groupby = [dummyname]
+        remove_dummy=True
+    else:
+        remove_dummy=False
+
     dfthis = df.groupby(groupby).apply(F).reset_index().rename(columns={0:new_col_name})
     # print(dfthis)
     # dfthis will be smaller than df. but merge will expand dfthis.
@@ -178,9 +191,16 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     #         print([[row[kbin]], [row["stroknum"]]])
     #         print("--")
 
-    if return_grouped_df:
-        return [pd.merge(df, dfthis, on=groupby), dfthis]
-    else:
-        return pd.merge(df, dfthis, on=groupby)
+    df_new = pd.merge(df, dfthis, on=groupby)
 
+    # remove dummy
+    if remove_dummy:
+        del df[dummyname]
+        del dfthis[dummyname]
+        del df_new[dummyname]
+
+    if return_grouped_df:
+        return df_new, dfthis
+    else:
+        return df_new
 

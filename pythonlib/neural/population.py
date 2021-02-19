@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def plotNeurHeat(X, ax=None, barloc="right", robust=True):
+def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
     """ plot heatmap for data X.
     X must be (neuron, time)
     """
@@ -13,11 +13,17 @@ def plotNeurHeat(X, ax=None, barloc="right", robust=True):
         fig, ax = plt.subplots(figsize=(10,5))
     
     # X = self.activations[pop][tasknum]
-    minmax = (np.min(X), np.max(X))
+    X_nonan = X[:]
+    X_nonan = X_nonan[~np.isnan(X_nonan)]
+    minmax = (np.min(X_nonan), np.max(X_nonan))
 
     # plot
-    # X = pd.DataFrame(X)            
-    sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
+    # X = pd.DataFrame(X)           
+    if zlims is not None: 
+        sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
+               robust=robust, vmin=zlims[0], vmax=zlims[1])
+    else:
+        sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
                robust=robust)
     # ax.set_title(f"{pop}|{minmax[0]:.2f}...{minmax[1]:.2f}")
     ax.set_xlabel(f"robust={robust}|{minmax[0]:.2f}...{minmax[1]:.2f}")
@@ -34,7 +40,8 @@ class PopAnal():
     """ for analysis of population state spaces
     """
 
-    def __init__(self, X, axislabels=None, dim_units=0, stack_trials_ver="append_nan"):
+    def __init__(self, X, axislabels=None, dim_units=0, stack_trials_ver="append_nan", 
+        feature_list = None):
         """ 
         Options for X:
         - array, where one dimensions is nunits. by dfefualt that should 
@@ -49,10 +56,13 @@ class PopAnal():
         - axislabels = list of strings
         - dim_units, dimeision holding units. if is not
         0 then will transpose to do all analyses.
+        - feature_list = list of strings, each identifying one column for X if 
+        X is datafarme, where these are features already extracted in X, useful for 
+        downstream analysis.
         ATTRIBUTES:
         - X, (nunits, cond1, cond2, ...). NOTE, can enter different
         shape, but tell me in dim_units which dimension is units. will then
-        reorder.
+        reorder. *(nunits, ntrials, time)
 
         """
         self.Xdataframe = None
@@ -72,12 +82,16 @@ class PopAnal():
                 X = [x for x in X["neur"].values] # list, where each elemnent is (nunits, tbins)
                 self.X = stackTrials(X, ver=stack_trials_ver)
                 assert dim_units==1, "are you sure? usually output of stackTrials puts trials as dim0."
+
+            self.Featurelist = feature_list
         else:
             self.X = X
         self.Saved = {}
         self.preprocess()
         print("Final shape of self.X; confirm that is (nunits, ntrials, time)")
         print(self.X.shape)
+
+
 
     def preprocess(self):
         """ preprocess X, mainly so units dimension is axis 0 
@@ -130,7 +144,7 @@ class PopAnal():
         print(f"shape of self.Xsorted: {self.Xsorted.shape}")        
 
 
-    def centerAndStack(self):
+    def centerAndStack(self, return_means=False):
         """ convert to (nunits, -1), 
         and center each row.
         """
@@ -138,13 +152,16 @@ class PopAnal():
         # - reshape to N x tiembins
         X = np.reshape(X, (X.shape[0],-1))
         # - demean
-        X = X - np.mean(X, axis=1)[:, None]
+        means = np.mean(X, axis=1)[:, None]
+        X = X - means
         
         self.Xcentered = X
+        self.Saved["centerAndStack_means"] = means # if want to apply same trnasformation in future data.
 
     def pca(self, ver="eig", ploton=False):
         """ perform pca
-        - saves in cache the axes"""
+        - saves in cache the axes, self.Saved["pca"]
+        """
         
         self.centerAndStack()
 
@@ -196,6 +213,50 @@ class PopAnal():
         if ploton:
             return fig
 
+    # def reproject1(self, Ndim=3):
+    #     """ reprojects neural pop onto subspace.
+    #     uses axes defined by ver. check if saved if 
+    #     not then autoamitcalyl extracst those axes
+    #     - Ndim is num axes to take."""
+        
+    #     maxdim = self.X.shape[0] # max number of neurons
+    #     # if Ndim>maxdim:
+    #     #     print(f"not enough actual neurons ({maxdim}) to match desired Ndim ({Ndim})")
+    #     #     print(f"reducing Ndim to {maxdim}")
+    #     #     Ndim = min((maxdim, Ndim))
+
+    #     # # - get old saved
+    #     # if "pca" not in self.Saved:
+    #     #     print(f"- running {ver} for first time")
+    #     #     self.pca(ver="eig")
+
+    #     if True:
+    #         w = self.Saved["pca"]["w"]
+    #         u = self.Saved["pca"]["u"]
+                
+    #         # - project data onto eigen
+    #         usub = u[:,:Ndim]
+    #         Xsub = usub.T @ self.Xcentered
+
+    #         # - reshape back to (nunits, ..., ...)
+    #         sh = list(self.X.shape)
+    #         sh[0] = Ndim
+    #         # print(self.X.shape)
+    #         # print(Ndim)
+    #         # print(Xsub.shape)
+    #         # print(self.Xcentered.shape)
+    #         # print(usub.T.shape)
+    #         # print(u.shape)
+    #         # print(u.)
+    #         Xsub = np.reshape(Xsub, sh)
+    #         # Ysub = Ysub.transpose((1, 0, 2))
+    #     else:
+    #         Xsub = self.reprojectInput(self.X, Ndim)
+
+
+    #     # -- return with units in the correct axis
+    #     return self.unpreprocess(Xsub)
+
 
     def reproject(self, Ndim=3):
         """ reprojects neural pop onto subspace.
@@ -203,39 +264,75 @@ class PopAnal():
         not then autoamitcalyl extracst those axes
         - Ndim is num axes to take."""
         
-        maxdim = self.X.shape[0] # max number of neurons
-        if Ndim>maxdim:
-            print(f"not enough actual neurons ({maxdim}) to match desired Ndim ({Ndim})")
-            print(f"reducing Ndim to {maxdim}")
-            Ndim = min((maxdim, Ndim))
+        # maxdim = self.X.shape[0] # max number of neurons
+        # if Ndim>maxdim:
+        #     print(f"not enough actual neurons ({maxdim}) to match desired Ndim ({Ndim})")
+        #     print(f"reducing Ndim to {maxdim}")
+        #     Ndim = min((maxdim, Ndim))
+
+        # # - get old saved
+        # if "pca" not in self.Saved:
+        #     print(f"- running {ver} for first time")
+        #     self.pca(ver="eig")
+
+        Xsub = self.reprojectInput(self.X, Ndim)
+
+        # -- return with units in the correct axis
+        return self.unpreprocess(Xsub)
+
+    def reprojectInput(self, X, Ndim=3, Dimslist = None):
+        """ same as reproject, but here project activity passed in 
+        X.
+        - X, (nunits, *), as many dim as wanted, as long as first dim is nunits (see reproject
+        for how to deal if first dim is not nunits)
+        - Dimslist, insteast of Ndim, can give me list of dims. Must leave Ndim None.
+        ==== RETURNS
+        - Xsub, (Ndim, *) [X not modified]
+        """
+
+        nunits = X.shape[0]
+        sh = list(X.shape) # save original shape.
+
+        if Dimslist is not None:
+            assert Ndim is None, "choose wiether to take the top N dim (Ndim) or to take specific dims (Dimslist)"
+            numdims = len(Dimslist)
+        else:
+            assert Ndim is not None
+            numdims = Ndim
+
+        if numdims>nunits:
+            print(f"not enough actual neurons ({nunits}) to match desired num dims ({numdims})")
+            assert False
+            # print(f"reducing Ndim to {nunits}")
+            # Ndim = min((nunits, Ndim))
 
         # - get old saved
         if "pca" not in self.Saved:
             print(f"- running {ver} for first time")
             self.pca(ver="eig")
 
+        # 1) center and stack
+        # X = X.copy()
+        # - reshape to N x tiembins
+        X = np.reshape(X, (nunits,-1)) # (nunits, else)
+        # - demean
+        X = X - self.Saved["centerAndStack_means"] # demean
+
+        # 2) 
         w = self.Saved["pca"]["w"]
         u = self.Saved["pca"]["u"]
-            
-        # - project data onto eigen
-        usub = u[:,:Ndim]
-        Xsub = usub.T @ self.Xcentered
+        if Ndim is None:
+            usub = u[:,Dimslist]
+        else:
+            usub = u[:,:Ndim]
+        Xsub = usub.T @ X
 
-        # - reshape back to (nunits, ..., ...)
-        sh = list(self.X.shape)
-        sh[0] = Ndim
-        # print(self.X.shape)
-        # print(Ndim)
-        # print(Xsub.shape)
-        # print(self.Xcentered.shape)
-        # print(usub.T.shape)
-        # print(u.shape)
-        # print(u.)
+        # 3) reshape back to origuinal
+        sh[0] = numdims
         Xsub = np.reshape(Xsub, sh)
-        # Ysub = Ysub.transpose((1, 0, 2))
 
-        # -- return with units in the correct axis
-        return self.unpreprocess(Xsub)
+        return Xsub
+
 
     ### ANALYSIS
     def dataframeByTrial(self, dim_trial = 1, columns_to_add = None):
@@ -245,7 +342,7 @@ class PopAnal():
         entry must be same length as num trials.
         - dim_trial, which dim is trialnum?
         """
-        print("[DEPRECATED] - isntead, pass in list of dicts to PopAnal directly, this ensures keeps all fields in the dicts")
+        assert False, "[DEPRECATED] - isntead, pass in list of dicts to PopAnal directly, this ensures keeps all fields in the dicts"
         ntrials = self.X.shape[dim_trial]
 
 
@@ -265,6 +362,46 @@ class PopAnal():
 
         return df
 
+    # Data Transformations
+    def zscoreFr(self, groupby=[]):
+        """ z-score firing rates using across trial mean and std.
+        - groupby, what mean and std to use. if [], then all trials
+        combined (so all use same mean and std). if ["circ_binned"], 
+        then asks for each trial what its bin (for circuiliatry) and then
+        uses mean and std within that bin. Must have binned data first 
+        before this (see binFeatures)
+        ==== RETURN:
+        modifies self.Xdataframe, adds column "neur_z"
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        # 1. get mean and std.
+        _, colname_std = self.aggregate(groupby, "trial", "std", "std", return_new_col_name=True)
+        _, colname_mean = self.aggregate(groupby, "trial", "mean", "mean", return_new_col_name=True)
+
+        # 2. take zscore
+        def F(x):
+            # returns (neur, time) fr in z-score units
+            return (x["neur"] - x[colname_mean])/x[colname_std]
+
+        self.Xdataframe = applyFunctionToAllRows(self.Xdataframe, F, newcolname="neur_z")
+
+    def binFeatures(self, nbins, feature_list=None):
+        """ assign bin to each trial, based on its value for feature
+        in feature_list.
+        - nbins, int, will bin by percentile (can modify to do uniform)
+        - feature_list, if None, then uses self.Featurelist. otherwise give
+        list of strings, but these must already be columnes in self.Xdataframe
+        === RETURNS
+        self.Xdataframe modifed to have new columns, e..g, <feat>_bin
+        """
+        if feature_list is None:
+            feature_list = self.Featurelist
+
+        for k in feature_list:
+            kbin = self.binColumn(k, nbins)
+
+
     def binColumn(self, col_to_bin, nbins):
         """ assign bin value to each trial, by binning based on
         scalar variable.
@@ -275,7 +412,7 @@ class PopAnal():
         return new_col_name
 
     def aggregate(self, groupby, axis, agg_method="mean", new_col_suffix="agg", 
-        force_redo=False):
+        force_redo=False, return_new_col_name = False, fr_use_this = "raw"):
         """ get aggregate pop activity in flexible ways.
         - groupby is how to group trials (rows of self.Xdataframe). 
         e.g., if groupby = [], then combines all trials into one aggreg.
@@ -286,6 +423,7 @@ class PopAnal():
         e.g., if number then is axis.
         - new_col_suffix, for new col name.
         - agg_method, how to agg. could be string, or could be function.
+        - fr_use_this, whether to use raw or z-scored (already done).
         RETURNS:
         - modifies self.Xdataframe, with one new column, means repopulated.
         - also the aggregated datagframe XdataframeAgg
@@ -301,7 +439,10 @@ class PopAnal():
 
         if isinstance(agg_method, str):
             def F(x):
-                X = np.stack(x["neur"].values)
+                if fr_use_this=="raw":
+                    X = np.stack(x["neur"].values)
+                elif fr_use_this=="z":
+                    X = np.stack(x["neur_z"].values)
                 # expect X to be (ntrials, nunits, time)
                 # make axis accordinyl.
                 if agg_method=="mean":
@@ -317,7 +458,9 @@ class PopAnal():
             F = agg_method
             assert callable(F)
 
-        if isinstance(groupby, str):
+        if len(groupby)==0:
+            new_col_name = f"alltrials_{new_col_suffix}"
+        elif isinstance(groupby, str):
             new_col_name = f"{groupby}_{new_col_suffix}"
         else:
             new_col_name = f"{'_'.join(groupby)}_{new_col_suffix}"
@@ -325,12 +468,16 @@ class PopAnal():
         # if already done, don't run
         if new_col_name in self.Xdataframe.columns:
             if not force_redo:
+                print(new_col_name)
                 assert False, "this colname already exists, force overwrite if actualyl want to run again."
 
         [self.Xdataframe, XdataframeAgg] = aggregThenReassignToNewColumn(self.Xdataframe, F, 
             groupby, new_col_name, return_grouped_df=True)
 
-        return XdataframeAgg
+        if return_new_col_name:
+            return XdataframeAgg, new_col_name
+        else:
+            return XdataframeAgg
 
 
 
