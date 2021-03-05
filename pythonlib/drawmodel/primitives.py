@@ -199,6 +199,48 @@ PARSE_EVALUATOR = False
                 
 
 # ============= TRANSFORMATIONS
+def makeAffine2(x=None, y=None, sx=None, sy=None, theta=None, order=None):
+        """General use, e..g, drawnn, and allowing x and y scaling to differ"""
+        if sx is None:
+                sx=1.
+        if sy is None:
+                sy=1.
+        if theta is None:
+                theta=0.
+        if x is None:
+                x=0.
+        if y is None:
+                y=0
+        if order is None:
+                order="trs"
+                
+        def R(theta):
+                T = np.array([[math.cos(theta), -math.sin(theta), 0.], [math.sin(theta), math.cos(theta), 0.], [0.,0.,1.]])
+                return T
+
+        def S(sx, sy):
+                T = np.array([[sx, 0., 0.], [0., sy, 0.], [0., 0., 1.]])
+                return T
+        
+        def T(x,y):
+                T = np.array([[1., 0., x], [0., 1., y], [0., 0., 1.]])
+                return T
+                
+        if order == "trs":
+                return T(x,y)@(R(theta)@S(sx, sy))
+        elif order == "tsr":
+                return T(x,y)@(S(sx, sy)@R(theta))
+        elif order == "rts":
+                return R(theta)@(T(x,y)@S(sx, sy))
+        elif order == "rst":
+                return R(theta)@(S(sx, sy)@T(x,y))
+        elif order == "srt":
+                return S(sx, sy)@(R(theta)@T(x,y))
+        elif order == "str":
+                return S(sx, sy)@(T(x,y)@R(theta))
+
+
+
 def _makeAffine(s=1., theta=0., x=0., y=0., order="trs"):
         
         if s is None:
@@ -291,6 +333,19 @@ def _reflect(p, theta=math.pi/2): # TODO: reflect should also be usable with rep
         return p
 
 # =========== FUNCTIONS ON PRIMTIVES.
+def repeat2(p, N, x=0., y=0., sx=1., sy=1., theta=0., order="trs"):
+        """ General purpose, and allowing scale differ for x and y"""
+        T = makeAffine2(x, y, sx, sy, theta, order)
+        p_out = []
+        for i in range(N):
+                if i>0:
+                        p = _tform(p, T) # apply transformation
+                pthis = [np.copy(pp) for pp in p] # copy current state, and append
+                p_out.extend(pthis)
+        return p_out
+
+
+
 def _repeat(p, N, T):
         # global PARSE_EVALUATOR
         # if PARSE_EVALUATOR:
