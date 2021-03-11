@@ -344,6 +344,7 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
             ax.set_title(plotver)
 
         ax.set_xlim((-0.1, strokes[-1][-1,tdim]+0.1))
+        ax.set_xlabel("time (sec)")
         # ---
         ax.axhline(color="k", linestyle = "--", alpha=0.5)
 

@@ -113,14 +113,17 @@ def annotate(s, ax=None, color="k"):
 def makeColors(numcol, alpha=1, cmap="plasma"):
     """ gets evensly spaced colors. currntly uses plasma map"""
     import matplotlib.pylab as pl
-
-    if cmap=="plasma":
-        pcols = pl.cm.plasma(np.linspace(0,1, numcol), alpha=alpha)
-    elif cmap=="jet":
-        pcols = pl.cm.jet(np.linspace(0,1, numcol), alpha=alpha)
+    import matplotlib.cm as cm
+    if True:
+        pcols = getattr(cm, cmap)(np.linspace(0,1, numcol), alpha=alpha)
     else:
-        print(cmaps)
-        assert False, "dont know this CMAP"
+        if cmap=="plasma":
+            pcols = pl.cm.plasma(np.linspace(0,1, numcol), alpha=alpha)
+        elif cmap=="jet":
+            pcols = pl.cm.jet(np.linspace(0,1, numcol), alpha=alpha)
+        else:
+            print(cmaps)
+            assert False, "dont know this CMAP"
     # cool
     return pcols
 

@@ -204,3 +204,24 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     else:
         return df_new
 
+def filterPandas(df, filtdict, return_indices=False):
+    """ 
+    filtdict is dict, where each value is a list of
+    allowable values.
+    - See filtdict for format
+    NOTE - doesnt modify in place. just returns.
+    NOTE - return_indices, returns the original row indices
+    (as a list of ints) instead of the modified df
+    """
+    for k, v in filtdict.items():
+        print('--')
+        print(len(df))
+        print(k)
+        print(v)
+#         print(df[k].isin(v))
+        df = df[df[k].isin(v)]
+        print(len(df))
+    if return_indices:
+        return list(df.index)
+    else:
+        return df
