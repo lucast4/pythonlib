@@ -214,13 +214,13 @@ def filterPandas(df, filtdict, return_indices=False):
     (as a list of ints) instead of the modified df
     """
     for k, v in filtdict.items():
-        print('--')
-        print(len(df))
-        print(k)
-        print(v)
+        # print('--')
+        # print(len(df))
+        # print(k)
+        # print(v)
 #         print(df[k].isin(v))
         df = df[df[k].isin(v)]
-        print(len(df))
+        # print(len(df))
     if return_indices:
         return list(df.index)
     else:

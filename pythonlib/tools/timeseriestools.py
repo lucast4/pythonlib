@@ -226,5 +226,16 @@ def DTW(x, y, distfun, asymmetric=True):
     return distmin, alignment
 
 
-               
+def getChangePoints(vals):
+    """ find when vals changes
+    only makes sense when vals are in blocks, and sudden switches, 
+    e.g., vals = [1 1 1 1 2 2 1 3 3 3], here would extract [4 6 7]               ,
+    the indices of first val in a block.
+    - Returns as np array of indices.
+    """
+    vals = np.array(vals)
+    idx_of_bloque_onsets = []
+    idx_of_bloque_onsets = (np.argwhere(np.diff(vals))+1).reshape(-1)
+    return idx_of_bloque_onsets
+
 
