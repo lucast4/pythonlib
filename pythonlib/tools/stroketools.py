@@ -30,7 +30,7 @@ def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
         strokes_new.append(s_new)
     return strokes_new
 
-def strokesInterpolate2(strokes, N, kind="linear"):
+def strokesInterpolate2(strokes, N, kind="linear", base="time"):
         """ 
         NEW - use this instaed of strokesInterpolate.
         N is multipurpose to determine how to interpolate. e.g,.
@@ -38,13 +38,28 @@ def strokesInterpolate2(strokes, N, kind="linear"):
         N = ["updnsamp", 1.5] then up or down samples (here up by 1.5)
         N = ["fsnew", 1000, 125] then targets new fs 1000, assuming
         initially 125.
+        - base, 
+        -- index, then replaces time with index before interpolating.
+        -- time, then just uses time
+        -- space, then uses cum dist.
+        RETURNS:
         - returns a copy
         """
 
         from scipy.interpolate import interp1d
         strokes_interp = []
+
         for strok in strokes:
             
+            if base=="index":
+                strok = strok.copy()
+                strok[:,2] = np.arange(len(strok))
+            elif base=="space":
+                strok = strok.copy()
+                strok = convertTimeCoord([strok], ver="dist")[0]
+            else:
+                assert base=="time"
+
             # get new timepoints
             t = strok[:,2]
             nold = len(t)
@@ -693,6 +708,8 @@ def standardizeStrokes(strokes, onlydemean=False, ver="xonly",
             strokes = [np.concatenate(((S[:,[0,1]]-center)/x_scale, S[:,2].reshape(-1,1)), axis=1) for S in strokes]
             return strokes
 
+
+
     elif ver=="centerize":
         center = np.mean(np.concatenate(strokes), axis=0)[:2]
         def tform(strokes):
@@ -878,3 +895,34 @@ def convertTimeCoord(strokes_in, ver="dist", fakegapdist=0.):
         print(ver)
         assert False, "not coded"
     return strokes
+
+
+def rescaleStrokes(strokes, ver="stretch_to_1"):
+    """ 
+    Apply rescale, taking into account entire strokes.
+    - ver,
+    --- "stretch_to_1", rescale so that max in either x or y is 1. 
+    finds max over all pts across all strok (in absolute val) and divides all 
+    values by that. i..e make this as big as possible in a square
+    [-1 1 -1 1].
+    """
+    if ver=="stretch_to_1":
+        pos = np.concatenate(strokes)
+        maxval = np.max(np.abs(pos[:,[0,1]]))
+        strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
+    else:
+        print(ver)
+        assert False, "not codede"
+    return strokes
+
+def strokesDiffsBtwPts(strokes):
+    """ baseically taking diffs btw successive pts separately fro x and y
+    , but using  diff5pt (i./.e, like np.diff)"""
+    from pythonlib.tools.stroketools import diff5pt
+    def _diff(strok):
+        x = diff5pt(strok[:,0]).reshape(-1,1)
+        y = diff5pt(strok[:,1]).reshape(-1,1)
+        return np.concatenate([x, y], axis=1)
+        
+    return [_diff(strok) for strok in strokes]
+    

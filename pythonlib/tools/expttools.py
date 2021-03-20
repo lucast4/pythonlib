@@ -8,10 +8,16 @@ def makeTimeStamp(exptID="", datefirst=True):
     ts = time.localtime()
     tstamp = time.strftime("%y%m%d_%H%M%S", ts)
 
+    if len(exptID)>0:
+        if not datefirst:
+            exptID+="-"
+        else:
+            exptID = "-" + exptID
+
     if datefirst==False:
-        return f"{exptID}-{tstamp}"
+        return f"{exptID}{tstamp}"
     else:
-        return f"{tstamp}-{exptID}"
+        return f"{tstamp}{exptID}"
 
 
 def getDateList(sdate=None, edate=None):

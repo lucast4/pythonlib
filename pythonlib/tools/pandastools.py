@@ -67,6 +67,7 @@ def df2dict(df):
 
 def applyFunctionToAllRows(df, F, newcolname="newcol"):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
+    assert newcolname not in df.columns, f"{newcolname} already exists as  col name"
     return df.merge(df.apply(lambda x: F(x), axis=1).reset_index(), left_index=True, right_index=True).rename(columns={0:newcolname})
 
 ############3333 SCRATCH NOTES
@@ -104,7 +105,7 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
         for v in values_to_check:
             checks.append(v in x[colname].values)
         return all(checks)
-    return df.groupby(group).filter(F)
+    return df.groupby(group).filter(F).reset_index(drop=True)
 
 
 def getCount(df, group, colname):
@@ -219,7 +220,7 @@ def filterPandas(df, filtdict, return_indices=False):
         # print(k)
         # print(v)
 #         print(df[k].isin(v))
-        df = df[df[k].isin(v)]
+        df = df[df[k].isin(v)].reset_index(drop=True)
         # print(len(df))
     if return_indices:
         return list(df.index)
