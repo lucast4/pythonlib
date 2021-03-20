@@ -10,6 +10,20 @@ import pandas as pd
 import numpy as np
 
 
+def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
+    """ merge df1 and 2, with output being same length
+    as df1, and same indices. 
+    - on, what columnt to align by, need this if they are differnet
+    sizes.
+    RETURN:
+    - dfout, without modifying in place.
+    """
+    df1["index_copy"] = df1.index # save old indices.
+    dfout = df1.merge(df2, how=how, on=on) # 
+    dfout = dfout.set_index("index_copy", drop=True)
+    dfout.index.names = ["index"]
+    return dfout
+
 def _checkDataframesMatch(df1, df2, check_index_match=True):
     """ Checks that:
     - for any index that is shared (between df1 and df2), 
@@ -250,8 +264,17 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     #         print([[row[kbin]], [row["stroknum"]]])
     #         print("--")
 
-    # df_new = pd.merge(df, dfthis, on=groupby)
-    df_new = pd.merge(df, dfthis, how="left", on=groupby)
+    
+    if False:
+        # old version, didnt work for cases where input index were not in order.
+
+        # df_new = pd.merge(df, dfthis, on=groupby)
+        # df_new = pd.merge(df, dfthis, how="left", on=groupby)
+
+        # df_new = df.merge(dfthis, how="left", on=groupby)
+        df_new = df.reset_index().merge(dfthis, how="left", on=groupby).set_index("index") # maintains indices.
+    else:
+        df_new = _mergeKeepLeftIndex(df, dfthis, how='left',on=groupby)
 
     # remove dummy
     if remove_dummy:
@@ -291,3 +314,12 @@ def filterPandas(df, filtdict, return_indices=False):
 
 
 
+def pivotAndMerge(d1, df2):
+    """
+    """
+    assert False, "in progress"
+
+    # from line2strokmodel.py
+    DF2 = pd.pivot_table(DF, index=["trial", "strok_num_0"], values="finalcost", columns="nsubstrokes").reset_index()
+    DFstrokdur = pd.pivot_table(DF, index=["trial", "strok_num_0"], values="strok_dur").reset_index()
+    DF2 = pd.merge(DF2, DFstrokdur)
