@@ -1,6 +1,37 @@
-""" tools for use with pandas dataframes. also some stuff using python dicts and translating between that and dataframs"""
+""" tools for use with pandas dataframes. also some stuff using python dicts and translating between that and dataframs
+
+3/20/21 - confirmed that no mixing of values due to index error:
+- i.e., in general, if function keeps df size unchanged, then will not modify the indices, and 
+will check that the output df is same as input (for matching columns). 
+- if does change size, then will reset indices.
+"""
+
 import pandas as pd
 import numpy as np
+
+
+def _checkDataframesMatch(df1, df2, check_index_match=True):
+    """ Checks that:
+    - for any index that is shared (between df1 and df2), 
+    the values for all columns are shared. 
+    - check_index_match, then also checks that df1 and df2
+    are identical length, with identical indices
+    NOTE: if have same values (relative to index) but index is
+    shuffled rleative to row locaiton, then will fail check - i.e.
+    df1[col].values muist equal df2[col].values for all col.
+    """
+    
+    columns_shared = [c for c in df1.columns if c in df2.columns]
+    
+    if check_index_match:
+        assert np.all(df1.index == df2.index), "indices are not the same!! maybe you applied reset_index() inadvertantely?"
+        assert df1[columns_shared].equals(df2[columns_shared]), "values dont match"
+        
+        # to show that index must be in the same order to pass check.
+#         assert df1[columns_shared].sort_values("hausdorff").sort_index().equals(df2[columns_shared])
+                
+    else:
+        assert False, "not coded, since if frames are different size, not sure what youd want to check"
 
 
 #############################vvvv OBSOLETE - USE aggregGeneral
@@ -12,6 +43,7 @@ def aggreg(df, group, values, aggmethod=["mean","std"]):
     NOTE: will change name of balues filed, e.g. to score_mean.
     OBSOLETE - USE aggregGeneral]
     """
+    assert False, "[OBSOLETE - use aggregGeneral]"
     # this version did not deal with non-numeric stuff that would liek to preset
     # but was useful in taking both mean and std.
     df = df.groupby(group)[values].agg(aggmethod).reset_index()
@@ -27,6 +59,7 @@ def aggregMean(df, group, values, nonnumercols=[]):
     e.g. nonnumercols=["sequence", "name"] i.e., will take the first item it encounters.
     [OBSOLETE - USE aggregGeneral]
     """
+    assert False, "[OBSOLETE - use aggregGeneral]"
     agg = {c:"mean" for c in df.columns if c in values }
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
     print(agg)
@@ -46,7 +79,9 @@ def aggregGeneral(df, group, values, nonnumercols=[], aggmethod=["mean"]):
     """
     agg = {c:aggmethod for c in df.columns if c in values }
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
+    
     print(agg)
+
     df = df.groupby(group).agg(agg).reset_index()
     # df.columns = df.columns.to_flat_index()
 
@@ -67,8 +102,28 @@ def df2dict(df):
 
 def applyFunctionToAllRows(df, F, newcolname="newcol"):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
-    assert newcolname not in df.columns, f"{newcolname} already exists as  col name"
-    return df.merge(df.apply(lambda x: F(x), axis=1).reset_index(), left_index=True, right_index=True).rename(columns={0:newcolname})
+    # To debug:
+    # def F(x):
+    #     return x["trial"]
+    # # applyFunctionToAllRows(Pp, F, newcolname="test")
+    # Ppsorted = Pp.sort_values("hausdorff").reset_index()
+    # applyFunctionToAllRows(Ppsorted, F, newcolname="test")
+
+    assert newcolname not in df.columns, f"{newcolname} already exists as a col name"
+
+    # # OLD VERSION FAILS IF INDICES PASSED IN ARE NOT IN ORDER, 
+    # # becuase of the reset_index()
+    # dfnewcol = df.apply(lambda x: F(x), axis=1).reset_index()
+    # dfout = df.merge(dfnewcol, left_index=True, right_index=True).rename(columns={0:newcolname})
+
+    dfnewcol = df.apply(F, axis=1).rename(newcolname) # rename, since series must be named.
+    # print(dfnewcol)
+    # print(dfnewcol.columns)
+    # print(dfnewcol.index)
+    dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
+    _checkDataframesMatch(df, dfout)
+
+    return dfout
 
 ############3333 SCRATCH NOTES
 
@@ -98,6 +153,7 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
         values_to_check = [1,2]
         colname = "epoch"
         group = "unique_task_name"
+    # NOTE - index of output will be reset.
     """
     def F(x):
         """ True if has data for all values"""
@@ -111,7 +167,7 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
 def getCount(df, group, colname):
     """ return df grouped by group, and with one count value
     for each level in group, the name of that will be colname
-    - colname must be a valid column from df
+    - colname must be a valid column from df [not sure why..]
     """
 
     return df.groupby(group)[colname].count().reset_index()
@@ -129,7 +185,7 @@ def binColumn(df, col_to_bin, nbins, bin_ver = "percentile"):
     - new_col_name, string
     """
     vals = df[col_to_bin].values
-
+    df_orig = df.copy()
     # 2) Get bin edges
     if bin_ver=="uniform":
         # even bin edges
@@ -150,6 +206,8 @@ def binColumn(df, col_to_bin, nbins, bin_ver = "percentile"):
     new_col_name = f"{col_to_bin}_binned"
     df[new_col_name] = vals_binned
     print(f"added column: {new_col_name}")
+
+    _checkDataframesMatch(df, df_orig)
     return new_col_name
 
 def aggregThenReassignToNewColumn(df, F, groupby, new_col_name, 
@@ -176,8 +234,8 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     else:
         remove_dummy=False
 
+
     dfthis = df.groupby(groupby).apply(F).reset_index().rename(columns={0:new_col_name})
-    # print(dfthis)
     # dfthis will be smaller than df. but merge will expand dfthis.
 
     # NOTE: sanity check, mking sure that merge does correctly repopulate:
@@ -192,13 +250,16 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     #         print([[row[kbin]], [row["stroknum"]]])
     #         print("--")
 
-    df_new = pd.merge(df, dfthis, on=groupby)
+    # df_new = pd.merge(df, dfthis, on=groupby)
+    df_new = pd.merge(df, dfthis, how="left", on=groupby)
 
     # remove dummy
     if remove_dummy:
         del df[dummyname]
         del dfthis[dummyname]
         del df_new[dummyname]
+
+    _checkDataframesMatch(df_new, df)
 
     if return_grouped_df:
         return df_new, dfthis
@@ -213,6 +274,7 @@ def filterPandas(df, filtdict, return_indices=False):
     NOTE - doesnt modify in place. just returns.
     NOTE - return_indices, returns the original row indices
     (as a list of ints) instead of the modified df
+    NOTE - if return dataframe, automaticlaly resets indices.
     """
     for k, v in filtdict.items():
         # print('--')
@@ -220,9 +282,12 @@ def filterPandas(df, filtdict, return_indices=False):
         # print(k)
         # print(v)
 #         print(df[k].isin(v))
-        df = df[df[k].isin(v)].reset_index(drop=True)
+        df = df[df[k].isin(v)]
         # print(len(df))
     if return_indices:
         return list(df.index)
     else:
-        return df
+        return df.reset_index(drop=True)
+
+
+

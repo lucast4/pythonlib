@@ -27,7 +27,7 @@ def addTextLabelToPoints(ax, df, x, y, name):
     
     # add annotations one by one with a loop
     for line in range(df.shape[0]):
-        ax.text(df[x][line], df[y][line], df[name][line], 
+        ax.text(df[x].values[line], df[y].values[line], df[name].values[line], 
                  horizontalalignment='left', size='medium', color='black',
                 alpha=0.6)
 

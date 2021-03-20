@@ -6,7 +6,6 @@ def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
     X must be (neuron, time)
     """
     import seaborn as sns
-    import pandas as pd
     import matplotlib.pyplot as plt
 
     if ax is None:

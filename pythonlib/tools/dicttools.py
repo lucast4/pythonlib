@@ -37,6 +37,7 @@ def filterSummary(summarydict, filterdict):
     e.g, filterdict = {"colname":[things,I,want], ...}    
     """
 #     df = filterSummary(summaryflat, {"xnum":[1,2,3,4]})
+    print("[OBSOLETE] - see pandastools for filterPandas")
     import pandas as pd
     df = pd.DataFrame(summarydict)
     for key in filterdict.keys():
