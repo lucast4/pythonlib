@@ -515,12 +515,34 @@ def __loss(p1, p2, plotPxl=False, smoothing=2):
 
 
 def prog2pxl(p, WHdraw = 2*XYLIM, WH=128, smoothing=0):
-        # takes a list of np array and outputs one pixel image
-        # WHdraw, the size of drawing canvas (e.g. 6, if is xlim -3 to 3)
+        """ takes a list of np array and outputs one pixel image
+        - WHdraw, the size of drawing canvas (e.g. 6, if is xlim -3 to 3),
+        for now assumes the canvas is a square. 
+        - WH, WH x WH for output image.
+        - smoothing, gaussian filter, this is sigma in pix. set to 0 to skip.
+        RETURN:
+        I, pixel image. where 0 is no ink, and max ink is 1.
+        NOTE: shape is such that I[10,:] will be the 11th row from the top of the
+        image, while I[:, 10] will be 11th column from the left. if use
+        plt.imshow(I) will be same orientation as input p.
+        NOTE: there will be inherent smoothing due to downsampling/interp.
+        """
         
         # 1) create canvas
         # WH = 128
-        assert WH%4==0, "empirically if not mod 4 then looks weird.."
+
+        # assert WH%4==0, "empirically if not mod 4 then looks weird.."
+        if WH%4!=0:
+            # then drop to next lowest multiple of 4. afterwards will add 0s to ends
+            # get back to 4.
+            rows_to_add =  WH%4
+            cols_to_add = rows_to_add
+            WH = WH - rows_to_add
+            # print(WH)
+            # print(rows_to_add)
+        else:
+            rows_to_add = None
+        
         scale = WH/WHdraw
         data = np.zeros((WH, WH), dtype=np.uint8)
         surface = cairo.ImageSurface.create_for_data(data, cairo.Format.A8, WH-2, WH-2)
@@ -555,9 +577,28 @@ def prog2pxl(p, WHdraw = 2*XYLIM, WH=128, smoothing=0):
 
         if smoothing>0:
             # return np.flip(data, 0)/255.0
-            return gf(np.flip(data, 0)/255.0, smoothing, truncate=5)
+            data =  gf(np.flip(data, 0)/255.0, smoothing, truncate=5)
         else:
-            return np.flip(data, 0)/255.0
+            data =  np.flip(data, 0)/255.0
+
+        # Append columns or rows to data to get back to the desired size.
+        # append r and c columns of 0s, in order to match a size
+
+        if rows_to_add is not None:
+            # rows
+            rup = int(np.ceil(rows_to_add/2))
+            rlow = int(np.floor(rows_to_add/2))
+            h, w = data.shape
+            data = np.r_[np.zeros((rup, w)), data, np.zeros((rlow, w))]
+
+            # columns
+            cleft = int(np.ceil(cols_to_add/2))
+            cright = int(np.floor(cols_to_add/2))
+            h, w = data.shape
+            data = np.c_[np.zeros((h, cleft)), data, np.zeros((h, cright))]
+
+        return data
+
 
 
 def loss_pxl(img1, img2):

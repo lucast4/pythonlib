@@ -19,6 +19,26 @@ class TaskClass(object):
         self.Task = task
         if "strokes" not in self.Task.keys():
             assert False, "see Probedat.pd2strokes for how to get this."
+        self.Strokes = self.Task["strokes"]
+
+        if isinstance(task, dict):
+            keys_to_check = ["x", "y", "stage"] # simply keys that are diagnostic of this being ml2 task
+            if all(k in task.keys() for k in keys_to_check):
+                # then this is ml2 task
+                self._cleanMonkeylogic()
+
+    def _cleanMonkeylogic(self):
+        """ clean monkeylogic tasks
+        """
+
+        # 1) remove redundant information
+        del self.Task["x_before_sketchpad"]
+        del self.Task["y_before_sketchpad"]
+        del self.Task["x"]
+        del self.Task["y"]
+        del self.Task["x_rescaled"]
+        del self.Task["y_rescaled"]
+
 
 
     ####################### ASSIGN EACH TASK STROKE A LABEL
@@ -66,6 +86,15 @@ class TaskClass(object):
             # assign the closest stroke
             assignments.append(np.argmin(distances))
         return assignments
+
+    ######################## PLOTS
+    def plotTaskOnAx(self, ax, plotkwargs = {}):
+        """ plot task on axes"""
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        strokes = self.Strokes
+        
+        plotkwargs["clean_unordered"] = True
+        plotDatStrokes(strokes, ax, **plotkwargs)
 
 
 

@@ -62,7 +62,8 @@ def getStrokeColors(strokes, CMAP="jet"):
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
-    mark_stroke_onset=True, centerize=False, onsets_by_order=True):
+    mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
+    clean_ordered=False):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -72,8 +73,20 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     - strokenums_to_plot, list of strokenums to plot. if None then plots all.
     e.g., [0,2], then plots 1st and 34d strokes. This only applies if 
     each_stroke_separate is True, so will force the latter.
+    - clean_unordered, clean_ordered, shortcuts to plot nice either one color with no 
+    markers (unordered) or colored, with markers (stroke onserts)
     """
     import numpy as np
+
+    if clean_ordered:
+        assert clean_unordered==False, "can only choose one of these 2 options"
+        each_stroke_separate= True
+    elif clean_unordered:
+        each_stroke_separate= False
+        pcol="k"
+        mark_stroke_onset= False
+        onsets_by_order=True
+
     if strokenums_to_plot is not None:
         each_stroke_separate=True
     

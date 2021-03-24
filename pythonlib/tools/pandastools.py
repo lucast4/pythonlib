@@ -38,6 +38,10 @@ def _checkDataframesMatch(df1, df2, check_index_match=True):
     columns_shared = [c for c in df1.columns if c in df2.columns]
     
     if check_index_match:
+        if len(df1)!=len(df2):
+            print(df1)
+            print(df2)
+            assert False, "lengths must be the same to do this check"
         assert np.all(df1.index == df2.index), "indices are not the same!! maybe you applied reset_index() inadvertantely?"
         assert df1[columns_shared].equals(df2[columns_shared]), "values dont match"
         
@@ -115,7 +119,9 @@ def df2dict(df):
 
 
 def applyFunctionToAllRows(df, F, newcolname="newcol"):
-    """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object"""
+    """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object
+    - validates that the output will be identically indexed rel input.
+    """
     # To debug:
     # def F(x):
     #     return x["trial"]
@@ -131,10 +137,24 @@ def applyFunctionToAllRows(df, F, newcolname="newcol"):
     # dfout = df.merge(dfnewcol, left_index=True, right_index=True).rename(columns={0:newcolname})
 
     dfnewcol = df.apply(F, axis=1).rename(newcolname) # rename, since series must be named.
+
     # print(dfnewcol)
     # print(dfnewcol.columns)
     # print(dfnewcol.index)
-    dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
+    if len(dfnewcol)!=len(df):
+        print(dfnewcol)
+        print(df)
+        assert False
+
+    # dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
+    dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True, validate="one_to_one")
+
+    if len(dfnewcol)!=len(dfout):
+        print(dfnewcol)
+        print(df)
+        print(dfout)
+        assert False
+
     _checkDataframesMatch(df, dfout)
 
     return dfout
