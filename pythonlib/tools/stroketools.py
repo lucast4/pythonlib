@@ -6,6 +6,8 @@ import numpy as np
 from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW, distanceBetweenStrokes
 
+
+# =============== TIME SERIES TOOLS
 def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
     """interpoaltes each stroke, such that there are 
     N timesteps in each stroke. uses the actual time to interpoatle
@@ -44,6 +46,9 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time"):
         -- space, then uses cum dist.
         RETURNS:
         - returns a copy
+        NOTE:
+        - if creates an empyt strok, then fixes by replacing with endpoints 
+        of original strokes.
         """
 
         from scipy.interpolate import interp1d
@@ -88,6 +93,12 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time"):
                     plt.plot(t, strok[:,0], '-ok');
                     plt.plot(tnew, f(tnew), '-or');
             strokes_interp.append(strokinterp)
+
+            for i, s in enumerate(strokes_interp):
+                if len(s)==0:
+                    # replace with previous endpoints.
+                    strokes_interp[i] = strokes[i][[0, -1], :]
+
         return strokes_interp
 
 def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
@@ -450,7 +461,79 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
 
 
 
+def diff5pt(x, h=1):
+    """ given timeseries x get devirative,
+    using 5-point differentiation. see:
+    https://en.wikipedia.org/wiki/Numerical_differentiation
+    this gives error (compared to true derivative) or 
+    order h^4, where h is timestep. 
+    - to deal with edgepts (i.e.,. first and last 4 pts), pad
+    edges by repeating the 1-interval distance.
+    - expects input to be around 100hz (doesnt relaly matter).
+    - x can be list or nparray
+    - h is time interval. leave as 1 to be unitless. (e..g, if
+    100hz, then h=10)
+    """
+    
+    if isinstance(x, list):
+        x = np.array(x)
+        
+    if False:
+        # doesnt work well - large discontnuities at edges.
+        x = np.concatenate([x[0, None], x[0, None], x, x[-1, None], x[-1, None]])
+    else:
+        for _ in range(2):
+            x = np.concatenate([
+                x[0, None]+(x[0]-x[1]), 
+                x, 
+                x[-1, None]+(x[-1]-x[-2])])
 
+
+    return (-x[4:] + 8*x[3:-1] - 8*x[1:-3] + x[:-4])/(12*h)
+
+
+def convertTimeCoord(strokes_in, ver="dist", fakegapdist=0.):
+    """ methods to convert the time column to other things.
+    Will return copy of strokes and leave input strokes unchanged.
+    - ver:
+    -- "dist", is distance traveled in pixels, starting from 
+    onset of first stroke. will assume zero dist from stroke 
+    offsets to next strok onsets, unless enter a gap dist for
+    fakegapdist (in pix)
+    
+    """
+    from copy import copy
+    strokes = [np.copy(s) for s in strokes_in]
+    
+    if ver=="dist":
+        cumdist=0.
+        for strok in strokes:
+            c = np.cumsum(np.linalg.norm(np.diff(strok[:,[0,1]], axis=0), axis=1))
+            c = np.r_[0., c]
+            distthis = c[-1] # copy to add to cumdist
+            c += cumdist
+            cumdist += distthis + fakegapdist
+            strok[:,2] = c
+    else:
+        print(ver)
+        assert False, "not coded"
+    return strokes
+
+def strokesDiffsBtwPts(strokes):
+    """ baseically taking diffs btw successive pts separately fro x and y
+    , but using  diff5pt (i./.e, like np.diff)"""
+    from pythonlib.tools.stroketools import diff5pt
+    def _diff(strok):
+        x = diff5pt(strok[:,0]).reshape(-1,1)
+        y = diff5pt(strok[:,1]).reshape(-1,1)
+        return np.concatenate([x, y], axis=1)
+        
+    return [_diff(strok) for strok in strokes]
+
+
+
+
+################# OTHER FEATURES
 
 def getStrokesFeatures(strokes):
     """output dict with features, one value for
@@ -690,6 +773,87 @@ def getOnOff(strokes, relativetimesec=False):
     return (onsets, offsets)
 
 
+
+########################### SPATIAL MANIPULATIONS
+def _stripTimeDimension(strokes):
+    """ returns strokes where each strok is
+    only N x 2, not N x 3.
+    Returns also T, which can be passed into 
+    _appendTimeDimension to put it back.
+    RETURNS:
+    strokes, t
+    """
+    t = [s[:,2] for s in strokes]
+    strokes = [s[:,[0,1]] for s in strokes]
+    return strokes, t
+
+def _appendTimeDimension(strokes, T):
+    """ Re-append T back to strokes.
+    see _stripTimeDimension
+    """
+    strokes = [np.c_[s, t] for s, t in zip(strokes, T)]
+    return strokes
+
+
+def translateStrokes(strokes, xy):
+    """ translates strokes by x, y
+    xy, np.array, shape (1,2), (2,1), or (2,)
+    RETURNS:
+    copy.
+    """
+
+    # assert xy.shape == (1,2)
+
+    # strokes_copy = [S.copy for S in strokes]
+    # strokes_copy = [S[:,[0,1]] + xy for S in strokes]
+
+    from ..drawmodel.primitives import transform
+
+    strokes, time = _stripTimeDimension(strokes)
+    strokes = transform(strokes, x=xy[0], y=xy[1])
+    strokes = _appendTimeDimension(strokes, time)
+    return strokes
+
+
+def rescaleStrokes(strokes, ver="stretch_to_1"):
+    """ 
+    Apply rescale, taking into account entire strokes.
+    - ver,
+    --- "stretch_to_1", rescale so that max in either x or y is 1. 
+    finds max over all pts across all strok (in absolute val) and divides all 
+    values by that. i..e make this as big as possible in a square
+    [-1 1 -1 1].
+    """
+    if ver=="stretch_to_1":
+        pos = np.concatenate(strokes)
+        maxval = np.max(np.abs(pos[:,[0,1]]))
+        strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
+    else:
+        print(ver)
+        assert False, "not codede"
+    return strokes
+
+    
+def getCenter(strokes, method="extrema"):
+    """ get center of strokes, with methods:
+    --- "extrema", based on x and y max edges, then
+    find center.
+    --- "com", then center of mass
+    RETURNS: 2-length list.
+    """
+    if method=="com":
+        assert False, "not coded, see features calc."""
+    elif method == "extrema":
+        
+        tmp = np.concatenate([s[:,0] for s in strokes])
+        xminmax = (np.min(tmp), np.max(tmp))
+
+        tmp = np.concatenate([s[:,1] for s in strokes])
+        yminmax = (np.min(tmp), np.max(tmp))
+        
+        return [np.mean(xminmax), np.mean(yminmax)]
+
+
 def standardizeStrokes(strokes, onlydemean=False, ver="xonly",
     return_tform_func=False):
     """ standardize in space (so centered at 0, and x range is from -1 to 1
@@ -837,92 +1001,3 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         
         return closest_task_stroknum_unflat
 
-
-def diff5pt(x, h=1):
-    """ given timeseries x get devirative,
-    using 5-point differentiation. see:
-    https://en.wikipedia.org/wiki/Numerical_differentiation
-    this gives error (compared to true derivative) or 
-    order h^4, where h is timestep. 
-    - to deal with edgepts (i.e.,. first and last 4 pts), pad
-    edges by repeating the 1-interval distance.
-    - expects input to be around 100hz (doesnt relaly matter).
-    - x can be list or nparray
-    - h is time interval. leave as 1 to be unitless. (e..g, if
-    100hz, then h=10)
-    """
-    
-    if isinstance(x, list):
-        x = np.array(x)
-        
-    if False:
-        # doesnt work well - large discontnuities at edges.
-        x = np.concatenate([x[0, None], x[0, None], x, x[-1, None], x[-1, None]])
-    else:
-        for _ in range(2):
-            x = np.concatenate([
-                x[0, None]+(x[0]-x[1]), 
-                x, 
-                x[-1, None]+(x[-1]-x[-2])])
-
-
-    return (-x[4:] + 8*x[3:-1] - 8*x[1:-3] + x[:-4])/(12*h)
-
-
-def convertTimeCoord(strokes_in, ver="dist", fakegapdist=0.):
-    """ methods to convert the time column to other things.
-    Will return copy of strokes and leave input strokes unchanged.
-    - ver:
-    -- "dist", is distance traveled in pixels, starting from 
-    onset of first stroke. will assume zero dist from stroke 
-    offsets to next strok onsets, unless enter a gap dist for
-    fakegapdist (in pix)
-    
-    """
-    from copy import copy
-    strokes = [np.copy(s) for s in strokes_in]
-    
-    if ver=="dist":
-        cumdist=0.
-        for strok in strokes:
-            c = np.cumsum(np.linalg.norm(np.diff(strok[:,[0,1]], axis=0), axis=1))
-            c = np.r_[0., c]
-            distthis = c[-1] # copy to add to cumdist
-            c += cumdist
-            cumdist += distthis + fakegapdist
-            strok[:,2] = c
-    else:
-        print(ver)
-        assert False, "not coded"
-    return strokes
-
-
-def rescaleStrokes(strokes, ver="stretch_to_1"):
-    """ 
-    Apply rescale, taking into account entire strokes.
-    - ver,
-    --- "stretch_to_1", rescale so that max in either x or y is 1. 
-    finds max over all pts across all strok (in absolute val) and divides all 
-    values by that. i..e make this as big as possible in a square
-    [-1 1 -1 1].
-    """
-    if ver=="stretch_to_1":
-        pos = np.concatenate(strokes)
-        maxval = np.max(np.abs(pos[:,[0,1]]))
-        strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
-    else:
-        print(ver)
-        assert False, "not codede"
-    return strokes
-
-def strokesDiffsBtwPts(strokes):
-    """ baseically taking diffs btw successive pts separately fro x and y
-    , but using  diff5pt (i./.e, like np.diff)"""
-    from pythonlib.tools.stroketools import diff5pt
-    def _diff(strok):
-        x = diff5pt(strok[:,0]).reshape(-1,1)
-        y = diff5pt(strok[:,1]).reshape(-1,1)
-        return np.concatenate([x, y], axis=1)
-        
-    return [_diff(strok) for strok in strokes]
-    

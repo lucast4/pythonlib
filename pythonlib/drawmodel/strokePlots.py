@@ -59,6 +59,11 @@ def getStrokeColors(strokes, CMAP="jet"):
     return color_order, color_order_by_pt
 
 
+def plotMultDatStrokes(strokes_list):
+    """ wrapper to plot mulitple trials
+    """
+    
+
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 

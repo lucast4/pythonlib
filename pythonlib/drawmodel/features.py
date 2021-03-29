@@ -106,7 +106,8 @@ def strokeCurvature(strokes):
 
 ####### ONE VALUE SUMMARIZING STROKES
 def computeDistTraveled(strokes, origin, include_lift_periods=True):
-    """ assume start at origin. assumes straight line movements.
+    """ assume start at origin. assumes straight line movements
+    between strokes, and travel along stroke during strokes.
     by default includes times when not putting down ink.
     IGNORES third column(time) - i.e., assuems that datpoints are in 
     chron order."""
@@ -115,7 +116,8 @@ def computeDistTraveled(strokes, origin, include_lift_periods=True):
     prev_point = origin
     for S in strokes:
         cumdist += np.linalg.norm(S[0,[0,1]] - prev_point)
-        cumdist += np.linalg.norm(S[-1,[0,1]] - S[0,[0,1]])
+        # cumdist += np.linalg.norm(S[-1,[0,1]] - S[0,[0,1]]) # old, doesnt do correct for curved cases.
+        cumdist += strokeDistances([S])[0]
         prev_point = S[-1, [0,1]]
     return cumdist
 

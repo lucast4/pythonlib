@@ -52,6 +52,22 @@ def _checkDataframesMatch(df1, df2, check_index_match=True):
         assert False, "not coded, since if frames are different size, not sure what youd want to check"
 
 
+def mergeOnIndex(df1, df2):
+    """ merge, keeping indexes unchanged, 
+    df1 and df2 must come in with idnetical indices.
+    will use union of columns, but making sure to not have
+    duplicate columns. if duplicate, then assumes that they are
+    identical in df1 and df2 (will check) and will
+    take the column values from df1.
+    """
+    _checkDataframesMatch(df1, df2)
+
+    cols_to_use = df2.columns.difference(df1.columns)
+    dfout = pd.merge(df1, df2[cols_to_use], left_index=True, 
+        right_index=True, how='outer', validate='one_to_one')
+    return dfout
+
+
 #############################vvvv OBSOLETE - USE aggregGeneral
 def aggreg(df, group, values, aggmethod=["mean","std"]):
     """
@@ -147,6 +163,8 @@ def applyFunctionToAllRows(df, F, newcolname="newcol"):
         assert False
 
     # dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
+    # _checkDataframesMatch(df, dfnewcol)
+
     dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True, validate="one_to_one")
 
     if len(dfnewcol)!=len(dfout):
@@ -343,3 +361,28 @@ def pivotAndMerge(d1, df2):
     DF2 = pd.pivot_table(DF, index=["trial", "strok_num_0"], values="finalcost", columns="nsubstrokes").reset_index()
     DFstrokdur = pd.pivot_table(DF, index=["trial", "strok_num_0"], values="strok_dur").reset_index()
     DF2 = pd.merge(DF2, DFstrokdur)
+
+def printOverview(df, MAX=50):
+    """
+    print columns and values counts)
+    - MAX, if num values greater than this, then skip printing.
+    """
+    if False:
+        # old version, doesnt plto frequency of values
+        from .dicttools import printOverviewKeyValues
+        printOverviewKeyValues(df2dict(df)) 
+    else:
+        for col in df.columns:
+            print(' ')
+            print(f"-- {col}")
+            if isinstance(df[col].values[0], list):
+                print(f"*Skipping print, since type of values are lists")
+                continue
+            if isinstance(df[col].values[0], np.ndarray):
+                print(f"*Skipping print, since type of values are np.ndarray")
+                continue
+            nvals = len(set(df[col].values))
+            if nvals>MAX:
+                print(f"*Skipping print, since {nvals} vals > MAX")
+            else:
+                print(df[col].value_counts())
