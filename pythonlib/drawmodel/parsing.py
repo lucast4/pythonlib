@@ -44,10 +44,11 @@ def extractJunctions(strokes, sketchpad_edges, image_edges):
     return extra_junctions
 
 
-def get_parses_from_strokes(strokes, canvas_max_WH, image_WH, k=20,     
+def get_parses_from_strokes(strokes, canvas_max_WH, image_WH=105, k=20,     
     score_fn = lambda parses: score_function(parses, ver="travel", normalization="negative", use_torch=True), 
     use_extra_junctions=False, plot=False):
     """ 
+
     """
     from pythonlib.drawmodel.parsing import extractJunctions
     from pythonlib.drawmodel.image import getSketchpadEdges
@@ -143,6 +144,9 @@ def convertCoordParseToStrokes(parse, canvas_max_WH, image_WH=105):
 def process_parse(parse, device=None, do_fit_spline=True):
     """ same as gns.inference.parsing.top_k, but allowing to skip fitting 
     spline """
+    from pybpl.data import unif_space
+    from gns.omniglot.minimal_splines import fit_minimal_spline
+
     parse_ = []
     for stk in parse:
         # for ntraj = 1, set spline as the original stroke
@@ -167,6 +171,8 @@ def get_topK_parses(img, k, score_fn, configs_per=100, trials_per=800,
     gns.inference.parsing.top_k, except allwoing for pp_kwargs, which is useful 
     if want to skip spline fit optimiziation step
     """
+    from pybpl.matlab.bottomup import generate_random_parses
+    from gns.inference.parsing.top_k import search_parse    
 
     # generate random walks (the "base parses")
     base_parses = generate_random_parses(I=img, seed=seed, **grp_kwargs)

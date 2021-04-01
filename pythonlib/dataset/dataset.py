@@ -1,6 +1,6 @@
 """ stores and operates on datasets"""
 import pandas as pd
-import pickle
+import pickle5 as pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
