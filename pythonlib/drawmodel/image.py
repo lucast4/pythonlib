@@ -9,9 +9,9 @@ def getSketchpadEdges(canvas_max_WH, image_WH):
     sketchpad_edges = np.array([[-canvas_max_WH, canvas_max_WH], [-canvas_max_WH, canvas_max_WH]])
     image_edges = np.array([[1, image_WH-1], [1, image_WH-1]]) # 1 on edges, since there is a slight border.
     return sketchpad_edges, image_edges
-    
 
-def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=1, bin_thresh= 0.6,
+
+def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=0.9, bin_thresh= 0.6,
     plot=False):
     """ default params are used for converitng to binary pixel image,, used for
     parsing.
