@@ -90,7 +90,7 @@ def get_parses_from_strokes(strokes, canvas_max_WH, image_WH=105, k=20,
     return parses_k, log_probs_k
 
 def score_function(parses, ver="ink", normalization = "inverse", test=False,
-                  use_torch=False):
+                  use_torch=False, origin=None):
     """ 
     - ver, str, determines what score to use
     --- "ink", then total distnace traveled on page
@@ -112,8 +112,16 @@ def score_function(parses, ver="ink", normalization = "inverse", test=False,
         distances = [np.sum(strokeDistances(strokes)) for strokes in parses]
     elif ver=="travel":
         # conisder origin to be onset of first storke.
+        # Note: has issue in that a single stroke task, flipped, is idnetical cost to the same task unflipped.
+        # leads to problems later since unique(score) is used to throw out redundant parses.
         distances_traveled = [computeDistTraveled(strokes, origin=strokes[0][0,[0,1]]) for strokes in parses]
         distances = distances_traveled
+    elif ver=="travel_from_orig":
+        # pass in origin. 
+        assert origin is not None, " must pass in coordinate for origin"
+        distances_traveled = [computeDistTraveled(strokes, origin=origin) for strokes in parses]
+        distances = distances_traveled
+
     elif ver=="nstrokes":
         # num strokes
         # == plit histogram of num strokes
@@ -311,6 +319,7 @@ if __name__=="__main__":
     from pythonlib.dataset.dataset import Dataset
     from pythonlib.drawmodel.parsing import *
     import numpy as np
+    import torch
 
     # Parse a single datset, but iter over multiple datsetes. 
     # Parses are one for each unique task, this is more efficiecnt that each row of datsaet.
@@ -344,26 +353,34 @@ if __name__=="__main__":
     }
     return_in_strokes_coords = True
     kparses = 10
-    animal = "Red"
+    # animal = "Red"
 
     use_extra_junctions=True
-    score_ver = "travel"
+    # score_ver = "travel"
+    score_ver = "travel_from_orig" # better, since differentiates 2 tasks thjat are just flipped (and so will not throw one of them out)
     score_norm = "negative"
-
+    image_WH = 105
     #################### RUN
-    for animal in ["Red", "Pancho"]:
+    for animal in ["Pancho"]:
         # Load datasets
         if animal == "Red":
+            # path_list = [
+            #     "/data2/analyses/database/Red-lines5-formodeling-210329_005719",
+            #     "/data2/analyses/database/Red-arc2-formodeling-210329_005550",
+            #     "/data2/analyses/database/Red-shapes3-formodeling-210329_005200",
+            #     "/data2/analyses/database/Red-figures89-formodeling-210329_005443"
+            # ]
             path_list = [
-                "/data2/analyses/database/Red-lines5-formodeling-210329_005719",
-                "/data2/analyses/database/Red-arc2-formodeling-210329_005550",
-                "/data2/analyses/database/Red-shapes3-formodeling-210329_005200",
                 "/data2/analyses/database/Red-figures89-formodeling-210329_005443"
             ]
         elif animal=="Pancho":
+            # path_list = [
+            #     "/data2/analyses/database/Pancho-lines5-formodeling-210329_014835",
+            #     "/data2/analyses/database/Pancho-arc2-formodeling-210329_014648",
+            #     "/data2/analyses/database/Pancho-shapes3-formodeling-210329_002448",
+            #     "/data2/analyses/database/Pancho-figures89-formodeling-210329_000418"
+            # ]
             path_list = [
-                "/data2/analyses/database/Pancho-lines5-formodeling-210329_014835",
-                "/data2/analyses/database/Pancho-arc2-formodeling-210329_014648",
                 "/data2/analyses/database/Pancho-shapes3-formodeling-210329_002448",
                 "/data2/analyses/database/Pancho-figures89-formodeling-210329_000418"
             ]
@@ -382,9 +399,13 @@ if __name__=="__main__":
                 maxes.append(np.max(np.abs(v["sketchpad_edges"].flatten())))
             canvas_max_WH = np.max(maxes)
 
+            # origin for tasks, is generally around (0, 50) to (0,100). so just hard code here.
+            origin = torch.tensor([image_WH/2, -(0.45*image_WH)])
+            # alternatively, could look into D.Dat["origin"], and convert to image coords [(1,105), (-105, -1)]
+
             # For each row, parse its task
             score_fn = lambda parses: score_function(parses, ver=score_ver, 
-                                                     normalization=score_norm, use_torch=True)
+                                                     normalization=score_norm, use_torch=True, origin=origin)
 
             if False:
                 # Just testing, pick a random trial
@@ -457,7 +478,7 @@ if __name__=="__main__":
 
                 parses, log_probs = get_parses_from_strokes(strokes, canvas_max_WH, 
                                                           use_extra_junctions=use_extra_junctions, 
-                                                            plot=False, 
+                                                            plot=False, image_WH=image_WH,
                                                             return_in_strokes_coords=return_in_strokes_coords, 
                                                             k=kparses, configs_per = params_parse["configs_per"],
                                                            trials_per = params_parse["trials_per"],
@@ -476,6 +497,8 @@ if __name__=="__main__":
 
             # === save as dataframe
             import os
+            import pandas as pd
+            import pickle
             
             DIR, FNAME = os.path.split(paththis)
             fname_parse = f"{DIR}/{FNAME}/parses.pkl"

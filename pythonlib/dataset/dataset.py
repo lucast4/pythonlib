@@ -90,6 +90,10 @@ class Dataset(object):
                 print("Loaded metadat:")
                 print(m)
 
+                metadats[i]["path"] = path
+
+
+
         self.Dat = pd.concat(dat_list, axis=0)
         self.Metadats = metadats
 
