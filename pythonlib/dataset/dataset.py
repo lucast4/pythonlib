@@ -13,18 +13,53 @@ def _checkPandasIndices(df):
 class Dataset(object):
     """ 
     """
-    def __init__(self, path_list, append_list=None):
+    def __init__(self, inputs, append_list=None):
         """
         Load saved datasets. 
-        - path_list, list of strings, where each string is
+        - inputs, is either:
+        --- list of strings, where each string is
         full path dataset.
+        --- list of tuples, where each tuple is (dat, metadat), where
+        dat and metadat are both pd.Dataframes, where each wouyld be the object
+        that would be loaded if list of paths.
         - append_list, dict, where each key:value pair will be 
         appendeded to datset as new column, value must be list 
         same length as path_list.
         """
 
-        self._load_datasets(path_list, append_list)
+        if isinstance(inputs[0], str):
+            self._load_datasets(inputs, append_list)
+        else:
+            self._store_dataframes(inputs, append_list)
         self.cleanup()
+
+
+    def _store_dataframes(self, inputs, append_list):
+        assert append_list is None, "not coded yet!"
+
+        dat_list = []
+        metadats = {}
+
+        for i, inthis in enumerate(inputs):
+            dat = inthis[0]
+            m = inthis[1]
+
+            dat["which_metadat_idx"] = i
+            dat_list.append(dat)
+            print("Loaded dataset, size:")
+            print(len(dat))
+
+            metadats[i] = m
+            print("Loaded metadat:")
+            print(m)
+
+        self.Dat = pd.concat(dat_list, axis=0)
+        self.Metadats = metadats
+
+        # reset index
+        print("----")
+        print("Resetting index")
+        self.Dat = self.Dat.reset_index(drop=True)
 
 
 
@@ -184,7 +219,8 @@ class Dataset(object):
             "resynthesized_setnum", "resynthesized_setname", "modelscore", 
             "modelcomp", "hausdorff_positive", "circleness", "kind"]
         for col in cols_to_remove:
-            del self.Dat[col]
+            if col in self.Dat.columns:
+                del self.Dat[col]
         print("Deleted unused columns from self.Dat")
 
         ####### Construct useful params
@@ -480,6 +516,43 @@ class Dataset(object):
         random.shuffle(inds_test)
 
         return inds_train, inds_val, inds_test
+
+
+    ############# EXTRACT THINGS
+    def flattenToStrokdat(self, keep_all_cols = True):
+        """ flatten to pd dataframe where each row is one
+        strok (np array)
+        - keep_all_cols, then keeps all dataframe columns. otherwise
+        will just have a reference (link) to dataset.
+        RETURNS:
+        - Strokdat, pd dataframe. Includes reference to Probedat.
+        NOTE: does not modify self.
+
+        """
+        _checkPandasIndices(self.Dat)
+
+        strokeslist = self.Dat["strokes_beh"].values
+        Strokdat = []
+        columns = [col for col in self.Dat.columns if col!="strokes_beh"]
+
+        for i, strokes in enumerate(strokeslist):
+            if i%500==0:
+                print(i)
+
+            row = self.Dat.iloc[i]
+
+            for ii, strok in enumerate(strokes):
+                Strokdat.append({
+                    "stroknum":ii,
+                    "strok":strok,
+                    "row_in_Dataset":i,
+                    "Dataset":self})
+
+                if keep_all_cols:
+                    for col in columns:
+                        Strokdat[-1][col] = row[col]
+
+        return pd.DataFrame(Strokdat)
 
 
     ############# PLOTS
