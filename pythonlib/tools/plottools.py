@@ -264,3 +264,98 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None):
     # plt.show()
     return ax
 
+
+def plotScatterXreduced(X, dims_to_take, nplot = 20, ax=None, 
+                       color="k", textcolor="r", alpha=0.05,
+                       plot_text_over_examples=False, return_inds_text=False):
+    """ 
+    Scatter plot of X, picking out 2 dimensions. useful is X is output after
+    dim reduction. 
+    INPUT:
+    - X, array, shape N x D, where N is n samp, D is dim.
+    - dims_to_take, list, which 2 dims to take, e.g., [0, 1]
+    """
+    import random
+    assert len(dims_to_take)==2
+
+    Xfit = X[:,dims_to_take]
+
+    # 1) Scatter plot all trials
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(15,15))
+    else:
+        fig = None
+    ALPHA = Xfit.shape[0]/500
+    ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+
+    # === pick out random indices, highlight them in the plot, and plot them
+    if plot_text_over_examples:
+        indsrand = random.sample(range(Xfit.shape[0]),nplot)
+        indsrand = sorted(indsrand)
+
+        for i in indsrand:
+            ax.text(Xfit[i,0], Xfit[i,1], i, color=textcolor, fontsize=10)
+    else:
+        indsrand = None
+
+    if return_inds_text:
+        return fig, ax, indsrand
+    else:
+        return fig, ax
+
+
+def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay"):
+    """ overlay multiple datasets on top of each other
+    or separate.
+    - X, array shape NxD.
+    - labels, vector length N, with label for each sample. 
+    Will color differnetly by label.
+    """
+    
+    # Color the labels
+    from pythonlib.tools.plottools import makeColors
+    labellist = set(labels)
+    pcols = makeColors(len(labellist), cmap="rainbow")
+
+    # Plot
+    if ver=="overlay":
+        for i, l in enumerate(labellist):
+            inds = [i for i, lab in enumerate(labels) if lab==l]
+            Xthis = X[inds]
+            if i==0:
+                # initiate a plot
+                fig, ax = plotScatterXreduced(Xthis, dimsplot, ax=None,
+                                              color=pcols[i], textcolor=pcols[i], alpha=alpha)
+            else:
+                plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                              color=pcols[i], textcolor=pcols[i], alpha=alpha)
+        ax.legend(labellist)
+
+    elif ver=="separate":
+        fig, axes = plt.subplots(len(labellist), 1, figsize=(8, 8*len(labellist)))
+        for i, (l, ax) in enumerate(zip(labellist, axes.flatten())):
+            inds = [i for i, lab in enumerate(labels) if lab==l]
+            Xthis = X[inds]
+            # initiate a plot
+            plotScatterXreduced(X, dimsplot, ax=ax,
+                                          color="k", textcolor="k", alpha=alpha/5)
+            plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                          color=pcols[i], textcolor=pcols[i], alpha=alpha)
+            ax.set_title(f"label: {l}")
+
+    elif ver=="separate_no_background":
+        fig, axes = plt.subplots(len(labellist), 1, figsize=(8, 8*len(labellist)))
+        for i, (l, ax) in enumerate(zip(labellist, axes.flatten())):
+            inds = [i for i, lab in enumerate(labels) if lab==l]
+            Xthis = X[inds]
+            # initiate a plot
+#             plotScatter(X, None, dimsplot, ax=ax,
+#                                           color="k", textcolor="k", alpha=alpha/5)
+            plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                          color=pcols[i], textcolor=pcols[i], alpha=alpha)
+            ax.set_title(f"label: {l}")        
+    else:
+        print(ver)
+        assert False
+        
+    return fig, ax

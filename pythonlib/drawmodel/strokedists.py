@@ -51,6 +51,21 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None):
         
         
         
+def distancePos(strokes1, strokes2, ver="hd"):
+    """ distance between strokes1 and 2 only based on positions,
+    so no temporal information
+    """
+    from ..tools.distfunctools import modHausdorffDistance
+    if ver=="hd":
+        pos1 = np.concatenate(strokes1, axis=0)[:,:2]
+        pos2 = np.concatenate(strokes2, axis=0)[:,:2]
+        d = modHausdorffDistance(pos1, pos2, dims = [0,1])
+    else:
+        print(ver)
+        assert False, "not coded"
+
+    return d
+
 def distanceDTW(strokes_beh, strokes_model, ver="timepoints", 
     asymmetric=True, norm_by_numstrokes=True):
     """inputs are lists of strokes. this first flattens the lists

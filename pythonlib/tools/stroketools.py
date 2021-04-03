@@ -677,7 +677,7 @@ def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_p
 
 
 
-def fakeTimesteps(strokes, point, ver):
+def fakeTimesteps(strokes, point=np.array([0.,0.]), ver="in_order"):
     """strokes is a list with each stroke an nparray 
     - each stroke can be (T x 3) or T x 2. doesnt mater.
     for each array, replaces the 3rd column with new timesteps, such 
@@ -687,6 +687,7 @@ def fakeTimesteps(strokes, point, ver):
     NOTE: could pull this out of getTrialsTaskAsStrokes, but would 
     need to be able to pass in origin sopecific for eafch trial.
     - point is just any point, will make the poitn closer to this as the onset.
+    NOTE: mutates strokes.
     """
     assert isinstance(strokes, (tuple, list)), "se above"
     if isinstance(strokes, tuple):
@@ -827,7 +828,10 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
     if ver=="stretch_to_1":
         pos = np.concatenate(strokes)
         maxval = np.max(np.abs(pos[:,[0,1]]))
-        strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
+        if strokes[0].shape[1]==3:
+            strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
+        else:
+            strokes = [s[:,[0,1]]/maxval for s in strokes]
     else:
         print(ver)
         assert False, "not codede"

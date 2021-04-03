@@ -360,30 +360,31 @@ if __name__=="__main__":
     score_ver = "travel_from_orig" # better, since differentiates 2 tasks thjat are just flipped (and so will not throw one of them out)
     score_norm = "negative"
     image_WH = 105
+
     #################### RUN
     for animal in ["Pancho"]:
         # Load datasets
         if animal == "Red":
-            # path_list = [
-            #     "/data2/analyses/database/Red-lines5-formodeling-210329_005719",
-            #     "/data2/analyses/database/Red-arc2-formodeling-210329_005550",
-            #     "/data2/analyses/database/Red-shapes3-formodeling-210329_005200",
-            #     "/data2/analyses/database/Red-figures89-formodeling-210329_005443"
-            # ]
             path_list = [
+                "/data2/analyses/database/Red-lines5-formodeling-210329_005719",
+                "/data2/analyses/database/Red-arc2-formodeling-210329_005550",
+                "/data2/analyses/database/Red-shapes3-formodeling-210329_005200",
                 "/data2/analyses/database/Red-figures89-formodeling-210329_005443"
             ]
-        elif animal=="Pancho":
             # path_list = [
-            #     "/data2/analyses/database/Pancho-lines5-formodeling-210329_014835",
-            #     "/data2/analyses/database/Pancho-arc2-formodeling-210329_014648",
-            #     "/data2/analyses/database/Pancho-shapes3-formodeling-210329_002448",
-            #     "/data2/analyses/database/Pancho-figures89-formodeling-210329_000418"
+            #     "/data2/analyses/database/Red-figures89-formodeling-210329_005443"
             # ]
+        elif animal=="Pancho":
             path_list = [
+                "/data2/analyses/database/Pancho-lines5-formodeling-210329_014835",
+                "/data2/analyses/database/Pancho-arc2-formodeling-210329_014648",
                 "/data2/analyses/database/Pancho-shapes3-formodeling-210329_002448",
                 "/data2/analyses/database/Pancho-figures89-formodeling-210329_000418"
             ]
+            # path_list = [
+            #     "/data2/analyses/database/Pancho-shapes3-formodeling-210329_002448",
+            #     "/data2/analyses/database/Pancho-figures89-formodeling-210329_000418"
+            # ]
             
         append_list = None
 
@@ -478,6 +479,7 @@ if __name__=="__main__":
 
                 parses, log_probs = get_parses_from_strokes(strokes, canvas_max_WH, 
                                                           use_extra_junctions=use_extra_junctions, 
+                                                          score_fn=score_fn,
                                                             plot=False, image_WH=image_WH,
                                                             return_in_strokes_coords=return_in_strokes_coords, 
                                                             k=kparses, configs_per = params_parse["configs_per"],

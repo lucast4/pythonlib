@@ -31,7 +31,7 @@ class Dataset(object):
             self._load_datasets(inputs, append_list)
         else:
             self._store_dataframes(inputs, append_list)
-        self.cleanup()
+        self._cleanup()
 
 
     def _store_dataframes(self, inputs, append_list):
@@ -101,6 +101,122 @@ class Dataset(object):
         print("----")
         print("Resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
+
+    ############# CLEANUP
+    def _cleanup(self, remove_dot_strokes=True):
+        """ automaitcalyl clean up using default params
+        Removes rows from self.Dat, and resets indices.
+        """
+        print("=== CLEANING UP self.Dat ===== ")
+
+
+        ####### Remove online aborts
+        print("ORIGINAL: online abort values")
+        print(self.Dat["online_abort"].value_counts())
+        idx_good = self.Dat["online_abort"].isin([None])
+        self.Dat = self.Dat[idx_good]
+        print(f"kept {sum(idx_good)} out of {len(idx_good)}")
+        print("removed all cases with online abort not None")
+        # reset 
+        self.Dat = self.Dat.reset_index(drop=True)
+
+
+        ###### remove strokes that are empty or just one dot
+        if remove_dot_strokes:
+            strokeslist = self.Dat["strokes_beh"].values
+            for i, strokes in enumerate(strokeslist):
+                strokes = [s for s in strokes if len(s)>1]
+                strokeslist[i] = strokes
+            self.Dat["strokes_beh"] = strokeslist
+
+
+        ####### Remove columns of useless info.
+        cols_to_remove = ["probe", "feedback_ver_prms", "feedback_ver",
+            "constraints_to_skip", "prototype", "saved_setnum", "tasknum", 
+            "resynthesized", "resynthesized_path", "resynthesized_trial",
+            "resynthesized_setnum", "resynthesized_setname", "modelscore", 
+            "modelcomp", "hausdorff_positive", "circleness", "kind"]
+        for col in cols_to_remove:
+            if col in self.Dat.columns:
+                del self.Dat[col]
+        print("Deleted unused columns from self.Dat")
+
+        ####### Construct useful params
+        # For convenience, add column for whether task is train or test (from
+        # monkey's perspective)
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            if x["taskgroup"] in ["train_fixed", "train_random"]:
+                return "train"
+            elif x["taskgroup"] in ["G2", "G3", "G4", "test_fixed", "test_random"]:
+                return "test"
+            else:
+                print(x)
+                assert False, "huh"
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "monkey_train_or_test")
+
+        # reset 
+        self.Dat = self.Dat.reset_index(drop=True)
+
+
+        ######## assign a "character" name to each task.
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            if x["random_task"]:
+                # For random tasks, character is just the task category
+                return x["task_stagecategory"]
+            else:
+                # For fixed tasks, it is the unique task name
+                return x["unique_task_name"]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
+
+        ####
+        self.Dat = self.Dat.reset_index(drop=True)
+
+        ###### remove empty strokes
+        # for 
+
+
+
+    def preprocessGood(self, ver="modeling"):
+        """ save common preprocess pipelines by name
+        """
+        if ver=="modeling":
+            # recenter tasks (so they are all similar spatial coords)
+            D.recenter(method="each_beh_center")
+
+            # interpolate beh (to reduce number of pts)
+            D.interpolateStrokes()
+
+            # subsample traisl in a stratified manner to amke sure good represnetaiton
+            # of all variety of tasks.
+            D.subsampleTrials()
+
+            # Recompute task edges (i..e, bounding box)
+            D.recomputeSketchpadEdges()
+        elif ver=="strokes":
+            # interpolate beh (to reduce number of pts)
+            D.interpolateStrokes()
+
+            # subsample traisl in a stratified manner to amke sure good represnetaiton
+            # of all variety of tasks.
+            D.subsampleTrials()
+        else:
+            print(ver)
+            assert False, "not coded"
+
+
+    ####################
+
+    def animals(self):
+        """ returns list of animals in this datsaet.
+        """
+        return sorted(list(set(self.Dat["animal"])))
+
+    def expts(self):
+        """ returns list of expts
+        """
+        return sorted(list(set(self.Dat["expt"])))
 
 
     ################# SPATIAL OPERATIONS
@@ -188,79 +304,6 @@ class Dataset(object):
 
 
 
-    ############# CLEANUP
-    def cleanup(self, remove_dot_strokes=True):
-        """ automaitcalyl clean up using default params
-        Removes rows from self.Dat, and resets indices.
-        """
-        print("=== CLEANING UP self.Dat ===== ")
-
-
-        ####### Remove online aborts
-        print("ORIGINAL: online abort values")
-        print(self.Dat["online_abort"].value_counts())
-        idx_good = self.Dat["online_abort"].isin([None])
-        self.Dat = self.Dat[idx_good]
-        print(f"kept {sum(idx_good)} out of {len(idx_good)}")
-        print("removed all cases with online abort not None")
-        # reset 
-        self.Dat = self.Dat.reset_index(drop=True)
-
-
-        ###### remove strokes that are empty or just one dot
-        if remove_dot_strokes:
-            strokeslist = self.Dat["strokes_beh"].values
-            for i, strokes in enumerate(strokeslist):
-                strokes = [s for s in strokes if len(s)>1]
-                strokeslist[i] = strokes
-            self.Dat["strokes_beh"] = strokeslist
-
-
-        ####### Remove columns of useless info.
-        cols_to_remove = ["probe", "feedback_ver_prms", "feedback_ver",
-            "constraints_to_skip", "prototype", "saved_setnum", "tasknum", 
-            "resynthesized", "resynthesized_path", "resynthesized_trial",
-            "resynthesized_setnum", "resynthesized_setname", "modelscore", 
-            "modelcomp", "hausdorff_positive", "circleness", "kind"]
-        for col in cols_to_remove:
-            if col in self.Dat.columns:
-                del self.Dat[col]
-        print("Deleted unused columns from self.Dat")
-
-        ####### Construct useful params
-        # For convenience, add column for whether task is train or test (from
-        # monkey's perspective)
-        from pythonlib.tools.pandastools import applyFunctionToAllRows
-        def F(x):
-            if x["taskgroup"] in ["train_fixed", "train_random"]:
-                return "train"
-            elif x["taskgroup"] in ["G2", "G3", "G4", "test_fixed", "test_random"]:
-                return "test"
-            else:
-                print(x)
-                assert False, "huh"
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "monkey_train_or_test")
-
-        # reset 
-        self.Dat = self.Dat.reset_index(drop=True)
-
-
-        ######## assign a "character" name to each task.
-        from pythonlib.tools.pandastools import applyFunctionToAllRows
-        def F(x):
-            if x["random_task"]:
-                # For random tasks, character is just the task category
-                return x["task_stagecategory"]
-            else:
-                # For fixed tasks, it is the unique task name
-                return x["unique_task_name"]
-        self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
-
-        ####
-        self.Dat = self.Dat.reset_index(drop=True)
-
-        ###### remove empty strokes
-        # for 
 
 
     def recomputeSketchpadEdges(self):
@@ -522,12 +565,18 @@ class Dataset(object):
         return inds_train, inds_val, inds_test
 
 
+
+
     ############# EXTRACT THINGS
-    def flattenToStrokdat(self, keep_all_cols = True):
+    def flattenToStrokdat(self, keep_all_cols = True, strokes_ver="strokes_beh",
+        cols_to_exclude = ["strokes_beh", "strokes_task", "strokes_parse", "parses"]):
         """ flatten to pd dataframe where each row is one
         strok (np array)
         - keep_all_cols, then keeps all dataframe columns. otherwise
         will just have a reference (link) to dataset.
+        - strokes_ver, can choose strokes_beh, strokes_task, strokes_parse...
+        for the latter must have first exgtractd strokes parse.
+        - cols_to_exclude, overwrites keep_all_cols.
         RETURNS:
         - Strokdat, pd dataframe. Includes reference to Probedat.
         NOTE: does not modify self.
@@ -535,10 +584,15 @@ class Dataset(object):
         """
         _checkPandasIndices(self.Dat)
 
-        strokeslist = self.Dat["strokes_beh"].values
-        Strokdat = []
-        columns = [col for col in self.Dat.columns if col!="strokes_beh"]
+        if strokes_ver=="strokes_parse":
+            if "strokes_parse" not in self.Dat.columns:
+                print("extracting a single parse, since you haevent done that")
+                self.parsesChooseSingle()
+            # assert "strokes_parse" in self.Dat.columns, "need to first extract parases"
 
+        strokeslist = self.Dat[strokes_ver].values
+        Strokdat = []
+        columns = [col for col in self.Dat.columns if col not in cols_to_exclude]
         for i, strokes in enumerate(strokeslist):
             if i%500==0:
                 print(i)
@@ -557,6 +611,117 @@ class Dataset(object):
                         Strokdat[-1][col] = row[col]
 
         return pd.DataFrame(Strokdat)
+
+
+    ################ PARSES
+    # Working with parses, which are pre-extracted and saved int he same directocry as datasets.
+    # See ..drawmodel.parsing
+
+    def _loadParses(self):
+        """ load all parases in bulk.
+        Assumes that they are arleady preprocessed.
+        - Loads one parse set for each dataset, and then combines them.
+        """
+        import pickle
+        PARSES = {}
+        for ind in self.Metadats.keys():
+            
+            path = self.Metadats[ind]["path"]
+            path_parses = f"{path}/parses.pkl"
+            path_parses_params =  f"{path}/parses_params.pkl"
+
+            with open(path_parses, "rb") as f:
+                parses = pickle.load(f)
+            with open(path_parses_params, "rb") as f:
+                parses_params = pickle.load(f)
+                
+            PARSES[ind] = parses
+        return PARSES
+
+    def parsesLoadAndExtract(self, fail_if_empty=True, print_summary=True):
+        """ does heavy lifting of extracting parses, assigning back into each dataset row.
+        does this by matching by unique task name.
+        - if any parse is not found, then it will be empty.
+        - fail_if_empty, then asserts that each row has found parses.
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        _checkPandasIndices(self.Dat)
+
+        def _extractParses(PARSES, ind_metadat, taskname):
+            """ helper, to get a single list of parses for this task"""
+            df = PARSES[ind_metadat]
+            dfthis = df[df["unique_task_name"]==taskname]
+            if len(dfthis)==0:
+                print("did not find parses, for the following, returning []!!")
+                print(taskname)
+                print(ind_metadat)
+                return []
+            elif len(dfthis)>1:
+                print(f"found >1 {len(dfthis)} parse! returning the first one, for the follpowing")
+                print(taskname)
+                print(ind_metadat)
+
+            return dfthis["parses"].values[0]
+            
+        PARSES = self._loadParses()
+
+        def F(x):
+            """ pull out list of parses"""
+            ind = x["which_metadat_idx"]
+            task = x["unique_task_name"]
+            return _extractParses(PARSES, ind, task)
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="parses")
+
+        if print_summary:
+            # -- sanity check, did we miss any parses?
+            print("num parses -- num cases")
+            print(self.Dat["parses"].apply(lambda x:len(x)).value_counts())
+
+        if fail_if_empty:
+            counts = set(self.Dat["parses"].apply(lambda x:len(x)).values)
+            assert 0 not in counts, "at least one row failed to extract parses..."
+
+        print("-- parses gotten!")
+
+
+    def parsesChooseSingle(self, convert_to_splines=True, add_fake_timesteps=True):
+        """ 
+        pick out a random single parse and assign to a new column
+        - e..g, if want to do shuffle analyses, can run this each time to pick out a random
+        parse
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        from pythonlib.tools.stroketools import fakeTimesteps      
+        import random
+
+        assert "parses" in self.Dat.columns, "need to first extract parses"
+        _checkPandasIndices(self.Dat)
+
+        def F(x):
+            """ pick out a isngle random parse"""
+            strokes = random.choice(x["parses"])
+            return strokes
+    
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_parse")
+
+        if convert_to_splines:
+            print("converting to splines, might take a minute...")
+            from ..drawmodel.splines import strokes2splines
+            def F(x):
+                strokes = x["strokes_parse"]
+                return strokes2splines(strokes)
+
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "tmp")
+            self.Dat["strokes_parse"] = self.Dat["tmp"]
+            del self.Dat["tmp"]
+
+        if add_fake_timesteps:
+            print("adding fake timesteps")
+            for row in self.Dat.iterrows():
+                fakeTimesteps(row[1]["strokes_parse"])
+
+        print("done choosing a single parse, it is in self.Dat['strokes_parse']!")
 
 
     ############# PLOTS
@@ -592,25 +757,34 @@ class Dataset(object):
         - which_strokes, either "strokes_beh" (monkey) or "strokes_task" (stim)
         """
         from ..drawmodel.strokePlots import plotDatStrokes
-
-        strokes_list = self.Dat[which_strokes].values
+        import random
 
         if isinstance(idxs, int):
-            import random
-            N = len(strokes_list)
+            N = len(self.Dat)
             k = idxs
-            idxs = random.sample(range(N), k=20)
+            idxs = random.sample(range(N), k=k)
+
+        if which_strokes=="parses":
+            # then pull out a random parse for each case
+            assert "parses" in self.Dat.columns, "need to extract parses first..."
+            strokes_list = [[a.copy() for a in strokes] for strokes in self.Dat["parses"].values] # copy, or else will mutate
+            # for the indices you want to plot, prune to just a single parse
+            for i in idxs:
+                ithis = random.randrange(len(strokes_list[i]))
+                strokes_list[i] = strokes_list[i][ithis]
+        else:
+            strokes_list = self.Dat[which_strokes].values
 
         nrows = int(np.ceil(len(idxs)/ncols))
         fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*2, nrows*2))
         
         for ind, (i, ax) in enumerate(zip(idxs, axes.flatten())):
-            if which_strokes == "strokes_beh":
-                # print(strokes_list[0])
-                # print(i)
+            if which_strokes in ["strokes_beh", "parses"]:
                 plotDatStrokes(strokes_list[i], ax, clean_ordered=True)
             elif which_strokes == "strokes_task":
                 plotDatStrokes(strokes_list[i], ax, clean_unordered=True)
+            else:
+                assert False
             if not titles:
                 ax.set_title(i)
             else:
