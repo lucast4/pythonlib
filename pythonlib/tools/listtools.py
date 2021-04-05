@@ -51,14 +51,18 @@ def concatStringsInList(mylist):
     pass
 
 
-def tabulate_list(l):
+def tabulate_list(l, return_as_list=False):
     """outputs dict with unique entries as keys, and num
     occurances as entries
-    like tabulate() in matlab"""
+    like tabulate() in matlab
+    - return_as_list, then returns as list of tuples, not as dict.
+    """
     l_unique = set(l);
     outdict = {}
     for key in l_unique:
         outdict[key] = len([ll for ll in l if ll==key])
+    if return_as_list:
+        return [(k, v) for k, v in outdict.items()]
     return outdict
 
 

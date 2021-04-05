@@ -1,4 +1,5 @@
 """ based around parsing in pyBPL package (Reuben Feinman)
+Img --> parses (where parses are strokes)
 """
 import numpy as np
 import torch

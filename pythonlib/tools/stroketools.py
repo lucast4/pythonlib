@@ -1005,3 +1005,12 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         
         return closest_task_stroknum_unflat
 
+def getMinMaxVals(strokes):
+    """ get min and max pts across all pts in storkes
+    returns np array, [minx, maxx, miny, maxy]
+    """
+    xvals = np.concatenate([s[:,0] for s in strokes])
+    yvals = np.concatenate([s[:,1] for s in strokes])
+    
+    return [np.min(xvals), np.max(xvals), np.min(yvals), np.max(yvals)]
+    

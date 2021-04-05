@@ -98,3 +98,77 @@ def checkIfDirExistsAndHasFiles(dirname):
     return (exists, hasfiles)
 
     
+
+def findPath(path_base, path_hierarchy, path_fname="", ext="",
+    return_without_fname=False):
+    """ get list of data, searches thru paths.
+    INPUT:
+    - path_base, str, static, common across all possible
+    paths
+    - path_hierarchy, list, where each element is another list,
+    where each element in that list is a string, each of which
+    will be separated by wildcards to find paths. 
+    - ext, extensions for files. leave empty to not care.
+    - return_without_fname, then returns path name but splt off from the
+    final file name. (i..e, jsut gets the dir)s
+    NOTES:
+    The order
+    matter. e..g,: 
+    path_hierarchy = [['pancho', 'beh'], ['figures']) 
+    ext = ".pkl"
+    means look for 
+    {path_base}/*pancho*beh*/*figures*/*.pkl
+    NOTE:
+    - length of path_hierarchy must match the hierarchy of the paths.
+    EXAMPLE USAGE:
+        path_base = "/data2/analyses/database/clustering/bysimilarity"
+        path_hierarchy = [
+            ["combined"],
+            ["Red", "Pancho"],
+            ["Pancho", "Red"],
+        ]
+        # path_hierarchy = [
+        # ]
+        path_fname = "SAVEDAT"
+        ext = ".pkl"
+        findPath(path_base, path_hierarchy, path_fname, ext)
+
+    """
+    import glob
+    
+    def _summarize(pathlist):
+        print("Found this many paths:")
+        print(len(pathlist))
+        for p in pathlist:
+            print("---")
+            print(p)
+    
+    # Construct path
+    path = path_base
+    
+    for p in path_hierarchy:
+        path += "/*"
+        for pp in p:
+            path += f"{pp}*"
+    
+    path += "/*" + path_fname + "*" + ext
+    
+    print("Searching using this string:")
+    print(path)
+    
+    # Search
+    pathlist = glob.glob(path)
+
+    # Process
+    if return_without_fname:
+        print("-- Splitting off dir from fname")
+        # pull out just the path before the file name
+        import os
+        pathlist = [os.path.split(p)[0] for p in pathlist]
+        pathlist = list(set(pathlist))
+
+    pathlist = sorted(pathlist)
+    _summarize(pathlist)
+
+    return pathlist
+    

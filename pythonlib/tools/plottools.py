@@ -304,14 +304,25 @@ def plotScatterXreduced(X, dims_to_take, nplot = 20, ax=None,
         return fig, ax
 
 
-def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay"):
+def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay",
+    downsample_auto=True):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
     - labels, vector length N, with label for each sample. 
     Will color differnetly by label.
+    - downsample_auto, then subsamples in case there are too many datapts
     """
     
+    if downsample_auto:
+        import random
+        thresh = 20000
+        nthis = X.shape[0]
+        if nthis> thresh:
+            indsthis = sorted(random.sample(range(X.shape[0]), thresh))
+            print(f"Randomly subsampling to {thresh}")
+            X = X[indsthis,:]
+            labels = [labels[i] for i in indsthis]
     # Color the labels
     from pythonlib.tools.plottools import makeColors
     labellist = set(labels)
@@ -359,3 +370,27 @@ def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay"):
         assert False
         
     return fig, ax
+
+def getHistBinEdges(vals, nbins):
+    """ return array of edges containing all vals,
+    and having n bins (so values is nbins+1)
+    """
+    # get range for binning
+    xmin = np.min(vals)
+    xmax = np.max(vals)
+    
+    # append a bit to edges to get all data.
+    width = xmax-xmin
+    delt = 0.01*width/nbins
+    xs = np.linspace(xmin-delt, xmax+delt, nbins+1)
+    
+    return xs
+
+# def plotHistOfLabels(labels):
+#     """ Plot historgram of labels,
+#     INPUT:
+#     - labels, vector of labels, could be string or num, 
+#     """
+#     import seaborn as sns
+#     plt.figure(figsize=(15,5))
+#     sns.histplot(data=SF, x="label", hue="animal_dset", stat="probability", multiple="dodge", element="bars", shrink=1.5)

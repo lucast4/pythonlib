@@ -314,28 +314,33 @@ class Dataset(object):
         - Modifies self.Metadat, replacing all metadats to have same sketchpad.
         """
         import matplotlib.pyplot as plt
+        from ..tools.stroketools import getMinMaxVals
 
         # 1. Find, in practice, edges of behavior
         # For each trial, get its min, max, for x and y
         def F(x):
-            out = np.array([
-                np.min([np.min(xx[:,0]) for xx in x["strokes_beh"]]),
-                np.max([np.max(xx[:,0]) for xx in x["strokes_beh"]]),
-                np.min([np.min(xx[:,1]) for xx in x["strokes_beh"]]),
-                np.max([np.max(xx[:,1]) for xx in x["strokes_beh"]])
-            ])
-            return out
+            # out = np.array([
+            #     np.min([np.min(xx[:,0]) for xx in x["strokes_beh"]]),
+            #     np.max([np.max(xx[:,0]) for xx in x["strokes_beh"]]),
+            #     np.min([np.min(xx[:,1]) for xx in x["strokes_beh"]]),
+            #     np.max([np.max(xx[:,1]) for xx in x["strokes_beh"]])
+            # ])
+
+            # return out
+            return getMinMaxVals(x["strokes_beh"])
+
         from pythonlib.tools.pandastools import applyFunctionToAllRows
         DAT2 = applyFunctionToAllRows(self.Dat, F, "beh_edges")
 
         # 2. get edges that contain all tasks (or 99% of tasks for each dim)
         beh_edges = np.stack(DAT2["beh_edges"].values)
+
         # sketchpad_edges = np.array([
-        #     [np.min(beh_edges[0,:]), np.min(beh_edges[2,:])], 
-        #     [np.max(beh_edges[1,:]), np.max(beh_edges[2,:])]]) # [-x, -y, +x +y]
+        #     [np.min(beh_edges[:,0]), np.min(beh_edges[2,:])], 
+        #     [np.max(beh_edges[:,1]), np.max(beh_edges[3,:])]]) # [-x, -y, +x +y]
         sketchpad_edges = np.array([
-            [np.percentile(beh_edges[0,:], [0.5])[0], np.percentile(beh_edges[2,:], [0.5])[0]], 
-            [np.percentile(beh_edges[1,:], [99.5])[0], np.percentile(beh_edges[2,:], [99.5])[0]]]) # [-x, -y, +x +y]
+            [np.percentile(beh_edges[:,0], [0.5])[0], np.percentile(beh_edges[:,2], [0.5])[0]], 
+            [np.percentile(beh_edges[:,1], [99.5])[0], np.percentile(beh_edges[:,3], [99.5])[0]]]) # [-x, -y, +x +y]
 
         # 3. Replace sketchpad in metadat (use same for all tasks)
         for k, v in self.Metadats.items():
@@ -569,7 +574,7 @@ class Dataset(object):
 
     ############# EXTRACT THINGS
     def flattenToStrokdat(self, keep_all_cols = True, strokes_ver="strokes_beh",
-        cols_to_exclude = ["strokes_beh", "strokes_task", "strokes_parse", "parses"]):
+        cols_to_exclude = ["strokes_beh", "strokes_task", "strokes_parse", "strokes_beh_splines", "parses"]):
         """ flatten to pd dataframe where each row is one
         strok (np array)
         - keep_all_cols, then keeps all dataframe columns. otherwise
@@ -589,6 +594,10 @@ class Dataset(object):
                 print("extracting a single parse, since you haevent done that")
                 self.parsesChooseSingle()
             # assert "strokes_parse" in self.Dat.columns, "need to first extract parases"
+        if strokes_ver=="strokes_beh_splines":
+            if "strokes_beh_splines" not in self.Dat.columns:
+                print("Running conversion of strokes_beh to splines, saving as new col strokes_beh_splines")
+                self.strokesToSplines()
 
         strokeslist = self.Dat[strokes_ver].values
         Strokdat = []
@@ -684,6 +693,32 @@ class Dataset(object):
 
         print("-- parses gotten!")
 
+    def strokesToSplines(self, strokes_ver="strokes_beh", make_new_col=True,
+        add_fake_timesteps=True):
+        print("converting to splines, might take a minute...")
+        from ..drawmodel.splines import strokes2splines
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        from pythonlib.tools.stroketools import fakeTimesteps      
+
+        def F(x):
+            strokes = x[strokes_ver]
+            return strokes2splines(strokes)
+
+        if make_new_col:
+            newcolname = strokes_ver + "_splines"
+        else:
+            newcolname = strokes_ver
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "tmp")
+        self.Dat[newcolname] = self.Dat["tmp"]
+        del self.Dat["tmp"]
+
+        if add_fake_timesteps:
+            print("adding fake timesteps")
+            for row in self.Dat.iterrows():
+                fakeTimesteps(row[1][newcolname])
+
+
 
     def parsesChooseSingle(self, convert_to_splines=True, add_fake_timesteps=True):
         """ 
@@ -707,14 +742,16 @@ class Dataset(object):
 
         if convert_to_splines:
             print("converting to splines, might take a minute...")
-            from ..drawmodel.splines import strokes2splines
-            def F(x):
-                strokes = x["strokes_parse"]
-                return strokes2splines(strokes)
+            self.strokes2splines("strokes_parse", make_new_col=False)
 
-            self.Dat = applyFunctionToAllRows(self.Dat, F, "tmp")
-            self.Dat["strokes_parse"] = self.Dat["tmp"]
-            del self.Dat["tmp"]
+            # from ..drawmodel.splines import strokes2splines
+            # def F(x):
+            #     strokes = x["strokes_parse"]
+            #     return strokes2splines(strokes)
+
+            # self.Dat = applyFunctionToAllRows(self.Dat, F, "tmp")
+            # self.Dat["strokes_parse"] = self.Dat["tmp"]
+            # del self.Dat["tmp"]
 
         if add_fake_timesteps:
             print("adding fake timesteps")
