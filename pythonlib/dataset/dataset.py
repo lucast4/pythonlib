@@ -178,36 +178,59 @@ class Dataset(object):
 
 
 
-    def preprocessGood(self, ver="modeling"):
+    def preprocessGood(self, ver="modeling", params=None):
         """ save common preprocess pipelines by name
+        returns a ordered list, which allows for saving preprocess pipeline.
+        - ver, string. uses this, unless params given, in which case uses parasm
+        - params, list, order determines what steps to take. if None, then uses
+        ver, otherwise usesparmas
         """
-        if ver=="modeling":
-            # recenter tasks (so they are all similar spatial coords)
-            D.recenter(method="each_beh_center")
+        if params is None:
+            if ver=="modeling":
+                # recenter tasks (so they are all similar spatial coords)
+                D.recenter(method="each_beh_center")
 
-            # interpolate beh (to reduce number of pts)
-            D.interpolateStrokes()
+                # interpolate beh (to reduce number of pts)
+                D.interpolateStrokes()
 
-            # subsample traisl in a stratified manner to amke sure good represnetaiton
-            # of all variety of tasks.
-            D.subsampleTrials()
+                # subsample traisl in a stratified manner to amke sure good represnetaiton
+                # of all variety of tasks.
+                D.subsampleTrials()
 
-            # Recompute task edges (i..e, bounding box)
-            D.recomputeSketchpadEdges()
-        elif ver=="strokes":
-            # interpolate beh (to reduce number of pts)
-            D.interpolateStrokes()
+                # Recompute task edges (i..e, bounding box)
+                D.recomputeSketchpadEdges()
 
-            # subsample traisl in a stratified manner to amke sure good represnetaiton
-            # of all variety of tasks.
-            D.subsampleTrials()
+                params = ["recenter", "interp", "subsample", "spad_edges"]
+            elif ver=="strokes":
+                # interpolate beh (to reduce number of pts)
+                D.interpolateStrokes()
+
+                # subsample traisl in a stratified manner to amke sure good represnetaiton
+                # of all variety of tasks.
+                D.subsampleTrials()
+
+                params = ["interp", "subsample"]
+
+            else:
+                print(ver)
+                assert False, "not coded"
         else:
-            print(ver)
-            assert False, "not coded"
+            for p in params:
+                if p=="recenter":
+                    D.recenter(method="each_beh_center")
+                elif p=="interp":
+                    D.interpolateStrokes()
+                elif p=="subsample"
+                    D.subsampleTrials()
+                elif p=="spad_edges":
+                    D.recomputeSketchpadEdges()
+                else:
+                    print(p)
+                    assert False, "dotn know this"
+        return params
 
 
     ####################
-
     def animals(self):
         """ returns list of animals in this datsaet.
         """
@@ -620,6 +643,8 @@ class Dataset(object):
                         Strokdat[-1][col] = row[col]
 
         return pd.DataFrame(Strokdat)
+
+    ############### MOTOR PROGRAMS (BPL)
 
 
     ################ PARSES

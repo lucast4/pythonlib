@@ -14,11 +14,13 @@ LIB_PATH = '/data1/code/python/pyBPL/lib_data/'
 lib = Library(LIB_PATH, use_hist=USE_HIST)
 model = CharacterModel(lib)
 
-def infer_MPs_from_strokes(strokes_list, sketchpad_edges, use_fake_images =True, imageWH = 105, 
+def infer_MPs_from_strokes(strokes_list, indices_list, sketchpad_edges, use_fake_images =True, imageWH = 105, 
     k=1, do_rescore=True, save_checkpoints=None):
     """ wrapper to extract best-fitting motor programs
     INPUTS:
     - strokes_list, list of strokes, each of which is a list of np array.
+    - indices_list, list of indices (could be string or int), saved , to
+    allow linking back to some dataset.
     - use_fake_images, then doesnt render strokes into image.
     Is ok, since the scoring doesnt use image anyway (although) note
     that optimization of continuos params does...
@@ -35,6 +37,7 @@ def infer_MPs_from_strokes(strokes_list, sketchpad_edges, use_fake_images =True,
     - Uses also Reuben Feinmans's PyBPL library
     """
 
+    assert False, "Need to make sure saving not just strokes, but associated dataset + task, so can link back to the datsaet. Also note how dataset was transformed (how bset to do this?) Also dont save tstamp in filename"
     if save_checkpoints is not None:
         dosave = True
         ncheck = save_checkpoints[0]
@@ -236,20 +239,38 @@ def params2ctype(prog):
     
     return ctype
 
-def scoreMPs(MPlist_flat, use_hist=True):
+def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = ["type", "token"]):
     """ outputs score (tokenscore + typescore, ignoring image score)
     as list of scores
     INPUT
     - MPlist, list of ctype (motor programs)
+    - lib, a Library object.
+    - use_hist, only applies if dont pass in lib, in which case will
+    have to load library, using use_hist
+    - scores_to_use, list, elements from {"type", "token", "image"}
+    NOTE: image is not implmeneted yet.
     """
+
+
     # Load model
-    lib = Library(LIB_PATH, use_hist=use_hist)
+    if lib is None:
+        lib = Library(LIB_PATH, use_hist=use_hist)
     model = CharacterModel(lib)
 
     def _score(ctype):
-        ctoken = model.sample_token(ctype)
-        s = model.score_type(ctype) + model.score_token(ctype, ctoken)
-        return s.float()
+        s = torch.tensor([0.])
+        for stype in scores_to_use:
+            if stype=="type":
+                s += model.score_type(ctype)
+            elif stype=="token":
+                ctoken = model.sample_token(ctype)
+                s += model.score_token(ctype, ctoken)                
+            elif stype=="image":
+                assert "image" not in scores_to_use, "not implmemneted, need to save image."
+            else:
+                print(stype)
+                assert False, "dont know this"
+        return s.float().reshape(1)
 
     scorelist = [_score(ctype) for ctype in MPlist_flat]
     return scorelist
