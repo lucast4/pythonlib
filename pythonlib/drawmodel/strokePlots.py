@@ -356,7 +356,7 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
         if overlay_stroke_periods:
             for s in strokes:
                 if len(s)>0:
-                    plt.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
+                    ax.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
         if not nolegend:
             ax.legend() 
             ax.set_title(plotver)

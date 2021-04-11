@@ -14,8 +14,8 @@ LIB_PATH = '/data1/code/python/pyBPL/lib_data/'
 lib = Library(LIB_PATH, use_hist=USE_HIST)
 model = CharacterModel(lib)
 
-def infer_MPs_from_strokes(strokes_list, indices_list, sketchpad_edges, use_fake_images =True, imageWH = 105, 
-    k=1, do_rescore=True, save_checkpoints=None):
+def infer_MPs_from_strokes(strokes_list, indices_list, dataset_preprocess_params, sketchpad_edges, 
+    use_fake_images =True, imageWH = 105, k=1, do_rescore=True, save_checkpoints=None):
     """ wrapper to extract best-fitting motor programs
     INPUTS:
     - strokes_list, list of strokes, each of which is a list of np array.
@@ -37,7 +37,6 @@ def infer_MPs_from_strokes(strokes_list, indices_list, sketchpad_edges, use_fake
     - Uses also Reuben Feinmans's PyBPL library
     """
 
-    assert False, "Need to make sure saving not just strokes, but associated dataset + task, so can link back to the datsaet. Also note how dataset was transformed (how bset to do this?) Also dont save tstamp in filename"
     if save_checkpoints is not None:
         dosave = True
         ncheck = save_checkpoints[0]
@@ -54,12 +53,15 @@ def infer_MPs_from_strokes(strokes_list, indices_list, sketchpad_edges, use_fake
                 pickle.dump(out_all, f)
             with open(f"{pathsave}/score_all.pkl", "wb") as f:
                 pickle.dump(score_all, f)
+            with open(f"{pathsave}/indices_list.pkl", "wb") as f:
+                pickle.dump(indices_list, f)
             params = {
                 "sketchpad_edges":sketchpad_edges,
                 "use_fake_images":use_fake_images,
                 "imageWH":imageWH,
                 "k":k,
-                "do_rescore":do_rescore
+                "do_rescore":do_rescore,
+                "dataset_preprocess_params":dataset_preprocess_params
             }
             with open(f"{pathsave}/params.pkl", "wb") as f:
                 pickle.dump(params, f)
@@ -275,7 +277,7 @@ def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = ["type", "tok
     scorelist = [_score(ctype) for ctype in MPlist_flat]
     return scorelist
 
-def plotMP(ctype, score=None):
+def plotMP(ctype, score=None, xlim=[0, 104], ylim=[-104, 0], ax=None):
     """ plot both img and motor, for this program (type level)"""
 
     def box_only(obj):
@@ -290,12 +292,18 @@ def plotMP(ctype, score=None):
     # Sample token
     ctoken = model.sample_token(ctype)
 
+    # fig, axes = plt.subplots(2, 1, figsize=(10,5))
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5,5))
+
     # Sample prob image
-    pimg = model.get_pimg(ctoken)
-    plt.figure(figsize=(2,2))
-    plt.imshow(pimg.detach().numpy(), cmap='Greys')
-    box_only(plt)
-    plt.show() 
+    if False:
+        pimg = model.get_pimg(ctoken)
+        ax = axes.flatten()[0]
+        ax.imshow(pimg.detach().numpy(), cmap='Greys')
+        box_only(plt)
+        # ax.set_xlim(xlim)
+        # ax.set_ylim(ylim)
 
     # PLOT MOTOR TRAJECTORY
     motor = [p.motor for p in ctoken.part_tokens] # list of (nsub, ncpt, 2)
@@ -310,9 +318,14 @@ def plotMP(ctype, score=None):
 
     # plot
     from pythonlib.drawmodel.strokePlots import plotDatStrokes
-
-    fig, axes = plt.subplots()
-    plotDatStrokes(motor_flat, axes, each_stroke_separate=True)
+    # ax = axes.flatten()[1]
+    plotDatStrokes(motor_flat, ax, each_stroke_separate=True)
     if score is not None:
-        axes.set_title(f"score {score}")
+        ax.set_title(f"score {score}")
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return ax
+
+
+
     

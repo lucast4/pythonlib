@@ -1,5 +1,7 @@
 """stuff to dow with lists"""
 from operator import itemgetter
+import numpy as np
+import torch
 
 def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
     """gets N random permutations from muylist, no
@@ -88,3 +90,52 @@ def partition(collection):
 
     # for n, p in enumerate(partition(something), 1):
     #     print(n, sorted(p))
+
+
+def get_counts(vals):
+    """ returns dict, where keys are unique values in vals,
+    and values are counts (frequenceis). vals can be anything
+    hashable (?) by np.unique, e..g, strings, nums, etc.
+    INPUTS:
+    - vals, array-like,
+    """
+    x, y = np.unique(np.array(vals), return_counts=True)
+    counts_dict = {xx:yy for xx, yy in zip(x, y)}
+    return counts_dict
+
+
+def counts_to_pdist(counts_dict, cats_in_order, dtype=torch.float32, 
+    prior_counts=0., print_stuff=True):
+    """
+    Get an array of probabilities, where the
+    indices are in order defined by cats_in_order.
+    INPUT:
+    - counts_dict, from get_counts.
+    - cats_in_order, list of elements matching (superset) of unique
+    values in vals. will use this to determine ordering in pdist output. 
+    can also be subset, in which will ignore any keys not in it. will always
+    normalize output to sum to 1.
+    - dtype, dtype for torch tensor
+    - prior_counts, adds this to counts before getting probs
+    RETURNS:
+    - pdist, torch tensor, len of cats_in_order.
+    """
+    probs = []
+    for c in cats_in_order:
+        if c not in counts_dict:
+            nelem = 0. + prior_counts
+        else:
+            nelem = counts_dict[c] + prior_counts
+        probs.append(nelem)
+
+    pdist = torch.tensor(probs, dtype=dtype)
+    pdist = pdist/torch.sum(pdist)
+    pdist = pdist.squeeze()
+    
+    if print_stuff:
+        print("cats, this order:")
+        print(cats_in_order)
+        print("these probs:")
+        print(pdist)
+    
+    return pdist

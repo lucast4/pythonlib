@@ -57,10 +57,10 @@ def get_parses_from_strokes(strokes, canvas_max_WH, image_WH=105, k=20,
     """
     from pythonlib.drawmodel.parsing import extractJunctions
     from pythonlib.drawmodel.image import getSketchpadEdges
+    from pythonlib.drawmodel.image import strokes2image
     # from gns.inference.parsing.top_k import get_topK_parses    
 
     # convert to images
-    from pythonlib.drawmodel.image import strokes2image
     I = strokes2image(strokes, canvas_max_WH, image_WH, plot=plot)
 
     # Extract junctions

@@ -386,3 +386,21 @@ def printOverview(df, MAX=50):
                 print(f"*Skipping print, since {nvals} vals > MAX")
             else:
                 print(df[col].value_counts())
+
+
+def append_col_with_grp_index(df, grp, new_col_name):
+    """ for each col, gets its grp index (based on grp list),
+    and appends as new column. first converts to string by str(list)
+    INPUTS:
+    - grp, list of strings, each a column. order matters!
+    RETURNS:
+    - df, but with new col.
+    """
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
+ 
+    # add a column, which is grp index
+    def F(x):
+        tmp = [x[g] for g in grp]
+        return str(tmp)
+    
+    return applyFunctionToAllRows(df, F, new_col_name)    

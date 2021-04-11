@@ -371,6 +371,56 @@ def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay",
         
     return fig, ax
 
+def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
+    means=False, labels=None):
+    """ scatter plot, but making sure is square, 
+    xlim and ylim are identical, and plotting a unity line
+    - plot_string_ind, THen plots 0, 1, 2..., on the pts
+    - dotted_lines, {"unity", "plus", "none"}, to verlay
+    - means, overlay dot for mean
+    - labels, list, same len as x and y, to overlay on dots (text), takes 
+    precedence over plot_string_ind
+    """
+
+    ax.plot(x, y, "x", alpha=0.8)
+
+    # ax.set_axis("square")
+    minimum = np.min((ax.get_xlim(),ax.get_ylim()))
+    maximum = np.max((ax.get_xlim(),ax.get_ylim()))
+    ran = maximum - minimum
+    MIN = minimum - 0.1*ran
+    MAX = maximum + 0.1*ran
+    if dotted_lines=="unity":
+        ax.plot([MIN, MAX], [MIN, MAX], '--k', alpha=0.5)
+    elif dotted_lines=="plus":
+        ax.plot([0, 0], [MIN, MAX], '--k', alpha=0.5)
+        ax.plot([MIN, MAX], [0, 0], '--k', alpha=0.5)
+    else:
+        assert dotted_lines=="none", "what you want?"
+
+    if means:
+        xmean = np.mean(x)
+        ymean = np.mean(y)
+        ax.plot(xmean, ymean, "ok")
+
+    # overlay strings?
+    if labels is not None:
+        assert len(labels)==len(x)
+        for l, xx, yy in zip(labels, x,y):
+            ax.text(xx, yy, l)
+    else:
+
+        if plot_string_ind:
+            for i, (xx, yy) in enumerate(zip(x,y)):
+                ax.text(xx, yy, i)
+
+
+
+    ax.set_xlim(MIN, MAX)
+    ax.set_ylim(MIN, MAX)
+    ax.axis("square")
+    # ax.set_aspect('equal', adjustable='datalim')
+
 def getHistBinEdges(vals, nbins):
     """ return array of edges containing all vals,
     and having n bins (so values is nbins+1)
