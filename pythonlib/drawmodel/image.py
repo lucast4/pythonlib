@@ -12,7 +12,7 @@ def getSketchpadEdges(canvas_max_WH, image_WH):
 
 
 def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=0.9, bin_thresh= 0.6,
-    plot=False):
+    plot=False, plotstrokes=False):
     """ default params are used for converitng to binary pixel image,, used for
     parsing.
     - canvas_max_WH, coordinates of the sketchpad used by monkey
@@ -33,22 +33,21 @@ def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=0.9, bin_thresh= 0
     I = np.array(I>bin_thresh) # binarize
 
     if plot:
-        # ----- PLOTS
-        # plot strokes
-        fig, ax = plt.subplots(figsize=(10,10))
-        plotDatStrokes(strokes, ax, each_stroke_separate=True)
+        if plotstrokes:
+            # ----- PLOTS
+            # plot strokes
+            fig, ax = plt.subplots(figsize=(10,10))
+            plotDatStrokes(strokes, ax, each_stroke_separate=True)
 
-        # plot hist of values
-        plt.figure()
-        plt.hist(I[:], log=True)
+            # plot hist of values
+            plt.figure()
+            plt.hist(I[:], log=True)
 
         # plot
         plt.figure()
         plt.imshow(I, cmap="gray")
         plt.colorbar()
         plt.title("after binarize")
-
-        print(I.shape)
     return I
 
 
