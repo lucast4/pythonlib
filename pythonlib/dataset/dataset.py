@@ -254,10 +254,20 @@ class Dataset(object):
         RETURNS:
         - list of strings, paths.
         """
-
         from pythonlib.tools.expttools import findPath
-        pathlist = findPath("/data2/analyses/database/", 
-                 [[animal, expt]], "dat", ".pkl", True)
+
+        # Collects across these dirs
+        SDIR_LIST = ["/data2/analyses/database/", "/data2/analyses/database/BEH"]
+
+        def _find(SDIR):
+            pathlist = findPath(SDIR, [[animal, expt]], "dat", ".pkl", True)
+            return pathlist
+
+        pathlist = []
+        for SDIR in SDIR_LIST:
+            pathlist.extend(_find(SDIR))
+
+        # pathlist = findPath(SDIR, [[animal, expt]], "dat", ".pkl", True)
         
         if assert_only_one:
             assert len(pathlist)==1
@@ -893,7 +903,7 @@ class Dataset(object):
             else:
                 print("Taking most recent path")
                 pathlist = [pathlist[-1]]
-                
+
 
         sdir = pathlist[0]
 

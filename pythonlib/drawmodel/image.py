@@ -50,6 +50,39 @@ def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=0.9, bin_thresh= 0
         plt.title("after binarize")
     return I
 
+def coordsMatchAspectRatio(edgesgood, edgesmod):
+    """ 
+    will make sure is asme aspect ratio Does this
+    by padding the smaller dimension of edgesmod to match edgesgood
+    (equally on both ends)
+    -edges format [[-x, +x],[-y, +y]]
+    RETURNS:
+    - new edgesmod. does not modify in place.
+    """
+    
+    edgesmod = edgesmod.copy()
+    
+    ratiogood = np.diff(edgesgood[1,:])/np.diff(edgesgood[0,:]) # y/x
+    
+    dy = np.diff(edgesmod[1,:])
+    dx = np.diff(edgesmod[0,:])
+    ratiomod = dy/dx
+    
+    if ratiomod>ratiogood:
+        # then pad x
+        dx_new = dy/ratiogood
+        pad = (dx_new - dx)/2
+        edgesmod[0,:] = [edgesmod[0,0]-pad, edgesmod[0,1]+pad]
+    elif ratiomod<ratiogood:
+        # then pad y
+        dy_new = ratiogood*dx
+        pad = (dy_new - dy)/2
+        edgesmod[1,:] = [edgesmod[1,0]-pad, edgesmod[1,1]+pad]
+        
+    assert np.isclose(ratiogood, np.diff(edgesmod[1,:])/np.diff(edgesmod[0,:]))
+    
+    return edgesmod
+    
 
 def convCoordGeneral(pts, edges1, edges2):
     """ general purpose conversion, assumes that only translating and rescaling image, but no

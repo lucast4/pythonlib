@@ -96,6 +96,10 @@ class TaskClass(object):
         plotkwargs["clean_unordered"] = True
         plotDatStrokes(strokes, ax, **plotkwargs)
 
+        # limits
+        spad = self.Task["sketchpad"]
+        ax.set_xlim(spad[:,0])
+        ax.set_ylim(spad[:,1])
 
 
 def task2chunklist(task):
