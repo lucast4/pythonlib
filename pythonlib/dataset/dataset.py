@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.pandastools import applyFunctionToAllRows
 import torch
+import os
+from pythonlib.tools.expttools import makeTimeStamp, findPath
 
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
@@ -40,12 +42,27 @@ class Dataset(object):
             print("Did not load data!!!")
 
 
-    def load_dataset_helper(self, animal, expt):
+    def load_dataset_helper(self, animal, expt, ver="single"):
         """ load a single dataset. 
-        endures that there is one and only one.
+        - ver, str
+        --- "single", endures that there is one and only one.
+        --- "mult", allows multiple. if want animal or expt to 
+        iterate over pass in lists of strings.
         """
-        pathlist = self.find_dataset(animal, expt, assert_only_one=True)
-        self._main_loader(pathlist, None)
+        if ver=="single":
+            pathlist = self.find_dataset(animal, expt, assert_only_one=True)
+            self._main_loader(pathlist, None)
+        elif ver=="mult":
+            pathlist = []
+            if isinstance(animal, str):
+                animal = [animal]
+            if isinstance(expt, str):
+                expt = [expt]
+            for a in animal:
+                for e in expt:
+                    pathlist.extend(self.find_dataset(a, e, True))
+            self._main_loader(pathlist, None)
+
 
 
     def _main_loader(self, inputs, append_list):
@@ -144,6 +161,16 @@ class Dataset(object):
         print("Resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
 
+
+    ############# ASSERTIONS
+    def _check_is_single_dataset(self):
+        """ True if single, False, if you 
+        contcatenated multipel datasets"""
+
+        if len(self.Metadats)>1:
+            return False
+        else:
+            return True
 
     ############# CLEANUP
     def _cleanup(self, remove_dot_strokes=True):
@@ -656,8 +683,299 @@ class Dataset(object):
 
 
     ############# EXTRACT THINGS
+    def _sf_get_path(self, strokes_ver, idx_metadat):
+        """ for single dataset. tell me which datset with idx_metadat
+        """
+        sdir = f"{self.Metadats[idx_metadat]['path']}/stroke_feats"
+        os.makedirs(sdir, exist_ok=True)
+        path_sf = f"{sdir}/sf-{strokes_ver}.pkl"
+        path_params = f"{sdir}/params-{strokes_ver}.pkl"
+        return path_sf, path_params
+
+
+    def _sf_get_path_combined(self):
+        """ for SF that has been reloaded, across multiple datasets.
+        will get automatic name for this combo. If already exist, then will
+        not update. otherwise comes up with new.
+        will be sved in self.SFparams["sdir"] """
+        # save and make save folder for this combined dataset
+        from pythonlib.tools.expttools import makeTimeStamp
+
+        if "sdir" not in self.SFparams:
+            ts = makeTimeStamp()
+            sdir = "/data2/analyses/database/combined_strokfeats"
+            a = sorted(set(self.SF["animal"]))
+            b = sorted(set(self.SF["expt"]))
+            c = sorted(set([p["strokes_ver"] for p in self.SFparams["params_each_original_sf"]]))
+            tmp = "_".join(a) + "-" + "_".join(b) + "-" + "_".join(c)
+
+            self.SFparams["sdir"] = f"{sdir}/{tmp}-{ts}"
+            
+            os.makedirs(self.SFparams['sdir'])
+        return self.SFparams["sdir"]
+
+
+    def sf_extract_and_save(self, strokes_ver = "strokes_beh", saveon=True):
+        """ extract and save stroke features dataframe, in save dir
+        where datsaet is saved. 
+        Will by default run this for all rows in self.Dat, can post-hoc assign
+        back to Datasets if want to do further preprocessing
+        INPUT:
+        - strokes_ver, {"strokes_beh", "strokes_parse", "strokes_beh_splines"}, 
+        determines which storkles to use. will seave spearately depending on this 
+        flag. Note: if strokes_parse, trhen will choose a random single parse. that means
+        each run could give diff ansers.
+        RETURNS:
+        - SF, dataframe. does not modify self.
+        NOTE: 
+        - by default only allows you to run if this is a single dataset.
+        - will delete Dataset from column before saving.
+        """
+        import os
+        import pickle
+        
+        assert self._check_is_single_dataset(), "not allowed to run this with multipe datasets..."
+
+        params = {}
+        params["strokes_ver"] = strokes_ver
+
+        if params["strokes_ver"]=="strokes_parse":
+            self.parsesLoadAndExtract() # extract parses, need to have done bfeore
+        if params["strokes_ver"]=="strokes_beh_splines":
+            self.strokesToSplines(strokes_ver='strokes_beh', make_new_col=True) # convert to splines (beh)
+        SF = self.flattenToStrokdat(strokes_ver=strokes_ver)
+
+
+        # save
+        if saveon:
+            # delete things you dont want to save
+            del SF["Dataset"]
+
+            # Dir
+            path_sf, path_params = self._sf_get_path(strokes_ver, 0)
+            # SF
+            SF.to_pickle(path_sf)
+            print("Saved SF to:")
+            print(path_sf)
+            # Save params
+            with open(path_params, "wb") as f:
+                pickle.dump(params, f)
+
+        return SF
+
+    def sf_load_preextracted(self, strokes_ver_list = ["strokes_beh"]):
+        """ wrapper to load multiple SFs.
+        - strokes_ver_list, list of strings. (see _sf_load_preextracted)
+        RETURNS:
+        self.SF, all concatenated. will keep record of both which dataset (idx_metadata)
+        and which SF it came from
+        """
+
+        SF = []
+        PARAMS = []
+        for sver in strokes_ver_list:
+            sf, prms = self._sf_load_preextracted(sver)
+
+            SF.extend(sf)
+            PARAMS.extend(prms)
+
+        # concat
+        SF = pd.concat(SF)
+        SF = SF.reset_index(drop=True)
+
+        # assign
+        self.SF = SF
+        self.SFparams = {
+            "params_each_original_sf":PARAMS}
+
+        print("SF put into self.SF")
+
+
+
+    def _sf_load_preextracted(self, strokes_ver="strokes_beh"):
+        """ Loads SF (and parasm) that have been presaved. 
+        must have run self.sf_extract_and_save() first.
+        RETURNS:
+        - list of SF, list of params
+        NOTE: fine to run this even if multiple Datasets.
+        """
+
+        SF  = []
+        PARAMS = []
+        for idx in range(len(self.Metadats)):
+
+            # Load presaved for this subdataset
+            path_sf, path_params = self._sf_get_path(strokes_ver, idx) 
+
+            sf = pd.read_pickle(path_sf)
+            with open(path_params, "rb") as f:
+                params = pickle.load(f)
+
+            sf["idx_metadat"] = idx
+            sf["strokes_ver"] = strokes_ver
+            params["idx_metadat"] = idx
+            params["path_sf"] = path_sf
+            params["path_params"] = path_params
+            params["path_params"] = path_params
+
+            # concat
+            PARAMS.append(params)
+            SF.append(sf)
+
+        # concat
+        # SF = pd.concat(SF)
+        # SF = SF.reset_index(drop=True)
+
+        # save into self
+        return SF, PARAMS
+
+
+    def sf_preprocess_stroks(self, align_to_onset = True, min_stroke_length_percentile = 2, 
+        min_stroke_length = 50, max_stroke_length_percentile = 99.5):
+        """ preprocess, filter, storkes, after already extracted into 
+        self.SF
+        """
+        from ..drawmodel.sf import preprocessStroks
+
+        params = {
+            "align_to_onset":align_to_onset,
+            "min_stroke_length_percentile":min_stroke_length_percentile,
+            "min_stroke_length":min_stroke_length,
+            "max_stroke_length_percentile":max_stroke_length_percentile,
+        }
+
+        self.SF = preprocessStroks(self.SF, params)
+
+        # Note down done preprocessing in params
+        self.SFparams["params_preprocessing"] = params
+
+
+    def sf_save_combined_sf(self):
+        """ must have already extracted SF. saves current state, inclding
+        preprocessing, etc
+        """
+        sdir = self._sf_get_path_combined()
+
+        path_SF = f"{sdir}/SF.pkl"
+        self.SF.to_pickle(path_SF)
+
+        path_SF = f"{sdir}/SFparams.pkl"
+        with open(path_SF, "wb") as f:
+            pickle.dump(self.SFparams, f)
+        print("saved SF and SFparams to:")
+        print(sdir)
+
+
+    def sf_load_combined_sf(self, animals, expts, strokes, tstamp = "*", take_most_recent=True):
+        """
+        Load SF (already concatted across mult datasets, and possible prerpocessed) NOTE:
+        do all preprocessing etc BEFORE use sf_save_combined_sf(), which saves objecst that iwll
+        load here.
+        - take_most_recent, then will allow if have multiple found paths by taking most recent.
+        otherwise will raise error if get multiple.
+        """
+        sdir = "/data2/analyses/database/combined_strokfeats"
+        a = sorted(animals)
+        b = sorted(expts)
+        c = sorted(strokes)
+        tmp = "*".join(a) + "-" + "*".join(b) + "-" + "*".join(c) + "*".join(tstamp)
+
+        pathlist = findPath(sdir, [[tmp]], "SF", "pkl", True)
+
+        if len(pathlist) == 0:
+            print(pathlist)
+            assert False, "did not find presaved data"
+        
+        if len(pathlist)>1:
+            if not take_most_recent:
+                print(pathlist)
+                assert False, "found to omany..."
+            else:
+                print("Taking most recent path")
+                pathlist = [pathlist[-1]]
+                
+
+        sdir = pathlist[0]
+
+        print("==== Loading:")
+        path = f"{sdir}/SF.pkl"
+        with open(path, "rb") as f:
+            self.SF = pickle.load(f)
+            print("** Loaded into self.SF:")
+            print(path)
+
+        path = f"{sdir}/SFparams.pkl"
+        with open(path, "rb") as f:
+            self.SFparams = pickle.load(f)
+            print("** Loaded into self.SFparams:")
+            print(path)
+
+        # save this path
+        self.SFparams["path_sf_combined"] = sdir
+
+
+
+    def sf_embedding_bysimilarity(self, rescale_strokes_ver = "stretch_to_1", distancever = "euclidian_diffs",
+        npts_space = 50, Nbasis = 300, saveon=True):
+        """copmputs embedding of strokes in similarity space (ie defined by basis set of strokes). basis set
+        picked randomly
+        INPUT:
+        - rescale_strokes_ver, str, how/whether to rescale strokes before process. will not change self.SF
+        - distance_ver, str, distance to use between strok-strok.
+        - npts_space, num pts to interpolate in space (spatially uniform)
+        - Nbasis, num random sampled trials to use for basesi.
+        - saveon, then saves in same dir as self.SF
+        RETURNS:
+        - similarity_matrix, Nsamp x Nbasis, range from 0 to 1
+        - idxs_stroklist_basis, indices in self.SF used as basis set (len Nbasis)
+        """
+        from pythonlib.drawmodel.sf import computeSimMatrix
+
+        # Get sim matrix
+        similarity_matrix, idxs_stroklist_basis = computeSimMatrix(self.SF, rescale_strokes_ver, 
+                                                                   distancever, npts_space, Nbasis)
+        # params_embedding = {
+        #     "align_to_onset":align_to_onset,
+        # }
+
+        dat = {
+            "similarity_matrix":similarity_matrix,
+        }
+
+        params = {
+            "rescale_strokes_ver":rescale_strokes_ver,
+            "distancever":distancever,
+            "npts_space":npts_space,
+            "Nbasis":Nbasis,
+            "idxs_stroklist_basis":idxs_stroklist_basis
+        }
+
+        if saveon:
+            sdir = self._sf_get_path_combined()
+            ts = makeTimeStamp()
+            sdirthis = f"{sdir}/embeddings/similarity-{rescale_strokes_ver}-{distancever}-N{Nbasis}-{ts}"
+            os.makedirs(sdirthis)
+            params["path_embeddings_similarity"] = sdirthis
+
+            # sim matrix
+            path = f"{sdirthis}/dat.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(dat, f)
+
+            # params
+            path = f"{sdirthis}/params.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(params, f)
+            print("Saved to:")
+            print(sdirthis)
+
+
+        return similarity_matrix, idxs_stroklist_basis, params
+
+
+
     def flattenToStrokdat(self, keep_all_cols = True, strokes_ver="strokes_beh",
-        cols_to_exclude = ["strokes_beh", "strokes_task", "strokes_parse", "strokes_beh_splines", "parses"]):
+        cols_to_exclude = ["strokes_beh", "strokes_task", "strokes_parse", "strokes_beh_splines", "parses", "motor_program"]):
         """ flatten to pd dataframe where each row is one
         strok (np array)
         - keep_all_cols, then keeps all dataframe columns. otherwise
@@ -703,6 +1021,8 @@ class Dataset(object):
                         Strokdat[-1][col] = row[col]
 
         return pd.DataFrame(Strokdat)
+
+
 
     ############### IMAGES
     def strokes2image(self, strokes_ver, imageWH=105, inds=None, ploton=False):
@@ -1207,7 +1527,7 @@ class Dataset(object):
 
         if convert_to_splines:
             print("converting to splines, might take a minute...")
-            self.strokes2splines("strokes_parse", make_new_col=False)
+            self.strokesToSplines("strokes_parse", make_new_col=False)
 
             # from ..drawmodel.splines import strokes2splines
             # def F(x):
@@ -1249,7 +1569,6 @@ class Dataset(object):
         - SDIR_THIS, dir where this saved.
         """
         import os
-        from pythonlib.tools.expttools import makeTimeStamp
         import pickle
 
         ts = makeTimeStamp()

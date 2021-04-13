@@ -1,5 +1,94 @@
 """ things that take in strokes and compute distances"""
 import numpy as np
+
+
+def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
+                   convert_to_similarity=True, normalize_rows=False, ploton=False, 
+                   normalize_cols_range01=False, distStrok_kwargs={}, 
+                   rescale_strokes_ver=None):
+    """ 
+    [use this over distmatStrokes]
+    given list of stroks, gets distance/similarity matrix
+    - idxs1, 2 are either lists of indices into stroklist, or are lists of strokes
+    (if stroklist is None).
+    - distancever, which metric to use between pairs of strok
+    - normalize_rows, then each datapoint (row) normalized so sum across cols is 1.
+    - convert_to_similarity, then returns similairty matrix instead of dist,
+    where sim is defined as S = 1-D/np.max(D).
+    (done in final step)
+    - ploton, then plots in heatmap
+    - rescale_strokes_ver, then methods to rescale stroke before computing distance.
+
+    NOTE: if stroklist is None, then idxs1 and 2 must be lists of stroks
+    RETURNS: 
+    - D, returns distance matrix,
+    size N,M, where N is len(idxs1)...
+    idxs index into stroklist
+    """
+    
+    from pythonlib.tools.distfunctools import modHausdorffDistance, distStrok
+
+    
+    # if distancever=="hausdorff":
+    #     def distfunc(strok1, strok2):
+    #         return modHausdorffDistance(strok1, strok2) 
+    # elif distancever=="hausdorff_means":
+    #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then 
+    #     # slices (columns) will not be smooth gaussian-like things. This should 
+    #     # be clear if I tink about it.
+    #     def distfunc(strok1, strok2):
+    #         return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean") 
+        
+    if stroklist is None:
+        stroklist1 = idxs1
+        stroklist2 = idxs2
+    else:
+        stroklist1 = [stroklist[i] for i in idxs1]
+        stroklist2 = [stroklist[i] for i in idxs2]
+
+    # rescale?
+    if rescale_strokes_ver is not None:
+        from pythonlib.tools.stroketools import rescaleStrokes
+        stroklist1 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist1]
+        stroklist2 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist2]
+
+    n1 = len(stroklist1)
+    n2 = len(stroklist2)
+
+    D = np.empty((n1, n2))
+
+    for i_dat, strokdat in enumerate(stroklist1):
+        if i_dat%250==0:
+            print(i_dat)
+        for i_bas, strokbas in enumerate(stroklist2):
+            # print(strokdat)
+            # print(strokbas)
+            d = distStrok(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
+            D[i_dat, i_bas] = d
+        
+    if normalize_rows:
+        dnorm = np.sum(D, axis=1, keepdims=True)
+        D = D/dnorm
+
+    if normalize_cols_range01:
+        # then each column convert to range 0,1 (min, max distance)
+        dmin = np.min(D, axis=0, keepdims=True)
+        D = D-dmin
+        dmax = np.max(D, axis=0, keepdims=True)
+        D = D/dmax
+        
+        
+    if convert_to_similarity:
+        D = 1-D/np.max(D)
+        
+    if ploton:
+        plt.figure()
+        plt.imshow(D, cmap="plasma")
+        plt.colorbar()
+
+    return D
+
+
 def distmatStrokes(strokes1, strokes2, ver="mindist"):
     """ pariwise distnace btween all strok in strokes1 and 2.
     returns distmat, which is size N x M, where N and M are lenght of
