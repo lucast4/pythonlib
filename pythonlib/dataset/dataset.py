@@ -42,6 +42,94 @@ class Dataset(object):
             print("Did not load data!!!")
 
 
+        self._possible_data = ["Dat", "BPL", "SF"]
+
+
+
+
+    def initialize_dataset(self, ver, params):
+        """ main wrapper for loading datasets of all kinds, including
+        monkey, model, etc.
+        - ver, {"monkey", "generic"}
+        - params, dict of params
+        """
+
+        if ver=="monkey":
+            animal = params["animal"]
+            expt = params["expt"]
+            if "ver" in params.keys():
+                ver = params["ver"]
+            else:
+                ver = "single"
+            self.load_dataset_helper(animal, expt, ver)
+
+        elif ver=="generic":
+            # then give me behaviro and tasks
+            strokes_list = params["strokes_list"]
+            task_list = params["task_list"]
+            self.Dat = pd.DataFrame({
+                "strokes_beh":strokes_list,
+                "Task":task_list})
+
+
+    def sliceDataset(self, inds):
+        """ given inds, slices self.Dat.
+        inds are same as row num, will ensure so
+        RETURNS:
+        - self.Dat, modified, index reset
+        """
+        assert False, "not coded, didnt think necesayr"
+
+    def copy(self):
+        """ returns a copy. does this by extracting 
+        data
+        NOTE: currently doesnt copy over Metadats. only copies data
+        """
+        import copy
+
+        Dnew = Dataset([])
+
+        Dnew.Dat = self.Dat.copy()
+        if hasattr(self, "BPL"):
+            Dnew.BPL = copy.deepcopy(self.BPL)
+        if hasattr(self, "SF"):
+            Dnew.SF = self.SF.copy()
+
+        return Dnew
+
+
+    def filterPandas(self, filtdict, return_ver = "indices"):
+        """
+        RETURNS:
+        - if return_ver is:
+        --- "indices", then returns (self.Dat not modifed,) and returns inds.
+        --- "modify", then modifies self.Dat, and returns Non
+        --- "dataframe", then returns new dataframe, doesnt modify self.Dat
+        --- "dataset", then copies and returns new dataset, without affecitng sefl.
+        """
+        from pythonlib.tools.pandastools import filterPandas
+        # traintest = ["test"]
+        # random_task = [False]
+        # filtdict = {"traintest":traintest, "random_task":random_task}
+
+        _checkPandasIndices(self.Dat)
+
+        if return_ver=="indices":
+            return filterPandas(self.Dat, filtdict, return_indices=True)
+        elif return_ver=="modify":
+            print("self.Dat modified!!")
+            self.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
+        elif return_ver=="dataframe":
+            return filterPandas(self.Dat, filtdict, return_indices=False)
+        elif return_ver=="dataset":
+            Dnew = self.copy()
+            Dnew.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
+            return Dnew
+        else:
+            print(return_ver)
+            assert False
+
+
     def load_dataset_helper(self, animal, expt, ver="single"):
         """ load a single dataset. 
         - ver, str
@@ -134,8 +222,6 @@ class Dataset(object):
                     dat = pickle.load(f)
             dat["which_metadat_idx"] = i
             dat_list.append(dat)
-            print("Loaded dataset, size:")
-            print(len(dat))
 
 
             # Open metadat
@@ -160,6 +246,51 @@ class Dataset(object):
         print("----")
         print("Resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
+
+
+    ############### TASKS
+    def load_tasks_helper(self):
+        """ To load tasks in TaskGeneral class format.
+        Must have already asved them beforehand
+        - Uses default path
+        RETURN:
+        - self.Dat has new column called Task
+        NOTE: fails if any row is not found.
+        """
+        from pythonlib.tools.expttools import findPath
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        # Load tasks
+        a = self.animals()
+        e = self.expts()
+        if len(a)>1 or len(e)>1:
+            assert False, "currently only works if single animal/ext dataset. can modify easily"
+
+        # Find path, load Tasks
+        sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-all"
+        pathlist = findPath(sdir, [], "Tasks", "pkl")
+        assert len(pathlist)==1
+        with open(pathlist[0], "rb") as f:
+            Tasks = pickle.load(f)
+
+        # Align tasks with dataset
+        def _get_task(Tasks, trialcode):
+            tmp = [T["Task"] for T in Tasks if T["trialcode"]==trialcode]
+            if len(tmp)==0:
+                assert False, "no found"
+            if len(tmp)>1:
+                assert False, "too many"
+            return tmp[0]
+
+        def F(x):
+            trialcode = x["trialcode"]
+            T = _get_task(Tasks, trialcode)
+            return T
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "Task")      
+        print("added new column self.Dat[Task]")  
+
+
 
 
     ############# ASSERTIONS
@@ -401,6 +532,20 @@ class Dataset(object):
             dummy_name = f"tmp{i}"
             self.Dat[which_strokes] = self.Dat[dummy_name]
             del self.Dat[dummy_name]
+
+
+    def interpolateStrokesSpatial(self, strokes_ver ="strokes_beh", npts=50):
+        """ interpolate in space, to npts pts
+        (uniformly sampled)
+        """
+        from ..tools.stroketools import strokesInterpolate2
+
+        strokes_list = self.Dat[strokes_ver].values
+        for i, strokes in enumerate(strokes_list):
+            strokes_list[i] = strokesInterpolate2(strokes, 
+                N=["npts", npts], base="space")
+
+        self.Dat[strokes_ver] = strokes_list
 
 
     def interpolateStrokes(self, fs_new=20):
@@ -725,7 +870,7 @@ class Dataset(object):
         return self.SFparams["sdir"]
 
 
-    def sf_extract_and_save(self, strokes_ver = "strokes_beh", saveon=True):
+    def sf_extract_and_save(self, strokes_ver = "strokes_beh", saveon=True, assign_into_self=False):
         """ extract and save stroke features dataframe, in save dir
         where datsaet is saved. 
         Will by default run this for all rows in self.Dat, can post-hoc assign
@@ -735,6 +880,7 @@ class Dataset(object):
         determines which storkles to use. will seave spearately depending on this 
         flag. Note: if strokes_parse, trhen will choose a random single parse. that means
         each run could give diff ansers.
+        - assign_into_self, then also assigns into self.SF and self.SFparams
         RETURNS:
         - SF, dataframe. does not modify self.
         NOTE: 
@@ -770,6 +916,10 @@ class Dataset(object):
             # Save params
             with open(path_params, "wb") as f:
                 pickle.dump(params, f)
+
+        if assign_into_self:
+            self.SF = SF
+            self.SFparams = {}
 
         return SF
 
@@ -841,17 +991,20 @@ class Dataset(object):
 
 
     def sf_preprocess_stroks(self, align_to_onset = True, min_stroke_length_percentile = 2, 
-        min_stroke_length = 50, max_stroke_length_percentile = 99.5):
+        min_stroke_length = 50, max_stroke_length_percentile = 99.5, centerize=False, rescale_ver=None):
         """ preprocess, filter, storkes, after already extracted into 
         self.SF
         """
         from ..drawmodel.sf import preprocessStroks
+
 
         params = {
             "align_to_onset":align_to_onset,
             "min_stroke_length_percentile":min_stroke_length_percentile,
             "min_stroke_length":min_stroke_length,
             "max_stroke_length_percentile":max_stroke_length_percentile,
+            "centerize":centerize,
+            "rescale_ver":rescale_ver
         }
 
         self.SF = preprocessStroks(self.SF, params)
@@ -1032,6 +1185,33 @@ class Dataset(object):
 
         return pd.DataFrame(Strokdat)
 
+
+    ############## SPATIAL
+    def convertCoord(self, edges_out, strokes_ver="strokes_beh", edges_in=None):
+        """ convert coordinate system.
+        - edges_out and edges_in, in format [xmin, xmax; ymin, ymax], 2 x 2 array
+        - edges_in, either give me, or if None wil compute automatically based on 
+        smallest bounding box covering all tasks.
+        RETURNS:
+        - modified self.Dat[strokesver]
+        - updates self._Sketchpad
+        """
+        from ..drawmodel.image import convCoordGeneral
+        if edges_in is None:
+            assert False, "not yet coded"
+
+        strokes_list = self.Dat[strokes_ver]
+
+        def F(strokes):
+            return [convCoordGeneral(s, edges_in, edges_out) for s in strokes]
+
+        strokes_list = [F(strokes) for strokes in strokes_list]
+
+        self.Dat[strokes_ver] = strokes_list
+
+        if not hasattr(self, "_Sketchpad"):
+            self._Sketchpad = {}
+        self._Sketchpad["edges"] = edges_out
 
 
     ############### IMAGES
@@ -1377,7 +1557,7 @@ class Dataset(object):
 
 
         # Add a column to self.Dat, for index grp
-        self.dat_append_col_by_grp(grp_by, "index_grp")
+        self.grouping_append_col(grp_by, "index_grp")
         print("-- SCORING, using this model:")
         
         if False:
@@ -1557,7 +1737,7 @@ class Dataset(object):
 
 
     ############# DAT dataframe manipualtions
-    def dat_append_col_by_grp(self, grp_by, new_col_name):
+    def grouping_append_col(self, grp_by, new_col_name):
         """ append column with index after applying grp_by, 
         as in df.groupby, where the new val is  string, from
         str(list), where list is the grp_by levels for that
@@ -1565,12 +1745,14 @@ class Dataset(object):
         RETURNS:
         - modified self.Dat
         """
-
         from pythonlib.tools.pandastools import append_col_with_grp_index
         self.Dat = append_col_with_grp_index(self.Dat, grp_by, new_col_name)
         print("appended col to self.Dat:")
         print(new_col_name)
 
+
+    def dat_append_col_by_grp(self, grp_by, new_col_name):
+        assert False, "moved to grouping_append_col"
 
     ################ SAVE
     def save_state(self, SDIR_MAIN, SDIR_SUB):
@@ -1720,9 +1902,55 @@ class Dataset(object):
 
 
 
+def matchTwoDatasets(D1, D2):
+    """ Given two Datasets, slices D2.Dat,
+    second dataset, so that it only inclues trials
+    prsent in D1. size D2 will be <= size D1. Uses
+    animal-trialcode, which is unique identifier for 
+    rows. 
+    RETURNS
+    - D2 will be modified. Nothings return
+    """
+    from pythonlib.tools.pandastools import filterPandas
+
+    # rows are uniquely defined by animal and trialcode (put into new column)
+    def F(x):
+        return (x["animal"], x["trialcode"])
+    if "rowid" not in D1.Dat.columns:
+        D1.Dat = applyFunctionToAllRows(D1.Dat, F, "rowid")
+    if "rowid" not in D2.Dat.columns:
+        D2.Dat = applyFunctionToAllRows(D2.Dat, F, "rowid")
+
+    print("original length")
+    print(len(D2.Dat))
+
+    F = {"rowid":list(set(D1.Dat["rowid"].values))}
+#     inds = filterPandas(D2.Dat, F, return_indices=True)
+    D2.filterPandas(F, return_ver="modify")
+
+    print("new length")
+    print(len(D2.Dat))
 
 
+def mergeTwoDatasets(D1, D2, on_="rowid"):
+    """ merge D2 into D1. indices for
+    D1 will not change. merges on 
+    unique rowid (animal-trialcode).
+    RETURNS:
+    D1.Dat will be updated with new columns
+    from D2.
+    NOTE:
+    will only use cols from D2 that are not in D1. will
+    not check to make sure that any shared columns are indeed
+    idnetical (thats up to you).
+    """
+    
+    df1 = D1.Dat
+    df2 = D2.Dat
 
-
-
-
+    # only uses columns in D2 that dont exist in D1
+    cols = df2.columns.difference(df1.columns)
+    cols = cols.append(pd.Index([on_]))
+    df = pd.merge(df1, df2[cols], how="outer", on=on_, validate="one_to_one")
+    
+    return df

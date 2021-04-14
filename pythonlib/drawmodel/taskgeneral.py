@@ -203,6 +203,22 @@ class TaskClass(object):
         print("TODO: check out of bounds")
 
 
+    ########################
+    def get_task_id(self):
+        """ get unique id for this task
+        RETUNRS:
+        tuple (category, number in cat)
+        """
+
+        if self.Params["input_ver"]=="ml2":
+            taskcat = self.Params["input_params"].Task["stage"]
+            taskstr = self.Params["input_params"].Task["str"]
+            idx = taskstr.find(taskcat)
+            tasknum = int(taskstr[idx+len(taskcat)+1:])
+        return taskcat, tasknum
+
+
+
     #############################3
     def program2shapes(self, program):
         assert False, "not done, see __init__ for what need to do."
@@ -282,6 +298,21 @@ class TaskClass(object):
             pickle.dump(self, f)
         print(f"Saved to: {path}")
 
+
+
+
+
+#################### TO WORK WITH LISTS OF TASKS
+def getSketchpad(TaskList, kind):
+    """ will fail in any Tasks in Tasklist have different sketchpads
+    RETURN:
+    - np array, 2,2
+    """
+    tmp = np.stack([task._Sketchpads[kind] for task in TaskList]) # combine all tasks
+    tmp = tmp.reshape(tmp.shape[0], -1) 
+    assert np.all(np.diff(tmp, axis=0)==0.) # chekc that all are the same.
+    spad = TaskList[0]._Sketchpads[kind]
+    return spad
 
 
 

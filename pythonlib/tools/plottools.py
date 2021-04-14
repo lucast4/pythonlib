@@ -444,3 +444,60 @@ def getHistBinEdges(vals, nbins):
 #     import seaborn as sns
 #     plt.figure(figsize=(15,5))
 #     sns.histplot(data=SF, x="label", hue="animal_dset", stat="probability", multiple="dodge", element="bars", shrink=1.5)
+
+
+def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5, 
+                   origin="lower_left", max_n_per_grid=None):
+    """ wrapper to plot each datapoint at a given
+    col and row.
+    INPUT:
+    - data = list of datapts. must be compatible with 
+    plotfunc
+    - plotfunct, func, signature is plotfunc(data[ind], ax)
+    - cols and rows, where 0,0 is bottom left of screen (assumes 
+    0indexed
+    - max_n_per_grid, then only plots max n per col/row combo. each time will shuffle
+    so that is different. Leave none to plot all
+    RETURNS:
+    - fig, 
+    NOTE: will overlay plots if multiple pltos on same on.
+    """
+
+    if max_n_per_grid is not None:
+        assert isinstance(max_n_per_grid, int)
+
+        # then shuffle
+        import random
+        tmp = [[d, r, c] for d, r, c in zip(data, rows, cols)]
+        random.shuffle(tmp)
+        data = [t[0] for t in tmp]
+        rows = [t[1] for t in tmp]
+        cols = [t[2] for t in tmp]
+
+    
+    nr = max(rows)+1
+    nc = max(cols)+1
+    
+    if origin=="lower_left":
+        rows = max(rows)-rows
+    else:
+        assert origin=="top_left", "not coded"
+
+    fig, axes = plt.subplots(nr, nc, sharex=True, sharey=True, 
+                             figsize=(nc*SIZE, nr*SIZE), squeeze=False)
+
+    done = {}
+    for col, row in zip(cols, rows):
+        done[(row, col)] = 0
+
+    for dat, col, row in zip(data, cols, rows):
+        if max_n_per_grid is not None:
+            if done[(row, col)]==max_n_per_grid:
+                continue
+
+        ax = axes[row][col]
+        plotfunc(dat, ax)
+
+        done[(row, col)] += 1
+
+    return fig

@@ -89,7 +89,7 @@ def convCoordGeneral(pts, edges1, edges2):
     rotation 
     INPUT:
     - pts. N x 2 array of pts in space of edges1.
-    - edges1, [xmin, xmax; ymin, ymax], 2 x 2 array
+    - edges1, [xmin, xmax; ymin, ymax], 2 x 2 array (input)
     - edges2, [xmin, xmax; ymin, ymax], 2 x 2 array
     (lower bound is inclusize, upper is eclusive, 
     so xmin and xmax are possible values that pts could take), so

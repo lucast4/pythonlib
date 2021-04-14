@@ -1,6 +1,6 @@
 """ things that take in strokes and compute distances"""
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
@@ -85,6 +85,8 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         plt.figure()
         plt.imshow(D, cmap="plasma")
         plt.colorbar()
+        plt.xlabel("stroklist2")
+        plt.ylabel("stroklist1")
 
     return D
 

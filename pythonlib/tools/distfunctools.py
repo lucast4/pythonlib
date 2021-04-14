@@ -47,6 +47,18 @@ def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver
             strok1, strok2 = _interp(strok1, strok2)
         return distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
                                        vec_over_spatial_ratio=(1,0))
+    elif ver=="euclidian_bidir":
+        # same as euclidian, but takes min over flipping one stroke. 
+        from pythonlib.tools.distfunctools import distStrokTimeptsMatched
+        if auto_interpolate_if_needed:
+            strok1, strok2 = _interp(strok1, strok2)
+        d1 = distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
+                                       vec_over_spatial_ratio=(1,0))
+        d2 = distStrokTimeptsMatched(strok1, strok2[::-1], min_strok_dur=None,
+                                       vec_over_spatial_ratio=(1,0))
+        return np.min([d1, d2])
+
+
     elif ver=="euclidian_diffs":
         # pt by pt, comparing diffs between pts, using euclidian. is like velocity, but 
         # not taking into account time. 

@@ -57,7 +57,8 @@ def preprocessStroks(df, params):
     Run: %timeit preprocessStroks(SF, params)
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
-    
+    from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2
+
     # ANOTHER METHOD, applied to df directly. is slower, see notse above, so do not use
 #     if params["align_to_onset"]:
 #         def F(x):
@@ -66,6 +67,10 @@ def preprocessStroks(df, params):
 # #             df["strok"] = df["stroknew"] # replace old
 # #             del df["stroknew"]
 # #             print(df.iloc[0])
+    
+    if "align_to_onset" in params.keys() and "centerize" in params.keys():
+        assert params["align_to_onset"] != params["centerize"], "cannot do both"
+
 
     print("starting length of dataframe:")
     print(len(df))
@@ -126,11 +131,16 @@ def preprocessStroks(df, params):
             return strok - strok[0,:]
         stroklist = [F(strok) for strok in stroklist]
         
-#     if "min_stroke_length_percentile" in params.keys():
-# #         plt.hist(SF["distance"], 100);
-#         thresh =  np.percentile(df["distance"].values, [params["min_stroke_length_percentile"]])
-        
-#         stroklist = [F(strok) for strok in stroklist]
+    if params["centerize"]:
+        def F(strok):
+            c = np.mean(strok[:,:2], axis=0)
+            s = strok.copy()
+            s[:,:2] = s[:,:2] - c
+            return s
+        stroklist = [F(strok) for strok in stroklist]
+
+    if params["rescale_ver"] is not None:
+        stroklist = [rescaleStrokes([s], ver=params["rescale_ver"])[0] for s in stroklist]
 
     # === finally, put back into df
     df["strok"] = stroklist

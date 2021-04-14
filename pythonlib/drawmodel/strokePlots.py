@@ -554,3 +554,28 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
                     ax.set_xticks(ylabels)
             #         ax.ylabels("trial")
 
+
+
+def plotStroksInGrid(stroklist, ncols=5, titlelist = None):
+    """ quick plot, in grid, centered."""
+#     ncols = 5
+    nrows = int(np.ceil(len(stroklist)/ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*2, nrows*2), sharex=True, sharey=True)
+    
+    for i, (strok, ax) in enumerate(zip(stroklist, axes.flatten())):
+        plotDatStrokes([strok], ax)
+        if titlelist is not None:
+            ax.set_title(titlelist[i])
+        else:
+            ax.set_title(i)
+    
+    MIN = np.min([np.min(s[:, [0,1]]) for s in stroklist])
+    MAX = np.max([np.max(s[:, [0,1]]) for s in stroklist])
+    M = np.max([np.abs(MIN), np.abs(MAX)])
+        
+    XLIM = [-M, M]
+    YLIM = [-M, M]
+    ax.set_xlim(XLIM)
+    ax.set_ylim(YLIM)
+    
+    return fig
