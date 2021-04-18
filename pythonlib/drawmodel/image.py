@@ -27,7 +27,6 @@ def strokes2image(strokes, canvas_max_WH, image_WH, smoothing=0.9, bin_thresh= 0
     """
     from pythonlib.drawmodel.primitives import prog2pxl
     from pythonlib.drawmodel.strokePlots import plotDatStrokes
-    from pythonlib.drawmodel.image import convStrokecoordToImagecoord
 
     I = prog2pxl(strokes, WHdraw=canvas_max_WH*2, WH=image_WH, smoothing=smoothing)
     I = np.array(I>bin_thresh) # binarize
@@ -177,3 +176,34 @@ def convStrokecoordToImagecoord(pts, sketchpad_edges, image_edges, flip="xy"):
 #     pts = np.c_[pts, t]
     
     return pts
+
+
+
+def get_sketchpad_edges_from_strokes(strokes_list):
+    """ gets smallest bounding box, edges, that covers 
+    all strokes in strokes_list (takes 0.5 and 99.5 percentiles,
+    to exclude outlier tasks.)
+    INPUT:
+    - strokes_list, list of strokes
+    RETURNS:
+    - sketchpad_edges, 2 x 2, [[-x -y],[+x +y]]
+    """
+    import matplotlib.pyplot as plt
+    from ..tools.stroketools import getMinMaxVals
+    from ..tools.pandastools import applyFunctionToAllRows
+
+    # For each trial, get its min, max, for x and y
+    minmax = [getMinMaxVals(strokes) for strokes in strokes_list]
+    beh_edges = np.stack(minmax)
+
+    # sketchpad_edges = np.array([
+    #     [np.min(beh_edges[:,0]), np.min(beh_edges[:, 2])], 
+    #     [np.max(beh_edges[:,1]), np.max(beh_edges[:, 3])]]) # [-x, -y, +x +y]
+    # sketchpad_edges = np.array([
+    #     [np.percentile(beh_edges[:,0], [0.5])[0], np.percentile(beh_edges[:,2], [0.5])[0]], 
+    #     [np.percentile(beh_edges[:,1], [99.5])[0], np.percentile(beh_edges[:,3], [99.5])[0]]]) # [-x, -y, +x +y]
+    sketchpad_edges = np.array([
+        [np.percentile(beh_edges[:,0], [0.25])[0], np.percentile(beh_edges[:,2], [0.25])[0]], 
+        [np.percentile(beh_edges[:,1], [99.75])[0], np.percentile(beh_edges[:,3], [99.75])[0]]]) # [-x, -y, +x +y]
+
+    return sketchpad_edges

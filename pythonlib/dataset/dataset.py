@@ -44,8 +44,11 @@ class Dataset(object):
 
         self._possible_data = ["Dat", "BPL", "SF"]
 
-
-
+        # Save common coordinate systems
+        # [[xmin, ymin], [xmax, ymax]]
+        self._edges = {
+        "bpl":np.array([[0, -104], [104, 0]])
+        }
 
     def initialize_dataset(self, ver, params):
         """ main wrapper for loading datasets of all kinds, including
@@ -569,6 +572,18 @@ class Dataset(object):
 
 
 
+    def recomputeSketchpadEdgesAll(self, strokes_ver="strokes_beh"):
+        """ 
+        Gets smallest bounding box over all tasks.
+        Will be affected if there are outliers (without "All", isntead
+        will exlcude outliers)
+        RETURNS:
+        - in format [[-x, -y], [+x, +y]]. does not save in self
+        """
+        from pythonlib.drawmodel.image import get_sketchpad_edges_from_strokes
+        strokes_list = list(self.Dat[strokes_ver].values)
+        edges = get_sketchpad_edges_from_strokes(strokes_list)
+        return edges
 
 
     def recomputeSketchpadEdges(self):
@@ -1198,7 +1213,10 @@ class Dataset(object):
         """
         from ..drawmodel.image import convCoordGeneral
         if edges_in is None:
-            assert False, "not yet coded"
+            # compute edges
+            edges_in = self.recomputeSketchpadEdgesAll().T
+            print("Computed these for edges_in:")
+            print(edges_in)
 
         strokes_list = self.Dat[strokes_ver]
 
@@ -1212,6 +1230,7 @@ class Dataset(object):
         if not hasattr(self, "_Sketchpad"):
             self._Sketchpad = {}
         self._Sketchpad["edges"] = edges_out
+        print("DONE converting coords")
 
 
     ############### IMAGES
