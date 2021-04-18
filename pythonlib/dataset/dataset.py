@@ -1804,7 +1804,7 @@ class Dataset(object):
 
 
     ############# PLOTS
-    def plotSingleTrial(self, idx, things_to_plot = ["beh", "beh_tc", "task", "parse", "bpl_mp"]):
+    def plotSingleTrial(self, idx, things_to_plot = ["beh", "beh_tc", "task", "parse", "bpl_mp", "beh_splines"]):
         """ 
         idx, index into Dat, 0, 1, ...
         """
@@ -1842,6 +1842,10 @@ class Dataset(object):
                     from ..bpl.strokesToProgram import plotMP
                     MP = dat["motor_program"].values[idx]
                     plotMP(MP, ax=ax)
+            elif thing=="beh_splines":
+                assert "strokes_beh_splines" in dat.columns, "need to run convertToSplines first!"
+                strokes = dat["strokes_beh_splines"].values[idx]
+                plotDatStrokes(strokes, ax, each_stroke_separate=True)
             else:
                 assert False
 
