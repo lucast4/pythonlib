@@ -1014,3 +1014,13 @@ def getMinMaxVals(strokes):
     
     return [np.min(xvals), np.max(xvals), np.min(yvals), np.max(yvals)]
     
+
+
+def check_strokes_in_temporal_order(strokes):
+    """ True/False. based on 3rd column"""
+    times = np.concatenate([s[:,2] for s in strokes],0)
+    if not np.all(np.diff(times)>=0):
+        print(times)
+        print(np.diff(times)>=0)
+        print(np.diff(times))
+        assert np.all(np.diff(times)>=0)

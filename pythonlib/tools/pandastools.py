@@ -404,3 +404,69 @@ def append_col_with_grp_index(df, grp, new_col_name):
         return str(tmp)
     
     return applyFunctionToAllRows(df, F, new_col_name)    
+
+
+def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False):
+    """
+    Take a long-form datagrame, and convert into a wide form. 
+    INPUTS:
+    - index, the new index. pass in a list, if want to group. the output will have each group category 
+    as a separate column. (e.g., if index=[a, b], then a and b will be columns in output.)
+    - columns, generally keep this length 1, easy to understand. if len >1, then will be hierarchical 
+    columns
+    - values, naems of values, list, is fine to input multiple.
+    - flatten_col_names, if output is hierarchical, will flatten to <val>-<col1>-<col2>.., if 
+    where col1, 2, ... are the items in columsn (if it is a list)
+    RETURNS:
+    - new dataframe, where can access e.g., by df["value"]["col_level"]
+    NOTES:
+    - Also aggregates, by taking mean over all cases with a given combo of (index, columns, values)
+    - essentially groups by the uniion of index, columns, values, then aggregates, then reshapes so that index
+    is over rows, and volumns/values are over columns (hierarhcical)
+    - resets index, so that index levels will make up a column
+    e.g.:
+    - index=["unique_task_name"], columns=["block"], values=["time_touchdone", "time_raise2firsttouch"]
+    - Look into pd.melt(dftmp, id_vars = ["block", "unique_task_name"]), if want to undo this. would need to 
+    not rename columns.
+    - can eitehr do:
+    (1) agg, then do this or
+    (2) do this directly (since it aggs by taking mean.)
+
+    """
+
+    dftmp = pd.pivot_table(data=df, index=index, columns=columns, values=values, aggfunc=aggfunc)
+
+    if flatten_col_names:
+        dftmp.columns = ['-'.join([str(c) for c in col]).strip() for col in dftmp.columns.values]
+
+    # to reindex and retain indices as new columns
+    dftmp = dftmp.reset_index()
+
+    # OLD VERSION WHERE DID THE SAME THING BUT BY HAND
+    # column_levels = [17, 18]
+    # column_dsets = "block"
+    # value = "time_touchdone"
+    # def F(x):
+    # #     cols=[str(column_levels[0]), str(column_levels[1])]
+    #     cols=column_levels
+    #     def _getval(x, level):
+    #         val = x[x[column_dsets]==level][value].values
+    #         if len(val)==0:
+    #             return np.nan
+    #         elif len(val)>1:
+    #             assert False
+    #         else:
+    #             return val[0]
+    #     val1 = _getval(x, column_levels[0])
+    #     val2 = _getval(x, column_levels[1])
+
+    #     tmp = [val1, val2]
+    #     tmp = pd.Series(tmp, index=cols)
+    #     return tmp
+
+    # DF.groupby(["unique_task_name"]).apply(F).reset_index()
+
+
+    return dftmp
+
+

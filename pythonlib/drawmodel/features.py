@@ -105,20 +105,42 @@ def strokeCurvature(strokes):
     assert False, "not done!!"
 
 ####### ONE VALUE SUMMARIZING STROKES
-def computeDistTraveled(strokes, origin, include_lift_periods=True):
+def computeDistTraveled(strokes, origin=None, include_lift_periods=True, include_origin_to_first_stroke=True, doneloc=None, include_transition_to_done=False):
     """ assume start at origin. assumes straight line movements
     between strokes, and travel along stroke during strokes.
     by default includes times when not putting down ink.
     IGNORES third column(time) - i.e., assuems that datpoints are in 
-    chron order."""
+    chron order.
+    - include_transition_to_done, then includes gap between end of last stroke and done button. 
+    Must pass in doneloc.
+    - include_origin_to_first_stroke, then must pass in origin.
+    """
     
+    if include_transition_to_done:
+        assert doneloc is not None
+    if include_origin_to_first_stroke:
+        assert origin is not None
+
     cumdist = 0
-    prev_point = origin
-    for S in strokes:
-        cumdist += np.linalg.norm(S[0,[0,1]] - prev_point)
-        # cumdist += np.linalg.norm(S[-1,[0,1]] - S[0,[0,1]]) # old, doesnt do correct for curved cases.
-        cumdist += strokeDistances([S])[0]
-        prev_point = S[-1, [0,1]]
+
+
+    if include_lift_periods:
+        # - Get inter-stroke movements
+        if not include_origin_to_first_stroke:
+            # then say you started at locaiton of first touch
+            origin = strokes[0][0, :2]
+
+        prev_point = origin
+        for S in strokes:
+            cumdist += np.linalg.norm(S[0,:2] - prev_point)
+            prev_point = S[-1, :2]
+
+        # - Include to done button
+        if include_transition_to_done:
+            cumdist += np.linalg.norm(doneloc - strokes[-1][-1,:2])
+    
+    # - Get stroke distances
+    cumdist += np.sum(strokeDistances(strokes))
     return cumdist
 
 

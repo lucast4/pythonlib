@@ -687,7 +687,7 @@ class Dataset(object):
         return 1/np.mean(periods_all)
 
 
-    def subsampleTrials(self, n_rand_to_keep=250, n_fixed_to_keep=50):
+    def subsampleTrials(self, n_rand_to_keep=400, n_fixed_to_keep=50, random_seed=3):
         """ subsample trials to make sure get good variety.
         Can run this before doing train test spkit
         - n_rand_to_keep, num random trials to keep for each 
@@ -697,6 +697,7 @@ class Dataset(object):
         how many to subsample to?
         """
         import random
+        random.seed(random_seed)
         _checkPandasIndices(self.Dat)
 
 
@@ -778,6 +779,49 @@ class Dataset(object):
 
         # reset
         self.Dat = self.Dat.reset_index(drop=True)
+
+
+    def splitTrainTestMonkey(self, expt, val=0., epoch=None, seed=2):
+        """ returns train and test tasks based on whether for monkey they
+        were train (got reinforcing feedback, might have practiced many times) or
+        test (no reinforcing feedback, not many chances)
+        INPUT:
+        - expt, str, the experiemnt name. will restrict tasks to just this expt.
+        - epoch, int, the epoch number, 1, 2, ... Leave None is fine, unless there are
+        multiple epohcs, in which case will throw error.
+        - val, how many subsample of train to pull out as validation set. default is none, but 
+        good amount, if ytou need, is like 0.05?
+        RETURNS:
+        - inds_train, inds_test, indices into self.Dat, as lists of ints.
+        """
+        import random
+        random.seed(seed)
+
+        _checkPandasIndices(self.Dat)
+
+        # First, get just for this epoch
+        if epoch is None:
+            df = self.Dat[self.Dat["expt"] == expt]
+            epochlist = set(df["epoch"])
+            assert len(epochlist)==1, "there are multipel epochs, you must tell me which one you want"
+        else:
+            df = self.Dat[(self.Dat["expt"] == expt) & (self.Dat["epoch"]==epoch)]
+
+        # Second, split into train and test
+        inds_train = list(np.where(df["monkey_train_or_test"]=="train")[0])
+        inds_test = list(np.where(df["monkey_train_or_test"]=="test")[0])
+
+        if val>0.:
+            nval = int(np.ceil(val*len(inds_train)))
+            random.shuffle(inds_train)
+            inds_val, inds_train = np.split(inds_train, [nval])
+        else:
+            inds_val = []
+
+        print("Got this many train, val, test inds")
+        print(len(inds_train), len(inds_val), len(inds_test))
+        return inds_train, inds_val, inds_test
+
 
 
     def splitTrainTest(self, train_frac = 0.9, val_frac = 0.05, test_frac = 0.05,

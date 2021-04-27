@@ -579,3 +579,12 @@ def plotStroksInGrid(stroklist, ncols=5, titlelist = None):
     ax.set_ylim(YLIM)
     
     return fig
+
+
+def plotSketchpad(spad, ax):
+    """ overlay in gray sketchpad, in format
+    2 x 2, [[-x, +x],[-y +y]]
+    """
+    X = spad
+    ax.hlines(X[1,:], X[0,0], X[0,1], color="k", alpha=0.3)
+    ax.vlines(X[0,:], X[1,0], X[1,1], color="k", alpha=0.3)

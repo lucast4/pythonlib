@@ -53,10 +53,12 @@ def writeStringsToFile(fname, stringlist, silent=True):
             f.write(f"{s}\n")
 
 
-def extractStrFromFname(fname, sep, pos):
+def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
     pull out arc2 if give me sep="_" and pos = "2"
     - pos is 0,1, ...
+    - if return_entire_filename, then overwrites sep and pos, and instead returns 
+    201030_164324_arc2_Pancho_3
     """
     import os
     import re
@@ -65,6 +67,9 @@ def extractStrFromFname(fname, sep, pos):
     # e.g., gets 201030_164324_arc2_Pancho_3
     path = os.path.split(fname)[1]
     path = os.path.splitext(path)[0]
+
+    if return_entire_filename:
+        return path
 
     # 2) get posoptions of the separator
     idxs = [m.start() for m in re.finditer(sep, path)]
@@ -172,3 +177,18 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
 
     return pathlist
     
+def get_common_path(pathlist):
+    """ if pathlist len>1, then gets the most specific path 
+    that is common across all. if len==1, then gets the final directory.
+    """
+    import os
+
+    assert isinstance(pathlist, list)
+
+    if len(pathlist)>1:
+        path_shared = os.path.commonpath(pathlist)
+    elif len(pathlist)==1:
+        path_shared = os.path.split(pathlist[0])[0]
+    else:
+        assert False
+    return path_shared
