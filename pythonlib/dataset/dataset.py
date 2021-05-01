@@ -808,8 +808,8 @@ class Dataset(object):
             df = self.Dat[(self.Dat["expt"] == expt) & (self.Dat["epoch"]==epoch)]
 
         # Second, split into train and test
-        inds_train = list(np.where(df["monkey_train_or_test"]=="train")[0])
-        inds_test = list(np.where(df["monkey_train_or_test"]=="test")[0])
+        inds_train = df.index[df["monkey_train_or_test"]=="train"].to_list()
+        inds_test = df.index[df["monkey_train_or_test"]=="test"].to_list()
 
         if val>0.:
             nval = int(np.ceil(val*len(inds_train)))

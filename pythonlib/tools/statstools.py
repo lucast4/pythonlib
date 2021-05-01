@@ -5,6 +5,21 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 
+def ttest_paired(x1, x2=None, ignore_nan=False):
+    """ x1, x2 arrays, with same lenght
+    if x2 is None, then assumes is comparing to 0s.
+    Automatically removes any rows with nans
+    """
+    if x2 is None:
+        x2 = np.zeros_like(x1)
+
+    if ignore_nan:
+        nan_policy='omit'
+    else:
+        nan_policy = 'propagate'
+    return stats.ttest_rel(x1, x2, nan_policy=nan_policy)
+
+
 def statsTtestPaired(df1, df2, varname, pairedon="human"):
     """ttest between two variables, assume it is paired at level of human (i.e, eachhuman 1pt each var pts)"""
     df12 = pd.merge(df1, df2, on=pairedon)
