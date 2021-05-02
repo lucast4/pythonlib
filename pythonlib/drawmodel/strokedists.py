@@ -2,13 +2,57 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def distscalarStrokes(strokes1, strokes2, ver, params=None, 
+    norm_by_numstrokes=True):
+    """ general purpose wrapper for scoring similarity of two strokes,
+    - ver, str, is method
+    - params, is flexible dict depends on ver
+    RETURNS:
+    - scalra score,
+    """
+
+    # ==== OLD CODE - NAMES ARE NOT SYSTEMATIC
+    if ver=="mindist":
+        # minimum pairwise distance between strok in strokes
+        dmat = distmatStrokes(strokes1, strokes2)
+        print(dmat)
+        assert False, "have not confirm this is correct"
+    elif ver=="mindist_offdiag":
+        # useful if strokes1 and strokes2 are identical and want
+        # to get pairwise dist for nonidentical s in strokes.
+        dmat = distmatStrokes(strokes1, strokes1)
+#         f, ax = plt.subplots()
+#         plotDatStrokes(strokes1, ax)
+        # get off diagonal
+        idx = ~np.eye(dmat.shape[0],dtype=bool)
+        return np.min(dmat[idx])
+
+    # ==== NEW CODE - NAMES ARE MORE SYSTEMATIC
+    elif ver=="position_hd":
+        # only based on positions (ingore time and stroke num), using hausdorff
+        return distancePos(strokes1, strokes2, "hd")
+    elif ver=="dtw_timepoints":
+        return distanceDTW(strokes1, strokes2, ver="timepoints", 
+            asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
+    elif ver=="dtw_segments":
+        return distanceDTW(strokes1, strokes2, ver="segments", 
+            asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
+    elif ver=="dtw_split_segments":
+        return distanceDTW(strokes1, strokes2, ver="split_segments", 
+            asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
+    else:
+        print(ver)
+        assert False, "not codede"
+        
+        
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
                    normalize_cols_range01=False, distStrok_kwargs={}, 
                    rescale_strokes_ver=None):
     """ 
     [use this over distmatStrokes]
-    given list of stroks, gets distance/similarity matrix
+    Given list of stroks, gets distance/similarity matrix, between all pariwise strokes.
+    (Note, by definition, strokes is a list of np arrays)
     - idxs1, 2 are either lists of indices into stroklist, or are lists of strokes
     (if stroklist is None).
     - distancever, which metric to use between pairs of strok
@@ -115,32 +159,6 @@ def distmatStrokes(strokes1, strokes2, ver="mindist"):
             distmat[i, j] = d(s1, s2)    
     return distmat
 
-def distscalarStrokes(strokes1, strokes2, ver, params=None):
-    """ general purpose, returns scalra score,
-    - ver is method
-    - params is flexible dict depends on ver
-    """
-    
-    if ver=="mindist":
-        # minimum pairwise distance between strok in strokes
-        dmat = distmatStrokes(strokes1, strokes2)
-        print(dmat)
-        assert False
-    if ver=="mindist_offdiag":
-        # useful if strokes1 and strokes2 are identical and want
-        # to get pairwise dist for nonidentical s in strokes.
-        dmat = distmatStrokes(strokes1, strokes1)
-#         f, ax = plt.subplots()
-#         plotDatStrokes(strokes1, ax)
-        # get off diagonal
-        idx = ~np.eye(dmat.shape[0],dtype=bool)
-        return np.min(dmat[idx])
-
-    else:
-        print(ver)
-        assert False, "not codede"
-        
-        
         
 def distancePos(strokes1, strokes2, ver="hd"):
     """ distance between strokes1 and 2 only based on positions,
@@ -158,20 +176,41 @@ def distancePos(strokes1, strokes2, ver="hd"):
     return d
 
 def distanceDTW(strokes_beh, strokes_model, ver="timepoints", 
-    asymmetric=True, norm_by_numstrokes=True):
-    """inputs are lists of strokes. this first flattens the lists
+    asymmetric=True, norm_by_numstrokes=True, splitnum1 = 5, splitnum2 = 2):
+    """Get dsitnace between strokes, taking into account temporal information.
+    INPUTS:
+    - strokes_beh, strokes_model, list of np ararys. if asymmetric==True, then it
+    matters whish is beh and model. the way it matters depends on the ver, see
+    within. otherwise doesnt matter.
+    - ver, string for what method to use
+    --- timepoints, first flattens the lists
     into single arrays each. then does dtw betweeen Nx2 and Mx2 arrays.
     uses euclidian distance in space as the distance function. 
-    Allows to not use up all of strokes_model, but must use up all of strokes_beh
-    - NOTE: a given point in strokes_beh is allowed to map onto multipe 
+    --- segments, matches up segements across strokes (based on order) but ignores
+    timing withing each stroke
+    --- split_segments, to inforporate timing within strokes, splits up strokes, before
+    matching across strokes_beh and strokes_model.
+    - asymmetric, relevant for DTW, if true, then it will use up all of strokes_beh, but not
+    constrianed to use up all of strokes_model. useful if they are not nececsarily smae lenght.
+    logic is that must take into account all of what mopnkey did, but allow for possibility that
+    monkey did not complete the entire drawing.
+    - splitnum1 and 2, only relevant if ver is split_segemnts. this dictates how many segmetns
+    to split up into, for beh(1) and model(2). 5 and 2 empriically seems to work well. 
+    RETURNS: 
+    - (distscalar, best alignemnt.)
+    NOTES:
+    - Allows to not use up all of strokes_model, but must use up all of strokes_beh (if 
+    assymetric)
+    - A given point in strokes_beh is allowed to map onto multipe 
     points in strokes_model
-    - RETURNS: (distscalar, best alignemnt.)
     - NOTE: this should make distanceBetweenStrokes() obsolete
     - norm_by_numstrokes, divide by num strokes (beh only if assyum,.
     min of task and beh if syummeteric) [note, this fixed, taking min
     is better than max, since if take max this can be cheated]
     """
     from pythonlib.tools.timeseriestools import DTW
+    from pythonlib.tools.stroketools import splitStrokesOneTime
+
     if ver=="timepoints":
         # consider each timepoint vs. timepoint. 
         # concatenate all strokes together.
@@ -193,14 +232,15 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints",
         # distances is between pairs of np arrays, so this
         # ignores the timesteps within each arrays.
         from pythonlib.tools.vectools import modHausdorffDistance
-        NUM1 = 5 
-        NUM2 = 2 
+        # NUM1 = 5 
+        # NUM2 = 2 
         distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
-        A = splitStrokesOneTime(strokes_beh, num=NUM1)
-        B = splitStrokesOneTime(strokes_model, num=NUM2)
+        A = splitStrokesOneTime(strokes_beh, num=splitnum1)
+        B = splitStrokesOneTime(strokes_model, num=splitnum2)
         output = DTW(A,B,distfun, asymmetric=asymmetric)
         lengths = (len(A), len(B))
     else:
+        print(ver)
         assert False, "not coded"
 
     if norm_by_numstrokes:
@@ -211,51 +251,51 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints",
             output[0] = output[0]/min(lengths)
     return output
 
-    if False:
-        # === DEBUGGING PLOTS - takes one dataspojtna nd compares to a
-        # bunch of random permutations, and plots distances on those plots.
-        # NOTE: best to make a dset object, and getting both directions.
-        from pythonlib.tools.stroketools import distanceDTW
-        s1 = strokes_all[0]
-        s2 = strokes_all[1]
-        distanceDTW(s1, s2, ver="segments")[0]
+    # if False:
+    #     # === DEBUGGING PLOTS - takes one dataspojtna nd compares to a
+    #     # bunch of random permutations, and plots distances on those plots.
+    #     # NOTE: best to make a dset object, and getting both directions.
+    #     from pythonlib.tools.stroketools import distanceDTW
+    #     s1 = strokes_all[0]
+    #     s2 = strokes_all[1]
+    #     distanceDTW(s1, s2, ver="segments")[0]
 
 
 
-        # =============== plot overview of distances
-        if False:
-            stroke1 = strokes_all[1]
-            strokeothers = random.sample([strokes_all[i] for i in range(len(strokes_all))], 8)
-        else:
-            t = 10
-            stroke1=dset.trials[t]["behavior"]["strokes"]
-            strokes_model = [d["strokes"] for d in dset.trials[t]["model_parses"]]
-            strokeothers = random.sample([strokes_model[i] for i in range(len(strokes_model))], 8)
-        VER = "segments"
+    #     # =============== plot overview of distances
+    #     if False:
+    #         stroke1 = strokes_all[1]
+    #         strokeothers = random.sample([strokes_all[i] for i in range(len(strokes_all))], 8)
+    #     else:
+    #         t = 10
+    #         stroke1=dset.trials[t]["behavior"]["strokes"]
+    #         strokes_model = [d["strokes"] for d in dset.trials[t]["model_parses"]]
+    #         strokeothers = random.sample([strokes_model[i] for i in range(len(strokes_model))], 8)
+    #     VER = "segments"
 
-        plt.figure(figsize=(10,10))
-        ax = plt.subplot(3,3,1)
-        plotDatStrokes(stroke1, ax, plotver="raw")
-        plt.xlim([-400, 400])
-        plt.ylim([-400, 400])
+    #     plt.figure(figsize=(10,10))
+    #     ax = plt.subplot(3,3,1)
+    #     plotDatStrokes(stroke1, ax, plotver="raw")
+    #     plt.xlim([-400, 400])
+    #     plt.ylim([-400, 400])
 
-        distances = []
-        for i, S in enumerate(strokeothers):
-            # get distance
-        #     d1 = distanceDTW(stroke1, S, ver="segments")[0]
-        #     d2 = distanceDTW(stroke1, S, ver="timepoints")[0]
-            d3, tmp = distanceDTW(stroke1, S, ver="split_segments")
-            print(tmp)
-        #     d4 = distanceBetweenStrokes(stroke1, S)
-            distances.append(d3)
-            ax = plt.subplot(3,3,i+2)
-            plt.title(f"seg{d1:.0f}, tp{d2/1000:.0f}\n split{d3:.0f}, old{d4:.0f}")
-            plotDatStrokes(S, ax=ax, plotver="raw")
-            plt.xlim([-400, 400])
-            plt.ylim([-400, 400])
-        plt.figure()
-        plt.plot(np.sort(distances), 'o-k');
-        plt.ylim(bottom=0)
+    #     distances = []
+    #     for i, S in enumerate(strokeothers):
+    #         # get distance
+    #     #     d1 = distanceDTW(stroke1, S, ver="segments")[0]
+    #     #     d2 = distanceDTW(stroke1, S, ver="timepoints")[0]
+    #         d3, tmp = distanceDTW(stroke1, S, ver="split_segments")
+    #         print(tmp)
+    #     #     d4 = distanceBetweenStrokes(stroke1, S)
+    #         distances.append(d3)
+    #         ax = plt.subplot(3,3,i+2)
+    #         plt.title(f"seg{d1:.0f}, tp{d2/1000:.0f}\n split{d3:.0f}, old{d4:.0f}")
+    #         plotDatStrokes(S, ax=ax, plotver="raw")
+    #         plt.xlim([-400, 400])
+    #         plt.ylim([-400, 400])
+    #     plt.figure()
+    #     plt.plot(np.sort(distances), 'o-k');
+    #     plt.ylim(bottom=0)
 
 
 
@@ -283,7 +323,7 @@ def distanceBetweenStrokes(strokes_beh, strokes_model, include_timesteps=False,
     and this is OK, but can miss some cases where you should "stay" in a column and keep going down, 
     so that you can minimize a lower row.
     """
-    print("[distanceBetweenStrokes OBSOLETE] use distscalarStrokes")
+    assert False, "[distanceBetweenStrokes OBSOLETE] use distscalarStrokes"
     # 2) get the minimum distance between strokes_beh and strokes_model
     from pythonlib.pythonlib.tools.vectools import modHausdorffDistance as hd
 
