@@ -134,7 +134,7 @@ def df2dict(df):
     return df.to_dict("records")
 
 
-def applyFunctionToAllRows(df, F, newcolname="newcol"):
+def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object
     - validates that the output will be identically indexed rel input.
     """
@@ -145,12 +145,17 @@ def applyFunctionToAllRows(df, F, newcolname="newcol"):
     # Ppsorted = Pp.sort_values("hausdorff").reset_index()
     # applyFunctionToAllRows(Ppsorted, F, newcolname="test")
 
-    assert newcolname not in df.columns, f"{newcolname} already exists as a col name"
 
     # # OLD VERSION FAILS IF INDICES PASSED IN ARE NOT IN ORDER, 
     # # becuase of the reset_index()
     # dfnewcol = df.apply(lambda x: F(x), axis=1).reset_index()
     # dfout = df.merge(dfnewcol, left_index=True, right_index=True).rename(columns={0:newcolname})
+
+    if replace:
+        if newcolname in df.columns:
+            del df[newcolname]
+    else:
+        assert newcolname not in df.columns, f"{newcolname} already exists as a col name"
 
     dfnewcol = df.apply(F, axis=1).rename(newcolname) # rename, since series must be named.
 

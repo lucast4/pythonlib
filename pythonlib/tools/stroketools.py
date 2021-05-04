@@ -810,9 +810,15 @@ def translateStrokes(strokes, xy):
 
     from ..drawmodel.primitives import transform
 
-    strokes, time = _stripTimeDimension(strokes)
+    if strokes[0].shape[1]==3:
+        strokes, time = _stripTimeDimension(strokes)
+    else:
+        time=None
+
     strokes = transform(strokes, x=xy[0], y=xy[1])
-    strokes = _appendTimeDimension(strokes, time)
+
+    if time is not None:
+        strokes = _appendTimeDimension(strokes, time)
     return strokes
 
 

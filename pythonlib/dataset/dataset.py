@@ -86,17 +86,22 @@ class Dataset(object):
     def copy(self):
         """ returns a copy. does this by extracting 
         data
-        NOTE: currently doesnt copy over Metadats. only copies data
+        NOTE: copies over all metadat, regardless of whether all
+        metadats are used.
         """
         import copy
 
         Dnew = Dataset([])
 
         Dnew.Dat = self.Dat.copy()
+        Dnew.Metadats = copy.deepcopy(self.Metadats)
+
         if hasattr(self, "BPL"):
             Dnew.BPL = copy.deepcopy(self.BPL)
         if hasattr(self, "SF"):
             Dnew.SF = self.SF.copy()
+        if hasattr(self, "Parses"):
+            Dnew.Parses = copy.deepcopy(self.Parses)
 
         return Dnew
 
@@ -249,6 +254,16 @@ class Dataset(object):
         print("----")
         print("Resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
+
+
+    ############### UTILS
+    def _strokes_kinds(self):
+        """ returns list with names (strings) for the kinds of strokes that
+        we have data for, 
+        e.g., ["strokes_beh", "strokes_task", ...]
+        """
+        allkinds = ["strokes_beh", "strokes_task", "strokes_parse", "strokes_beh_splines", "parses"]
+        return [k for k in allkinds if k in self.Dat.columns]
 
 
     ############### TASKS
@@ -409,7 +424,7 @@ class Dataset(object):
         return pathlist
 
 
-    def preprocessGood(self, ver="modeling", params=None):
+    def preprocessGood(self, ver="modeling", params=None, apply_to_recenter="all"):
         """ save common preprocess pipelines by name
         returns a ordered list, which allows for saving preprocess pipeline.
         - ver, string. uses this, unless params given, in which case uses parasm
@@ -419,7 +434,7 @@ class Dataset(object):
         if params is None:
             if ver=="modeling":
                 # recenter tasks (so they are all similar spatial coords)
-                self.recenter(method="each_beh_center")
+                self.recenter(method="each_beh_center", apply_to=apply_to_recenter)
 
                 # interpolate beh (to reduce number of pts)
                 self.interpolateStrokes()
@@ -448,7 +463,7 @@ class Dataset(object):
         else:
             for p in params:
                 if p=="recenter":
-                    self.recenter(method="each_beh_center")
+                    self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
                 elif p=="interp":
                     self.interpolateStrokes()
                 elif p=="subsample":
@@ -485,9 +500,11 @@ class Dataset(object):
         uses this as (0,0). can differ for each trial.
         --- "each_beh_center", similar, but uses center based on touch 
         coordinates for behavior.
-        - apply_to, to apply to "monkey", "stim" or "both".
+        - apply_to, to apply to "monkey", "stim" or "both", or "all"
         [NOTE, only "both" is currently working, since I have to think 
         about in what scenario the others would make sense]
+        --- can also pass in as list of strings, with strokes names, eg
+        ["strokes_beh", "strokes_task"] is identical to "both"
         """
 
         from pythonlib.tools.pandastools import applyFunctionToAllRows
@@ -514,15 +531,24 @@ class Dataset(object):
 
                 strokes = x[which_strokes]
 
-                return translateStrokes(strokes, xydelt)
+                if which_strokes=="parses":
+                    # then this is list of strokes
+                    return [translateStrokes(s, xydelt) for s in strokes]
+                else:
+                    return translateStrokes(strokes, xydelt)
 
             return F
 
-        if apply_to=="both":
-            which_strokes_list = ["strokes_beh", "strokes_task"]
+        if isinstance(apply_to, list):
+            which_strokes_list = apply_to
         else:
-            print(apply_to)
-            assert False, "not coded"
+            if apply_to=="both":
+                which_strokes_list = ["strokes_beh", "strokes_task"]
+            elif apply_to=="all":
+                which_strokes_list = self._strokes_kinds()
+            else:
+                print(apply_to)
+                assert False, "not coded"
 
         for i, which_strokes in enumerate(which_strokes_list):
             dummy_name = f"tmp{i}"
@@ -1323,6 +1349,107 @@ class Dataset(object):
         return image_list
 
     ############### MOTOR PROGRAMS (BPL)
+    def _loadMotorPrograms(self, ver="strokes"):
+        """ 
+        Helper to load pre-saved motor programs.
+        INPUTS:
+        - ver, {"strokes", "parses"} which set of pre-saved programs
+        to load.
+        """
+        from pythonlib.tools.expttools import findPath
+
+        # Go thru each dataset, search for its presaved motor programs. Collect
+        # into a list of dicts, one dict for each dataset.
+        ndat = len(self.Metadats)
+        MPdict_by_metadat = {}
+        for i in range(ndat):
+
+            # find paths
+            if ver=="strokes":
+                path = findPath(self.Metadats[i]["path"], [["infer_MPs_from_strokes"]],
+                    "params",".pkl",True)
+            elif ver=="parses":
+                path = findPath(self.Metadats[i]["path"], [["MPs_for_parses"], ["infer_MPs_from_strokes"]],
+                    "params",".pkl",True)
+            else:
+                print(ver)
+                assert False, "not coded"
+            
+            # should be one and only one path
+            if len(path)==0:
+                assert False, "did not find"
+            elif len(path)>1:
+                assert False, "found > 1. you should deletethings."
+            path = path[0]
+
+            # lioad things from path
+            _namelist = ["indices_list", "MPlist", "out_all", "params", "score_all"]
+            MPdict = {}
+            for name in _namelist:
+                paththis = f"{path}/{name}.pkl"
+                with open(paththis, "rb") as f:
+                    MPdict[name] = pickle.load(f)
+
+            # check consistency
+            assert len(MPdict["MPlist"])==len(MPdict["indices_list"])
+            assert len(MPdict["score_all"])==len(MPdict["indices_list"])
+            assert len(MPdict["out_all"])==len(MPdict["out_all"])
+
+            MPdict_by_metadat[i] = MPdict
+
+        return MPdict_by_metadat
+
+    def _extractMP(self, MPdict_by_metadat, idx_mdat, trialcode, expect_only_one_MP_per_trial=True,
+        fail_if_None=True, parsenum=None):
+        """
+        Helper, to extract a single motor program for a signle trial (trialcode), and single
+        metadat index (idx_mdat)
+        INPUTS:
+        - fail_if_None, then fialks if any trial doesnt find.
+        NOTES:
+        - expect_only_one_MP_per_trial, then each trial only got one parse. will return that MP 
+        (instead of a list of MPs)
+        - parsenum, {0, 1, ...}, parses, in order as in presaved parses. Leave as None if this is for
+        strokes (so only one program).
+        [SAME AS (not parses), but here each trial can have multiple paress. these are flattened in 
+        MPdict_by_metadat. THis code pulls out a specific trialcode and parsenum"]
+        RETURNS:
+        - list of MPs. Usually is one, if there is only single parse. Unless 
+        expect_only_one_MP_per_trial==True, then returns MP (not list). If doesnt fine, then will return None
+        """
+
+        # Get the desired dataset
+        MPdict = MPdict_by_metadat[idx_mdat]
+        trialcode_list = MPdict["indices_list"]
+        MP_list = MPdict["MPlist"]
+
+        if parsenum is None:
+            # Pull out the desired trial        
+            tmp = [m for m, t in zip(MP_list, trialcode_list) if t==trialcode]
+        else:
+            def _code(trialcode, parsenum):
+                return f"tc_{trialcode}--p_{parsenum}"
+
+            # Pull out the desired trial        
+            tmp = [m for m, t in zip(MP_list, trialcode_list) if t==_code(trialcode, parsenum)]
+        
+        # === CHECK 
+        if len(tmp)==0:
+            if fail_if_None:
+                print(f"Did not find MP for idx_metadat {idx_mdat}, trialcode {trialcode}")
+                assert False
+            return None
+        elif len(tmp)>1:
+            print(tmp)
+            assert False, "not sure why, multiple inds have same trialcode? must be bug"
+
+        if expect_only_one_MP_per_trial:
+            assert len(tmp[0])==1
+            tmp = tmp[0]
+
+        return tmp[0]
+
+
     def bpl_reload_saved_state(self, path):
         """ reload BPL object, previously saved
         """
@@ -1364,6 +1491,53 @@ class Dataset(object):
 
         return MPlist, scores
 
+    def bpl_extract_and_save_motorprograms_parses(self, params_preprocess = ["recenter", "spad_edges"],
+            sketchpad_edges =np.array([[-260., 260.],[-260., 260.]]), save_checkpoints = [100, ""], 
+            parses_good=False):
+
+        from pythonlib.bpl.strokesToProgram import infer_MPs_from_strokes
+        import pickle
+
+        assert len(self.Metadats)==1, "advised to only do this if you are working wtih one dataset."
+        assert len(save_checkpoints[1])==0, "code wil overwrite..."
+        if parses_good:
+            save_checkpoints[1] = f"{self.Metadats[0]['path']}/parses_good/MPs_for_parses"
+        else:
+            save_checkpoints[1] = f"{self.Metadats[0]['path']}/MPs_for_parses"
+
+
+        # Preprocess
+        self.preprocessGood(ver="", params=params_preprocess, apply_to_recenter=["strokes_beh", "strokes_task", "parses"])
+
+        if True:
+            # maybe this better, keep it stable caross all epxts
+            sketchpad_edges = sketchpad_edges
+        else:
+            sketchpad_edges = self.Metadats[0]["sketchpad_edges"].T
+
+        # Strategy for extraction - flatten all MPs (so ntrials x nparses), but keep information about parse num and trialcode.
+        strokeslist = []
+        trialcode_parsenum_list =[]
+        for row in self.Dat.iterrows():
+            parselist = row[1]["parses"]
+            trialcode = row[1]["trialcode"]
+
+            for i, parse in enumerate(parselist):
+
+                strokeslist.append(parse)
+                trialcode_parsenum_list.append(f"tc_{trialcode}--p_{i}")
+
+
+        print(len(strokeslist))
+        print(len(trialcode_parsenum_list))
+        # print(strokeslist[0])
+        # print(trialcode_parsenum_list[0])
+        # assert False
+
+        MPlist, scores = infer_MPs_from_strokes(strokeslist, trialcode_parsenum_list, params_preprocess,
+                                                sketchpad_edges, save_checkpoints=save_checkpoints)
+
+        return MPlist, scores
 
     def bpl_load_motorprograms(self):
         """ 
@@ -1375,88 +1549,88 @@ class Dataset(object):
         """
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-        def _loadMotorPrograms():
-            """ 
-            """
-            from pythonlib.tools.expttools import findPath
+        # def _loadMotorPrograms():
+        #     """ 
+        #     """
+        #     from pythonlib.tools.expttools import findPath
             
-            # Go thru each dataset, search for its presaved motor programs. Collect
-            # into a list of dicts, one dict for each dataset.
-            ndat = len(self.Metadats)
-            MPdict_by_metadat = {}
-            for i in range(ndat):
+        #     # Go thru each dataset, search for its presaved motor programs. Collect
+        #     # into a list of dicts, one dict for each dataset.
+        #     ndat = len(self.Metadats)
+        #     MPdict_by_metadat = {}
+        #     for i in range(ndat):
                 
-                # find paths
-                path = findPath(self.Metadats[i]["path"], [["infer_MPs_from_strokes"]],
-                    "params",".pkl",True)
+        #         # find paths
+        #         path = findPath(self.Metadats[i]["path"], [["infer_MPs_from_strokes"]],
+        #             "params",".pkl",True)
                 
-                # should be one and only one path
-                if len(path)==0:
-                    print(self.Metadats[i]["path"])
-                    assert False, "did not find"
-                elif len(path)>1:
-                    assert False, "found > 1. you should deletethings."
-                path = path[0]
+        #         # should be one and only one path
+        #         if len(path)==0:
+        #             print(self.Metadats[i]["path"])
+        #             assert False, "did not find"
+        #         elif len(path)>1:
+        #             assert False, "found > 1. you should deletethings."
+        #         path = path[0]
                 
-                # lioad things from path
-                _namelist = ["indices_list", "MPlist", "out_all", "params", "score_all"]
-                MPdict = {}
-                for name in _namelist:
-                    paththis = f"{path}/{name}.pkl"
-                    with open(paththis, "rb") as f:
-                        MPdict[name] = pickle.load(f)
+        #         # lioad things from path
+        #         _namelist = ["indices_list", "MPlist", "out_all", "params", "score_all"]
+        #         MPdict = {}
+        #         for name in _namelist:
+        #             paththis = f"{path}/{name}.pkl"
+        #             with open(paththis, "rb") as f:
+        #                 MPdict[name] = pickle.load(f)
 
-                # check consistency
-                assert len(MPdict["MPlist"])==len(MPdict["indices_list"])
-                assert len(MPdict["score_all"])==len(MPdict["indices_list"])
-                assert len(MPdict["out_all"])==len(MPdict["out_all"])
+        #         # check consistency
+        #         assert len(MPdict["MPlist"])==len(MPdict["indices_list"])
+        #         assert len(MPdict["score_all"])==len(MPdict["indices_list"])
+        #         assert len(MPdict["out_all"])==len(MPdict["out_all"])
                 
-                MPdict_by_metadat[i] = MPdict
+        #         MPdict_by_metadat[i] = MPdict
 
-            return MPdict_by_metadat
+        #     return MPdict_by_metadat
         
-        def _extractMP(MPdict_by_metadat, idx_mdat, trialcode, expect_only_one_MP_per_trial=True,
-            fail_if_None=True):
-            """
-            Helper, to extract a single motor program for a signle trial (trialcode), and single
-            metadat index (idx_mdat)
-            INPUTS:
-            - fail_if_None, then fialks if any trial doesnt find.
-            NOTES:
-            - expect_only_one_MP_per_trial, then each trial only got one parse. will return that MP 
-            (instead of a list of MPs)
-            RETURNS:
-            - list of MPs. Usually is one, if there is only single parse. Unless 
-            expect_only_one_MP_per_trial==True, then returns MP (not list). If doesnt fine, then will return None
-            """
+        # def _extractMP(MPdict_by_metadat, idx_mdat, trialcode, expect_only_one_MP_per_trial=True,
+        #     fail_if_None=True):
+        #     """
+        #     Helper, to extract a single motor program for a signle trial (trialcode), and single
+        #     metadat index (idx_mdat)
+        #     INPUTS:
+        #     - fail_if_None, then fialks if any trial doesnt find.
+        #     NOTES:
+        #     - expect_only_one_MP_per_trial, then each trial only got one parse. will return that MP 
+        #     (instead of a list of MPs)
+        #     RETURNS:
+        #     - list of MPs. Usually is one, if there is only single parse. Unless 
+        #     expect_only_one_MP_per_trial==True, then returns MP (not list). If doesnt fine, then will return None
+        #     """
 
-            # Get the desired dataset
-            MPdict = MPdict_by_metadat[idx_mdat]
-            trialcode_list = MPdict["indices_list"]
-            MP_list = MPdict["MPlist"]
+        #     # Get the desired dataset
+        #     MPdict = MPdict_by_metadat[idx_mdat]
+        #     trialcode_list = MPdict["indices_list"]
+        #     MP_list = MPdict["MPlist"]
 
-            # Pull out the desired trial        
-            tmp = [m for m, t in zip(MP_list, trialcode_list) if t==trialcode]
-            if len(tmp)==0:
-                if fail_if_None:
-                    print(f"Did not find MP for idx_metadat {idx_mdat}, trialcode {trialcode}")
-                    assert False
-                return None
-            elif len(tmp)>1:
-                print(tmp)
-                assert False, "not sure why, multiple inds have same trialcode? must be bug"
+        #     # Pull out the desired trial        
+        #     tmp = [m for m, t in zip(MP_list, trialcode_list) if t==trialcode]
+        #     if len(tmp)==0:
+        #         if fail_if_None:
+        #             print(f"Did not find MP for idx_metadat {idx_mdat}, trialcode {trialcode}")
+        #             assert False
+        #         return None
+        #     elif len(tmp)>1:
+        #         print(tmp)
+        #         assert False, "not sure why, multiple inds have same trialcode? must be bug"
             
-            if expect_only_one_MP_per_trial:
-                assert len(tmp[0])==1
-                tmp = tmp[0]
+        #     if expect_only_one_MP_per_trial:
+        #         assert len(tmp[0])==1
+        #         tmp = tmp[0]
 
-            return tmp[0]
+        #     return tmp[0]
 
         # check that havent dione before
         assert not hasattr(self, "BPL"), "self.BPL exists. I woint overwrite."
         assert "motor_program" not in self.Dat.columns
 
-        MPdict_by_metadat = _loadMotorPrograms()
+        MPdict_by_metadat = self._loadMotorPrograms()
 
         # save things
         self.BPL = {}
@@ -1465,7 +1639,7 @@ class Dataset(object):
         def F(x):
             idx_mdat = x["which_metadat_idx"]
             trialcode = x["trialcode"]
-            MP = _extractMP(MPdict_by_metadat, idx_mdat, trialcode)
+            MP = self._extractMP(MPdict_by_metadat, idx_mdat, trialcode)
             assert MP is not None, "did not save this MP..."
             return MP
 
@@ -1540,9 +1714,53 @@ class Dataset(object):
 
         self.BPL["refits"].append(out)
 
-    def bpl_index_to_col_name(self, index):
-            tmp = [str(i) for i in index]
-            return f"bpl-{'-'.join(tmp)}"
+    def bpl_index_to_col_name(self, index, ver="strokes"):
+            if isinstance(index, (list, tuple)):
+                tmp = [str(i) for i in index]
+            else:
+                tmp = [index]
+            if ver=="strokes":
+                return f"bpl-{'-'.join(tmp)}"
+            elif ver=="parses":
+                return f"bpl-parses-{'-'.join(tmp)}"
+            else:
+                print(ver)
+                assert False
+
+
+    def _bpl_extract_refitted_libraries(self, lib_refit_index=0, libraries_to_apply_inds = None):
+        """ Extract list of BPL libraries, they should have already been refitted,
+        and are in self.BPL["refits"]
+        INPUTS:
+        - lib_refit_index, a particular grouping index. i.e.., self.BPL["refits"][lib_refit_index]
+        - libraries_to_apply_inds, list of either ints, (in which case this indexes into 
+        libraries_list), or list of tuples, in which case each tuple is a grp index (i.e., a level)
+        RETURNS:
+        - LibListThis, list of libraries.
+        """
+
+        # Extract list of libraries
+        libraries_list = self.BPL["refits"][lib_refit_index]["libraries"]
+        # grp_by = self.BPL["refits"][lib_refit_index]["libraries_grpby"]
+        # for L in libraries_list:
+            # print(L["index_grp"])
+
+        # 2) get libraries
+        # LibListThis = [L for L in libraries_list if L["index_grp"] in dsets_to_keep] # old version, same for dste and libary
+        if libraries_to_apply_inds is None:
+            LibListThis = libraries_list
+        elif isinstance(libraries_to_apply_inds[0], int):
+            LibListThis = [libraries_list[i] for i in libraries_to_apply_inds]
+        elif isinstance(libraries_to_apply_inds[0], tuple):
+            LibListThis = [L for L in libraries_list if L["index_grp"] in libraries_to_apply_inds] # old version, same for dste and libary
+            print(libraries_to_apply_inds)
+            print([L["index_grp"] for L in libraries_list])
+            assert len(LibListThis)==len(libraries_to_apply_inds)
+        else:
+            print(LibListThis)
+            assert False
+        return LibListThis
+
 
     def bpl_score_trials_by_libraries(self, lib_refit_index=0, libraries_to_apply_inds = None,
         dsets_to_keep=None, scores_to_use = ["type"]):
@@ -1566,26 +1784,25 @@ class Dataset(object):
         from ..bpl.strokesToProgram import scoreMPs
 
         # Extract list of libraries
-        libraries_list = self.BPL["refits"][lib_refit_index]["libraries"]
-        grp_by = self.BPL["refits"][lib_refit_index]["libraries_grpby"]
-        for L in libraries_list:
-            print(L["index_grp"])
+        # libraries_list = self.BPL["refits"][lib_refit_index]["libraries"]
+        # for L in libraries_list:
+        #     print(L["index_grp"])
 
         # 2) get libraries
-        # LibListThis = [L for L in libraries_list if L["index_grp"] in dsets_to_keep] # old version, same for dste and libary
-        if libraries_to_apply_inds is None:
-            LibListThis = libraries_list
-        elif isinstance(libraries_to_apply_inds[0], int):
-            LibListThis = [libraries_list[i] for i in libraries_to_apply_inds]
-        elif isinstance(libraries_to_apply_inds[0], tuple):
-            LibListThis = [L for L in libraries_list if L["index_grp"] in libraries_to_apply_inds] # old version, same for dste and libary
-            print(libraries_to_apply_inds)
-            print([L["index_grp"] for L in libraries_list])
-            assert len(LibListThis)==len(libraries_to_apply_inds)
-        else:
-            print(LibListThis)
-            assert False
-
+        # # LibListThis = [L for L in libraries_list if L["index_grp"] in dsets_to_keep] # old version, same for dste and libary
+        # if libraries_to_apply_inds is None:
+        #     LibListThis = libraries_list
+        # elif isinstance(libraries_to_apply_inds[0], int):
+        #     LibListThis = [libraries_list[i] for i in libraries_to_apply_inds]
+        # elif isinstance(libraries_to_apply_inds[0], tuple):
+        #     LibListThis = [L for L in libraries_list if L["index_grp"] in libraries_to_apply_inds] # old version, same for dste and libary
+        #     print(libraries_to_apply_inds)
+        #     print([L["index_grp"] for L in libraries_list])
+        #     assert len(LibListThis)==len(libraries_to_apply_inds)
+        # else:
+        #     print(LibListThis)
+        #     assert False
+        LibListThis = self._bpl_extract_refitted_libraries(lib_refit_index, libraries_to_apply_inds)
 
         # [OPTIONAL - prune dataset, and models, before running]
         if dsets_to_keep is not None:
@@ -1620,6 +1837,7 @@ class Dataset(object):
 
 
         # Add a column to self.Dat, for index grp
+        grp_by = self.BPL["refits"][lib_refit_index]["libraries_grpby"]
         self.grouping_append_col(grp_by, "index_grp")
         print("-- SCORING, using this model:")
         
@@ -1659,21 +1877,87 @@ class Dataset(object):
                 newcol = self.bpl_index_to_col_name(lib_index)
                 self.Dat[newcol] = scores
 
+    def bpl_score_parses_by_libraries(self, lib_refit_index=0, libraries_to_apply_inds = None,
+        dsets_to_keep=None, scores_to_use = ["type"]):
+        """
+        Score each parse in self.Dat["parases"], each row can have multipe parese.
+        Does this based on libraries, first converting the parses to motor programs,
+        returns a scalar score, log ll
+        - libraries_to_apply_inds, list of either ints, (in which case this indexes into 
+        libraries_list), or list of tuples, in which case each tuple is a grp index (i.e., a level)
+        RETURNS:
+        - self.Dat with new col: parses_scores_<index_levels as a string>
+        """
+        from ..bpl.strokesToProgram import scoreMPs
+
+        LibListThis = self._bpl_extract_refitted_libraries(lib_refit_index, libraries_to_apply_inds)
+
+        # new way, extract as vector.
+        for L in LibListThis:
+            lib_index = L["index_grp"]
+            libthis = L["lib"]
+            print(lib_index)
+            
+            # Go thru all parses
+            def F(x):
+                MPlist = list(x["parses_motor_programs"])
+                scores = scoreMPs(MPlist, lib=libthis, scores_to_use=scores_to_use)
+                scores = [s.numpy().squeeze() for s in scores]
+                return scores
+            newcol = self.bpl_index_to_col_name(lib_index, ver="parses")
+            self.Dat = applyFunctionToAllRows(self.Dat, F, newcol)
+
+
+    def bpl_score_parses_factorized(self, lib_refit_index=0, libraries_to_apply_inds = None,
+        weights = {"k":1/3, "parts":1/3, "rel":1/3}):
+        """
+        RETURNS:
+        - scores, factorized into features.
+        """
+        # weights = [1/3, 1/3, 1/3]
+        from ..bpl.strokesToProgram import scoreMPs_factorized
+
+        LibListThis = self._bpl_extract_refitted_libraries(lib_refit_index, libraries_to_apply_inds)
+        _checkPandasIndices(self.Dat)
+
+        # new way, extract as vector.
+        out = []
+        for L in LibListThis:
+            lib_index = L["index_grp"]
+            libthis = L["lib"]
+            print(lib_index)
+            
+            # Go thru all parses
+            for i, row in enumerate(self.Dat.iterrows()):
+                MPlist = list(row[1]["parses_motor_programs"])
+                scores_dict = scoreMPs_factorized(MPlist, lib=libthis, return_as_tensor=False)
+
+                out.append({
+                    "lib_index":lib_index,
+                    "trialcode":row[1]["trialcode"],
+                    "row_num":i,
+                    "scores_features":scores_dict
+                    })
+        return out
+
 
     ################ PARSES
     # Working with parses, which are pre-extracted and saved int he same directocry as datasets.
     # See ..drawmodel.parsing
 
-    def _loadParses(self):
+    def _loadParses(self, parses_good=False):
         """ load all parases in bulk.
         Assumes that they are arleady preprocessed.
         - Loads one parse set for each dataset, and then combines them.
+        - parses_good, then finds the /parses_good dolfer.
         """
         import pickle
         PARSES = {}
         for ind in self.Metadats.keys():
             
             path = self.Metadats[ind]["path"]
+            if parses_good:
+                path = path + "/" + "parses_good"
             path_parses = f"{path}/parses.pkl"
             path_parses_params =  f"{path}/parses_params.pkl"
 
@@ -1685,7 +1969,7 @@ class Dataset(object):
             PARSES[ind] = parses
         return PARSES
 
-    def parsesLoadAndExtract(self, fail_if_empty=True, print_summary=True):
+    def parsesLoadAndExtract(self, fail_if_empty=True, print_summary=True, parses_good = False):
         """ does heavy lifting of extracting parses, assigning back into each dataset row.
         does this by matching by unique task name.
         - if any parse is not found, then it will be empty.
@@ -1709,8 +1993,8 @@ class Dataset(object):
                 print(ind_metadat)
 
             return dfthis["parses"].values[0]
-            
-        PARSES = self._loadParses()
+
+        PARSES = self._loadParses(parses_good=parses_good)
 
         def F(x):
             """ pull out list of parses"""
@@ -1758,11 +2042,13 @@ class Dataset(object):
 
 
 
-    def parsesChooseSingle(self, convert_to_splines=True, add_fake_timesteps=True):
+    def parsesChooseSingle(self, convert_to_splines=True, add_fake_timesteps=True, 
+        replace=False):
         """ 
         pick out a random single parse and assign to a new column
         - e..g, if want to do shuffle analyses, can run this each time to pick out a random
         parse
+        - replace, then overwrites, otherwise fails.
         """
         from pythonlib.tools.pandastools import applyFunctionToAllRows
         from pythonlib.tools.stroketools import fakeTimesteps      
@@ -1776,7 +2062,7 @@ class Dataset(object):
             strokes = random.choice(x["parses"])
             return strokes
     
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_parse")
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_parse", replace=replace)
 
         if convert_to_splines:
             print("converting to splines, might take a minute...")
@@ -1798,6 +2084,44 @@ class Dataset(object):
 
         print("done choosing a single parse, it is in self.Dat['strokes_parse']!")
 
+
+    def parses_load_motor_programs(self):
+        """ load pre-saved programs
+        loads best parse (MP) presaved, BPL.
+        (see strokesToProgram) for extraction.
+        RETURNS:
+        - self.Dat adds a new column "parses_motor_programs", which is a list, same len as parses,
+        holding programs. 
+        - self.Parses, which stores things related to params.
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        # check that havent dione before
+        # assert not hasattr(self, "Parses"), "self.Parses exists. I woint overwrite."
+        assert "parses_motor_programs" not in self.Dat.columns
+
+        MPdict_by_metadat = self._loadMotorPrograms(ver="parses")
+
+        # save things
+        self.Parses = {}
+        self.Parses["params_MP_extraction"] = {k:MP["params"] for k, MP in MPdict_by_metadat.items()}
+
+        count=0
+        def F(x):
+            nparses = len(x["parses"])
+            idx_mdat = x["which_metadat_idx"]
+            trialcode = x["trialcode"]
+            MPlist = []
+            if count%100==0:
+                print(trialcode)    
+            count+=1
+            for i in range(nparses):
+                MP = self._extractMP(MPdict_by_metadat, idx_mdat, trialcode, parsenum=i)
+                assert MP is not None, "did not save this MP..."
+                MPlist.append(MP)
+            return MPlist
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, 'parses_motor_programs')        
 
     ############# DAT dataframe manipualtions
     def grouping_append_col(self, grp_by, new_col_name):
@@ -1848,9 +2172,18 @@ class Dataset(object):
 
 
     ############# PLOTS
-    def plotSingleTrial(self, idx, things_to_plot = ["beh", "beh_tc", "task", "parse", "bpl_mp", "beh_splines"]):
+    def plotMP(self, MP, ax):
+        """ helper for plotting motor program
+        """
+        from ..bpl.strokesToProgram import plotMP
+        plotMP(MP, ax=ax)
+
+
+    def plotSingleTrial(self, idx, things_to_plot = ["beh", "beh_tc", "task", "parse", "bpl_mp", "beh_splines"],
+        sharex=False, sharey=False, params=None):
         """ 
         idx, index into Dat, 0, 1, ...
+        - params, only matters for some things.
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokes, plotDatStrokesTimecourse, plotDatWaterfall
         dat = self.Dat
@@ -1860,7 +2193,7 @@ class Dataset(object):
         nplots = len(things_to_plot)
         nrows = int(np.ceil(nplots/ncols))
 
-        fig, axes = plt.subplots(nrows, ncols, sharex=False, sharey=False, figsize=(ncols*3, nrows*3))
+        fig, axes = plt.subplots(nrows, ncols, sharex=sharex, sharey=sharey, figsize=(ncols*3, nrows*3))
 
         for thing, ax in zip(things_to_plot, axes.flatten()):
             if thing=="beh":
@@ -1878,19 +2211,29 @@ class Dataset(object):
                 strokes = dat["strokes_beh"].values[idx]
                 plotDatStrokesTimecourse(strokes, ax, plotver="vel", label="vel (pix/sec)")
             elif thing=="parse":
-                if "parse" in dat.columns:
+                if "parses" in dat.columns:
+                    if "strokes_parse" not in dat.columns:
+                        assert False, "need to tell me which pares to plot, run self.parsesChooseSingle()"
                     strokes = dat["strokes_parse"].values[idx]
                     plotDatStrokes(strokes, ax, each_stroke_separate=True)
             elif thing=="bpl_mp":
                 if "motor_program" in dat.columns:
-                    from ..bpl.strokesToProgram import plotMP
+                    # from ..bpl.strokesToProgram import plotMP
                     MP = dat["motor_program"].values[idx]
-                    plotMP(MP, ax=ax)
+                    # plotMP(MP, ax=ax)
+                    self.plotMP(MP, ax=ax)
+            elif thing=="parse_frompool_mp":
+                # Then you need to tell me which mp (0, 1, ...)
+                ind = params["parse_ind"]
+                MP = dat["parses_motor_programs"].values[idx][ind]
+                self.plotMP(MP, ax=ax)
+
             elif thing=="beh_splines":
                 assert "strokes_beh_splines" in dat.columns, "need to run convertToSplines first!"
                 strokes = dat["strokes_beh_splines"].values[idx]
                 plotDatStrokes(strokes, ax, each_stroke_separate=True)
             else:
+                print(thing)
                 assert False
 
             ax.set_title(thing)

@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import torch
 from pybpl.model import CharacterModel
 from pybpl.library import Library
+from .scoring import scoreMPs_factorized, scoreMPs # since legacy code expects it to be here.
+
 
 # Load Library
 USE_HIST = True
@@ -29,6 +31,7 @@ def infer_MPs_from_strokes(strokes_list, indices_list, dataset_preprocess_params
     - do_rescore, then rescores using pyBPL library. 
     - save_checkpoints, either None, or [n, path], where n is how often, and
     path is path dir (will append filename)
+    - dataset_preprocess_params, just for saving purposes, doesnt affect anything here.
     RETURNS:
     - MPlist, list (len strokeslist), of lists (num parses per strokes) of MPs 
     (i.e., MP is a character type).
@@ -241,41 +244,6 @@ def params2ctype(prog):
     
     return ctype
 
-def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = ["type", "token"]):
-    """ outputs score (tokenscore + typescore, ignoring image score)
-    as list of scores
-    INPUT
-    - MPlist, list of ctype (motor programs)
-    - lib, a Library object.
-    - use_hist, only applies if dont pass in lib, in which case will
-    have to load library, using use_hist
-    - scores_to_use, list, elements from {"type", "token", "image"}
-    NOTE: image is not implmeneted yet.
-    """
-
-
-    # Load model
-    if lib is None:
-        lib = Library(LIB_PATH, use_hist=use_hist)
-    model = CharacterModel(lib)
-
-    def _score(ctype):
-        s = torch.tensor([0.])
-        for stype in scores_to_use:
-            if stype=="type":
-                s += model.score_type(ctype)
-            elif stype=="token":
-                ctoken = model.sample_token(ctype)
-                s += model.score_token(ctype, ctoken)                
-            elif stype=="image":
-                assert "image" not in scores_to_use, "not implmemneted, need to save image."
-            else:
-                print(stype)
-                assert False, "dont know this"
-        return s.float().reshape(1)
-
-    scorelist = [_score(ctype) for ctype in MPlist_flat]
-    return scorelist
 
 def plotMP(ctype, score=None, xlim=[0, 104], ylim=[-104, 0], ax=None):
     """ plot both img and motor, for this program (type level)"""

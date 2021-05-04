@@ -9,6 +9,10 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None,
     - params, is flexible dict depends on ver
     RETURNS:
     - scalra score,
+    TODO:
+    - Frechet distnace
+    - linear sum assignment.
+    
     """
 
     # ==== OLD CODE - NAMES ARE NOT SYSTEMATIC

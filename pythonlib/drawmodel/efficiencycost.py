@@ -67,8 +67,9 @@ class Cost:
 
         # 2) what is scale of screen? for normalizing units
         # (goal is diagoal is ~2)
-        self.Params["screenDiagPixHalf"] = \
-        0.5*np.linalg.norm(self.Params["screenHV"])
+        if "screenHV" in self.Params:
+            self.Params["screenDiagPixHalf"] = \
+            0.5*np.linalg.norm(self.Params["screenHV"])
 
 
     def updateThetas(self, params):
@@ -120,6 +121,30 @@ class Cost:
     #         self.Params["thetanames"].append(k)
 
     #     self.Params["thetavec"] = np.array(self.Params["thetavec"])
+
+    def score_features(self, feature_vec):
+        """ given feature vec, return score. So this doesnt work directly with
+        the motor behavior. assumes your've already extracted features 
+        INPUT:
+        - feature_vec, {list, dict}
+        --- if list, then must be in order of self.Params["thetanames"]
+        --- if dict, then the names of features must be subsets of params. 
+        format is feature_vec = {paramname: value}
+        """
+
+        if isinstance(feature_vec, list):
+            assert False, "not coded"
+
+        thetas = self.Params["thetas"]
+        print(feature_vec)  
+
+        # Get weighted sum of feature vec.
+        score = 0.
+        for k, v in feature_vec.items():
+            score += thetas[k]*feature_vec[k]
+        return score
+
+
 
     def score(self, strokes, task, return_feature_vecs = False):
         """ given behavior (strokes) and task (task), 
