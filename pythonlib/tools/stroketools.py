@@ -547,31 +547,6 @@ def getStrokesFeatures(strokes):
     return outdict
 
 
-def getAllStrokeOrders(strokes, num_max=None):
-    """for strokes, list of np arrays, outputs a set
-    of all possible stroke orders, all permuations.
-    NOTE: each time run could be a different order
-    NOTE: output will be in same memory location as inputs."""
-    from pythonlib.tools.listtools import permuteRand
-    from math import factorial
-    
-    nstrokes = len(strokes)
-    if nstrokes==1:
-        return [[strokes[0]]], [[0]] 
-    else:
-        if num_max:
-            num_max = min([num_max, factorial(nstrokes)])
-        else:
-            num_max = factorial(nstrokes)
-        stroke_orders_set = set(permuteRand(list(range(nstrokes)), N=num_max))
-        strokes_allorders = [[strokes[i] for i in order] for order in stroke_orders_set] # convert from set to list.
-    #     strokes_allorders = permuteRand(strokes, N=factorial(len(strokes)))
-        
-    #     print(strokes_allorders)
-    #     return [[strokes[i] for i in order] for order in strokes_allorders]
-        return strokes_allorders, stroke_orders_set 
-
-
 
 def _splitarray(A, num=2):
     # split one numpy array into a list of two arrays
@@ -630,50 +605,6 @@ def splitStrokes(strokes, num=2):
             ax = plt.subplot(3,3,i+2)
             # plotDatStrokes(strokes, ax)
             plotDatStrokes(S, ax, plotver="strokes_order")
-
-
-def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_point=None):
-    """ given list of np arays, outputs list of list of arrays,
-    where each inner list is same size as input list (and actually
-    includes the list as one of them), but will all permutations of 
-    orders of the storkes. so if input is list of 3 arrays, then
-    output is list of 8 lists, each with the same 3 arrays but 
-    in unique ordering.
-    """
-    from itertools import product
-
-    strokes_split = []
-    for A in strokes:
-        strokes_split.append([A, np.flipud(A)])
-        # appends: [a, a'], where a and a' are arrays
-
-    # --- get outer products
-    strokes_all = list(product(*strokes_split))
-
-    # --- get fake timesteps?
-    if not fake_timesteps_ver is None:
-        strokes_all = [fakeTimesteps(strokes, point=fake_timesteps_point, ver=fake_timesteps_ver) for strokes in strokes_all]
-
-    return strokes_all
-    # return list(product(*strokes_split))
-
-    # e.g.,:
-    # B = [[1,2],[3,4],[5,6]]
-    # list(product(*B)) --> [(1, 3, 5), (1, 3, 6), (1, 4, 5), (1, 4, 6), (2, 3, 5), (2, 3, 6), (2, 4, 5), (2, 4, 6)]
-
-    if False:
-        # DEBUGGING PLOTS
-        strokes_split = splitStrokes(strokes, 2)
-
-        fig = plt.figure(figsize=(10,10))
-        ax = plt.subplot(3,3,1)
-        plotDatStrokes(strokes, ax=ax, plotver="strokes_order")
-
-        for i, S in enumerate(strokes_split):
-            ax = plt.subplot(3,3,i+2)
-            # plotDatStrokes(strokes, ax)
-            plotDatStrokes(S, ax, plotver="strokes_order")
-
 
 
 
@@ -1030,3 +961,105 @@ def check_strokes_in_temporal_order(strokes):
         print(np.diff(times)>=0)
         print(np.diff(times))
         assert np.all(np.diff(times)>=0)
+
+
+
+################### STROKE PERMUTATION TOOLS
+
+def getStrokePermutationsWrapper(strokes, ver):
+    """ wrapper, different moethods for permuting strokes.
+    """
+    if ver=="circular_and_reversed":
+        # Then get circular for both strokes, and 
+        # after strokes is reversed. only includes reversed
+        # if len(strokes)>2, since for length 2 
+        # reversed doesnt add any new circular perms.
+
+        strokes_list = getCircularPerm(strokes)
+        if len(strokes)>2:
+            strokes_list.extend(getCircularPerm(strokes[::-1]))
+        return strokes_list
+    else:
+        print(ver)
+        assert False, "not coded"
+
+def getCircularPerm(strokes):
+    """ get circular permutation of storkes, returning
+    a list containing all permutations.
+    circular perm maintains the ordering of trajs in strokes,
+    but changes which is the first traj. 
+    e..g, [1,2,3] returns [[1 2 3], [2 3 1], [3 1 2]]
+    """
+    from more_itertools import circular_shifts
+    return circular_shifts(strokes)
+
+
+def getAllStrokeOrders(strokes, num_max=1000):
+    """for strokes, list of np arrays, outputs a set
+    of all possible stroke orders, all permuations.
+    - num_max, None if want to get all.
+    NOTE: each time run could be a different order
+    NOTE: output will be in same memory location as inputs."""
+    from pythonlib.tools.listtools import permuteRand
+    from math import factorial
+    
+    nstrokes = len(strokes)
+    if nstrokes==1:
+        return [[strokes[0]]], [[0]] 
+    else:
+        if num_max:
+            num_max = min([num_max, factorial(nstrokes)])
+        else:
+            num_max = factorial(nstrokes)
+        stroke_orders_set = set(permuteRand(list(range(nstrokes)), N=num_max))
+        strokes_allorders = [[strokes[i] for i in order] for order in stroke_orders_set] # convert from set to list.
+    #     strokes_allorders = permuteRand(strokes, N=factorial(len(strokes)))
+        
+    #     print(strokes_allorders)
+    #     return [[strokes[i] for i in order] for order in strokes_allorders]
+        return strokes_allorders, stroke_orders_set 
+
+
+
+def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_point=None):
+    """ given list of np arays, outputs list of list of arrays,
+    where each inner list is same size as input list (and actually
+    includes the list as one of them), but will all permutations of 
+    orders of the storkes. so if input is list of 3 arrays, then
+    output is list of 8 lists, each with the same 3 arrays but 
+    in unique ordering.
+    """
+    from itertools import product
+
+    strokes_split = []
+    for A in strokes:
+        strokes_split.append([A, np.flipud(A)])
+        # appends: [a, a'], where a and a' are arrays
+
+    # --- get outer products
+    strokes_all = list(product(*strokes_split))
+
+    # --- get fake timesteps?
+    if not fake_timesteps_ver is None:
+        strokes_all = [fakeTimesteps(strokes, point=fake_timesteps_point, ver=fake_timesteps_ver) for strokes in strokes_all]
+
+    return strokes_all
+    # return list(product(*strokes_split))
+
+    # e.g.,:
+    # B = [[1,2],[3,4],[5,6]]
+    # list(product(*B)) --> [(1, 3, 5), (1, 3, 6), (1, 4, 5), (1, 4, 6), (2, 3, 5), (2, 3, 6), (2, 4, 5), (2, 4, 6)]
+
+    if False:
+        # DEBUGGING PLOTS
+        strokes_split = splitStrokes(strokes, 2)
+
+        fig = plt.figure(figsize=(10,10))
+        ax = plt.subplot(3,3,1)
+        plotDatStrokes(strokes, ax=ax, plotver="strokes_order")
+
+        for i, S in enumerate(strokes_split):
+            ax = plt.subplot(3,3,i+2)
+            # plotDatStrokes(strokes, ax)
+            plotDatStrokes(S, ax, plotver="strokes_order")
+

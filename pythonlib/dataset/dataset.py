@@ -110,7 +110,7 @@ class Dataset(object):
         """
         RETURNS:
         - if return_ver is:
-        --- "indices", then returns (self.Dat not modifed,) and returns inds.
+        --- "indices", then returns inds.(self.Dat not modifed,) 
         --- "modify", then modifies self.Dat, and returns Non
         --- "dataframe", then returns new dataframe, doesnt modify self.Dat
         --- "dataset", then copies and returns new dataset, without affecitng sefl.

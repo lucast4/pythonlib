@@ -43,12 +43,39 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None,
             asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
     elif ver=="dtw_split_segments":
         return distanceDTW(strokes1, strokes2, ver="split_segments", 
-            asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
+            asymmetric=False, norm_by_numstrokes=norm_by_numstrokes,
+            splitnum1=2, splitnum2=2)[0]
     else:
         print(ver)
         assert False, "not codede"
         
+
+def distmatStrokes(strokes1, strokes2, ver="mindist"):
+    """ pariwise distnace btween all strok in strokes1 and 2.
+    returns distmat, which is size N x M, where N and M are lenght of
+    strokes1 and 2.
+    - ver is what distance metric to use.
+    """
+    if ver=="mindist":
+        def d(s1, s2):
+            from pythonlib.tools.distfunctools import modHausdorffDistance as hd
+            # s1 and s2 are np arrays. 
+            # returns scalar.
+#             from scipy.spatial.distance import cdist
+#             distmat = pdist(s1, s2)
+            return hd(s1, s2, ver1="min")
+    else:
+        print(ver)
+        assert False, "not coded"
+            
+    distmat = np.empty((len(strokes1), len(strokes2)))
+    for i, s1 in enumerate(strokes1):
+        for j, s2 in enumerate(strokes2):
+            distmat[i, j] = d(s1, s2)    
+    return distmat
         
+
+
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
                    normalize_cols_range01=False, distStrok_kwargs={}, 
@@ -138,32 +165,7 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
 
     return D
 
-
-def distmatStrokes(strokes1, strokes2, ver="mindist"):
-    """ pariwise distnace btween all strok in strokes1 and 2.
-    returns distmat, which is size N x M, where N and M are lenght of
-    strokes1 and 2.
-    - ver is what distance metric to use.
-    """
-    if ver=="mindist":
-        def d(s1, s2):
-            from pythonlib.tools.distfunctools import modHausdorffDistance as hd
-            # s1 and s2 are np arrays. 
-            # returns scalar.
-#             from scipy.spatial.distance import cdist
-#             distmat = pdist(s1, s2)
-            return hd(s1, s2, ver1="min")
-    else:
-        print(ver)
-        assert False, "not coded"
-            
-    distmat = np.empty((len(strokes1), len(strokes2)))
-    for i, s1 in enumerate(strokes1):
-        for j, s2 in enumerate(strokes2):
-            distmat[i, j] = d(s1, s2)    
-    return distmat
-
-        
+########################## SPECIFIC DISTANCE FUNCTIONS
 def distancePos(strokes1, strokes2, ver="hd"):
     """ distance between strokes1 and 2 only based on positions,
     so no temporal information

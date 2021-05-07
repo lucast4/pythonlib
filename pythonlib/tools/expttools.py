@@ -52,6 +52,13 @@ def writeStringsToFile(fname, stringlist, silent=True):
                 print(s)
             f.write(f"{s}\n")
 
+def writeDictToYaml(dictdat, path):
+    """ path shold include extension (.yaml)"""
+    import yaml
+
+    with open(path, 'w') as f:
+        # yaml.dump(dictdat, f, default_flow_style=False)
+        yaml.dump(dictdat, f)
 
 def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'

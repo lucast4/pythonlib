@@ -227,7 +227,7 @@ def saveMultToPDF(path, figs):
     import matplotlib.backends.backend_pdf
     pdf = matplotlib.backends.backend_pdf.PdfPages(f"{path}.pdf")
     for fig in figs:
-        pdf.savefig(fig, dpi=100)
+        pdf.savefig(fig, dpi=100, bbox_inches='tight')
     pdf.close()
 
 def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None):
@@ -372,7 +372,7 @@ def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay",
     return fig, ax
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
-    means=False, labels=None):
+    means=False, labels=None, alpha=0.8):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -382,7 +382,7 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     precedence over plot_string_ind
     """
 
-    ax.plot(x, y, "x", alpha=0.8)
+    ax.plot(x, y, "x", alpha=alpha)
 
     # ax.set_axis("square")
     minimum = np.min((ax.get_xlim(),ax.get_ylim()))
