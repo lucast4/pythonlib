@@ -121,7 +121,7 @@ class Dataset(object):
         # filtdict = {"traintest":traintest, "random_task":random_task}
 
         _checkPandasIndices(self.Dat)
-
+        print(f"Original length: {len(self.Dat)}")
         if return_ver=="indices":
             return filterPandas(self.Dat, filtdict, return_indices=True)
         elif return_ver=="modify":
@@ -1940,7 +1940,6 @@ class Dataset(object):
                     })
         return out
 
-
     ################ PARSES
     # Working with parses, which are pre-extracted and saved int he same directocry as datasets.
     # See ..drawmodel.parsing
@@ -2123,6 +2122,50 @@ class Dataset(object):
 
         self.Dat = applyFunctionToAllRows(self.Dat, F, 'parses_motor_programs')        
 
+
+    ############## BEHAVIOR ANALYSIS
+    def extract_beh_features(self, feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
+        """ extract features, one val per row, 
+        INPUT:
+        - feature_list, list of strings. instead of string, if pass in function, then will use that.
+        func: strokes --> scalar. 
+        RETURNS:
+        - (modifies self.Dat in place)
+        - feature_list_names, which are the col names (FEAT_...)
+        NOTE:
+        - for features which operate at single traj level, takes mean over all trajs for a single strokes.
+        """
+        from pythonlib.drawmodel.features import strokesAngleOverall, strokeCircularity, strokeDistances
+        feature_list_names = []
+
+        # get overall angle for each task
+        for f in feature_list:
+            if not isinstance(f, str):
+                # Then should be function handle
+                x = [f(strokes) for strokes in self.Dat["strokes_beh"].values]
+            else:
+                if f=="angle_overall":
+                    x = [strokesAngleOverall(strokes) for strokes in self.Dat["strokes_beh"].values]
+                elif f=="num_strokes":
+                    x = [len(strokes) for strokes in self.Dat["strokes_beh"].values]
+                elif f=="circ":
+                    x= [np.mean(strokeCircularity(strokes)) for strokes in self.Dat["strokes_beh"].values]
+                elif f=="dist":
+                    x = [np.mean(strokeDistances(strokes)) for strokes in self.Dat["strokes_beh"].values]
+                else:
+                    print(f)
+                    assert False
+
+            print(f"Num nan/total, for {f}")
+            print(sum(np.isnan(x)), "/", len(x))
+            self.Dat[f"FEAT_{f}"] = x
+            feature_list_names.append(f"FEAT_{f}")
+
+        print("Added these features:")
+        print(feature_list_names)
+        
+        return feature_list_names
+
     ############# DAT dataframe manipualtions
     def grouping_append_col(self, grp_by, new_col_name):
         """ append column with index after applying grp_by, 
@@ -2142,6 +2185,31 @@ class Dataset(object):
         assert False, "moved to grouping_append_col"
 
     ################ SAVE
+    def make_fig_savedir_suffix(self, filterDict):
+        """ wrapper to help make suffix for saving, encoding
+        animal, expt, and filter params in filterDict (which assumed
+        to be used in self.filterPandas to filkter datraset)
+        """
+
+        suff = f"{'_'.join(self.animals())}-{'_'.join(self.expts())}"
+
+        for k, v in filterDict.items():
+            if isinstance(v[0], bool):
+                v = [str(vv) for vv in v]
+            if k=="insummarydates":
+                suff += f"-insumd_{'_'.join(v)}"
+            elif k=="random_task":
+                suff += f"-rndmt_{'_'.join(v)}"
+            elif k=="monkey_train_or_test":
+                suff += f"-mktt_{'_'.join(v)}"
+            elif k=="taskgroup":
+                suff += f"-tskgrp_{'_'.join(v)}"
+            else:
+                print("dont know this: ", k)
+
+        return suff
+        # suff =         self.animal()
+
     def save_state(self, SDIR_MAIN, SDIR_SUB):
         """
         RETURNS:
@@ -2298,10 +2366,46 @@ class Dataset(object):
         # exactly from midnight to midnight, but within the "experimental session"). so 2.5 means day 1, halfway through the 
         # day (from start of expt to end of expt)
         # - to get the actual time, see "tval" qwhich is fraction of day from 0:00 to 24:00
+        # RETURNS: 
+        # - list of figs.
         """
         import seaborn as sns
-        sns.catplot(data=self.Dat, x="tvalday", y="taskgroup", hue="task_stagecategory", 
+        from pythonlib.tools.snstools import rotateLabel
+
+        figlist = []
+
+        fig = sns.catplot(data=self.Dat, x="tvalday", y="taskgroup", hue="task_stagecategory", 
             row="expt", col="epoch")
+        figlist.append(fig)
+
+        fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="monkey_train_or_test", 
+            row="date", col="epoch")
+        rotateLabel(fig)
+        figlist.append(fig)
+
+        # fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="online_abort", 
+        #     row="date", col="epoch")
+        # rotateLabel(fig)
+
+        # fig = sns.scatter(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="online_abort", 
+        #     row="date", col="epoch")
+        # rotateLabel(fig)
+
+        # import seaborn as sns
+        # import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(3,1, sharex=True, figsize=(15,20))
+        ax=axes.flatten()[0]
+        sns.lineplot(data=self.Dat, x="trial", y="block", estimator=None, ax=ax)
+        sns.scatterplot(data=self.Dat, x="trial", y="block",ax=ax)
+        ax.grid()
+        figlist.append(fig)
+
+        # ax=axes.flatten()[1]
+        # sns.lineplot(data=D.Dat, x="trial", y="blokk", estimator=None, ax=ax)
+        # ax=axes.flatten()[2]
+        # sns.lineplot(data=D.Dat, x="trial", y="bloque", estimator=None, ax=ax)
+
+        return figlist
 
     ############### PRINT INFO
     def printOverview(self):
@@ -2364,3 +2468,5 @@ def mergeTwoDatasets(D1, D2, on_="rowid"):
     df = pd.merge(df1, df2[cols], how="outer", on=on_, validate="one_to_one")
     
     return df
+
+

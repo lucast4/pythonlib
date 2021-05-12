@@ -144,6 +144,42 @@ def computeDistTraveled(strokes, origin=None, include_lift_periods=True, include
     return cumdist
 
 
+def strokesAngleOverall(strokes, ver="mean_of_center_jumps"):
+    """ get angle reflecting overal sequence of strokes.
+    INPUTS:
+    - ver, which version
+    --- mean_of_center_jumps, get sum of unit vectors between
+    stroke centers (median), then get angle of that vector.
+    RETURNS:
+    - angle, radians, where (1,0) is 0, in range 0 --> 2pi.
+    - (if stroke len 1, then np.nan)
+    """
+    from ..tools.vectools import unit_vector, get_angle
+    if len(strokes)==1:
+        return np.nan
+    
+    if ver=="mean_of_center_jumps":
+        # get angle of transition between center of strokes
+        centers = getCentersOfMass(strokes)
+#         jumpangles = []
+        uvs = []
+        for s1, s2 in zip(centers[:-1], centers[1:]):
+            jump = s2 - s1
+#                 jumpangles.append(get_angle(jump))
+            uvs.append(unit_vector(jump))
+
+        # Get vector mean of angles
+        # get the average unit vector
+        mean_vec = np.mean(np.stack(uvs), axis=0)
+
+        # Get angle of mean vec
+        return get_angle(mean_vec)
+    else:
+        print(ver)
+        assert False, "not coded"
+
+
+
 ######## GET FEATURES, GIVEN STROKES
 def strokeFeatures(strokeslist):
     """ 
@@ -170,3 +206,5 @@ def strokeFeatures(strokeslist):
         strokesfeatures.append(tmp)
         
     return strokesfeatures
+
+

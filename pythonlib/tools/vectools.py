@@ -98,3 +98,34 @@ def angle_diff(a1, a2):
         return 2*pi - a
 
 
+
+def bin_angle_by_direction(angles_all, num_angle_bins=4, binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}):
+    """ bin angle, based on slicing circle into same-sized slices, with first bin
+    always starting from (1,0), and going CCW.
+    INPUTS:
+    - angles_all, array of angles, with 0 at 1,0, and ccw. in rad.
+    - binnames, replaces bins with this, dict. e.g., could call l-->r one value,
+    and r-->l another.
+    RETURNS:
+    - angles_named (based on mapping using binnames)
+    NOTE:
+    - bins start from 1...
+    - nans will be 
+    """
+    from math import pi
+    if not num_angle_bins==4:
+        assert False, "bin_names will not be accurate. code this"
+
+    # bin angles
+    bins = np.linspace(0, 2*pi, num_angle_bins+1)
+    angles_all_binned = [np.digitize(a, bins) for a in angles_all]
+
+#     plt.figure()
+#     plt.plot(angles_all, angles_all_binned, 'ok')
+
+    # assign bin to a label
+    # binnames = {1: "L->R", 2:"R->L", 3:"R->L", 4:"L->R", 5:"undefined"}
+    angles_named = [binnames[b] for b in angles_all_binned]
+
+    return angles_named
+

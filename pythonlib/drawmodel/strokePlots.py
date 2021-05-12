@@ -16,6 +16,25 @@ def overlayStrokeTimes(ax, strokes, yfrac=0.9, color="k"):
         ax.hlines(y, on, off, color=color)
 
 
+def getStrokeColorsGradient(strokes, cmap="winter"):
+    """ get evently spaced colors, based on stroke orders
+    """
+    from pythonlib.tools.plottools import makeColors
+    color_order = makeColors(len(strokes), alpha=1, cmap=cmap)
+    if cmap=="cool":
+        color_order = np.flipud(color_order)
+
+    # color_order = color_order[2:]
+    if not isinstance(strokes, int):
+        color_order_by_pt = []
+        for i, s in enumerate(strokes):
+            # print(i)
+            color_order_by_pt.extend([color_order[i] for _ in range(len(s))])
+        # pcol = np.array(pcol)
+        # print(
+        # assert False
+    return color_order, color_order_by_pt
+
 def getStrokeColors(strokes, CMAP="jet"):
     """
     a fixed set of colors, always mapping to stroke nums
@@ -63,12 +82,51 @@ def plotMultDatStrokes(strokes_list):
     """ wrapper to plot mulitple trials
     """
     
+def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma",
+    markersize=6, alpha=0.55, mark_stroke_onset=True, add_stroke_number=True, 
+    naked=False):
+    """ plot strokes, similar to plotDatStrokes, but the color is proportional
+    to value in strokes_values, where first remapped to range (vmin, vmax), and
+    uses color gradient based on that range
+    """
+    from pythonlib.tools.plottools import colorGradient
+
+    assert not np.any(np.isnan(strokes_values))
+    
+    ax.set_facecolor((0.9, 0.9, 0.9))
+    # First get colors for each stroke
+    color_list = []
+    for v in strokes_values:
+        col = colorGradient((v-vmin)/(vmax-vmin), cmap=cmap)
+        color_list.append(col)
+
+    for i, (s, col) in enumerate(zip(strokes, color_list)):
+        ax.plot(s[:,0], s[:,1], color=col, linewidth=(3/5)*markersize,
+            alpha=min([1, 1.5*alpha]))
+
+    if mark_stroke_onset:
+        for i, (s, col) in enumerate(zip(strokes, color_list)):
+            mfc = col
+            tcol=col
+            markersize = markersize + 0.5
+            ax.plot(s[0,0], s[0,1], mec=col, mfc= mfc, markersize=markersize+1.5, 
+                marker="o", alpha= 0.75)
+            if add_stroke_number:
+                ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
+    ax.set_aspect('equal')
+    if naked:
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.set_title(None)
+        ax.tick_params(axis='both', which='both',length=0)
+
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
-    clean_ordered=False):
+    clean_ordered=False, clean_ordered_ordinal=False, 
+    force_onsets_same_col_as_strokes=False, naked=False):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -91,6 +149,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         pcol="k"
         mark_stroke_onset= False
         onsets_by_order=True
+    elif clean_ordered_ordinal:
+        assert clean_unordered==False, "can only choose one of these 2 options"
+        each_stroke_separate= True
+        plotver = "order"
 
     if strokenums_to_plot is not None:
         each_stroke_separate=True
@@ -180,8 +242,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         # markersize = (3/5)*markersize
         # color scheme must be different for each stroke.
         if isinstance(plotver, str):
-            if plotver in ["strokes", "strokes_order", "order"]:
+            if plotver in ["strokes"]:
                 color_order, pcol = getStrokeColors(strokes2, CMAP)
+            elif plotver in ["strokes_order", "order"]:
+                color_order, pcol = getStrokeColorsGradient(strokes2)
             elif plotver in ["onecolor", "randcolor"]:
                 color_order = [pcol[0] for _ in range(len(strokes2))]
             else:
@@ -231,21 +295,25 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
             if strokenums_to_plot is not None:
                 if i not in strokenums_to_plot:
                     continue
-            if onsets_by_order:
-                color_order, pcol = getStrokeColors(strokes2, CMAP)
-                col = color_order[i]
-                tcol = color_order[i]
-            if plotver=="order":
-                col = color_order[i]
-                tcol = color_order[i]
-                # tcol = "k"
-            elif each_stroke_separate:
+            if force_onsets_same_col_as_strokes:
                 col = color_order[i]
                 tcol = color_order[i]
             else:
-                col = [0.7, 0.7, 0.7]
-                tcol = "k"
-                tcol = [0.7, 0.7, 0.7]
+                if onsets_by_order:
+                    color_order, pcol = getStrokeColors(strokes2, CMAP)
+                    col = color_order[i]
+                    tcol = color_order[i]
+                if plotver=="order":
+                    col = color_order[i]
+                    tcol = color_order[i]
+                    # tcol = "k"
+                elif each_stroke_separate:
+                    col = color_order[i]
+                    tcol = color_order[i]
+                else:
+                    col = [0.7, 0.7, 0.7]
+                    tcol = "k"
+                    tcol = [0.7, 0.7, 0.7]
 
             if plotver == "onecolor":
                 mfc = col
@@ -264,6 +332,14 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
                 # ax.text(s[0,0], s[0,1], f"{i+1}", color=col, fontsize=12)
     if not isinstance(fraction_of_stroke, list):
         return (timeon, timeoff)
+
+    ax.set_aspect('equal')
+    if naked:
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.set_title(None)
+        ax.tick_params(axis='both', which='both',length=0)
+
 
 # def plotDatStrokesVelSpeed(strokes, ax, plotver="speed"):
 #     """  pass in strokes and will autoamtically differnetiate to 

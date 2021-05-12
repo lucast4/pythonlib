@@ -421,6 +421,51 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     ax.axis("square")
     # ax.set_aspect('equal', adjustable='datalim')
 
+def histogramMult(vals_list, nbins, ax=None, separate_plots=False):
+    """ overlays multiple historgrams, making sure to 
+    use same bins. first finds bins by taking all values and getting 
+    common bins.
+    Overlays using steps, using standard mpl colors
+    INPUT:
+    - vals_list, list of vals, each a (N,) array
+    RETURNS:
+    - fig
+    """
+
+    # Find common bins
+    allvals = np.concatenate([x[:] for x in vals_list])
+    assert not any(np.isnan(allvals))
+    assert len(allvals.shape)==1
+    bins = getHistBinEdges(allvals, nbins)
+    if separate_plots:
+        nc = 3
+        nr = int(np.ceil(len(vals_list)/3))
+        fig, axes= plt.subplots(nr, nc, figsize=(3*nc, 2*nr))
+        for x, ax in zip(vals_list, axes.flatten()):
+            ax.hist(x, bins=bins, histtype="step", density=True)
+            # print(x)
+            # print(bins)
+    else:
+        if ax is None:
+            nc = 1
+            nr = 1
+            fig, ax= plt.subplots(nr, nc, figsize=(3*nc, 2*nr))
+        else:
+            fig=None
+        for x in vals_list:
+            # weights = np.ones_like(x) / (len(x))
+            hist_prob(ax, x, bins, "step")
+            # ax.hist(x, bins=bins, histtype="step", weights=weights)
+        
+    return fig
+
+def hist_prob(ax, x, bins, histtype="step"):
+    """ liek hist, but plots in prob. not prob density.
+    """
+    weights = np.ones_like(x) / (len(x))
+    ax.hist(x, bins=bins, histtype=histtype, weights=weights)
+
+
 def getHistBinEdges(vals, nbins):
     """ return array of edges containing all vals,
     and having n bins (so values is nbins+1)
@@ -447,7 +492,9 @@ def getHistBinEdges(vals, nbins):
 
 
 def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5, 
-                   origin="lower_left", max_n_per_grid=None):
+                   origin="lower_left", max_n_per_grid=None, 
+                   col_labels = None, row_labels=None, tight=True,
+                   aspect=0.8):
     """ wrapper to plot each datapoint at a given
     col and row.
     INPUT:
@@ -458,10 +505,15 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
     0indexed
     - max_n_per_grid, then only plots max n per col/row combo. each time will shuffle
     so that is different. Leave none to plot all
+    - col_labels, row_labels, list of things to label the cols and rows.
+    - aspect, w/h
     RETURNS:
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
     """
+
+    assert min(rows)==0, "if not, messes up plotting of titles"
+    assert min(cols)==0
 
     if max_n_per_grid is not None:
         assert isinstance(max_n_per_grid, int)
@@ -484,9 +536,11 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
         assert origin=="top_left", "not coded"
 
     fig, axes = plt.subplots(nr, nc, sharex=True, sharey=True, 
-                             figsize=(nc*SIZE, nr*SIZE), squeeze=False)
+                             figsize=(nc*SIZE*aspect, nr*SIZE), squeeze=False)
 
     done = {}
+    minrow = min(rows)
+    mincol = min(cols)
     for col, row in zip(cols, rows):
         done[(row, col)] = 0
 
@@ -500,4 +554,17 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
 
         done[(row, col)] += 1
 
+        if col_labels:
+            if row==0:
+                ax.set_title(col_labels[col])
+
+        if row_labels:
+            if col==0:
+                ax.set_ylabel(row_labels[row])
+    if tight:
+        fig.subplots_adjust(wspace=0, hspace=0)
+
+
     return fig
+
+

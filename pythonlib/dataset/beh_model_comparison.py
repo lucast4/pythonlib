@@ -15,6 +15,10 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
                                 model_score_name_list, savedir=None, return_DatThisAggPaired=False):
     """ All plots, where take cross product of prior model (monkey) and model (anythign else)
     Assumes that there are only 2 priors and 2 models, for now.
+    NOTES:
+    - column_dsets = "monkey_prior" # names the dartasets.
+    - column_dsets = "epoch" # names the dartasets.
+
     """
     from pythonlib.tools.pandastools import pivot_table
     from pythonlib.tools.plottools import plotScatter45
@@ -23,17 +27,17 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
     assert len(model_score_name_list)==2, "not coded for otherwise"
     assert len(monkey_prior_list)==2, "not coded for otherwise"
 
+    
     # --- subtract model1 from model2 score
     DatThisTest["mod2_minus_mod1"] = DatThisTest[model_score_name_list[1]] - DatThisTest[model_score_name_list[0]]
     
     # aggregate over tasks
-    column_dsets = "monkey_prior" # names the dartasets.
     # tasklist = set(DatThisTest["character"])
-    DatThisAgg = aggregGeneral(DatThisTest, group = ["character", column_dsets], 
+    DatThisAgg = aggregGeneral(DatThisTest, group = ["character", monkey_prior_col_name], 
                                values=[model_score_name_list[0], model_score_name_list[1], "mod2_minus_mod1"])
 
     # Pivot
-    DatThisAggPaired = pivot_table(DatThisAgg, index=["character"], columns = [column_dsets], 
+    DatThisAggPaired = pivot_table(DatThisAgg, index=["character"], columns = [monkey_prior_col_name], 
                                    values=[model_score_name_list[0], model_score_name_list[1], "mod2_minus_mod1"])
     # cleanup remove any rows with nans
     DatThisAggPaired = DatThisAggPaired.dropna().reset_index(drop=True)
@@ -80,29 +84,33 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
 
 
     #  PLOT OVERVIEW, ALL TASKS
-    fig = sns.catplot(data=DatThisTest, x="monkey_prior", y="mod2_minus_mod1", aspect=3)
+    fig = sns.catplot(data=DatThisTest, x=monkey_prior_col_name, y="mod2_minus_mod1", aspect=3)
     plt.axhline(0, color="k", alpha=0.5)
-    fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
 
 
-    fig = sns.displot(data=DatThisTest, hue="monkey_prior", x="mod2_minus_mod1", 
+    fig = sns.displot(data=DatThisTest, hue=monkey_prior_col_name, x="mod2_minus_mod1", 
                 aspect=3, kind="hist", stat="probability", common_norm=False)
     plt.axvline(0, color="r")
-    fig.savefig(f"{savedir}/all_trials_summary_mod2minus1.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/all_trials_summary_mod2minus1.pdf")
 
 
 
     ########### ONE PLOT PER TASK
-    fig = sns.displot(data=DatThisAgg, hue=column_dsets, x="mod2_minus_mod1", 
+    fig = sns.displot(data=DatThisAgg, hue=monkey_prior_col_name, x="mod2_minus_mod1", 
                 aspect=2, kind="hist", stat="probability", common_norm=False, bins=20,
                element="bars", fill=True)
     plt.axvline(0, color="r")
-    fig.savefig(f"{savedir}/aggbytask_summary_mod2minus1.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/aggbytask_summary_mod2minus1.pdf")
 
     # === 
-    fig = sns.catplot(data=DatThisAgg, x="monkey_prior", y="mod2_minus_mod1", aspect=3)
+    fig = sns.catplot(data=DatThisAgg, x=monkey_prior_col_name, y="mod2_minus_mod1", aspect=3)
     plt.axhline(0, color="k", alpha=0.5)
-    fig.savefig(f"{savedir}/aggbytask_catplot_summary_mod2minus1.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/aggbytask_catplot_summary_mod2minus1.pdf")
 
     ALPHA = ALPHA*2
     fig, axes = plt.subplots(1,len(monkey_prior_list), sharex=True, sharey=True)
@@ -154,14 +162,16 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
     ax.set_xlabel(col1)
     ax.set_ylabel(col2)
     ax.set_title("mod2 - mod1")
-    fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1.pdf")
 
     fig, ax = plt.subplots(figsize=(15,15))
     plotScatter45(x, y, ax, dotted_lines="plus", means=False, labels = tasknames)
     ax.set_xlabel(col1)
     ax.set_ylabel(col2)
     ax.set_title("mod2 - mod1")
-    fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1_largetext.pdf")
+    if savedir:
+        fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1_largetext.pdf")
 
     if return_DatThisAggPaired:
         return DatThisAggPaired
