@@ -33,6 +33,8 @@ def _checkDataframesMatch(df1, df2, check_index_match=True):
     NOTE: if have same values (relative to index) but index is
     shuffled rleative to row locaiton, then will fail check - i.e.
     df1[col].values muist equal df2[col].values for all col.
+    NOTE: Not checking whether columns have same values, since this
+    led to segmentation fault issues (if there was nan)
     """
     
     columns_shared = [c for c in df1.columns if c in df2.columns]
@@ -43,7 +45,11 @@ def _checkDataframesMatch(df1, df2, check_index_match=True):
             print(df2)
             assert False, "lengths must be the same to do this check"
         assert np.all(df1.index == df2.index), "indices are not the same!! maybe you applied reset_index() inadvertantely?"
-        assert df1[columns_shared].equals(df2[columns_shared]), "values dont match"
+        # dfthis1 = df1[df1.notna()]
+        # dfthis2 = df2[df2.notna()]
+        # assert dfthis1[columns_shared].equals(dfthis2[columns_shared])
+        # for col in columns_shared:
+        #     assert df1[col].fillna(0).equals(df2[col].fillna(0)), "values dont match"
         
         # to show that index must be in the same order to pass check.
 #         assert df1[columns_shared].sort_values("hausdorff").sort_index().equals(df2[columns_shared])
@@ -151,30 +157,35 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True):
     # dfnewcol = df.apply(lambda x: F(x), axis=1).reset_index()
     # dfout = df.merge(dfnewcol, left_index=True, right_index=True).rename(columns={0:newcolname})
 
-    if replace:
-        if newcolname in df.columns:
-            del df[newcolname]
-    else:
-        assert newcolname not in df.columns, f"{newcolname} already exists as a col name"
-
+    # GET NEW SERIES
     dfnewcol = df.apply(F, axis=1).rename(newcolname) # rename, since series must be named.
+
+    # DO MERGE
+    # Make copy, since must delete if want to replace col
+    dfthis = df.copy()
+    if replace:
+        if newcolname in dfthis.columns:
+            del dfthis[newcolname]
+    else:
+        assert newcolname not in dfthis.columns, f"{newcolname} already exists as a col name"
 
     # print(dfnewcol)
     # print(dfnewcol.columns)
+    # assert False
     # print(dfnewcol.index)
-    if len(dfnewcol)!=len(df):
+    if len(dfnewcol)!=len(dfthis):
         print(dfnewcol)
-        print(df)
+        print(dfthis)
         assert False
 
     # dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
     # _checkDataframesMatch(df, dfnewcol)
 
-    dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True, validate="one_to_one")
+    dfout = dfthis.merge(dfnewcol, how="left", left_index=True, right_index=True, validate="one_to_one")
 
     if len(dfnewcol)!=len(dfout):
         print(dfnewcol)
-        print(df)
+        print(dfthis)
         print(dfout)
         assert False
 

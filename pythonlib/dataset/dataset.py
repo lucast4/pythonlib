@@ -105,6 +105,20 @@ class Dataset(object):
 
         return Dnew
 
+    def is_finalized(self):
+        """ Was metadata flagged as finalized by me? Returns True or False
+        - If there are multiple datasets loaded simultanesuoy, returns True
+        only if all are finalized
+        """
+        outs = []
+        for k, v in self.Metadats.items():
+            if "metadat_probedat" not in v.keys():
+                outs.append(False)
+            else:
+                outs.append(v["metadat_probedat"]["finalized"])
+        return all(outs)
+
+
 
     def filterPandas(self, filtdict, return_ver = "indices"):
         """
@@ -146,8 +160,12 @@ class Dataset(object):
         iterate over pass in lists of strings.
         """
         if ver=="single":
+            print("HERE0")
             pathlist = self.find_dataset(animal, expt, assert_only_one=True)
+            print("HERE1")
             self._main_loader(pathlist, None)
+            print("HERE2")
+
         elif ver=="mult":
             pathlist = []
             if isinstance(animal, str):
@@ -266,6 +284,61 @@ class Dataset(object):
         return [k for k in allkinds if k in self.Dat.columns]
 
 
+    def removeNans(self, columns=None):
+        """ remove rows that have nans for the given columns
+        INPUTS:
+        - columns, list of column names. if None, then uses all columns.
+        RETURNS:
+        [modifies self.Dat]
+        """
+        print("--- Removing nans")
+        print("start len:", len(self.Dat))
+        if columns is None:
+            self.Dat = self.Dat.dropna()
+        else:
+            self.Dat = self.Dat.dropna(subset=columns)
+        self.Dat = self.Dat.reset_index(drop=True)
+        print("ending len:", len(self.Dat))
+
+
+    def printNansPerCol(self, columns=None):
+        """ PRINT, for each column how many nans
+        """
+        if columns is None:
+            columns = self.Dat.columns
+        # inds_bad = []
+        for col in columns:
+            # print(f"{col} : {sum(self.Dat[col].isna())}")
+            print(f"{sum(self.Dat[col].isna())}, {col}")
+            # inds_bad.extend(np.where(dfthis[col].isna())[0])
+        print(f"Total num rows: {len(self.Dat)}")
+
+    def removeOutlierRows(self, columns, prctile_min_max):
+        """ remove rows that are outliers, based on percentiles for 
+        columns of interest.
+        INPUT:
+        - columns, list of columns, if row is outline for _any_ column,
+        will remove it entirely.
+        - prctile_min_max, (2,) array, range=[0, 100], indicating min and max
+        prctiles to use for calling somthing outlier. e.g., [1 99]
+        RETURNS:
+        - [modifies self.Dat]
+        """
+        print("--- Removing outliers")
+        inds_bad = []
+        for val in columns:
+            limits = np.percentile(self.Dat[val], prctile_min_max)
+            indsthis = (self.Dat[val]<limits[0]) | (self.Dat[val]>limits[1])
+            inds_bad.extend(np.where(indsthis)[0])
+
+        inds_bad = sorted(set(inds_bad))
+        inds_good = [i for i in range(len(self.Dat)) if i not in inds_bad]
+        print("starting len(self.Dat)", len(self.Dat))
+        self.Dat = self.Dat.iloc[inds_good] 
+        self.Dat = self.Dat.reset_index(drop=True)
+        print("final len: ", len(self.Dat))
+
+
     ############### TASKS
     def load_tasks_helper(self):
         """ To load tasks in TaskGeneral class format.
@@ -327,15 +400,17 @@ class Dataset(object):
         Removes rows from self.Dat, and resets indices.
         """
         print("=== CLEANING UP self.Dat ===== ")
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 
         ####### Remove online aborts
-        print("ORIGINAL: online abort values")
-        print(self.Dat["online_abort"].value_counts())
-        idx_good = self.Dat["online_abort"].isin([None])
-        self.Dat = self.Dat[idx_good]
-        print(f"kept {sum(idx_good)} out of {len(idx_good)}")
-        print("removed all cases with online abort not None")
+        # print("ORIGINAL: online abort values")
+        # print(self.Dat["online_abort"].value_counts())
+        # idx_good = self.Dat["online_abort"].isin([None])
+        # self.Dat = self.Dat[idx_good]
+        # print(f"kept {sum(idx_good)} out of {len(idx_good)}")
+        # print("removed all cases with online abort not None")
+
         # reset 
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -363,7 +438,6 @@ class Dataset(object):
         ####### Construct useful params
         # For convenience, add column for whether task is train or test (from
         # monkey's perspective)
-        from pythonlib.tools.pandastools import applyFunctionToAllRows
         def F(x):
             if x["taskgroup"] in ["train_fixed", "train_random"]:
                 return "train"
@@ -372,20 +446,23 @@ class Dataset(object):
             else:
                 print(x)
                 assert False, "huh"
+        print("applying monkey train test names")
         self.Dat = applyFunctionToAllRows(self.Dat, F, "monkey_train_or_test")
 
         # reset 
+        print("resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
 
 
         ######## assign a "character" name to each task.
-        from pythonlib.tools.pandastools import applyFunctionToAllRows
         def F(x):
             if x["random_task"]:
+                # print(x["task_stagecategory"])
                 # For random tasks, character is just the task category
                 return x["task_stagecategory"]
             else:
                 # For fixed tasks, it is the unique task name
+                # print(x["unique_task_name"])
                 return x["unique_task_name"]
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
 
@@ -973,7 +1050,6 @@ class Dataset(object):
         - will delete Dataset from column before saving.
         """
         import os
-        import pickle
         
         assert self._check_is_single_dataset(), "not allowed to run this with multipe datasets..."
 
@@ -1455,7 +1531,6 @@ class Dataset(object):
         """
 
         # load BPL
-        import pickle
         fthis = f"{path}/BPL.pkl"
         with open(fthis, "rb") as f:
             self.BPL = pickle.load(f)
@@ -1469,7 +1544,6 @@ class Dataset(object):
         does some auto preprocessing first too
         """
         from pythonlib.bpl.strokesToProgram import infer_MPs_from_strokes
-        import pickle
 
         assert len(self.Metadats)==1, "advised to only do this if you are working wtih one dataset."
         save_checkpoints[1] = self.Metadats[0]["path"]
@@ -1496,7 +1570,6 @@ class Dataset(object):
             parses_good=False):
 
         from pythonlib.bpl.strokesToProgram import infer_MPs_from_strokes
-        import pickle
 
         assert len(self.Metadats)==1, "advised to only do this if you are working wtih one dataset."
         assert len(save_checkpoints[1])==0, "code wil overwrite..."
@@ -1950,7 +2023,6 @@ class Dataset(object):
         - Loads one parse set for each dataset, and then combines them.
         - parses_good, then finds the /parses_good dolfer.
         """
-        import pickle
         PARSES = {}
         for ind in self.Metadats.keys():
             
@@ -2216,7 +2288,6 @@ class Dataset(object):
         - SDIR_THIS, dir where this saved.
         """
         import os
-        import pickle
 
         ts = makeTimeStamp()
         # os.makedirs(SDIR_MAIN, exist_ok=True)
@@ -2383,6 +2454,10 @@ class Dataset(object):
         rotateLabel(fig)
         figlist.append(fig)
 
+        fig = sns.catplot(data=self.Dat, x="block", y="taskgroup", hue="monkey_train_or_test", 
+            row="date", col="epoch", aspect=2)
+        figlist.append(fig)
+
         # fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="online_abort", 
         #     row="date", col="epoch")
         # rotateLabel(fig)
@@ -2393,7 +2468,8 @@ class Dataset(object):
 
         # import seaborn as sns
         # import matplotlib.pyplot as plt
-        fig, axes = plt.subplots(3,1, sharex=True, figsize=(15,20))
+        nrow = 1
+        fig, axes = plt.subplots(nrow,1, sharex=True, figsize=(15,nrow*6), squeeze=False)
         ax=axes.flatten()[0]
         sns.lineplot(data=self.Dat, x="trial", y="block", estimator=None, ax=ax)
         sns.scatterplot(data=self.Dat, x="trial", y="block",ax=ax)
@@ -2411,6 +2487,143 @@ class Dataset(object):
     def printOverview(self):
         from pythonlib.tools.pandastools import printOverview
         printOverview(self.Dat)
+
+
+    ################ ANALYSIS HELPERS
+    def analy_get_tasks_strongesteffect(self, grouping, grouping_levels, feature,
+        dfunc = lambda x,y: y-x, df_in=None, return_vals_sorted=False):
+        """ Extract tasks which have greatest difference along some feature (column),
+        after aggregating over tasks, separating by some grouping variable.
+        Currently only works for goruping using 2 levels (takes difference)
+        e.g., can ask: which task shows largest difference for feature "score", across
+        epochs 1 and 2?
+        INPUTS:
+        - dfunc, function for scoring difference, func: x,y --> scalar, where y is feature for
+        group level 2.
+        - df, if None, then uses self.Dat. otherwises uses df.
+        RETURNS:
+        - tasklist, which is sorted.
+        NOTE:
+        - sorts so that first item is that with greatest psoitive difference (level 2 minus level 1)
+        """
+        from pythonlib.tools.pandastools import pivot_table
+
+        if df_in is None:
+            print("Using self.Dat")
+            dfthis = self.Dat
+        else:
+            print("Using inputted df_in")
+            dfthis = df_in
+
+        # Remove nan
+
+        # Pivot
+        df = pivot_table(dfthis, index=["character"], columns=[grouping], 
+                         values = [feature])
+
+        df = df.dropna()
+        df = df.reset_index(drop=True)
+
+        # get diff
+        x1 = df[feature][grouping_levels[0]] 
+        x2 = df[feature][grouping_levels[1]]
+        tasklist = df["character"].to_list()
+        value_diffs = [dfunc(xx1, xx2) for xx1, xx2 in zip(x1, x2)]
+
+        tmp = [(task, v) for task, v in zip(tasklist, value_diffs)]
+        tmp_sorted = sorted(tmp, key=lambda x: x[1])[::-1]
+        tasklist_sorted = [t[0] for t in tmp_sorted]
+        vals_sorted = [t[1] for t in tmp_sorted]
+
+        # # tmp = [(i, v) for i, v in enumerate(value_diffs)]
+        # # inds_sorted = sorted(tmp, key= lambda x: x[1])[::-1]
+        # # vals_sorted = [i[1] for i in inds_sorted]
+        # # inds_sorted = [i[0] for i in inds_sorted]
+        # if True:
+        #     print(vals_sorted)
+        # # nplot = np.min([10, len(inds_sorted)])
+        # # inds_to_plot = inds_sorted[:nplot]
+
+        # tasklist_sorted = [tasklist[i] for i in inds_sorted]
+        if return_vals_sorted:
+            return tasklist_sorted, vals_sorted
+        else:
+            return tasklist_sorted
+
+
+    def analy_singletask_df(self, task, row_variable, row_levels=None, return_row_levels=False):
+        """ extract datafarme of just one task, with appended columns named
+        "row" and "col" where col is trial num (in order seen in self.Dat) and row
+        is level for row_variable. indices will be reset within each row level, but not in
+        in the final df.
+        RETURNS:
+        - df
+        - return_row_levels (if flagged on)
+        """
+        df = self.Dat[self.Dat["character"] == task]
+
+        # what are rows
+        if row_levels is None:
+            row_levels = sorted(df[row_variable].unique().tolist())
+
+        out = []
+        for i, lev in enumerate(row_levels):
+            dfthis = df[df[row_variable]==lev]
+            dfthis = dfthis.reset_index(drop=True)
+            dfthis["col"] = dfthis.index.tolist()
+            dfthis["row"] = i
+            out.append(dfthis)
+
+        if return_row_levels:
+            return pd.concat(out), row_levels
+        else:
+            return pd.concat(out)
+
+    def analy_assign_trialnums_within_task(self, groupby=None):
+        """ in chron order 0, 1, 2, assigned to each row depending 
+        onw hich trial for its unique task. groupby allows to have
+        0, 1, 2, for a grouping variable too.
+        RETURNS:
+        - modifies self.Dat to have new column "trialnum_this_task"
+        """
+        from pythonlib.tools.nptools import rankItems
+        def F(x):
+            assert np.all(np.diff(x)>0), "shouldnt matter, but should confirm that now rankItems outputs correct order. then remove this assertion?"
+            return rankItems(x)
+
+        assert isinstance(groupby, list)
+        gb = ["character"] + groupby
+        self.Dat["trialnum_this_task"] = self.Dat.groupby(gb)["tval"].transform(F)
+
+
+    def analy_match_numtrials_per_task(self, groupby):
+        """ returns dataset where make sure each task has same num trials across
+        all levels for group. prunes by deleting trials not matched.
+        RETURNS:
+        - new dataset, copied and pruned.
+        """
+        _checkPandasIndices(self.Dat)
+        # D.Dat = D.Dat.reset_index(drop=True)
+
+        # first Make sure assigned trialnums
+        self.analy_assign_trialnums_within_task(groupby)
+
+        tasklist = self.Dat["character"].unique().tolist()
+
+        # Collect inds that are extraneous.
+        inds_bad_all = []
+        for task in tasklist:
+            df = self.Dat[self.Dat["character"]==task]
+            maxnum = min(df.groupby(groupby)["trialnum_this_task"].max())
+            inds_bad = df.index[df["trialnum_this_task"]>maxnum].tolist()
+            inds_bad_all.extend(inds_bad)
+
+        Dtrialsmatch = self.copy()
+        print(len(Dtrialsmatch.Dat))
+        Dtrialsmatch.Dat = Dtrialsmatch.Dat.drop(inds_bad_all)
+        Dtrialsmatch.Dat = Dtrialsmatch.Dat.reset_index(drop=True)
+        print(len(Dtrialsmatch.Dat))
+        return Dtrialsmatch
 
 
 

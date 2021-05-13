@@ -107,7 +107,8 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
     - sample_rate in samp/sec (e.g., fd["params"]["sample_rate"])
     - adapt_win_len, what to do fro strokes that are shoerter than window.
     """
-    from tools.calc import smoothDat
+    from .timeseriestools import  smoothDat
+
     window_len = np.floor(window_time/(1/sample_rate))
     if window_len%2==0:
         window_len+=1
@@ -299,7 +300,7 @@ def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filte
 
 
 def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
-    fs_new = 30, do_pre_filter=False):
+    fs_new = 30, do_pre_filter=False, clean=False):
     """ gets velocity and speeds. 
     should first have filtered strokes to ~15-20hz. if not, then 
     activate flag to run filter here. 
@@ -328,7 +329,9 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
     strokes.
 
     """
-
+    if clean:
+        lowpass_freq = 5
+        
     sample_rate = fs
 
     if ploton:

@@ -126,7 +126,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
     clean_ordered=False, clean_ordered_ordinal=False, 
-    force_onsets_same_col_as_strokes=False, naked=False):
+    force_onsets_same_col_as_strokes=False, naked=False, mfc_input=None):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -320,7 +320,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
                 markersize = markersize + 0.5
             else:
                 mfc = "w"
-
+            if mfc_input:
+                mfc = mfc_input
             # ax.plot(s[0,0], s[0,1], mfc=col, mec= [0.7, 0.7, 0.7], markersize=markersize+3, 
                 # marker="s")
             ax.plot(s[0,0], s[0,1], mec=col, mfc= mfc, markersize=markersize+1.5, 
@@ -498,9 +499,129 @@ def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1.,
         #     plotDatStrokes([strok_mean], ax=ax, plotver=[0,0,0], each_stroke_separate=True)
 
 
+
+def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_list=None, strokes_ypos_list = None,
+    ax=None, colorver="default", 
+    cleanver=False, flipxy=False, chunkmodel=None, chunkmodel_idx = 0,
+     waterfallkwargs={}, ylabels=None):
+    """ wrapper to plot waterfall, i.e,., raster where y 
+    is trial and x is time in trial. Plots multipel trials (strokes_list)
+    INPUTS:
+    - strokes_list, list of strokes
+    - strokes_task_list, optional, list of strokes for tasks corresponding to storkes_list.
+    Only need if colorver is by assignment to task stropkes.
+    - onset_time_list, times which will subtract from each strokes, e.g., if want to make sure all algined.
+    if None, then does not subtract anything.
+    - colorver deternbnes colors for each timestep.
+    if pass in string, then must be one of these shortcuts:
+    "vel", velocity
+    "taskstrokenum_fixed", assigned stroke number from ground truth task.
+    if pass in function, then should take in strokes and return strokescolor (same
+    size as strokes. the stroknum is taken as is from the task struct. useful
+    when is identical task across tirals.
+    "taskstrokenum_reordered", same but strokenums assigned 0,1,... based on 
+    what touched first by behaviro (useful when there is no set order,e.g. when tasks
+    differ over trials)
+    - cleanver is shortcut to make params: align true, ...
+    - chunkmodel, uses this model to parse the task strokes.
+    - chunkmodel_idx if this too large, dont exist, then returns None.
+    - ylabels, list of names for each item in strokes_list. if empty then just uses 0 , 1, 2...
+    """
+    from pythonlib.tools.stroketools import assignStrokenumFromTask
+    # from pythonlib.drawmodel.strokePlots import getStrokeColors, plotDatWaterfall
+
+    if ylabels is None:
+        ylabels = range(len(strokes_list))
+    strokescolors_list = []
+    
+
+    pcols = getStrokeColors(max([len(strokes) for strokes in strokes_list]))[0] # default.
+
+    # === COLLECT ALL TRIALS.
+    for i, strokes in enumerate(strokes_list):
+
+        # 2) -- Collect hwo to color strokes
+        def colorbystroknum(sort_stroknum):
+            print(chunkmodel_idx)
+            strokes_task = strokes_task_list[i]
+            # strokes_task = getTrialsTaskAsStrokes(filedata, t,
+            #     chunkmodel = chunkmodel, chunkmodel_idx=chunkmodel_idx)
+            # if strokes_task is None:
+            #     return None
+            strokes_colors = assignStrokenumFromTask(strokes, strokes_task, 
+                                                         sort_stroknum=sort_stroknum)
+            # strokes_colors = [s for s in stroknums_assigned]
+            # print(stroknums_assigned)
+            # print(strokes_colors)
+            # assert False
+            if len(strokes_task)>len(pcols):
+                pcolsthis = getStrokeColors(strokes_task)[0]
+            else:
+                pcolsthis = pcols
+            for ii in range(len(strokes_colors)):
+                strokes_colors[ii] = pcolsthis[strokes_colors[ii]]
+            return strokes_colors
+
+        if isinstance(colorver, str):
+            if colorver=="vel":
+                assert False, "need to pass in fs..."
+                fs = filedata["params"]["sample_rate"]
+                _, strokes_speed = strokesVelocity(strokes, fs, lowpass_freq=5)
+                strokes_colors = [s[:,0] for s in strokes_speed]
+            elif colorver =="default":
+                strokes_colors = [pcols[ii] for ii in range(len(strokes))]
+            elif colorver=="taskstrokenum_fixed":
+                strokes_colors = colorbystroknum(False)
+            elif colorver=="taskstrokenum_reordered":
+                strokes_colors = colorbystroknum(True)
+            else: 
+                print(colorver)
+                assert False, "not coded"
+        else:
+            assert False, "this a function? not yet coded"
+
+        strokescolors_list.append(strokes_colors)
+
+        # === assign colors
+    if ax is None:
+        if flipxy:
+            W = 20
+            H = 7
+        else:
+            W = 7
+            H = 20
+        fig, ax = plt.subplots(1,1, figsize=(W, H))
+
+    if onset_time_list is not None:
+        assert len(onset_time_list)==len(strokes_list)
+        strokes_list_new = []
+        for i, (onset, strokes) in enumerate(zip(onset_time_list, strokes_list)):
+            strokes = [np.copy(s) for s in strokes]
+            for s in strokes:
+                s[:, 2] = s[:,2] - onset
+            # strokes = [s[:, 2] - onset for s in strokes]
+            strokes_list_new.append(strokes)
+        strokes_list = strokes_list_new
+
+    plotDatWaterfall(strokes_list, strokescolors_list, ax, ylabels=ylabels, flipxy=flipxy, 
+        strokes_ypos_list = strokes_ypos_list, **waterfallkwargs)
+
+    waterfallkwargs["xaxis"] = ""
+    if flipxy==False:
+        ax.set_ylabel("trial")
+        ax.set_xlabel(waterfallkwargs["xaxis"])
+    else:
+        ax.set_xlabel("trial")
+        ax.set_ylabel(waterfallkwargs["xaxis"])
+    
+    if ax is None:
+        return fig
+
+
 def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_time=False, 
                     normalize_strok_lengths=False, ylabels=None, xaxis="time", fakegapdist=100., 
                     flipxy=False, align_all_strok=False, trialorder="asinput", 
+                    strokes_ypos_list = None,
                     plotkwargs = {"marker":"o", "alpha":0.8, "s":10}):
     """ low-lebvel waterfall plot, i.e., like raster, 
     where y is trials and x is time in trial.
@@ -508,11 +629,15 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
     the corresponding strokes in strokes_list, since it
     a color to each timepoint in strokes.
     - if any strokes is empty, leaveas a blank row (skips)
-    === 
+    INPUTS:
     - strokes_list is lsit of strokes, where strokes is
     is llist of N x 3 (xyt) arrays
     - strokescolors_list is list of strokescolors, where
     strokes_colors is list of N x 3 arrays (rgb)
+    - strokes_ypos_list, same len as strokes_list, each list within should be
+    same length as strokes, but each array (n,) indicating y position for each timepoint.
+    Units dont matter, since will normalize across all strokes so that can all fit ont same plot and
+    still be proportiona in the y dimension.
     - xaxis,
     -- "time", then is default, time
     -- "dist", then is distance traveled (will add fake gap dist using fakegapdist)
@@ -526,6 +651,16 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
     # yticks = []
     row_nogaps = 0
     row = 1
+
+    if strokes_ypos_list is not None:
+        # do nomalization.
+        tmp = np.concatenate([xx for x in strokes_ypos_list for xx in x])
+        minval, maxval = np.percentile(tmp, [2, 98])
+
+        def F(strokes):
+            return [0.5*(s-minval)/(maxval-minval) for s in strokes]
+        strokes_ypos_list = [F(strokes) for strokes in strokes_ypos_list]            
+
     for k, (strokes, strokescolors) in enumerate(zip(strokes_list, strokescolors_list)):
         
 
@@ -584,14 +719,25 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
 
     #         plt.plot(tvals, t*np.ones_like(tvals), color=pcols[i])
     #         try:
+            if strokes_ypos_list is not None:
+                ythis = strokes_ypos_list[k][i] + rowthis
+            else:
+                ythis = rowthis*np.ones_like(tvals)
+            # print(ythis)
+            # print(len(strokes_ypos_list))
+            # print(len(strokes_ypos_list[k]))
+            # asdfsfsad
             if flipxy:
-                x = rowthis*np.ones_like(tvals)
+                x = ythis
                 y = tvals
             else:
                 x = tvals
-                y = rowthis*np.ones_like(tvals)
+                y = ythis
             # ax.scatter(tvals, row*np.ones_like(tvals), c=strokcols,  cmap="plasma", 
             #     **plotkwargs)
+
+
+
             if flipxy:
                 marker = "_"
             else:
@@ -603,9 +749,18 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
             else:
                 ax.plot(x[0], y[0], mec="k", mfc= "none",
                     markersize=plotkwargs["s"], marker=marker, alpha= 1)
-            # print(strokcols)
-            ax.scatter(x, y, c=strokcols,  cmap="plasma", 
-                **plotkwargs)
+            if max(strokcols.shape)<=4:
+                # then is color for entire
+                ax.scatter(x, y, color=strokcols,  cmap="plasma", 
+                    **plotkwargs)
+            else:
+                # then is color for each pt.
+                ax.scatter(x, y, c=strokcols,  cmap="plasma", 
+                    **plotkwargs)
+            if flipxy:
+                ax.axvline(rowthis, color="k", alpha=0.15)
+            else:
+                ax.axhline(rowthis, color="k", alpha=0.15)
     #         except:
     #             plt.scatter(tvals, t*np.ones_like(tvals), c="k")
 

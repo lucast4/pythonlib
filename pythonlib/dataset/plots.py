@@ -93,3 +93,78 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
         **plotkwargs)
 
     return figbeh, figtask
+
+
+def plot_beh_grid_singletask_alltrials(D, task, row_variable, row_levels=None, plotkwargs = {},
+    plotfuncbeh=None):
+    """ given a singel task, plots all trials in df in a grid, where rows split into row_levels (grouped by row_variable)
+    and columns are trials, in order encountered in df.
+    INPUTS:
+    - df, usually make this D.Dat, or related
+    """
+
+    # df = D.Dat[D.Dat["character"]==task]
+    import pandas as pd
+
+    dfplot, row_levels = D.analy_singletask_df(task, row_variable, row_levels=row_levels, return_row_levels=True)
+
+    # df = df[df["character"] == task]
+
+    # # what are rows
+    # if row_levels is None:
+    #     row_levels = sorted(df[row_variable].unique().tolist())
+
+    # # Skip if dont have data across all rows.
+    # if not all([l in df[row_variable].unique().tolist() for l in row_levels]):
+    #     print("SKIPPING, since not have data across levels:", task)
+    #     return
+
+    # out = []
+    # for i, lev in enumerate(row_levels):
+    #     dfthis = df[df[row_variable]==lev]
+    #     dfthis = dfthis.reset_index(drop=True)
+    #     dfthis["col"] = dfthis.index.tolist()
+    #     dfthis["row"] = i
+    #     out.append(dfthis)
+
+    # dfplot = pd.concat(out)
+
+    # PLOT
+    figb, figt = plot_dat_grid_inputrowscols(dfplot, row_labels=row_levels, plotfuncbeh=None, **plotkwargs)
+
+
+    return figb, figt
+
+def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=None, plotkwargs = {},
+    plotfuncbeh=None):
+    """ given a singel task, plots all trials in df in a waterfall, where organizes them based on row_levels, in order encountered in df.
+    this will dictate order, and label in plot.
+    INPUTS:
+    - df, usually make this D.Dat, or related
+    """
+    from pythonlib.drawmodel.strokePlots import plotDatWaterfallWrapper
+    from pythonlib.tools.stroketools import strokesVelocity
+
+    dfplot, row_levels = D.analy_singletask_df(task, row_variable, row_levels=row_levels, return_row_levels=True)
+
+    # PLOT WATERFALL
+    strokes_list = dfplot["strokes_beh"].values
+    onsets_list = dfplot["go_cue"].values
+    row_list = dfplot["row"].values
+    row_list = [row_levels[i] for i in row_list]
+    col_list = dfplot["col"].values
+    labels = [f"c_{c}|r_{r}" for c,r in zip(col_list, row_list)]
+
+    # Get velocities
+    # TODO: assuming that fs for first params will apply across all.
+    fs = D.Metadats[0]["filedata_params"]["sample_rate"]
+    strokespeed_list = [strokesVelocity(strokes, fs, clean=True)[1] for strokes in strokes_list]
+    strokespeed_list = [[ss[:,0] for ss in s] for s in strokespeed_list] # only keep the speed, not the time.
+
+    n = len(strokes_list)
+    fig, ax = plt.subplots(1, 1, figsize=(n*1.5, 5))
+    # plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, ax=ax, ylabels=labels)
+    plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, strokes_ypos_list=strokespeed_list, ax=ax, ylabels=labels)
+    return fig
+
+
