@@ -2420,6 +2420,8 @@ class Dataset(object):
                 assert False
             if not titles:
                 ax.set_title(i)
+            elif isinstance(titles[ind], str):
+                ax.set_title(f"{titles[ind]}")
             else:
                 ax.set_title(f"{titles[ind]:.2f}")
 
@@ -2682,4 +2684,23 @@ def mergeTwoDatasets(D1, D2, on_="rowid"):
     
     return df
 
+
+def concatDatasets(Dlist):
+    """ concatenates datasets in Dlist into a single dataset.
+    Main goal is to concatenate D.Dat. WIll attempt to keep track of 
+    Metadats, but have not confirmed that this is reliable yet.
+    NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
+
+    """
+
+    Dnew = Dataset([])
+
+    dflist = [D.Dat for D in Dlist]
+    Dnew.Dat = pd.concat(dflist)
+
+    del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+
+    print("Done!, new len of dataset", len(Dnew.Dat))
+    # Dnew.Metadats = copy.deepcopy(self.Metadats)
+    return Dnew
 

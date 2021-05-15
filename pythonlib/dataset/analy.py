@@ -45,7 +45,7 @@ def _groupingParams(D, expt):
     F = lambda x: plantime_cats[x["plan_time"]]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
-    grouping_levels = sorted([v for v in plantime_cats.values()])
+    grouping_levels = ["short", "long"]
 
     vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
         "dist_raise2firsttouch", "sdur", "isi", 
@@ -124,19 +124,21 @@ def preprocessDat(D, expt):
     D.Dat["dist_per_gap"] = D.Dat["dist_gaps"]/(D.Dat["nstrokes"]-1)
     D.Dat["dist_per_stroke"] = D.Dat["dist_strokes"]/(D.Dat["nstrokes"])
 
+
+
     # (3) Apply grouping variabples + prune dataset
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES = _groupingParams(D, expt)
 
-    
     # (4) Sequences more similar within group than between?
-    DIST_VER = "dtw_split_segments"
     from pythonlib.dataset.analy import score_all_pairwise_within_task
     from pythonlib.dataset.analy import score_alignment
+    DIST_VER = "dtw_split_segments"
 
     # - score all pairwise, trials for a given task
-    SCORE_COL_NAMES = score_all_pairwise_within_task(D, DIST_VER, GROUPING, DONEG=True)
+    SCORE_COL_NAMES = score_all_pairwise_within_task(D, GROUPING, GROUPING_LEVELS,
+        DIST_VER, DONEG=True)
+
     # - score alignment
-    # score_name_list = [f"vs-selfsametask-{x}" for x in GROUPING_LEVELS]
     score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
    
     # ======== CLEAN, REMOVE NAN AND OUTLIERS
@@ -227,8 +229,8 @@ def get_task_pairwise_metrics(D, grouping, func):
 
 
 
-def score_all_pairwise_within_task(D, DIST_VER = "dtw_segments", GROUPING = "plan_time_cat", 
-    DONEG=False):
+def score_all_pairwise_within_task(D,  GROUPING, 
+    GROUPING_LEVELS, DIST_VER = "dtw_segments", DONEG=False):
     """
     for each unique task, gets all pairwise distances for same level, diff level,
     where levels defined by grouping variable (e..g, monkey_prior, epoch etc).
@@ -236,15 +238,17 @@ def score_all_pairwise_within_task(D, DIST_VER = "dtw_segments", GROUPING = "pla
     - DIST_VER, str, which kidn of score to use.
     - GROUPING, dataframe column, whose levels are used to split data.
     - DONEG, if True, then will flip sign of distance, so that more neg is more worse.
+    - GROUPING_LEVELS, the levels to care about (i.e., within level vs. across level scoring)
     RETURNS:
     - modifies D.Dat, modified to have new columns, where for each trial give score reltaive to 
     all other trials, separated by how those other trials are grouped. if multipel trials 
     compared to it, then takes mean.
-    - colnames, the names of new cols.
+    - colnames, the names of new cols. **Will be in same order as GROUPING_LEVELS input!!
     NOTE:
     - Useful, e.g, for positive control based on across-trial varibility given
     the same task(stimulus)
     - NOTE: grouping is synonymous with monkey prior in this code.
+    - 
     """
     
     # Distancd function defined.
@@ -284,7 +288,6 @@ def score_all_pairwise_within_task(D, DIST_VER = "dtw_segments", GROUPING = "pla
 
     #     # print(task, c)
 
-    monkey_prior_list = sorted(D.Dat[GROUPING].unique().tolist())
 
     # Repopulate into main DF
     def _extract(task, monkey_prior_this, monkey_prior_other):
@@ -300,9 +303,9 @@ def score_all_pairwise_within_task(D, DIST_VER = "dtw_segments", GROUPING = "pla
         return scores
 
     colnames = []
-    for MONKEY_PRIOR_OTHER in monkey_prior_list:
+    for group_other in GROUPING_LEVELS:
         def F(x):
-            scores = _extract(x["character"], x[GROUPING], MONKEY_PRIOR_OTHER)
+            scores = _extract(x["character"], x[GROUPING], group_other)
             if len(scores)==0:
                 return np.nan
             if any(np.array(scores)<0.001):
@@ -313,8 +316,8 @@ def score_all_pairwise_within_task(D, DIST_VER = "dtw_segments", GROUPING = "pla
                 s = -s
             return s
          
-        D.Dat = applyFunctionToAllRows(D.Dat, F, newcolname=f"vs-selfsametask-{MONKEY_PRIOR_OTHER}")    
-        colnames.append(f"vs-selfsametask-{MONKEY_PRIOR_OTHER}")
+        D.Dat = applyFunctionToAllRows(D.Dat, F, newcolname=f"vs-selfsametask-{group_other}")    
+        colnames.append(f"vs-selfsametask-{group_other}")
 
     return colnames
 

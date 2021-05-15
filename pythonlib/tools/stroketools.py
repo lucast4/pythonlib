@@ -969,7 +969,7 @@ def check_strokes_in_temporal_order(strokes):
 
 ################### STROKE PERMUTATION TOOLS
 
-def getStrokePermutationsWrapper(strokes, ver):
+def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):
     """ wrapper, different moethods for permuting strokes.
     """
     if ver=="circular_and_reversed":
@@ -981,10 +981,29 @@ def getStrokePermutationsWrapper(strokes, ver):
         strokes_list = getCircularPerm(strokes)
         if len(strokes)>2:
             strokes_list.extend(getCircularPerm(strokes[::-1]))
-        return strokes_list
+    elif ver=="all_orders":
+        # Then all possible unique orderings. This can get large,
+        # so use num_max. Does not modify the direction within each stroke.
+        from math import factorial
+        print(f"expect to get (ignoreing num max): {factorial(len(strokes))}")
+        strokes_list, _ = getAllStrokeOrders(strokes, num_max =num_max)
+    elif ver=="all_orders_directions":
+        # Then all possible unique orderings. This can get large,
+        # so use num_max. Gets all direction within each stroke. num
+        # max only applies BEFORE getting the diff orders.
+        from math import factorial
+        print(f"expect to get (ignoreing num max): {factorial(len(strokes)) * 2**len(strokes)}")
+        strokes_list, _ = getAllStrokeOrders(strokes, num_max =num_max)
+        strokes_bothdir = []
+        # strokes_bothdir_orders = []
+        for strokes in strokes_list:
+            S = getBothDirections(strokes, fake_timesteps_ver = "in_order")
+            strokes_bothdir.extend(S)
+        strokes_list = strokes_bothdir
     else:
         print(ver)
         assert False, "not coded"
+    return strokes_list
 
 def getCircularPerm(strokes):
     """ get circular permutation of storkes, returning

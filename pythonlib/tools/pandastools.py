@@ -397,6 +397,9 @@ def printOverview(df, MAX=50):
             if isinstance(df[col].values[0], np.ndarray):
                 print(f"*Skipping print, since type of values are np.ndarray")
                 continue
+            if isinstance(df[col].values[0], dict):
+                print(f"*Skipping print, since type of values are dict")
+                continue
             nvals = len(set(df[col].values))
             if nvals>MAX:
                 print(f"*Skipping print, since {nvals} vals > MAX")
@@ -486,3 +489,78 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     return dftmp
 
 
+
+
+def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
+                          INDEX= ["character", "animal", "expt"], 
+                          func = lambda x: np.nanmean(x), return_dfpivot=False
+                         ):
+    """ High level summary, for each task, get its difference (for eg)
+    across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
+    by INDEX (usually, animal/expt/character).
+    INPUTS:
+    - GROUPING, dictates which levels will be split into separate columns
+    - FEATURE_NAMES, will only keep these features (columns)
+    - INDEX, how to split up into unique columns, based on unique indices.
+    - func, how to aggregate across multipel rows.
+    OUTPUT:
+    - dfsummary, new dataframe, with rows = unique combos of index, and columns line:
+    ("total_time") [see eg below]
+    - dfsummaryflat, similar but flattened, so that only columns are to identify index
+    NOTES:
+    - e.g, starting from D, 
+    --- INDEX = ["character", "animal", "expt"], (must be rows in input dataframe)
+    --- GROUPING = ["plan_time_cat"] --> levels {"short, "long"}  (must be 
+    rows in input dataframe, e.g., short is a value that plantimecat can take
+    --- FEATURE_NAMES = ["total_time", "distance", ...] (must be columns in 
+    input datafrane)
+    """
+    
+    # 1) Aggregate and split by grouping
+    dfpivot = pivot_table(df, index=INDEX, columns=[GROUPING], values=FEATURE_NAMES, 
+                          aggfunc=func)
+
+    # ===== Compute summary statistic (e.g., difference across groupings)
+    out = {}
+    COLNAMES_DICT = []
+    COLNAMES_NOABS = []
+    COLNAMES_ABS = []
+
+    # 2) all other features, take difference
+    for val2 in FEATURE_NAMES:
+        if val2=="alignment":
+            # 1) alignemnt, take mean
+            colname = f"{val2}-MEAN"
+            colvals = np.nanmean(np.c_[dfpivot[val2][GROUPING_LEVELS[0]].values, 
+                                                dfpivot[val2][GROUPING_LEVELS[1]].values], axis=1)
+        else:
+            colname = f"{val2}-{GROUPING_LEVELS[1]}min{GROUPING_LEVELS[0]}"
+            colvals = dfpivot[val2][GROUPING_LEVELS[1]] - dfpivot[val2][GROUPING_LEVELS[0]]
+
+        out[colname] = colvals
+
+        # get the abs balue
+        out[f"{colname}-ABS"] = np.abs(colvals)
+
+        COLNAMES_NOABS.append(colname)
+        COLNAMES_ABS.append(f"{colname}-ABS")
+
+    # 3) retain character name
+    for colthis in INDEX:
+        out[colthis] = dfpivot[colthis]
+
+    dfsummary = pd.DataFrame(out)
+    dfsummary=dfsummary.dropna().reset_index(drop=True)
+
+    # ==== Melt into long-form dataset
+    dfsummaryflat = pd.melt(dfsummary, id_vars = INDEX)
+    predicted_len = (len(dfsummary.columns)-len(INDEX)) * len(dfsummary)
+    assert len(dfsummaryflat)==predicted_len
+    
+    if return_dfpivot:
+        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, dfpivot
+    else:
+        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS
+
+
+# dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)

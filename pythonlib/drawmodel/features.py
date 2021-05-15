@@ -105,7 +105,8 @@ def strokeCurvature(strokes):
     assert False, "not done!!"
 
 ####### ONE VALUE SUMMARIZING STROKES
-def computeDistTraveled(strokes, origin=None, include_lift_periods=True, include_origin_to_first_stroke=True, doneloc=None, include_transition_to_done=False):
+def computeDistTraveled(strokes, origin=None, include_lift_periods=True, 
+    include_origin_to_first_stroke=True, doneloc=None, include_transition_to_done=False):
     """ assume start at origin. assumes straight line movements
     between strokes, and travel along stroke during strokes.
     by default includes times when not putting down ink.

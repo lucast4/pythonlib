@@ -54,17 +54,24 @@ def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=
     return g
 
 
-def pairplot_corrcoeff(data, x_vars=None, y_vars = None, hue=None, vars=None, aspect=1):
+def pairplot_corrcoeff(data, x_vars=None, y_vars = None, hue=None, vars=None, aspect=1,
+    corrver="spearman"):
     """ like sns.pairplot, but overlaying pearsons r and p.
     """
     from scipy import stats
     def corrfunc(x, y, **kws):
-        r, p = stats.pearsonr(x, y)
+        if corrver=="pearson":
+            r, p = stats.pearsonr(x, y)
+        elif corrver=="spearman":
+            r, p = stats.spearmanr(x, y)
+        else:
+            assert False
+
         ax = plt.gca()
         ax.annotate(f"r={r:.2f}|p={p:.4f}", xy=(.1, .9), xycoords=ax.transAxes)
 
     g = sns.pairplot(data=data, x_vars = x_vars, y_vars = y_vars, aspect=aspect,
-                      kind="reg")
+                      kind="reg", hue=hue)
     # g.map_upper(plt.scatter, s=10)
     # g.map_diag(sns.distplot, kde=False)
     # g.map_lower(sns.kdeplot, cmap="Blues_d")

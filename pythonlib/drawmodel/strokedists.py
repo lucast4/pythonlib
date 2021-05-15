@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def distscalarStrokes(strokes1, strokes2, ver, params=None, 
-    norm_by_numstrokes=True):
+    norm_by_numstrokes=True, splitnum1 = 5, splitnum2 = 2):
     """ general purpose wrapper for scoring similarity of two strokes,
     - ver, str, is method
     - params, is flexible dict depends on ver
@@ -44,7 +44,9 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None,
     elif ver=="dtw_split_segments":
         return distanceDTW(strokes1, strokes2, ver="split_segments", 
             asymmetric=False, norm_by_numstrokes=norm_by_numstrokes,
-            splitnum1=2, splitnum2=2)[0]
+            splitnum1=splitnum1, splitnum2=splitnum2)[0]
+    elif ver=="alignment_dtwsegments":
+        return strokesAlignmentScore(strokes1, strokes2, ver="dtw_split_segments")
     else:
         print(ver)
         assert False, "not codede"
@@ -165,6 +167,60 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
 
     return D
 
+
+
+def strokesAlignmentScore(strokes_constant, strokes_perm, ver, ratio_ver="divide_by_mean", 
+    Nperm=50):
+    """ Methods to compute alginment bweteen strokes, 
+    Intuitively, how similar are overall sequences. 
+    Here explicitly do care about timing (order or withinstroke
+    order).
+    INPUTS:
+    - ver, str indicating what method
+    - ratio_vs_permutations, returns a ratio, where smaller is better, which is 
+    (score)/(mean score over permtuations). i.e., if sequence is really alignemd, then
+    permutations should damage score. Keeps strokes_constant constant, while getting all permutations of
+    strokes_perm.
+    - ratio_ver, how to summarize the actual dist vs. shuffle? 
+    --- divide_by_mean,
+    --- prctile, within distriubtion of perm, where does actual fall? 0 to 1.0
+    NOTE:
+    - in general output is distance, so larger is worse.
+    - in general assumes that strokes_constant is beh, strokes_perm is model. Mostly doesnt matter, only for
+    assmetric scores.
+    """
+    from pythonlib.drawmodel.strokedists import distscalarStrokes
+    from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+    from math import factorial
+    print("REPLACE PARTS OPF THIS CODE with scoreAgainstAllPermutations")
+    assert "alignment" not in ver, "this is infinite loop, cant call self."
+
+    def func(x, y):
+        return distscalarStrokes(x, y, ver=ver)
+        
+    # GEt ratio_vs_permutations:
+
+    if factorial(len(strokes_perm))<Nperm:
+        # then also get directions
+        strokes2_list = getStrokePermutationsWrapper(strokes_perm, ver="all_orders_directions", num_max=Nperm)
+    else:
+        strokes2_list = getStrokePermutationsWrapper(strokes_perm, ver="all_orders", num_max=Nperm)
+    # strokes2_list = getStrokePermutationsWrapper(strokes_perm, ver="all_orders_directions", num_max=Nperm)
+    distances_perm = [func(strokes_constant, s2) for s2 in strokes2_list]
+    if ratio_ver=="divide_by_mean":
+        dist = func(strokes_constant, strokes_perm)/np.mean(distances_perm)
+    elif ratio_ver=="prctile":
+        a = func(strokes_constant, strokes_perm)
+        b = np.array(distances_perm)
+        dist = np.sum(a>b)/len(distances_perm)
+    else:
+        print(ratio_ver)
+        assert False
+    
+    return dist
+
+
+
 ########################## SPECIFIC DISTANCE FUNCTIONS
 def distancePos(strokes1, strokes2, ver="hd"):
     """ distance between strokes1 and 2 only based on positions,
@@ -181,8 +237,39 @@ def distancePos(strokes1, strokes2, ver="hd"):
 
     return d
 
+def distanceStroksMustBePaired(strokes_beh, strokes_model, ver, 
+    norm_by_numstrokes=False):
+    """ Wrapper, for ways of scoring when strokes_beh and strokes_model are
+    same length. If they are different, this will return nan.
+    - ver, method for strok-strok dist, this passes into distStrok
+    --- {set of ver in distStrok}
+    --- list [ver1, ver2, ...] then will do each ver, then normalize each ver (dividing by max)
+    then average across vers. THIS will return something like a ratio, [0,1] 
+    [OBSOLETE]
+    RETURNS: 
+    - dist, scalar.
+    NOTE: this is like distanceDTW, but here forces to be paired.
+    NOTE: if len not same, returns nan
+
+    """
+    from pythonlib.tools.distfunctools import distStrok
+
+    if len(strokes_beh)!=len(strokes_model):
+        return np.nan
+
+    if isinstance(ver, str):
+        dist = 0
+        for s1, s2 in zip(strokes_beh, strokes_model):
+            dist+=distStrok(s1, s2, ver=ver, auto_interpolate_if_needed=True)
+    else:
+        assert False
+
+    return dist
+
+
+
 def distanceDTW(strokes_beh, strokes_model, ver="timepoints", 
-    asymmetric=True, norm_by_numstrokes=True, splitnum1 = 5, splitnum2 = 2):
+    asymmetric=True, norm_by_numstrokes=True, splitnum1 = 3, splitnum2 = 2):
     """Get dsitnace between strokes, taking into account temporal information.
     INPUTS:
     - strokes_beh, strokes_model, list of np ararys. if asymmetric==True, then it
@@ -241,8 +328,16 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints",
         # NUM1 = 5 
         # NUM2 = 2 
         distfun = lambda x,y: modHausdorffDistance(x,y, dims=[0,1])
+        # reduce split num based on length of strokes
+        tmp = min([len(s) for s in strokes_beh])
+        splitnum1 = min([tmp, splitnum1])
+        tmp = min([len(s) for s in strokes_model])
+        splitnum2 = min([tmp, splitnum2])
+
         A = splitStrokesOneTime(strokes_beh, num=splitnum1)
         B = splitStrokesOneTime(strokes_model, num=splitnum2)
+        # print([len(a) for a in A])
+        # print([len(a) for a in B])
         output = DTW(A,B,distfun, asymmetric=asymmetric)
         lengths = (len(A), len(B))
     else:
@@ -304,7 +399,152 @@ def distanceDTW(strokes_beh, strokes_model, ver="timepoints",
     #     plt.ylim(bottom=0)
 
 
+######################### BATCH FUNCTIONS
+def scoreAgainstBatch(strokes_beh, strokes_task_list, 
+    distfunc = "COMBO-euclidian-euclidian_diffs", sort=True, 
+    plots=False, confidence_ver=None):
+    """ hold strokes_beh constant, get distnaces against all strokes in strokes_list(task)
+    Useful plotting functions to visualize scores over all task permutations./
+    INPUTS:
+    - strokes_beh, strokes_task, in strokes format (list of list). Generlaly expect these to
+    be for the same task
+    - distfunc, to score stroke_beh againste each permtuation.
+    - sort, sorts in ascending order of distance before returning.
+    - plots, useful stuff.
+    - confidence_ver, then computes confidence, based on method here (str).
+    --- "diff_first_vs_second", the difference between rank0 and rank1 (abs) the larger the better.
+    RETURNS:
+    - None (if error in computing, such as if diff length strokes, but score fun
+    requires same length.)
+    - beh_task_distances, strokes_task_perms
+    - (if confidence_ver) then beh_task_distances, strokes_task_perms, confidence_ver
+    """
+    # Get all permutations (and orders) for task
+    from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+    # from pythonlib.drawmodel.features import computeDistTraveled
+    # from pythonlib.drawmodel.strokedists import distscalarStrokes
 
+    
+
+    # Convert string distfuncs to their functions:
+    if isinstance(distfunc, str):
+        if distfunc == "COMBO-euclidian-euclidian_diffs":
+            def dfunc1(strokes1, strokes2):
+                return distanceStroksMustBePaired(strokes1, strokes2, ver='euclidian') 
+            def dfunc2(strokes1, strokes2):
+                return distanceStroksMustBePaired(strokes1, strokes2, ver='euclidian_diffs')
+            distfunc = [dfunc1, dfunc2]
+        else:
+            print(distfunc)
+            assert False, "not coded"
+
+    # (3) Get all beh-task distances
+    if isinstance(distfunc, list):
+        # Then is multiple, 
+        outs = []
+        for dfn in distfunc:
+            tmp = [dfn(strokes_beh, S) for S in strokes_task_list]
+            if np.isnan(tmp[0]):
+                return None
+            # noramlzie to max
+            tmp = np.array(tmp)
+            tmp = tmp/np.max(tmp)
+            outs.append(tmp)
+
+        # average them
+        beh_task_distances = np.mean(np.r_[outs], axis=0)
+        assert len(beh_task_distances)==len(strokes_task_list)
+        # print(outs)
+        # print(np.c_[outs].shape)
+        # assert False
+    else:
+        beh_task_distances = [distfunc(strokes_beh, S) for S in strokes_task_list]
+        if np.isnan(beh_task_distances[0]):
+            return None
+
+    # Sort 
+    if sort:
+        tmp = [(a, b) for a, b in zip(strokes_task_list, beh_task_distances)]
+        tmp = sorted(tmp, key=lambda x:x[1])
+        strokes_task_list = [t[0] for t in tmp]
+        beh_task_distances = [t[1] for t in tmp]
+
+    if plots:
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        # (1) Plot behavior
+        fig, axes = plt.subplots(1, 1, figsize=(1*3, 1*3))
+        plotDatStrokes(ax=axes, strokes=strokes_beh, clean_ordered=True)
+        axes.set_title(f"behavior")
+
+        # (2) plot all strokes_task, ordered
+        n = len(strokes_task_list)
+        if n>80:
+            print("SKIPPING PLOTTING<M TOO many:", n)
+        else:
+            nc = 6
+            nr = int(np.ceil(n/nc))
+            fig, axes = plt.subplots(nr, nc, figsize=(nc*3, nr*3))
+            for ax, dist, strokest in zip(axes.flatten(), beh_task_distances, strokes_task_list):
+                plotDatStrokes(ax=ax, strokes=strokest, clean_ordered=True)
+                ax.set_title(f"dist: {dist:.2f}")
+
+        # plot histograms
+        fig, axes = plt.subplots(1, 2, figsize=(10,4))
+        ax=axes.flatten()[0]
+        ax.hist(beh_task_distances, 20)
+        ax.set_xlabel("distances")
+
+        ax=axes.flatten()[1]
+        ax.plot(range(len(beh_task_distances)), beh_task_distances, "-ok")
+        ax.axhline(0)
+        ax.set_xlabel("rank")
+        ax.set_ylabel("distnace")
+
+    if confidence_ver == "diff_first_vs_second":
+        assert sort==True, "need to sort first"
+        confidence = np.abs(beh_task_distances[0] - beh_task_distances[1])
+    else:
+        assert confidence_ver is None
+
+    if confidence_ver is not None:
+        return beh_task_distances, strokes_task_list, confidence
+    else:
+        return beh_task_distances, strokes_task_list
+
+def scoreAgainstAllPermutations(strokes_beh, strokes_task, permver="all_orders_directions",
+    distfunc = "COMBO-euclidian-euclidian_diffs", **kwargs):
+    """ hold strokes_beh constant, get distnaces against all permtuations of storkes_task.
+    Useful plotting functions to visualize scores over all task permutations./
+    INPUTS:
+    - strokes_beh, strokes_task, in strokes format (list of list). Generlaly expect these to
+    be for the same task
+    - permver, str, how to permutate strokes_task.
+    - distfunc, to score stroke_beh againste each permtuation.
+    - return_strokes_permuted, then returns the list of permutated strokes (list of lists)
+    - sort, sorts in ascending order of distance before returning.
+    - plots, useful stuff.
+    RETURNS:
+    - beh_task_distances, strokes_task_perms
+
+    """
+    # Get all permutations (and orders) for task
+    from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+    # from pythonlib.drawmodel.features import computeDistTraveled
+    # from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+    # (1) get all permutations of the task strokes
+    assert permver=="all_orders_directions", "have not coded else"
+    assert len(strokes_task)<6, "havent figured out how to deal with long tasks..." 
+    strokes_task_perms = getStrokePermutationsWrapper(strokes_task, ver=permver)
+    # print("got this many perms:len(strokes_task_perms))
+
+    return scoreAgainstBatch(strokes_beh, strokes_task_perms, 
+        distfunc = distfunc, **kwargs)
+
+
+
+######################### OLD
 def distanceBetweenStrokes(strokes_beh, strokes_model, include_timesteps=False,
                           long_output=False):
     """ gets distance bewteen two sequences of strokes. takes into account
@@ -396,3 +636,5 @@ if False:
     plotDictCanvasOverlay(stroke_dict, filedata, "strokes_all_task", strokes_to_plot="all", plotver="strokes")
     plotDictCanvasOverlay(stroke_dict, filedata, "strokes_all", plotver="strokes")
     plotTrialSimple(filedata, trials_list[trial])
+
+
