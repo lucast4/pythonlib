@@ -647,6 +647,112 @@ class Cost:
 #     return res
 
 
+def rank_beh_out_of_all_possible_sequences_quick(strokes_beh, strokes_task_perms, beh_task_distances, 
+    task_inefficiency, plot_rank_distribution=False, efficiency_score_ver="weighted_avg", 
+    confidence_ver="diff_first_vs_second", **kwargs):
+    """ 
+    QUICK VERSION: must pass in precomputed beh_task_distances and task_inefficiency
+    out of all possible way sot sequence the task (orders and directions)
+    how close is beh to the most efficient sequence? 
+    - efficiency_score_ver, how to summarize.
+    RETURNS:
+    - rank, confidence, summaryscore, always
+    --- rank, {0, 1, ... num sequences} where 0 means the task sequence that beh 
+    is most aligned to is also the one that is most efficent
+    - adds num possible seq (return_num_possible_seq)
+    - adds strokeslist (return_chosen_task_strokes)
+    - None, if somehow fails, e.g. if scoring function expects asme length, but it is not.
+    """
+    # Get all permutations (and orders) for task
+    from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+    from pythonlib.drawmodel.features import computeDistTraveled
+    from pythonlib.drawmodel.strokedists import distscalarStrokes, scoreAgainstAllPermutations
+
+
+    # (4) Find the rank (based on effiicencey) of the task sequence closest aligned to behavior.
+    inefficiency_dissimilarity = [[d, b, s] for d, b, s in zip(task_inefficiency, beh_task_distances, strokes_task_perms)]
+    inefficiency_dissimilarity = sorted(inefficiency_dissimilarity, key=lambda x:x[0]) # sort in order of incresae inefficiency
+    beh_task_distances_ranked = [i[1] for i in inefficiency_dissimilarity]
+    inefficiency_ranked = [i[0] for i in inefficiency_dissimilarity]
+    strokes_task_ranked = [i[2] for i in inefficiency_dissimilarity]
+    rank = beh_task_distances_ranked.index(min(beh_task_distances_ranked)) # find the index of the task sequence that is most aligned to beh.
+
+    # Compute confidence
+    if confidence_ver:
+        if confidence_ver =="diff_first_vs_second":
+            confidence = np.abs(beh_task_distances_ranked[1] - beh_task_distances_ranked[0])
+        else:
+            print(confidence_ver)
+            assert False, "not coded"
+    else:
+        confidence = np.nan
+
+
+    # Compute efficiency score
+    if efficiency_score_ver=="weighted_avg":
+        # summary efficnecy score (weighted sum of efficiencey, weighted by 1-distance)
+        # <1 good, 1 =ranodm, >1 worse than random.
+        # "proibability", based on beh_task_dist
+        a = 1/np.array(beh_task_distances_ranked)
+        a = a/np.sum(a) # must be prob, to get weighted sum
+
+        # weighted sum of inefficiencey
+        b = np.array(inefficiency_ranked)
+        summaryscore = np.dot(a, b)
+
+        # normalize to average inefficiencey
+        summaryscore = summaryscore/np.mean(inefficiency_ranked) # noramlize to the mean over all efficiencies
+    else:
+        print(efficiency_score_ver)
+        assert False, "not coded"
+
+
+    if plot_rank_distribution:
+        x = range(len(inefficiency_dissimilarity))
+
+        import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(1,2, figsize=(10, 3))
+
+        ax=axes.flatten()[0]
+        ax.plot(x, inefficiency_ranked, "-ok", label="ineffiiency")
+        ax1=ax.twinx()
+        ax1.plot(x, beh_task_distances_ranked, "-xr", label="beh_task_distance")
+        ax1.axhline(0)
+        # plt.ylabel("inefficiency")
+        plt.xlabel("sroted by inefficnecy")
+        ax.legend()
+        ax1.legend()
+
+        # OTher way around, sort by beh task distance.
+        tmp = sorted(inefficiency_dissimilarity, key=lambda x:x[1]) # 
+        inefficiency_this = [i[0] for i in tmp]
+        beh_task_distances_sorted = [i[1] for i in tmp]
+
+        ax=axes.flatten()[1]
+        ax.plot(x, inefficiency_this, "-ok", label="ineffiiency")
+        ax1=ax.twinx()
+        ax1.plot(x, beh_task_distances_sorted, "-xr", label="beh_task_distance")
+        ax1.axhline(0)
+        # plt.ylabel("inefficiency")
+        plt.xlabel("sroted by beh task dist")
+        ax.legend()
+        ax1.legend()
+
+        plt.title(f"sumscore {summaryscore:.3f}")
+
+
+    if False:
+        # plot
+        plt.figure()
+        x = [i[0] for i in inefficiency_dissimilarity]
+        y = [i[1] for i in inefficiency_dissimilarity]
+        plt.plot(x,y, "ok")
+        plt.xlabel("inefficiency")
+        plt.ylabel("beh_task_dist")
+
+    return rank, confidence, summaryscore, strokes_task_ranked[rank]
+
+
 def rank_beh_out_of_all_possible_sequences(strokes_beh, strokes_task, return_num_possible_seq=False,
     return_chosen_task_strokes=False, plot_rank_distribution=False, efficiency_score_ver="weighted_avg", 
     confidence_ver="diff_first_vs_second", **kwargs):
@@ -681,6 +787,7 @@ def rank_beh_out_of_all_possible_sequences(strokes_beh, strokes_task, return_num
     if False:
         plt.figure()
         plt.hist(distances, 20)
+
 
     # # (3) Find the one that beh is best aligned to
     # beh_task_distances = [distscalarStrokes(strokes_beh, S, ver="dtw_split_segments", splitnum1=2) 

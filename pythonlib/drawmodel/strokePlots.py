@@ -152,7 +152,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     elif clean_ordered_ordinal:
         assert clean_unordered==False, "can only choose one of these 2 options"
         each_stroke_separate= True
-        plotver = "order"
+        plotver = "order_gradient"
 
     if strokenums_to_plot is not None:
         each_stroke_separate=True
@@ -225,6 +225,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         elif plotver=="raw":
             # keep as is, so that color reflects time.
             pass
+        elif plotver=="order_gradient":
+            assert each_stroke_separate==True, "will get color down there"
         else:
             print(plotver)
             print(type(plotver))
@@ -242,9 +244,9 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         # markersize = (3/5)*markersize
         # color scheme must be different for each stroke.
         if isinstance(plotver, str):
-            if plotver in ["strokes"]:
+            if plotver in ["strokes", "strokes_order", "order"]:
                 color_order, pcol = getStrokeColors(strokes2, CMAP)
-            elif plotver in ["strokes_order", "order"]:
+            elif plotver in ["order_gradient"]:
                 color_order, pcol = getStrokeColorsGradient(strokes2)
             elif plotver in ["onecolor", "randcolor"]:
                 color_order = [pcol[0] for _ in range(len(strokes2))]

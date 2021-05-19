@@ -9,6 +9,15 @@ def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
     Dataset"""
 
+    grouping_levels = ["short", "long"]
+    vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
+        "dist_raise2firsttouch", "sdur", "isi", 
+        "time_touchdone", "dist_touchdone", "dist_strokes", 
+        "dist_gaps", "sdur_std", "gdur_std", "hdoffline", "alignment"]
+
+    feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
+                   "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
+
     ### FILTER BLOCKS
     if expt == "neuralprep2":
         F = {
@@ -37,6 +46,24 @@ def _groupingParams(D, expt):
         }
         grouping = "plan_time_cat"
         plantime_cats = {150.: "short", 1000.: "long"}
+    elif expt in ["plan3"]:
+        F = {
+            "block":[11],
+            "plan_time":[0., 1200.]
+        }
+        grouping = "plan_time_cat"
+        plantime_cats = {0.: "short", 1200.: "long"}
+        feature_names = [f for f in feature_names if f not in 
+        ["time_touchdone", "dist_touchdone", "offset_speed"]]
+    elif expt in ["plan4"]:
+        F = {
+            "block":[11],
+            "plan_time":[0., 1000.]
+        }
+        grouping = "plan_time_cat"
+        plantime_cats = {0.: "short", 1000.: "long"}
+        feature_names = [f for f in feature_names if f not in 
+            ["time_touchdone", "dist_touchdone", "offset_speed"]]
     else:
         assert False
     D = D.filterPandas(F, return_ver="dataset")
@@ -45,15 +72,6 @@ def _groupingParams(D, expt):
     F = lambda x: plantime_cats[x["plan_time"]]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
-    grouping_levels = ["short", "long"]
-
-    vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
-        "dist_raise2firsttouch", "sdur", "isi", 
-        "time_touchdone", "dist_touchdone", "dist_strokes", 
-        "dist_gaps", "sdur_std", "gdur_std", "hdoffline", "alignment"]
-
-    feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
-                   "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
 
 
     return D, grouping, grouping_levels, feature_names
@@ -117,8 +135,11 @@ def preprocessDat(D, expt):
     D.Dat["onset_speed"] = D.Dat["dist_raise2firsttouch"]/D.Dat["time_raise2firsttouch"]
     D.Dat["offset_speed"] = D.Dat["dist_touchdone"]/D.Dat["time_touchdone"]
 
-    D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"] + D.Dat["dist_raise2firsttouch"] + D.Dat["dist_touchdone"]
-    D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"] + D.Dat["time_raise2firsttouch"] + D.Dat["time_touchdone"]
+    # D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"] + D.Dat["dist_raise2firsttouch"] + D.Dat["dist_touchdone"]
+    # D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"] + D.Dat["time_raise2firsttouch"] + D.Dat["time_touchdone"]
+    # D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
+    D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"]
+    D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"]
     D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
 
     D.Dat["dist_per_gap"] = D.Dat["dist_gaps"]/(D.Dat["nstrokes"]-1)
@@ -184,6 +205,48 @@ def preprocessDat(D, expt):
 
 
 
+def sequence_get_rank_vs_task_permutations(D):
+    from pythonlib.drawmodel.efficiencycost import rank_beh_out_of_all_possible_sequences
+    """ For each behavhora trial, align its sequence vs. task, then compute the rank
+    of the saeuqnece based on efficiency cost. can only compute rank if have same lenth
+    otherwise will return nan.
+    RETURNS:
+    - D.Dat modified to have 5 new columns. see code.
+    """
+    def F(x):
+        sb = x["strokes_beh"]
+        st = x["strokes_task"]
+        if len(sb)!=len(st):
+            return np.nan
+        out = rank_beh_out_of_all_possible_sequences(sb, st, return_chosen_task_strokes=False,
+                                                    plot_rank_distribution=False, 
+                                                    return_num_possible_seq=True)
+    #     rank, confidence, summaryscore, numseq = out
+        return out
+    #     return rank_beh_out_of_all_possible_sequences(x["strokes_beh"], x["strokes_task"])
+
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "rankeffic")
+
+    # Expand out efficiency scores
+    def F(x, ind):
+        if np.all(np.isnan(x["rankeffic"])):
+            return np.nan
+        return x["rankeffic"][ind]
+
+    # for ind in range(4):
+    #     D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,ind), "effic_rank")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,0), "effic_rank")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,1), "effic_confid")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,2), "effic_summary")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,3), "effic_nperms")
+    del D.Dat["rankeffic"]
+
+    def F(x):
+        if np.isnan(x["effic_rank"]):
+            return False
+        else:
+            return True
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "has_effic_rank")
 
 def get_task_pairwise_metrics(D, grouping, func):
     """ groups data bsed on tasks, then runs thru all pairs of trials (same task) and computs
@@ -347,3 +410,5 @@ def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list):
             print(x)
             assert False
     D.Dat = applyFunctionToAllRows(D.Dat, F, "alignment")
+
+

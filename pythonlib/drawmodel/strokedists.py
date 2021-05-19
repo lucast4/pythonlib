@@ -445,7 +445,8 @@ def scoreAgainstBatch(strokes_beh, strokes_task_list,
         for dfn in distfunc:
             tmp = [dfn(strokes_beh, S) for S in strokes_task_list]
             if np.isnan(tmp[0]):
-                return None
+                # this usually mean num strokes doint match and requird to do so.
+                return [np.nan for _ in range(len(strokes_task_list))], strokes_task_list
             # noramlzie to max
             tmp = np.array(tmp)
             tmp = tmp/np.max(tmp)
@@ -506,6 +507,9 @@ def scoreAgainstBatch(strokes_beh, strokes_task_list,
         confidence = np.abs(beh_task_distances[0] - beh_task_distances[1])
     else:
         assert confidence_ver is None
+
+    # print("HERE")
+    # print(len(beh_task_distances), len(strokes_task_list))
 
     if confidence_ver is not None:
         return beh_task_distances, strokes_task_list, confidence

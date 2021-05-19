@@ -94,7 +94,8 @@ class Dataset(object):
         Dnew = Dataset([])
 
         Dnew.Dat = self.Dat.copy()
-        Dnew.Metadats = copy.deepcopy(self.Metadats)
+        if hasattr(self, "Metadats"):
+            Dnew.Metadats = copy.deepcopy(self.Metadats)
 
         if hasattr(self, "BPL"):
             Dnew.BPL = copy.deepcopy(self.BPL)
@@ -2013,6 +2014,192 @@ class Dataset(object):
                     })
         return out
 
+
+
+    ################ PLANNER MODEL, like a simpler version of BPL
+    def _get_planner_sdir(self):
+        assert len(self.Metadats)==1, "only run this if one dataset"
+        return f"{self.Metadats[0]['path']}/planner_model"
+
+    def planner_extract_save_all_parses(self, permver = "all_orders_directions",
+        num_max=1000):
+        """ extract and save all permtuations for each task, using the input ver. 
+        will save separately depending on ver (and run)
+        """
+        assert len(self.Metadats)==1, "only run this if one dataset"
+
+        from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+        from pythonlib.tools.expttools import makeTimeStamp
+        sdir = f"{self._get_planner_sdir()}/parses/{permver}-{makeTimeStamp()}"
+        os.makedirs(sdir, exist_ok=True)
+        print("Saving parses to : ", sdir) 
+
+        for row in self.Dat.iterrows():
+            trialcode = row[1]["trialcode"]
+            strokes_task = row[1]["strokes_task"]
+
+            strokes_task_perms = getStrokePermutationsWrapper(strokes_task, ver=permver, 
+                num_max=num_max)
+
+            # save
+            path = f"{sdir}/trialcode_{trialcode}.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(strokes_task_perms, f)
+
+    def planner_load_presaved_parses(self, permver = "all_orders_directions",
+        assume_only_one_parseset=True):
+        """ Extract for each trial, parses, permtuations of task, pre-extracted using 
+        planner_extract_save_all_parses
+        INPUTS:
+        - assume_only_one_parseset, then fails if finds >1 presaved ste.
+        NOTES:
+        - will fail unless can find one and only one for each trial in self
+        """
+        pathbase = f"{self._get_planner_sdir()}/parses"
+        pathlist = findPath(pathbase, [[permver]], return_without_fname=True)
+        if assume_only_one_parseset and len(pathlist)>1:
+            assert False, "found >1 set, need to mnaually prune"
+        pathdir = pathlist[0]
+
+        def _findrow(x):
+            paththis = f"{pathdir}/trialcode_{x['trialcode']}.pkl"
+            with open(paththis, "rb") as f:
+                tmp = pickle.load(f)
+            return tmp
+
+        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parses_planner")
+
+        return pathdir
+
+    def planner_score_beh_against_all_parses(self, permver = "all_orders_directions",
+        distfunc = "COMBO-euclidian-euclidian_diffs",
+        confidence_ver = None):
+        """ for each trial the beh is scored against all parses
+        parses must have been presaved (indexed by permver)
+        Here, saves these scores.
+        INPUTS:
+        - distfunc, passes into scoreAgainstBatch, could be string or func
+        - confidence_ver, passes into scoreAgainstBatch (leave conf ver as none since easy to compute, and currently requires sorting.)
+
+        """
+        from pythonlib.tools.expttools import makeTimeStamp, writeDictToYaml
+        from pythonlib.drawmodel.strokedists import scoreAgainstBatch
+
+        pathdir = self.planner_load_presaved_parses(permver=permver)
+
+        sdir = f"{pathdir}/beh_parse_distances"
+        os.makedirs(sdir, exist_ok=True)
+        print("Saving distances to : ", sdir) 
+
+        # save params
+        params = {
+        "permver":permver,
+        "distfunc":distfunc,
+        "confidence_ver":confidence_ver,
+        }
+        writeDictToYaml(params, f"{sdir}/params.yaml")
+
+        for i, row in enumerate(self.Dat.iterrows()):
+            trialcode = row[1]["trialcode"]
+            strokes_beh = row[1]["strokes_beh"]
+            # strokes_task = row[1]["strokes_task"]
+            strokes_task_perms = row[1]["parses_planner"]
+
+            print(len(strokes_beh))
+            print(len(strokes_task_perms))
+            print(len(strokes_task_perms[0]))
+
+            distances_unsorted = scoreAgainstBatch(strokes_beh, strokes_task_perms, 
+                    distfunc = distfunc, confidence_ver=confidence_ver, sort=False)[0]
+            # leave conf ver as none since easy to compute, and currently requires sorting.
+            # leave sort False, so that distances are always corresponding to presaved parses.
+
+            # save
+            path = f"{sdir}/trialcode_{trialcode}.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(distances_unsorted, f)
+
+            if i%200==0:
+                print(i)
+
+    def planner_score_parses(self, permver = "all_orders_directions",
+        scorever="dist_traveled"):
+        """ scores parses , eg by efficiency
+        INPUTS
+        - permver, is to index, to extract the correct parses.
+        """
+        from pythonlib.tools.expttools import makeTimeStamp, writeDictToYaml
+        from pythonlib.drawmodel.strokedists import scoreAgainstBatch
+
+        pathdir = self.planner_load_presaved_parses(permver=permver)
+
+        sdir = f"{pathdir}/parse_scores"
+        os.makedirs(sdir, exist_ok=True)
+        print("Saving parse scores to : ", sdir) 
+
+        # save params
+        params = {
+        "scorever":scorever,
+        }
+        writeDictToYaml(params, f"{sdir}/params.yaml")
+
+        # get function, given scorever
+        if isinstance(scorever, str):
+            if scorever=="dist_traveled":
+                from pythonlib.drawmodel.features import computeDistTraveled
+                scorefun = lambda strokes: computeDistTraveled(strokes, include_origin_to_first_stroke=False, 
+                                include_transition_to_done=False)
+            else:
+                print(scorever)
+                assert False, "not coded"
+        else:
+            # asusme is a function
+            scorefun = scorever
+
+        # compute
+        for i, row in enumerate(self.Dat.iterrows()):
+            trialcode = row[1]["trialcode"]
+            strokes_task_perms = row[1]["parses_planner"]
+            distances_unsorted = [scorefun(strokes) for strokes in strokes_task_perms]
+
+            # save
+            path = f"{sdir}/trialcode_{trialcode}.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(distances_unsorted, f)
+
+            if i%200==0:
+                print(i)
+
+    def planner_load_everything(self, permver = "all_orders_directions"):
+        """ Loads (1) parses; (2) beh-parse distances; (3) parses scores
+        """
+
+        # Load parses
+        pathdir = self.planner_load_presaved_parses(permver=permver)
+        print("Loaded parses to column: parses_planner")
+
+        # Load beh task scores
+        sdir = f"{pathdir}/beh_parse_distances"
+        def _findrow(x):
+            paththis = f"{sdir}/trialcode_{x['trialcode']}.pkl"
+            with open(paththis, "rb") as f:
+                tmp = pickle.load(f)
+            return tmp
+        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parses_planner_behtaskdist")
+        print("Loaded beh-task dsitrances to column: parses_planner_behtaskdist")
+
+        # Load task scores
+        sdir = f"{pathdir}/parse_scores"
+        def _findrow(x):
+            paththis = f"{sdir}/trialcode_{x['trialcode']}.pkl"
+            with open(paththis, "rb") as f:
+                tmp = pickle.load(f)
+            return tmp
+        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parses_planner_taskscore")
+        print("Loaded parse scores to col: parses_planner_taskscore")
+
+
+
     ################ PARSES
     # Working with parses, which are pre-extracted and saved int he same directocry as datasets.
     # See ..drawmodel.parsing
@@ -2699,6 +2886,8 @@ def concatDatasets(Dlist):
     Dnew.Dat = pd.concat(dflist)
 
     del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+
+    Dnew.Dat = Dnew.Dat.reset_index(drop=True)
 
     print("Done!, new len of dataset", len(Dnew.Dat))
     # Dnew.Metadats = copy.deepcopy(self.Metadats)

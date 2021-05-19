@@ -493,7 +493,8 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
 
 def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
                           INDEX= ["character", "animal", "expt"], 
-                          func = lambda x: np.nanmean(x), return_dfpivot=False
+                          func = lambda x: np.nanmean(x), return_dfpivot=False, 
+                          do_normalize=False, normalize_grouping = ["animal", "expt"]
                          ):
     """ High level summary, for each task, get its difference (for eg)
     across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
@@ -503,6 +504,10 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
     - FEATURE_NAMES, will only keep these features (columns)
     - INDEX, how to split up into unique columns, based on unique indices.
     - func, how to aggregate across multipel rows.
+    - do_normalize, if True, then dfsummaryflat will have normalized values.
+    i.e., for each (animal, expt, variable), take frac change relative to GROUPING_LEVEL[0]
+    i.e., (a-b)/abs(b), where b is after averaging over all tasks. Will put this in a new column
+    caleed "value_norm"
     OUTPUT:
     - dfsummary, new dataframe, with rows = unique combos of index, and columns line:
     ("total_time") [see eg below]
@@ -525,6 +530,7 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
     COLNAMES_DICT = []
     COLNAMES_NOABS = []
     COLNAMES_ABS = []
+    COLNAMES_DIFF = []
 
     # 2) all other features, take difference
     for val2 in FEATURE_NAMES:
@@ -536,6 +542,7 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
         else:
             colname = f"{val2}-{GROUPING_LEVELS[1]}min{GROUPING_LEVELS[0]}"
             colvals = dfpivot[val2][GROUPING_LEVELS[1]] - dfpivot[val2][GROUPING_LEVELS[0]]
+            COLNAMES_DIFF.append(colname)
 
         out[colname] = colvals
 
@@ -556,11 +563,35 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
     dfsummaryflat = pd.melt(dfsummary, id_vars = INDEX)
     predicted_len = (len(dfsummary.columns)-len(INDEX)) * len(dfsummary)
     assert len(dfsummaryflat)==predicted_len
+
+    # === Noramlize?
+    if do_normalize:
+        # Normalization, collect denominators (for percent change, signed)
+        denom_level = GROUPING_LEVELS[0]
+        normalization_denoms = {}
+        for g in dfpivot.groupby(normalize_grouping):
+            for var in FEATURE_NAMES:
+                x = np.nanmean(g[1][var][denom_level])
+                normalization_denoms[g[0] + tuple([var])] = x
+
+        # extract "original" variabl ename
+        def F(x):
+            return x["variable"][:x["variable"].find("-")]
+        dfsummaryflat = applyFunctionToAllRows(dfsummaryflat, F, "variable_origname")
+
+        # compute normalization
+        def F(x):
+            idx = (x["animal"], x["expt"], x["variable_origname"])
+            denom = normalization_denoms[idx]
+            xnorm = x["value"]/np.abs(denom) # take abs to retain sign
+            return xnorm
+        dfsummaryflat = applyFunctionToAllRows(dfsummaryflat, F, "value_norm")
+
     
     if return_dfpivot:
-        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, dfpivot
+        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF, dfpivot
     else:
-        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS
+        return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF
 
 
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
