@@ -140,3 +140,31 @@ def counts_to_pdist(counts_dict, cats_in_order, dtype=torch.float32,
     
     return pdist
 
+
+def rankinarray1_of_minofarray2(array1, array2):
+    """ for the index of min in array2, what is the rank of the
+    correspodning value in array1? e.g., if
+    array1 = [1,40,8,32,32] and array2 = [3,2,4,5,1], then first say
+    index of min array 2 is 4, then looks in array1[4]. 32 is the 3rd 
+    rank (this accounts for ties by taking the best rank), so the output 
+    is 3.
+    RETURNS:
+    - rank, item1, item2, idx, where items are the original values in arrays 1 and 2.
+    and idx is the index.
+    NOTES:
+    - e.g., useful is array2 is beh-task distance, and array1 is some measure of
+    the task efficeincey(score), for scoring how efficient behvior was.
+    - 0-indexed, so best rank is 0.
+
+    """    
+    import scipy.stats as ss
+    
+    # convert array1 to ranks
+    array1_ranks = ss.rankdata(array1, method="min") # e..g, [12 13 2 2] --> [3 4 1 1]
+    array1_ranks = array1_ranks-1 # since is 1-indexed
+
+    # find the rank of min array2
+    idx = array2.index(min(array2)) # find the index of the task sequence that is most aligned to beh.
+
+    return array1_ranks[idx], array1[idx], array2[idx], idx
+

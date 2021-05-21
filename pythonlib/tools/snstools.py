@@ -77,3 +77,16 @@ def pairplot_corrcoeff(data, x_vars=None, y_vars = None, hue=None, vars=None, as
     # g.map_lower(sns.kdeplot, cmap="Blues_d")
     g.map(corrfunc)
     return g
+
+def map_function_tofacet(fig, func):
+    """
+    fig is a facetgrid plot, e.g., catplot
+    func(ax), does stuff with ax,applies to each facet
+    """
+
+    def F(*pargs, **kws):
+        ax = plt.gca()
+        func(ax)
+        # ax.axhline(0, alpha=0.2, **kws)
+
+    fig.map(F)

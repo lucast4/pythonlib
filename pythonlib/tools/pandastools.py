@@ -489,6 +489,19 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     return dftmp
 
 
+def summarize_feature(df, GROUPING, FEATURE_NAMES,
+                          INDEX= ["character", "animal", "expt"], 
+                          func = lambda x: np.nanmean(x)):
+    """ aggregating and summarizing features
+    See summarize_featurediff for variables.
+    """
+    if not isinstance(GROUPING, list):
+        GROUPING = [GROUPING]
+    dfagg = aggregGeneral(df, GROUPING + INDEX, FEATURE_NAMES, aggmethod=[func])
+    dfaggflat = pd.melt(dfagg, id_vars = GROUPING + INDEX)
+    return dfagg, dfaggflat
+
+
 
 
 def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,

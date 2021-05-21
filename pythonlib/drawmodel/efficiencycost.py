@@ -9,9 +9,9 @@ object, which will have this efficiencycost as a sub object
 
 # from preprocess import loadPreprocessedData, getFlatData
 # import pickle
-# import pandas as pd
-# import matplotlib.pyplot as plt
-# import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import numpy as np
 # from itertools import permutations
@@ -23,6 +23,7 @@ from scipy.special import logsumexp
 # from pythonlib.tools.listtools import permuteRand
 # from pythonlib.tools.dicttools import printOverviewKeyValues, filterSummary
 # from pythonlib.tools.snstools import addLabel
+
 
 class Cost:
     def __init__(
@@ -649,7 +650,7 @@ class Cost:
 
 def rank_beh_out_of_all_possible_sequences_quick(strokes_beh, strokes_task_perms, beh_task_distances, 
     task_inefficiency, plot_rank_distribution=False, efficiency_score_ver="weighted_avg", 
-    confidence_ver="diff_first_vs_second", **kwargs):
+    confidence_ver="diff_relative_all", plot_strokes=False, plot_n_strokes=4, **kwargs):
     """ 
     QUICK VERSION: must pass in precomputed beh_task_distances and task_inefficiency
     out of all possible way sot sequence the task (orders and directions)
@@ -667,20 +668,39 @@ def rank_beh_out_of_all_possible_sequences_quick(strokes_beh, strokes_task_perms
     from pythonlib.tools.stroketools import getStrokePermutationsWrapper
     from pythonlib.drawmodel.features import computeDistTraveled
     from pythonlib.drawmodel.strokedists import distscalarStrokes, scoreAgainstAllPermutations
+    import scipy.stats as ss
+
+    if np.any(np.isnan(beh_task_distances)):
+        return None
+    if np.any(np.isnan(task_inefficiency)):
+        return None
 
 
     # (4) Find the rank (based on effiicencey) of the task sequence closest aligned to behavior.
     inefficiency_dissimilarity = [[d, b, s] for d, b, s in zip(task_inefficiency, beh_task_distances, strokes_task_perms)]
     inefficiency_dissimilarity = sorted(inefficiency_dissimilarity, key=lambda x:x[0]) # sort in order of incresae inefficiency
-    beh_task_distances_ranked = [i[1] for i in inefficiency_dissimilarity]
     inefficiency_ranked = [i[0] for i in inefficiency_dissimilarity]
+    beh_task_distances_ranked = [i[1] for i in inefficiency_dissimilarity]
     strokes_task_ranked = [i[2] for i in inefficiency_dissimilarity]
-    rank = beh_task_distances_ranked.index(min(beh_task_distances_ranked)) # find the index of the task sequence that is most aligned to beh.
+    
+    # rank_list = ss.rankdata(beh_task_distances_ranked, method="min")
+    # rank = beh_task_distances_ranked.index(min(beh_task_distances_ranked)) # find the index of the task sequence that is most aligned to beh.
+
+    from pythonlib.tools.listtools import rankinarray1_of_minofarray2
+    rank, inefficiency_picked, beh_task_distance_picked, strokes_task_picked = \
+        rankinarray1_of_minofarray2(inefficiency_ranked, beh_task_distances_ranked)[:4]
 
     # Compute confidence
     if confidence_ver:
         if confidence_ver =="diff_first_vs_second":
-            confidence = np.abs(beh_task_distances_ranked[1] - beh_task_distances_ranked[0])
+            tmp = sorted(beh_task_distances_ranked)
+            confidence = np.abs(tmp[1] - tmp[0])
+        elif confidence_ver =="diff_relative_all":
+            # like diff_first_vs_second, but normalize to the diffs for all others.
+            tmp = sorted(beh_task_distances_ranked)
+            numer = np.abs(tmp[1] - tmp[0])
+            denom = np.mean(np.abs(np.diff(tmp[1:])))
+            confidence = numer -denom
         else:
             print(confidence_ver)
             assert False, "not coded"
@@ -706,11 +726,59 @@ def rank_beh_out_of_all_possible_sequences_quick(strokes_beh, strokes_task_perms
         print(efficiency_score_ver)
         assert False, "not coded"
 
+    if plot_strokes:
+
+        # First rerank based on sim to beh
+        # inefficiency_dissimilarity = [[d, b, s] for d, b, s in zip(task_inefficiency, beh_task_distances, strokes_task_perms)]
+        inefficiency_dissimilarity_2 = sorted(inefficiency_dissimilarity, key=lambda x:x[1]) # sort in order of incresae inefficiency
+        beh_task_distances_ranked_2 = [i[1] for i in inefficiency_dissimilarity_2]
+        inefficiency_ranked_2 = [i[0] for i in inefficiency_dissimilarity_2]
+        strokes_task_ranked_2 = [i[2] for i in inefficiency_dissimilarity_2]
+
+        # Plot the picked strokes
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        fig, axes = plt.subplots(1, 2, figsize=(2*2, 2))
+
+        ax = axes[0]
+        plotDatStrokes(strokes_beh, ax=ax, clean_ordered=True)
+        ax.set_title("behavior")
+
+        ax = axes[1]
+        plotDatStrokes(strokes_task_picked, ax=ax, clean_ordered=True)
+        ax.set_title(f"task, bestmatch (rank:{rank})")
+
+        if isinstance(plot_n_strokes, str):
+            assert plot_n_strokes=="all"
+            ntaskplot = len(strokes_task_perms)
+        else:
+            ntaskplot = plot_n_strokes
+
+        ncols = 6
+        nrows = int(np.ceil((ntaskplot+1)/ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*2, nrows*2))
+
+        # Beh
+        ax = axes.flatten()[0]
+        plotDatStrokes(strokes_beh, ax=ax, clean_ordered=True)
+        ax.set_title("behavior")
+
+        # all tasks
+        for i in range(1, ntaskplot+1):
+            ax = axes.flatten()[i]
+            st = strokes_task_ranked_2[i-1]
+            beh_task_dist = beh_task_distances_ranked_2[i-1]
+            task_score = inefficiency_ranked_2[i-1]
+            plotDatStrokes(st, ax=ax, clean_ordered=True)
+            ax.set_title(f"b-t dist: {beh_task_dist:.2f}")
+            ax.set_xlabel(f"t score: {task_score:.2f}")
+            ax.set_ylabel(f"t score: {task_score:.2f}")
+
+
 
     if plot_rank_distribution:
         x = range(len(inefficiency_dissimilarity))
 
-        import matplotlib.pyplot as plt
         fig, axes = plt.subplots(1,2, figsize=(10, 3))
 
         ax=axes.flatten()[0]
@@ -750,7 +818,7 @@ def rank_beh_out_of_all_possible_sequences_quick(strokes_beh, strokes_task_perms
         plt.xlabel("inefficiency")
         plt.ylabel("beh_task_dist")
 
-    return rank, confidence, summaryscore, strokes_task_ranked[rank]
+    return rank, confidence, summaryscore, strokes_task_picked, inefficiency_picked, beh_task_distance_picked
 
 
 def rank_beh_out_of_all_possible_sequences(strokes_beh, strokes_task, return_num_possible_seq=False,

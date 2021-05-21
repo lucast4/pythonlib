@@ -109,10 +109,49 @@ def checkIfDirExistsAndHasFiles(dirname):
 
     return (exists, hasfiles)
 
+def fileparts(path):
+    """ breaks down path into dir, path, ext. always works regaridless of whether give 
+    relative or fullpath.
+    NOTES:
+    - if path is full, then pathdir will be string.
+    - if path is rel, then pathdir is empyt string.
+    - if path is full, but only one level (e/g. path = /tmp.ext), pathdir is "/"
+    - Will alkways be able to reconstruct path as pathdir + pathname + ext
+    """
+    # f = "/210517_152802_plan3_Red_1.pkl"
+    import os
+    pathdir, pathend = os.path.split(path)
+    pathname, ext = os.path.splitext(pathend)
+    if len(pathdir)>0 and pathdir!="/":
+        pathdir+="/" # to allow reconstruction as pathdir + pathname + ext
+   
+    return pathdir, pathname, ext
+
     
+def modPathFname(path, prefix=None, suffix=None):
+    """ moves file in path, to nbew filename either
+    {prefix}-{path} or {path, without ext}-{suffix}-{ext}
+    NOTES:
+    - ok to entire full path, this code will pick out the lowest level filename.
+
+    """
+    from pathlib import Path
+    pathdir,pathname, ext = fileparts(path)
+
+    if prefix:
+        pathname = prefix + "-" + pathname
+    if suffix:
+        pathname = pathname + "-" + suffix
+    pathout = pathdir + pathname + ext
+
+    Path(path).rename(pathout)
+    print("Renamed path1 to path2:")
+    print(path)
+    print(pathout)
+
 
 def findPath(path_base, path_hierarchy, path_fname="", ext="",
-    return_without_fname=False):
+    return_without_fname=False, sort_by="name", path_hierarchy_wildcard_on_ends=True):
     """ get list of data, searches thru paths.
     INPUT:
     - path_base, str, static, common across all possible
@@ -120,9 +159,13 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     - path_hierarchy, list, where each element is another list,
     where each element in that list is a string, each of which
     will be separated by wildcards to find paths. 
+    - path_fname, {str, None} make this None if want to have the last level of path_hierarchy
+    be the filename.
     - ext, extensions for files. leave empty to not care.
     - return_without_fname, then returns path name but splt off from the
     final file name. (i..e, jsut gets the dir)s
+    - sort_by, if "name", then alphabetically. otherwise {"size", "date"}. always incresaing order.
+    - path_hierarchy_wildcard_on_ends, if true, allows /*[]*[]*/... otherwise does /[]*[]/
     NOTES:
     The order
     matter. e..g,: 
@@ -159,11 +202,19 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     path = path_base
     
     for p in path_hierarchy:
-        path += "/*"
+        if path_hierarchy_wildcard_on_ends:
+            path += "/*"
+        else:
+            path += "/"
         for pp in p:
             path += f"{pp}*"
+        if not path_hierarchy_wildcard_on_ends:
+            path = path[:-1] # remove the last wildcard
     
-    path += "/*" + path_fname + "*" + ext
+    if path_fname is None:
+        path += "*" + ext
+    else:
+        path += "/*" + path_fname + "*" + ext
     
     print("Searching using this string:")
     print(path)
@@ -179,7 +230,25 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
         pathlist = [os.path.split(p)[0] for p in pathlist]
         pathlist = list(set(pathlist))
 
-    pathlist = sorted(pathlist)
+    if sort_by == "name":
+        pathlist = sorted(pathlist)
+    elif sort_by == "size":
+        import os
+        fsizes = [os.path.getsize(f) for f in pathlist]
+
+        tmp = [(s, p) for s, p in zip(fsizes, pathlist)]
+        tmp = sorted(tmp, key=lambda x:x[0])
+        pathlist = [t[1] for t in tmp]
+    elif sort_by == "date":
+        import os
+        fsizes = [os.path.getmtime(f) for f in pathlist]
+        tmp = [(s, p) for s, p in zip(fsizes, pathlist)]
+        tmp = sorted(tmp, key=lambda x:x[0])
+        pathlist = [t[1] for t in tmp]
+    else:
+        print(sort_by)
+        assert False, "not coded"
+
     _summarize(pathlist)
 
     return pathlist

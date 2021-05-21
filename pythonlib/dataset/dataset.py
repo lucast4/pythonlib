@@ -11,6 +11,8 @@ from pythonlib.tools.expttools import makeTimeStamp, findPath
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
     """
+    tmp =  np.unique(np.diff(df.index))
+    assert len(tmp)==1
     assert np.unique(np.diff(df.index)) ==1 
 
 class Dataset(object):
@@ -73,85 +75,6 @@ class Dataset(object):
             self.Dat = pd.DataFrame({
                 "strokes_beh":strokes_list,
                 "Task":task_list})
-
-
-    def sliceDataset(self, inds):
-        """ given inds, slices self.Dat.
-        inds are same as row num, will ensure so
-        RETURNS:
-        - self.Dat, modified, index reset
-        """
-        assert False, "not coded, didnt think necesayr"
-
-    def copy(self):
-        """ returns a copy. does this by extracting 
-        data
-        NOTE: copies over all metadat, regardless of whether all
-        metadats are used.
-        """
-        import copy
-
-        Dnew = Dataset([])
-
-        Dnew.Dat = self.Dat.copy()
-        if hasattr(self, "Metadats"):
-            Dnew.Metadats = copy.deepcopy(self.Metadats)
-
-        if hasattr(self, "BPL"):
-            Dnew.BPL = copy.deepcopy(self.BPL)
-        if hasattr(self, "SF"):
-            Dnew.SF = self.SF.copy()
-        if hasattr(self, "Parses"):
-            Dnew.Parses = copy.deepcopy(self.Parses)
-
-        return Dnew
-
-    def is_finalized(self):
-        """ Was metadata flagged as finalized by me? Returns True or False
-        - If there are multiple datasets loaded simultanesuoy, returns True
-        only if all are finalized
-        """
-        outs = []
-        for k, v in self.Metadats.items():
-            if "metadat_probedat" not in v.keys():
-                outs.append(False)
-            else:
-                outs.append(v["metadat_probedat"]["finalized"])
-        return all(outs)
-
-
-
-    def filterPandas(self, filtdict, return_ver = "indices"):
-        """
-        RETURNS:
-        - if return_ver is:
-        --- "indices", then returns inds.(self.Dat not modifed,) 
-        --- "modify", then modifies self.Dat, and returns Non
-        --- "dataframe", then returns new dataframe, doesnt modify self.Dat
-        --- "dataset", then copies and returns new dataset, without affecitng sefl.
-        """
-        from pythonlib.tools.pandastools import filterPandas
-        # traintest = ["test"]
-        # random_task = [False]
-        # filtdict = {"traintest":traintest, "random_task":random_task}
-
-        _checkPandasIndices(self.Dat)
-        print(f"Original length: {len(self.Dat)}")
-        if return_ver=="indices":
-            return filterPandas(self.Dat, filtdict, return_indices=True)
-        elif return_ver=="modify":
-            print("self.Dat modified!!")
-            self.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
-        elif return_ver=="dataframe":
-            return filterPandas(self.Dat, filtdict, return_indices=False)
-        elif return_ver=="dataset":
-            Dnew = self.copy()
-            Dnew.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
-            return Dnew
-        else:
-            print(return_ver)
-            assert False
-
 
     def load_dataset_helper(self, animal, expt, ver="single"):
         """ load a single dataset. 
@@ -274,6 +197,85 @@ class Dataset(object):
         print("Resetting index")
         self.Dat = self.Dat.reset_index(drop=True)
 
+    def sliceDataset(self, inds):
+        """ given inds, slices self.Dat.
+        inds are same as row num, will ensure so
+        RETURNS:
+        - self.Dat, modified, index reset
+        """
+        assert False, "not coded, didnt think necesayr"
+
+    def copy(self):
+        """ returns a copy. does this by extracting 
+        data
+        NOTE: copies over all metadat, regardless of whether all
+        metadats are used.
+        """
+        import copy
+
+        Dnew = Dataset([])
+
+        Dnew.Dat = self.Dat.copy()
+        if hasattr(self, "Metadats"):
+            Dnew.Metadats = copy.deepcopy(self.Metadats)
+
+        if hasattr(self, "BPL"):
+            Dnew.BPL = copy.deepcopy(self.BPL)
+        if hasattr(self, "SF"):
+            Dnew.SF = self.SF.copy()
+        if hasattr(self, "Parses"):
+            Dnew.Parses = copy.deepcopy(self.Parses)
+
+        return Dnew
+
+    def is_finalized(self):
+        """ Was metadata flagged as finalized by me? Returns True or False
+        - If there are multiple datasets loaded simultanesuoy, returns True
+        only if all are finalized
+        """
+        outs = []
+        for k, v in self.Metadats.items():
+            if "metadat_probedat" not in v.keys():
+                outs.append(False)
+            else:
+                outs.append(v["metadat_probedat"]["finalized"])
+        return all(outs)
+
+
+
+    def filterPandas(self, filtdict, return_ver = "indices"):
+        """
+        RETURNS:
+        - if return_ver is:
+        --- "indices", then returns inds.(self.Dat not modifed,) 
+        --- "modify", then modifies self.Dat, and returns Non
+        --- "dataframe", then returns new dataframe, doesnt modify self.Dat
+        --- "dataset", then copies and returns new dataset, without affecitng sefl.
+        """
+        from pythonlib.tools.pandastools import filterPandas
+        # traintest = ["test"]
+        # random_task = [False]
+        # filtdict = {"traintest":traintest, "random_task":random_task}
+
+        _checkPandasIndices(self.Dat)
+        print(f"Original length: {len(self.Dat)}")
+        if return_ver=="indices":
+            return filterPandas(self.Dat, filtdict, return_indices=True)
+        elif return_ver=="modify":
+            print("self.Dat modified!!")
+            self.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
+        elif return_ver=="dataframe":
+            return filterPandas(self.Dat, filtdict, return_indices=False)
+        elif return_ver=="dataset":
+            Dnew = self.copy()
+            Dnew.Dat = filterPandas(self.Dat, filtdict, return_indices=False)
+            return Dnew
+        else:
+            print(return_ver)
+            assert False
+
+
+
 
     ############### UTILS
     def _strokes_kinds(self):
@@ -328,6 +330,13 @@ class Dataset(object):
         print("--- Removing outliers")
         inds_bad = []
         for val in columns:
+            # print("--")
+            # print(self.Dat)
+            # print(val)
+            # print(self.Dat[val])
+            # print(np.min(self.Dat[val]))
+            # print(np.max(self.Dat[val]))
+
             limits = np.percentile(self.Dat[val], prctile_min_max)
             indsthis = (self.Dat[val]<limits[0]) | (self.Dat[val]>limits[1])
             inds_bad.extend(np.where(indsthis)[0])
@@ -414,6 +423,15 @@ class Dataset(object):
 
         # reset 
         self.Dat = self.Dat.reset_index(drop=True)
+
+
+        # Make sure expts is the correct name, becuase in sme cases
+        # the automaticlaly extracted name is from the filenmae, which may be
+        # incorrect
+        def F(x):
+            idx = x["which_metadat_idx"]
+            return self.Metadats[idx]["metadat_probedat"]["expt"]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "expt")
 
 
         ###### remove strokes that are empty or just one dot
@@ -2198,6 +2216,52 @@ class Dataset(object):
         self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parses_planner_taskscore")
         print("Loaded parse scores to col: parses_planner_taskscore")
 
+
+    def planner_plot_summary(self, ind_list, n_task_perms_plot="all"):
+        """ plots all task perms, along with their distance to beh, and their efficneciy scores
+        INPUTS:
+        - ind, index into self.Dat
+        """
+        from pythonlib.drawmodel.efficiencycost import rank_beh_out_of_all_possible_sequences_quick
+
+        ranklist = []
+        conflist =[]
+        sumscorelist =[]
+        for ind in ind_list:
+            strokes_beh = self.Dat["strokes_beh"].values[ind]
+            strokes_task_perms = self.Dat["parses_planner"].values[ind]
+            beh_task_distances = self.Dat["parses_planner_behtaskdist"].values[ind]
+            task_inefficiency = self.Dat["parses_planner_taskscore"].values[ind]
+
+            rank, conf, sumscore, strokest = rank_beh_out_of_all_possible_sequences_quick(
+                strokes_beh, strokes_task_perms, beh_task_distances, 
+                task_inefficiency, plot_strokes=True, 
+                plot_rank_distribution=True, plot_n_strokes=n_task_perms_plot)
+
+            ranklist.append(rank)
+            conflist.append(conf)
+            sumscorelist.append(sumscore)
+
+        fig, axes = plt.subplots(1,3, figsize=(9,3))
+        x = range(len(ind_list))
+
+        ax = axes.flatten()[0]
+        ax.plot(x, ranklist, "-ok", label="rank")
+        ax.axhline(0)
+        ax.set_title("rank")
+
+        ax = axes.flatten()[1]
+        ax.plot(x, conflist, "-ok")
+        ax.axhline(0)
+        ax.set_title("confidence")
+
+        ax = axes.flatten()[2]
+        ax.plot(x, sumscorelist, "-ok")
+        ax.axhline(1)
+        ax.set_title("summary score")
+
+
+    
 
 
     ################ PARSES

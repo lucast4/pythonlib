@@ -55,7 +55,7 @@ def _groupingParams(D, expt):
         plantime_cats = {0.: "short", 1200.: "long"}
         feature_names = [f for f in feature_names if f not in 
         ["time_touchdone", "dist_touchdone", "offset_speed"]]
-    elif expt in ["plan4"]:
+    elif expt in ["plan4", "plan5"]:
         F = {
             "block":[11],
             "plan_time":[0., 1000.]
@@ -73,13 +73,20 @@ def _groupingParams(D, expt):
     D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
 
-
     return D, grouping, grouping_levels, feature_names
 
 
-def preprocessDat(D, expt):
+def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
+    INPUT:
+    - get_sequence_rank, then gets rank of beh sequence using parses (rank of efficiency 
+    of best-matching parse). NOTE: this removes all trials where strokes_beh cannot be compared
+    to strokes_task - by defualt removes cases where num strokes not equal. Should be qwuick, since
+    requires preprocessing with D.planner... methods.
+    NOTE:
+    - if D.Dat ends up being empty, then returns None
+
     """
     from pythonlib.tools.pandastools import filterPandas, aggregGeneral, applyFunctionToAllRows
     from pythonlib.drawmodel.strokedists import distscalarStrokes
@@ -161,9 +168,24 @@ def preprocessDat(D, expt):
 
     # - score alignment
     score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
-   
+
+    # - score beh sequence rank relative to parses
+    if get_sequence_rank:
+        sequence_get_rank_vs_task_permutations_quick(D)
+        FEATURE_NAMES = sorted(set(FEATURE_NAMES + ["effic_rank", "effic_summary", "effic_confid"]))
+
+    # print("pruning by confidence of rank")
+    # print(len(D.Dat))
+    # print(D.Dat["effic_confid"])
+    # print(len(np.isnan(D.Dat["effic_confid"])))
+    if get_sequence_rank and sequence_rank_confidence_min is not None:
+        D.Dat = D.Dat[D.Dat["effic_confid"]>=sequence_rank_confidence_min]
+        D.Dat = D.Dat.reset_index(drop=True)
+    if len(D.Dat)==0:
+        return None
+
     # ======== CLEAN, REMOVE NAN AND OUTLIERS
-    D.removeNans(columns=FEATURE_NAMES)
+    D.removeNans(columns=FEATURE_NAMES) 
     D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
     if False:
@@ -202,6 +224,84 @@ def preprocessDat(D, expt):
     D._analy_preprocess_done=True
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
+
+
+def sequence_get_rank_vs_task_permutations_quick(D, permver = "all_orders_directions"):
+    from pythonlib.drawmodel.efficiencycost import rank_beh_out_of_all_possible_sequences
+    """ For each behavhora trial, align its sequence vs. task, then compute the rank
+    of the saeuqnece based on efficiency cost. can only compute rank if have same lenth
+    otherwise will return nan.
+    INPUTS:
+    - permver, think of this as index into a particular planner expt/analysis.
+    RETURNS:
+    - D.Dat modified to have 5 new columns. see code.
+    NOTE:
+    - "quick" means that parses, parse-beh dist, and parse-scores are all precomputed and saved,
+    using the appropriate Dataset methods.
+    """
+    from pythonlib.drawmodel.efficiencycost import rank_beh_out_of_all_possible_sequences_quick
+
+    # load pre-computed planner stuff
+    D.planner_load_everything(permver = "all_orders_directions")
+
+    def F(x):
+        strokes_beh = x["strokes_beh"]
+        strokes_task_perms = x["parses_planner"]
+        beh_task_distances = x["parses_planner_behtaskdist"]
+        task_inefficiency = x["parses_planner_taskscore"]
+
+        out = rank_beh_out_of_all_possible_sequences_quick(
+            strokes_beh, strokes_task_perms, beh_task_distances, 
+            task_inefficiency, efficiency_score_ver="weighted_avg", 
+            confidence_ver="diff_relative_all")
+        # print("this")
+        # print(out)
+        # print("th")
+        if out is None:
+            return np.nan
+        out = list(out) # dont inlcude the last element, which is strokes task picked.
+        out[3] = len(strokes_task_perms) # num perms.
+        return out
+
+    # def F(x):
+    #     sb = x["strokes_beh"]
+    #     st = x["strokes_task"]
+    #     if len(sb)!=len(st):
+    #         return np.nan
+    #     out = rank_beh_out_of_all_possible_sequences(sb, st, return_chosen_task_strokes=False,
+    #                                                 plot_rank_distribution=False, 
+    #                                                 return_num_possible_seq=True)
+    # #     rank, confidence, summaryscore, numseq = out
+    #     return out
+    # #     return rank_beh_out_of_all_possible_sequences(x["strokes_beh"], x["strokes_task"])
+
+    # print(len(D.Dat))
+    # for row in D.Dat.iterrows():
+    #     row[1]["rankeffic"] = F(row[1])
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "rankeffic")
+
+    # Expand out efficiency scores
+    def F(x, ind):
+        if np.all(np.isnan(x["rankeffic"])):
+            return np.nan
+        return x["rankeffic"][ind]
+
+    # for ind in range(4):
+    #     D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,ind), "effic_rank")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,0), "effic_rank")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,1), "effic_confid")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,2), "effic_summary")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,3), "effic_nperms")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,4), "effic_taskscore")
+    D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x,5), "effic_behtaskdist")
+    del D.Dat["rankeffic"]
+
+    def F(x):
+        if np.isnan(x["effic_rank"]):
+            return False
+        else:
+            return True
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "has_effic_rank")
 
 
 
@@ -247,6 +347,8 @@ def sequence_get_rank_vs_task_permutations(D):
         else:
             return True
     D.Dat = applyFunctionToAllRows(D.Dat, F, "has_effic_rank")
+
+
 
 def get_task_pairwise_metrics(D, grouping, func):
     """ groups data bsed on tasks, then runs thru all pairs of trials (same task) and computs
