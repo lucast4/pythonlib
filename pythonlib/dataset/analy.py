@@ -16,7 +16,9 @@ def _groupingParams(D, expt):
         "dist_gaps", "sdur_std", "gdur_std", "hdoffline", "alignment"]
 
     feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
-                   "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
+                    "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
+
+    features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
 
     ### FILTER BLOCKS
     if expt == "neuralprep2":
@@ -64,6 +66,16 @@ def _groupingParams(D, expt):
         plantime_cats = {0.: "short", 1000.: "long"}
         feature_names = [f for f in feature_names if f not in 
             ["time_touchdone", "dist_touchdone", "offset_speed"]]
+    elif expt in ["plandir1"]:
+        print("ONLY FOCUS ON l-->r BLOCK FOR NOW!! NEED TO ALSO ADD BLOCK 1")
+        F = {
+            "block":[11],
+            "plan_time":[0., 1000.]
+        }
+        grouping = "plan_time_cat"
+        plantime_cats = {0.: "short", 1000.: "long"}
+        feature_names = [f for f in feature_names if f not in 
+            ["time_touchdone", "dist_touchdone", "offset_speed", "alignment"]] # exclude alignment if there is only one trial per task.
     else:
         assert False
     D = D.filterPandas(F, return_ver="dataset")
@@ -72,11 +84,11 @@ def _groupingParams(D, expt):
     F = lambda x: plantime_cats[x["plan_time"]]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
+    return D, grouping, grouping_levels, feature_names, features_to_remove_nan
 
-    return D, grouping, grouping_levels, feature_names
 
-
-def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None):
+def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
+    remove_outliers=False, sequence_match_kind=None):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -84,6 +96,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     of best-matching parse). NOTE: this removes all trials where strokes_beh cannot be compared
     to strokes_task - by defualt removes cases where num strokes not equal. Should be qwuick, since
     requires preprocessing with D.planner... methods.
+    - only_if_sequence_different_across_grouping, then only trials where sequence is not used in other groups.
+    THis ideally goes with get_sequence_rank=True, sequence_rank_confidence_min=0.1, as only make sense if
+    sequence assignment is accurate/confident.
     NOTE:
     - if D.Dat ends up being empty, then returns None
 
@@ -155,7 +170,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
 
     # (3) Apply grouping variabples + prune dataset
-    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES = _groupingParams(D, expt)
+    print("- starting/ending len (grouping params):")
+    print(len(D.Dat))
+    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan = _groupingParams(D, expt)
+    print(len(D.Dat))
 
     # (4) Sequences more similar within group than between?
     from pythonlib.dataset.analy import score_all_pairwise_within_task
@@ -169,6 +187,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # - score alignment
     score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
 
+
     # - score beh sequence rank relative to parses
     if get_sequence_rank:
         sequence_get_rank_vs_task_permutations_quick(D)
@@ -178,50 +197,38 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # print(len(D.Dat))
     # print(D.Dat["effic_confid"])
     # print(len(np.isnan(D.Dat["effic_confid"])))
+    print("- starting/ending len (getting sequence):")
+    print(len(D.Dat))
     if get_sequence_rank and sequence_rank_confidence_min is not None:
         D.Dat = D.Dat[D.Dat["effic_confid"]>=sequence_rank_confidence_min]
         D.Dat = D.Dat.reset_index(drop=True)
     if len(D.Dat)==0:
         return None
+    print(len(D.Dat))
+
+    # =========
+    if sequence_match_kind in ["same", "diff"]:
+        print("-- Doing only_if_sequence_different_across_grouping")
+        print(len(D.Dat))
+        D.analy_match_sequence_discrete_per_task(groupby=GROUPING, 
+            grouping_levels=GROUPING_LEVELS, ver = sequence_match_kind, 
+            print_summary=True)
+        print(len(D.Dat))      
+    else:
+        assert sequence_match_kind is None
 
     # ======== CLEAN, REMOVE NAN AND OUTLIERS
-    D.removeNans(columns=FEATURE_NAMES) 
-    D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
+    D.removeNans(columns=features_to_remove_nan) 
+    if remove_outliers:
+        D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
-    if False:
-        def prep_data(D):
-            """ D --> df"""
+    # Only keep characters that have at lesat one trial across all grouping levels.
+    D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
 
-            ### aggregrate over unique tasks
-            dfthis = aggregGeneral(D.Dat, [condition, "character"], values=vals)
-            # dfthis = aggregGeneral(dfthis, ["hold_time_string", "unique_task_name"], values=vals)
-
-            ### Derive new features, using the trial-averaged features
-
-            # ADD THINGS
-            dfthis["stroke_speed"] = dfthis["dist_strokes"]/dfthis["sdur"]
-            dfthis["gap_speed"] = dfthis["dist_gaps"]/dfthis["isi"]
-            dfthis["onset_speed"] = dfthis["dist_raise2firsttouch"]/dfthis["time_raise2firsttouch"]
-            dfthis["offset_speed"] = dfthis["dist_touchdone"]/dfthis["time_touchdone"]
-
-            dfthis["total_distance"] = dfthis["dist_strokes"] + dfthis["dist_gaps"] + dfthis["dist_raise2firsttouch"] + dfthis["dist_touchdone"]
-            dfthis["total_time"] = dfthis["sdur"] + dfthis["isi"] + dfthis["time_raise2firsttouch"] + dfthis["time_touchdone"]
-            dfthis["total_speed"] = dfthis["total_distance"]/dfthis["total_time"]
-
-            dfthis["dist_per_gap"] = dfthis["dist_gaps"]/(dfthis["nstrokes"]-1)
-            dfthis["dist_per_stroke"] = dfthis["dist_strokes"]/(dfthis["nstrokes"])
-
-            return dfthis
-
-        dfthis = prep_data(D)
-        dfAgg = dfthis
-        
-        ###### OUTPUT
-        feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
-                               "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
-    
     # () Note that preprocess done
     D._analy_preprocess_done=True
+
+
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 

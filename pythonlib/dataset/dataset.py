@@ -287,6 +287,28 @@ class Dataset(object):
         return [k for k in allkinds if k in self.Dat.columns]
 
 
+    def removeTrialsExistAcrossGroupingLevels(self, GROUPING, GROUPING_LEVELS):
+        """ only keeps trials that exist across all grouping levels (conditions on character)
+        """
+
+        tasklist = self.Dat["character"].unique().tolist()
+        inds_to_remove = []
+        for task in tasklist:
+            dfthis = self.Dat[self.Dat["character"]==task]
+
+            # check that all grouping levels exist
+            grouping_levels_exist = dfthis[GROUPING].unique().tolist()
+
+            if not all([lev in grouping_levels_exist for lev in GROUPING_LEVELS]):
+                # Remove all trials for this characters, since not all desired grouping
+                # levels exist for this task.
+                inds_to_remove.extend(dfthis.index.tolist())
+
+        print("removing these inds (lack trials in at least one grioupuibg level):")
+        print(inds_to_remove)
+        self.Dat = self.Dat.drop(inds_to_remove, axis=0).reset_index(drop=True)
+
+
     def removeNans(self, columns=None):
         """ remove rows that have nans for the given columns
         INPUTS:
@@ -294,8 +316,17 @@ class Dataset(object):
         RETURNS:
         [modifies self.Dat]
         """
+
         print("--- Removing nans")
         print("start len:", len(self.Dat))
+
+        print("- num names for each col")
+        if columns is None:
+            tmpcol = self.Dat.columns
+        else:
+            tmpcol = columns
+        for c in tmpcol:
+            print(c, ':', np.sum(self.Dat[c].isna()))
         if columns is None:
             self.Dat = self.Dat.dropna()
         else:
@@ -328,6 +359,7 @@ class Dataset(object):
         - [modifies self.Dat]
         """
         print("--- Removing outliers")
+        assert len(self.Dat)>0, "empty dat.."
         inds_bad = []
         for val in columns:
             # print("--")
@@ -2217,6 +2249,24 @@ class Dataset(object):
         print("Loaded parse scores to col: parses_planner_taskscore")
 
 
+    def planner_assign_sequence_id(self):
+        """ for a given task, number sequences as 0, 1, 2, ..., where sequence number is
+        based on order in saved planner pareses. 
+        e.g., all trials with 0 have the same discrete parse, nbased on closest match to planner parses.
+        RETURNS:
+        - new col in self.Dat, "sequence_id"
+        NOTE:
+        - if ties, then will asign to sequence with lower index.
+        """
+
+        self.planner_load_everything()
+        def F(x):
+            parses_planner_behtaskdist = x["parses_planner_behtaskdist"]
+            # find index if minimum dist
+            return np.argmin(parses_planner_behtaskdist)
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "sequence_id")
+
+
     def planner_plot_summary(self, ind_list, n_task_perms_plot="all"):
         """ plots all task perms, along with their distance to beh, and their efficneciy scores
         INPUTS:
@@ -2877,6 +2927,125 @@ class Dataset(object):
         Dtrialsmatch.Dat = Dtrialsmatch.Dat.reset_index(drop=True)
         print(len(Dtrialsmatch.Dat))
         return Dtrialsmatch
+
+
+    def analy_match_sequence_discrete_per_task(self, groupby, grouping_levels = None,
+        ver="same", print_summary=False):
+        """ For each task, make sure trials use same ("same") or different ("diff")
+        sequence across levels for groupby. Sequences are defined by discrete parse of
+        task sequence.
+        INPUT:
+        - groupby, how to group trials
+        - grouping_levels, leave None to use all. otherwise give me.
+        - ver, {"same", "diff"}
+        --- same, then will only keep a trial if every other grouping level has at least
+        one trial with this trial's sequence. Note that can end up with a task having multiple
+        sequences.
+        e..g, --- mixture2_11-savedset-34-91957
+                {'short': [21], 'long': [21, 43, 0]} [start, showing seq for each trial for 2 group levels.]
+                {'short': [21], 'long': [21]} [end]
+        --- diff, then will only keep trials for which no trial in other grouping levels have the
+        same sequence. Note that can end up with a task having multiple
+        sequences.
+        e..g, --- mixture2_11-savedset-34-91957
+                {'short': [21], 'long': [21, 43, 0]} [start, showing seq for each trial for 2 group levels.]
+                {'short': [], 'long': [43, 0]} [end]
+
+
+        """
+
+        if grouping_levels is None:
+            grouping_levels = self.Dat[groupby].unique().tolist()
+
+        # Make sure sequence ids already asisgned.
+        self.planner_assign_sequence_id()
+        Dcopy = self.copy()
+
+        # Go thru each task
+        inds_to_remove = []
+        tasklist = self.Dat["character"].unique().tolist()
+        for task in tasklist:
+            # print(task)
+            dfthis = self.Dat[self.Dat["character"]==task]
+            
+            # get mapoing between grouping level and sequences that exist
+            levels2sequences = {}
+            for lev in grouping_levels:
+                levels2sequences[lev] = dfthis[dfthis[groupby]==lev]["sequence_id"].unique().tolist()
+            
+            # get mapping between grouping level and sequences to keep
+            # flatten to all indices that exist
+            indices_all = set([vv for v in levels2sequences.values() for vv in v])
+            # print(indices_all)
+            # assert False
+
+            if ver=="same":
+                # find the indices that exist across all groups
+                def _isgood(ind):
+                    # Returns True if keep this ind, false otherwise
+                    return all([ind in v for v in levels2sequences.values()])
+            elif ver=="diff":
+                def _isgood(ind):
+                    tmp = [ind in v for v in levels2sequences.values()]
+                    # if task=="mixture2_55-savedset-34-09627":
+                    #     print("---")
+                    #     print(levels2sequences)
+                    #     print(ind)
+                    #     print(sum(tmp))
+                    if sum(tmp)==0:
+                        assert False, "bug. this ind must be in at least one grouping level"
+                    elif sum(tmp)==1:
+                        # good, then is only in the one from which we extracted it to enter here
+                        return True
+                    elif sum(tmp)>1:
+                        # then is present in at least one other grouping level.
+                        return False
+            else:
+                print(ver)
+                assert False, "noit coded"
+
+            # update levels2sequences to only good sequences
+            levels2sequences_good = {}
+            for k, v in levels2sequences.items():
+                levels2sequences_good[k] = [vv for vv in v if _isgood(vv)]
+
+            # For each level, only keep trials if its sequence is in the good sequences.
+            for row in dfthis.iterrows():
+                if row[1]["sequence_id"] in levels2sequences_good[row[1][groupby]]:
+                    # then good, keep this.
+                    pass
+                else:
+                    inds_to_remove.append(row[0])
+        inds_to_remove = sorted(list(set(inds_to_remove)))
+        print("Remoiving these inds")
+        print(inds_to_remove)
+        self.Dat = self.Dat.drop(inds_to_remove, axis=0).reset_index(drop=True)
+
+
+        if print_summary:
+            def _check_task_sequences(D, task, unique=True):
+                # print(task)
+                dfthis = D.Dat[D.Dat["character"]==task]
+
+                # get mapoing between grouping level and sequences that exist
+                levels2sequences = {}
+                for lev in grouping_levels:
+                    if unique:
+                        levels2sequences[lev] = dfthis[dfthis[groupby]==lev]["sequence_id"].unique().tolist()
+                    else:
+                        levels2sequences[lev] = dfthis[dfthis[groupby]==lev]["sequence_id"].tolist()
+                print(levels2sequences)
+
+            tasklist = self.Dat["character"].unique().tolist()
+            print("SUMMARY - task, before, after, [sequences per trial]")
+            for task in tasklist:
+                print("---", task)
+                _check_task_sequences(Dcopy, task, unique=False)
+                _check_task_sequences(self, task, unique=False)
+
+            
+
+
 
 
 
