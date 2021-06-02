@@ -5,7 +5,7 @@ and each element in a list being a stroke.
 import numpy as np
 from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW, distanceBetweenStrokes
-
+import matplotlib.pyplot as plt
 
 # =============== TIME SERIES TOOLS
 def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
@@ -32,7 +32,7 @@ def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
         strokes_new.append(s_new)
     return strokes_new
 
-def strokesInterpolate2(strokes, N, kind="linear", base="time"):
+def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=False):
         """ 
         NEW - use this instaed of strokesInterpolate.
         N is multipurpose to determine how to interpolate. e.g,.
@@ -65,40 +65,70 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time"):
             else:
                 assert base=="time"
 
-            # get new timepoints
-            t = strok[:,2]
-            nold = len(t)
-            if N[0]=="npts":
-                nnew = N[1]
-            elif N[0]=="updnsamp":
-                nnew = int(np.round(N[1]*nold))
-                # tnew = np.linspace(t[0], t[-1], nnew)
-            elif N[0]=="fsnew":
-                nnew = int(np.round(N[1]/N[2]*nold))
-                # tnew = np.linspace(t[0], t[-1], nnew)
-            tnew = np.linspace(t[0], t[-1], nnew)
-#             print(t)
-#             print(tnew)
+            if strok.shape[0]==1:
+                # then dont interpolate, only one pt
+                strokinterp = strok
+            else:
 
-            strokinterp = np.empty((len(tnew), 3))
-            strokinterp[:,2] = tnew
-        
-            # fill the x,y, columns
-            for i in [0, 1]:
-                f = interp1d(t, strok[:,i], kind=kind)
-                strokinterp[:,i] = f(tnew)
+                # get new timepoints
+                t = strok[:,2]
+                nold = len(t)
+                if N[0]=="npts":
+                    nnew = N[1]
+                elif N[0]=="updnsamp":
+                    nnew = int(np.round(N[1]*nold))
+                    # tnew = np.linspace(t[0], t[-1], nnew)
+                elif N[0]=="fsnew":
+                    nnew = int(np.round(N[1]/N[2]*nold))
+                    # tnew = np.linspace(t[0], t[-1], nnew)
+                elif N[0]=="interval":
+                    # goal is a constant interval btw pts.
+                    interval = N[1]
+                    total = t[-1] - t[0]
+                    nnew = int(np.ceil(total/interval))
+                    # print(interval)
+                    # print(total)
+                    # print(nnew)
+                    # assert False
+                else:
+                    print(N)
+                    assert False, "not coded"
+                tnew = np.linspace(t[0], t[-1], nnew)
+    #             print(t)
+    #             print(tnew)
 
-                if False:
-                    plt.figure()
-                    plt.plot(t, strok[:,0], '-ok');
-                    plt.plot(tnew, f(tnew), '-or');
+                strokinterp = np.empty((len(tnew), 3))
+                strokinterp[:,2] = tnew
+            
+                # fill the x,y, columns
+                for i in [0, 1]:
+                    f = interp1d(t, strok[:,i], kind=kind)
+                    strokinterp[:,i] = f(tnew)
+
+                    if False:
+                        plt.figure()
+                        plt.plot(t, strok[:,0], '-ok');
+                        plt.plot(tnew, f(tnew), '-or');
+
             strokes_interp.append(strokinterp)
 
-            for i, s in enumerate(strokes_interp):
-                if len(s)==0:
-                    # replace with previous endpoints.
-                    strokes_interp[i] = strokes[i][[0, -1], :]
+        # If new length is 0, replace with previous endpoints.
+        for i, s in enumerate(strokes_interp):
+            if len(s)==0:
+                strokes_interp[i] = strokes[i][[0, -1], :]
 
+        if plot_outcome:
+            fig, axes = plt.subplots(1,2, figsize=(12,6))
+            ax = axes.flatten()[0]
+            for s in strokes:
+                ax.plot(s[:,0], s[:,1], "-o")
+            ax.set_title('original')
+            
+            ax = axes.flatten()[1]
+            for s in strokes_interp:
+                ax.plot(s[:,0], s[:,1], "-o")
+            ax.set_title('after interpolation')
+    
         return strokes_interp
 
 def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
@@ -958,6 +988,8 @@ def getMinMaxVals(strokes):
 
 def check_strokes_in_temporal_order(strokes):
     """ True/False. based on 3rd column"""
+    assert strokes[0].shape[1]>=3, "need a time column"
+
     times = np.concatenate([s[:,2] for s in strokes],0)
     if not np.all(np.diff(times)>=0):
         print(times)

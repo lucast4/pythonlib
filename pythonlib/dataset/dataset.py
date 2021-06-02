@@ -457,13 +457,27 @@ class Dataset(object):
         self.Dat = self.Dat.reset_index(drop=True)
 
 
+        # Make sure strokes are all in format (N,3)
+        def F(x):
+            strokes_beh = x["strokes_beh"]
+            # strokes_task = x["strokes_task"]
+            for i, strok in enumerate(strokes_beh):
+                if len(strok.shape)==1:
+                    assert strok.shape==(3,), "is maybe (2,),without time var?"
+                    strokes_beh[i] = strok.reshape(1,3)
+                assert strok.shape[1]==3
+            return strokes_beh
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_beh")
+
         # Make sure expts is the correct name, becuase in sme cases
         # the automaticlaly extracted name is from the filenmae, which may be
         # incorrect
-        def F(x):
-            idx = x["which_metadat_idx"]
-            return self.Metadats[idx]["metadat_probedat"]["expt"]
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "expt")
+        if "metadat_probedat" in self.Metadats[0].keys():
+            # Since only starting saving this later...
+            def F(x):
+                idx = x["which_metadat_idx"]
+                return self.Metadats[idx]["metadat_probedat"]["expt"]
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "expt")
 
 
         ###### remove strokes that are empty or just one dot

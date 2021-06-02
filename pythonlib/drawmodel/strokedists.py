@@ -3,17 +3,36 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def distscalarStrokes(strokes1, strokes2, ver, params=None, 
-    norm_by_numstrokes=True, splitnum1 = 5, splitnum2 = 2):
+    norm_by_numstrokes=True, splitnum1 = 5, splitnum2 = 2, do_spatial_interpolate=False,
+    do_spatial_interpolate_interval = 10, return_strokes_only=False):
     """ general purpose wrapper for scoring similarity of two strokes,
     - ver, str, is method
     - params, is flexible dict depends on ver
+    - do_spatial_interpolate, then first interpolates so all data have uniform spacing btw points, with
+    space defined by do_spatial_interpolate_interval (pixels)
+    - return_strokes_only, then returns (strokes1, strokes2) after preprocessing, e.g, interpolation,
+    without doing distance.
     RETURNS:
     - scalra score,
+    - [if return_strokes_only] strokes1, strokes2
     TODO:
     - Frechet distnace
     - linear sum assignment.
-    
+    NOTE:
+    - does _not_ modify input.
     """
+
+    if do_spatial_interpolate:
+        # interpolate all
+        from pythonlib.tools.stroketools import strokesInterpolate2
+        N = ["interval", do_spatial_interpolate_interval]
+        base = "space"
+
+        strokes1 = strokesInterpolate2(strokes1, N=N, base=base, plot_outcome=False)
+        strokes2 = strokesInterpolate2(strokes2, N=N, base=base, plot_outcome=False)
+
+    if return_strokes_only:
+        return strokes1, strokes2
 
     # ==== OLD CODE - NAMES ARE NOT SYSTEMATIC
     if ver=="mindist":
@@ -35,6 +54,9 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None,
     elif ver=="position_hd":
         # only based on positions (ingore time and stroke num), using hausdorff
         return distancePos(strokes1, strokes2, "hd")
+    elif ver=="position_hd_soft":
+        # same, but using mean, mean for hd params.
+        return distancePos(strokes1, strokes2, "hd_soft")
     elif ver=="dtw_timepoints":
         return distanceDTW(strokes1, strokes2, ver="timepoints", 
             asymmetric=False, norm_by_numstrokes=norm_by_numstrokes)[0]
@@ -50,6 +72,7 @@ def distscalarStrokes(strokes1, strokes2, ver, params=None,
     else:
         print(ver)
         assert False, "not codede"
+
         
 
 def distmatStrokes(strokes1, strokes2, ver="mindist"):
@@ -231,6 +254,10 @@ def distancePos(strokes1, strokes2, ver="hd"):
         pos1 = np.concatenate(strokes1, axis=0)[:,:2]
         pos2 = np.concatenate(strokes2, axis=0)[:,:2]
         d = modHausdorffDistance(pos1, pos2, dims = [0,1])
+    elif ver=="hd_soft":
+        pos1 = np.concatenate(strokes1, axis=0)[:,:2]
+        pos2 = np.concatenate(strokes2, axis=0)[:,:2]
+        d = modHausdorffDistance(pos1, pos2, dims = [0,1], ver1="mean", ver2="mean")       
     else:
         print(ver)
         assert False, "not coded"
