@@ -19,6 +19,7 @@ def _groupingParams(D, expt):
                     "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
 
     features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
+    features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
 
     ### FILTER BLOCKS
     if expt == "neuralprep2":
@@ -76,6 +77,16 @@ def _groupingParams(D, expt):
         plantime_cats = {0.: "short", 1000.: "long"}
         feature_names = [f for f in feature_names if f not in 
             ["time_touchdone", "dist_touchdone", "offset_speed", "alignment"]] # exclude alignment if there is only one trial per task.
+    elif expt in ["plandir2"]:
+        print("ONLY FOCUS ON r-->l BLOCK FOR NOW!! NEED TO ALSO ADD BLOCK 1")
+        F = {
+            "block":[18],
+            "plan_time":[0., 1000.]
+        }
+        grouping = "plan_time_cat"
+        plantime_cats = {0.: "short", 1000.: "long"}
+        feature_names = [f for f in feature_names if f not in 
+            ["time_touchdone", "dist_touchdone", "offset_speed", "alignment"]] # exclude alignment if there is only one trial per task.
     else:
         assert False
     D = D.filterPandas(F, return_ver="dataset")
@@ -84,7 +95,7 @@ def _groupingParams(D, expt):
     F = lambda x: plantime_cats[x["plan_time"]]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
-    return D, grouping, grouping_levels, feature_names, features_to_remove_nan
+    return D, grouping, grouping_levels, feature_names, features_to_remove_nan, features_to_remove_outliers
 
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
@@ -172,7 +183,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # (3) Apply grouping variabples + prune dataset
     print("- starting/ending len (grouping params):")
     print(len(D.Dat))
-    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan = _groupingParams(D, expt)
+    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, features_to_remove_outliers = _groupingParams(D, expt)
     print(len(D.Dat))
 
     # (4) Sequences more similar within group than between?
@@ -218,7 +229,11 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         assert sequence_match_kind is None
 
     # ======== CLEAN, REMOVE NAN AND OUTLIERS
+    # - Remove nans
     D.removeNans(columns=features_to_remove_nan) 
+    # - Replace outliers with nans
+    for F in features_to_remove_outliers:
+        D.removeOutlierRowsTukey(F, niqr=2.5, replace_with_nan=True)
     if remove_outliers:
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
@@ -227,8 +242,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
-
-
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 

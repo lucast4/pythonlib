@@ -380,6 +380,44 @@ class Dataset(object):
         self.Dat = self.Dat.reset_index(drop=True)
         print("final len: ", len(self.Dat))
 
+    def removeOutlierRowsTukey(self, col, niqr = 2, replace_with_nan=False):
+        """ remove rows with outliers, based on iqr (tukey method)
+        outlers are those either < 25th percentile - 1.5*iqr, or above...
+        INPUTS:
+        - replace_with_nan, then doesnt remove row, but instead replaces with nan.
+        """
+
+        from scipy.stats import iqr
+
+        # Get the upper and lower limits
+        x = self.Dat[col]
+        lowerlim = np.percentile(x, [25])[0] - niqr*iqr(x)
+        upperlim = np.percentile(x, [75])[0] + niqr*iqr(x)
+        outliers = (x<lowerlim) | (x>upperlim)
+
+        print("Lower and upper lim for outlier detection, feature=", col)
+        print(lowerlim, upperlim)
+        print("this many outliers / total")
+        print(sum(outliers), "/", len(outliers))
+
+        if False:
+            fig, ax = plt.subplots(1,1, figsize=(10,5))
+            x.hist(ax=ax, bins=30)
+            ax.plot(x, np.ones_like(x), "o")
+            ax.axvline(lowerlim)
+            ax.axvline(upperlim)
+
+        # x[outliers] = np.nan
+        # print(outliers)
+        inds_outliers = outliers[outliers==True].index
+        if replace_with_nan:
+            print("Replacing outliers with nan")
+            print(inds_outliers)
+            self.Dat[col] = self.Dat[col].mask(outliers)
+        else:
+            print("Removing outliers")
+            print(inds_outliers)
+            self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
 
     ############### TASKS
     def load_tasks_helper(self):
