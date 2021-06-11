@@ -274,7 +274,16 @@ class Dataset(object):
             print(return_ver)
             assert False
 
-
+    def findPandas(self, col, list_of_vals, reset_index=True):
+        """ returns slice of self.Dat, where rows are matched one-to-one to list_of_vals.
+        INPUTS:
+        - col, str name of col
+        - list_of_vals, list of values that pick out the rows.
+        OUTPUT:
+        - dfout, dataframe same length as list_of_vals
+        """
+        from pythonlib.tools.pandastools import findPandas
+        return findPandas(self.Dat, col, list_of_vals, reset_index=reset_index)
 
 
     ############### UTILS
@@ -2787,8 +2796,9 @@ class Dataset(object):
                 plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
                     add_stroke_number=add_stroke_number)
             elif which_strokes == "strokes_task":
-                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, 
-                    add_stroke_number=add_stroke_number)
+                # plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, 
+                #     add_stroke_number=add_stroke_number)
+                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True)
             else:
                 assert False
             data = [strokes_list[i] for i in idxs]

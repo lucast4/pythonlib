@@ -125,7 +125,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
-    clean_ordered=False, clean_ordered_ordinal=False, 
+    clean_ordered=False, clean_ordered_ordinal=False, clean_task=False, 
     force_onsets_same_col_as_strokes=False, naked=False, mfc_input=None):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
@@ -153,6 +153,13 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         assert clean_unordered==False, "can only choose one of these 2 options"
         each_stroke_separate= True
         plotver = "order_gradient"
+    elif clean_task:
+        add_stroke_number=False 
+        each_stroke_separate = True
+        mark_stroke_onset=False
+        pcol = [[0.45, 0.3, 0.3]]
+        plotver="onecolor"
+
 
     if strokenums_to_plot is not None:
         each_stroke_separate=True
@@ -219,7 +226,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
                     s[:,2] = 0
 
             # CMAP="coolwarm"
-            pcol = [[0.3, 0.3, 0.3]]
+            if pcol is None:
+                pcol = [[0.3, 0.3, 0.3]]
         elif plotver=="randcolor":
             pcol = np.random.rand(1,3) * 0.7
         elif plotver=="raw":

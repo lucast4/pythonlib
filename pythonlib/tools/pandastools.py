@@ -366,6 +366,33 @@ def filterPandas(df, filtdict, return_indices=False):
     else:
         return df.reset_index(drop=True)
 
+def findPandas(df, colname, list_of_vals, reset_index=True):
+    """ returns df with only rows matchibng list_of_vals. 
+    output will be same length as list_of_vals, with order matching.
+    INPUT:
+    - df
+    - colname, the column to check
+    - list_of_vals, the values to pick out the rows
+    RETURNS:
+    - dfout
+    NOTE
+    - is doing it in a slow way, iterating over items.
+    - will fail if list_of_vals are not unique, or any val is not found
+    - will reset index
+    """
+    assert len(set(list_of_vals))==len(list_of_vals), "values not all unique"
+
+    dfout = pd.concat([df[df[colname]==v] for v in list_of_vals])
+
+    assert len(dfout)==len(list_of_vals), "at least one val was not found in df"
+    tmp = dfout[colname].tolist()
+    for a,b in zip(tmp, list_of_vals):
+        assert a==b, "mistake somewher"
+
+    if reset_index:
+        dfout = dfout.reset_index(drop=True)
+    return dfout
+
 
 
 def pivotAndMerge(d1, df2):
