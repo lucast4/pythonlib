@@ -491,10 +491,11 @@ def getHistBinEdges(vals, nbins):
 #     sns.histplot(data=SF, x="label", hue="animal_dset", stat="probability", multiple="dodge", element="bars", shrink=1.5)
 
 
-def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5, 
+
+def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5, 
                    origin="lower_left", max_n_per_grid=None, 
                    col_labels = None, row_labels=None, tight=True,
-                   aspect=0.8):
+                   aspect=0.8, ncols=6, titles=None, naked_axes=False):
     """ wrapper to plot each datapoint at a given
     col and row.
     INPUT:
@@ -502,15 +503,30 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
     plotfunc
     - plotfunct, func, signature is plotfunc(data[ind], ax)
     - cols and rows, where 0,0 is bottom left of screen (assumes 
-    0indexed
+    0indexed (same length as data). if either is None, then plots data starting from 0,0 and
+    going row by row
+    --- ncols, only matters if have to automticalyl get cols and rows.
     - max_n_per_grid, then only plots max n per col/row combo. each time will shuffle
     so that is different. Leave none to plot all
     - col_labels, row_labels, list of things to label the cols and rows.
+    - titles, same length as data. If present, will overwrite row_labels and col_labels.
     - aspect, w/h
+    - clean_axes, then no x or y labels.
     RETURNS:
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
     """
+
+    if cols is None or rows is None:
+        # get so rows is 0, 1, 2, ... and cols is 0,0,0,...
+        cols = []
+        rows = []
+        n = len(data)
+        for i in range(n):
+            cols.append(i%ncols)
+            rows.append(int(np.floor(i/ncols)))
+        cols = np.array(cols)
+        rows = np.array(rows)
 
     assert min(rows)==0, "if not, messes up plotting of titles"
     assert min(cols)==0
@@ -544,7 +560,7 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
     for col, row in zip(cols, rows):
         done[(row, col)] = 0
 
-    for dat, col, row in zip(data, cols, rows):
+    for i, (dat, col, row) in enumerate(zip(data, cols, rows)):
         if max_n_per_grid is not None:
             if done[(row, col)]==max_n_per_grid:
                 continue
@@ -554,15 +570,26 @@ def plotGridWrapper(data, plotfunc, cols, rows, SIZE=2.5,
 
         done[(row, col)] += 1
 
-        if col_labels:
-            if row==0:
-                ax.set_title(col_labels[col])
+        if titles is not None:
+            if isinstance(titles[i], str):
+                ax.set_title(f"{titles[i]}")
+            else:
+                ax.set_title(f"{titles[i]:.2f}")
+        else:
+            if col_labels:
+                if row==0:
+                    ax.set_title(col_labels[col])
+            if row_labels:
+                if col==0:
+                    ax.set_ylabel(row_labels[row])
+        if naked_axes:
+            ax.set_yticklabels([])
+            ax.set_xticklabels([])
+            ax.tick_params(axis='both', which='both',length=0)
 
-        if row_labels:
-            if col==0:
-                ax.set_ylabel(row_labels[row])
     if tight:
         fig.subplots_adjust(wspace=0, hspace=0)
+
 
 
     return fig

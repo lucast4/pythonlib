@@ -45,6 +45,8 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 
     return figbeh, figtask
 
+############## HELPERS THAT CALL plot_dat_grid_inputrowscols
+
 
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
     plotfuncbeh=None):

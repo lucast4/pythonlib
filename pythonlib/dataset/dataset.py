@@ -2735,8 +2735,9 @@ class Dataset(object):
 
             # 
 
+
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None):
+        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True):
         """ plot multiple trials in a grid.
         - idxs, if list of indices, then plots those.
         --- if an integer, then plots this many random trials.
@@ -2761,22 +2762,37 @@ class Dataset(object):
         else:
             strokes_list = self.Dat[which_strokes].values
 
-        nrows = int(np.ceil(len(idxs)/ncols))
-        fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*2, nrows*2))
-        
-        for ind, (i, ax) in enumerate(zip(idxs, axes.flatten())):
+        if False:
+            # Old version, obsolete...
+            nrows = int(np.ceil(len(idxs)/ncols))
+            fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*2, nrows*2))
+            
+            for ind, (i, ax) in enumerate(zip(idxs, axes.flatten())):
+                if which_strokes in ["strokes_beh", "parses"]:
+                    plotDatStrokes(strokes_list[i], ax, clean_ordered=True)
+                elif which_strokes == "strokes_task":
+                    plotDatStrokes(strokes_list[i], ax, clean_unordered=True)
+                else:
+                    assert False
+                if not titles:
+                    ax.set_title(i)
+                elif isinstance(titles[ind], str):
+                    ax.set_title(f"{titles[ind]}")
+                else:
+                    ax.set_title(f"{titles[ind]:.2f}")
+        else:
+            # New version, uses grid wrapper
+            from pythonlib.tools.plottools import plotGridWrapper
             if which_strokes in ["strokes_beh", "parses"]:
-                plotDatStrokes(strokes_list[i], ax, clean_ordered=True)
+                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
+                    add_stroke_number=add_stroke_number)
             elif which_strokes == "strokes_task":
-                plotDatStrokes(strokes_list[i], ax, clean_unordered=True)
+                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, 
+                    add_stroke_number=add_stroke_number)
             else:
                 assert False
-            if not titles:
-                ax.set_title(i)
-            elif isinstance(titles[ind], str):
-                ax.set_title(f"{titles[ind]}")
-            else:
-                ax.set_title(f"{titles[ind]:.2f}")
+            data = [strokes_list[i] for i in idxs]
+            fig= plotGridWrapper(data, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes)
 
         if return_idxs:
             return fig, idxs
