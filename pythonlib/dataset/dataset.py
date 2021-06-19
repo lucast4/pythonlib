@@ -655,10 +655,17 @@ class Dataset(object):
                     self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
                 elif p=="interp":
                     self.interpolateStrokes()
+                elif p=="interp_spatial_int":
+                    self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
+                        pts_or_interval="int")
+                    self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
+                        pts_or_interval="int")
                 elif p=="subsample":
                     self.subsampleTrials()
                 elif p=="spad_edges":
                     self.recomputeSketchpadEdges()
+                elif p=="rescale_to_1":
+                    self.rescaleStrokes()
                 else:
                     print(p)
                     assert False, "dotn know this"
@@ -752,16 +759,28 @@ class Dataset(object):
             del self.Dat[dummy_name]
 
 
-    def interpolateStrokesSpatial(self, strokes_ver ="strokes_beh", npts=50):
+    def interpolateStrokesSpatial(self, strokes_ver ="strokes_beh", pts_or_interval = "pts",
+        npts=50, interval=10):
         """ interpolate in space, to npts pts
         (uniformly sampled)
+        INPUTS:
+        - pts_or_interval, which method
+        --- "int", then keeps uniform spatial interavl; interval, pixels
+        --- "pts", this num pts.
         """
         from ..tools.stroketools import strokesInterpolate2
 
         strokes_list = self.Dat[strokes_ver].values
+        if pts_or_interval=="pts":
+            N = ["npts", npts]
+        elif pts_or_interval=="int":
+            N = ["interval", interval]
+        else:
+            assert False
+
         for i, strokes in enumerate(strokes_list):
             strokes_list[i] = strokesInterpolate2(strokes, 
-                N=["npts", npts], base="space")
+                N=N, base="space")
 
         self.Dat[strokes_ver] = strokes_list
 
@@ -784,6 +803,29 @@ class Dataset(object):
                 N = ["fsnew", fs_new, fs_old])
 
         self.Dat["strokes_beh"] = strokes_list
+
+    def rescaleStrokes(self, rescale_ver="stretch_to_1"):
+        """ spatial rescaling of strokes
+        Autoatmicalyl applies same rescaling to strokes_beh and strokes_task 
+        by first concatenating, then applying, then unconcatnating
+        """
+        from pythonlib.tools.stroketools import rescaleStrokes
+
+        strokes_beh_list = self.Dat["strokes_beh"]
+        strokes_task_list = self.Dat["strokes_task"]
+
+        strokes_beh_list_out = []
+        strokes_task_list_out = []
+        for strokes_beh, strokes_task in zip(strokes_beh_list, strokes_task_list):
+
+            strokes_combined = strokes_beh + strokes_task
+            strokes_combined = rescaleStrokes(strokes_combined, ver="stretch_to_1")
+
+            strokes_beh_list_out.append(strokes_combined[:len(strokes_beh)])
+            strokes_task_list_out.append(strokes_combined[len(strokes_beh):])
+
+        self.Dat["strokes_beh"] = strokes_beh_list_out
+        self.Dat["strokes_task"] = strokes_task_list_out
 
 
 
@@ -2680,7 +2722,7 @@ class Dataset(object):
         plotMP(MP, ax=ax)
 
 
-    def plotSingleTrial(self, idx, things_to_plot = ["beh", "beh_tc", "task", "parse", "bpl_mp", "beh_splines"],
+    def plotSingleTrial(self, idx, things_to_plot = ["beh", "task"],
         sharex=False, sharey=False, params=None):
         """ 
         idx, index into Dat, 0, 1, ...

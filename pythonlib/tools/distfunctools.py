@@ -213,6 +213,8 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=No
         else:
             D = cdist(itemA, itemB)
 
+    # print(D)
+
     mindist_A = D.min(axis=1)
     mindist_B = D.min(axis=0)
     if ver1=="mean":
@@ -237,6 +239,10 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=No
         dist = np.max((mean_A,mean_B))
     else:
         assert False
+
+    # print(dist)
+    # print(mindist_A)
+    # print(mindist_B)
 
     if return_marginals:
         return dist, mindist_A, mindist_B

@@ -793,7 +793,8 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
     --- "stretch_to_1", rescale so that max in either x or y is 1. 
     finds max over all pts across all strok (in absolute val) and divides all 
     values by that. i..e make this as big as possible in a square
-    [-1 1 -1 1].
+    [-1 1 -1 1]. This makes most sense if you have recentered already, so that (0,0) is 
+    at center.
     """
     if ver=="stretch_to_1":
         pos = np.concatenate(strokes)
