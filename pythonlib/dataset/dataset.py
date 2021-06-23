@@ -76,43 +76,47 @@ class Dataset(object):
                 "strokes_beh":strokes_list,
                 "Task":task_list})
 
-    def load_dataset_helper(self, animal, expt, ver="single"):
+    def load_dataset_helper(self, animal, expt, ver="single", rule=""):
         """ load a single dataset. 
         - ver, str
         --- "single", endures that there is one and only one.
         --- "mult", allows multiple. if want animal or expt to 
+        - rule, some datasets defined by a "rule". 
         iterate over pass in lists of strings.
         """
         if ver=="single":
-            print("HERE0")
-            pathlist = self.find_dataset(animal, expt, assert_only_one=True)
-            print("HERE1")
-            self._main_loader(pathlist, None)
-            print("HERE2")
+            pathlist = self.find_dataset(animal, expt, assert_only_one=True, rule=rule)
+            self._main_loader(pathlist, None, animal_expt_rule=[(animal, expt, rule)])
 
         elif ver=="mult":
             pathlist = []
+            aer_list =[]
             if isinstance(animal, str):
                 animal = [animal]
             if isinstance(expt, str):
                 expt = [expt]
             for a in animal:
                 for e in expt:
-                    pathlist.extend(self.find_dataset(a, e, True))
-            self._main_loader(pathlist, None)
+                    pathlist.extend(self.find_dataset(a, e, True, rule=rule))
+                    aer_list.append((a,e,rule))
+            self._main_loader(pathlist, None, animal_expt_rule=aer_list)
 
 
-
-    def _main_loader(self, inputs, append_list):
-        """ loading function, use this for all loading purposes"""
+    def _main_loader(self, inputs, append_list, animal_expt_rule=None):
+        """ loading function, use this for all loading purposes
+        - animal_expt_rule = [aer1, aer2, ..] length of inputs, where aer1 is like (a, e, r)
+        -- only applies if input is paths
+        """
         
         if self._reloading_saved_state:
             assert len(inputs)==1, "then must reload one saved state."
             self._reloading_saved_state_inputs = inputs
 
         if isinstance(inputs[0], str):
-            self._load_datasets(inputs, append_list)
+            # then loading datasets (given path)
+            self._load_datasets(inputs, append_list, animal_expt_rule=animal_expt_rule)
         else:
+            # then you passed in pandas dataframes directly.
             self._store_dataframes(inputs, append_list)
         if not self._reloading_saved_state:
             self._cleanup()
@@ -151,14 +155,24 @@ class Dataset(object):
 
 
 
-    def _load_datasets(self, path_list, append_list):
+    def _load_datasets(self, path_list, append_list, animal_expt_rule=None):
+        # INPUTS:
+        # - animal_expt_rule, expect this to be list of 3-tuples: (animal, expt, rule) or None.
+        # --- len(list) must be length of path_list
 
         assert append_list is None, "not coded yet!"
+        if animal_expt_rule is not None:
+            if len(animal_expt_rule) != len(path_list):
+                print(path_list)
+                print(animal_expt_rule)
+                assert False, "should be list of (a,e,r)"
+        else:
+            animal_expt_rule = [([], [], []) for _ in range(len(path_list))] # just pass in empty things.
 
         dat_list = []
         metadats = {}
 
-        for i, path in enumerate(path_list):
+        for i, (path, aer) in enumerate(zip(path_list, animal_expt_rule)):
             
             print("----------------")
             print(f"Currently loading: {path}")
@@ -186,6 +200,9 @@ class Dataset(object):
             print(m)
 
             metadats[i]["path"] = path
+            metadats[i]["animal"] = aer[0]
+            metadats[i]["expt"] = aer[1]
+            metadats[i]["rule"] = aer[2]
 
 
 
@@ -440,16 +457,29 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
+        assert len(self.Metadats)==1, "only works for single datasets"
         # Load tasks
         a = self.animals()
         e = self.expts()
+        r = self.Metadats[0]["rule"]
+        # print(self.Metadats[0])
+        # assert False
+        # print(r)
+
         if len(a)>1 or len(e)>1:
             assert False, "currently only works if single animal/ext dataset. can modify easily"
 
         # Find path, load Tasks
-        sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-all"
+        if len(r)>0:
+            sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-{r}-all"
+        else:
+            sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-all"
+
         pathlist = findPath(sdir, [], "Tasks", "pkl")
-        assert len(pathlist)==1
+        if len(pathlist)!=1:
+            print(pathlist)
+            assert False
+        # assert len(pathlist)==1
         with open(pathlist[0], "rb") as f:
             Tasks = pickle.load(f)
 
@@ -584,8 +614,11 @@ class Dataset(object):
         ###### remove empty strokes
         # for 
 
+        ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
+        assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
 
-    def find_dataset(self, animal, expt, assert_only_one=True):
+
+    def find_dataset(self, animal, expt, assert_only_one=True, rule=""):
         """ helper to locate path for presaved (from Probedat) dataset
         can then use this toload  it
         - assert_only_one, then asserts that one and only one path found.
@@ -598,7 +631,7 @@ class Dataset(object):
         SDIR_LIST = ["/data2/analyses/database/", "/data2/analyses/database/BEH"]
 
         def _find(SDIR):
-            pathlist = findPath(SDIR, [[animal, expt]], "dat", ".pkl", True)
+            pathlist = findPath(SDIR, [[animal, expt, rule]], "dat", ".pkl", True)
             return pathlist
 
         pathlist = []
