@@ -17,7 +17,6 @@ def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
     minmax = (np.min(X_nonan), np.max(X_nonan))
 
     # plot
-    # X = pd.DataFrame(X)           
     if zlims is not None: 
         sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
                robust=robust, vmin=zlims[0], vmax=zlims[1])
@@ -26,6 +25,7 @@ def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
                robust=robust)
     # ax.set_title(f"{pop}|{minmax[0]:.2f}...{minmax[1]:.2f}")
     ax.set_xlabel(f"robust={robust}|{minmax[0]:.2f}...{minmax[1]:.2f}")
+    ax.set_ylabel('neuron #')
         
 def plotNeurTimecourse(X, Xerror=None, ax=None):
     """ Plot overlaid timecourses. 
