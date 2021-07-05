@@ -60,15 +60,37 @@ class TaskClass(object):
     def _initialize_ml2(self, taskobj):
         """ Pass in a task from monkeylogic.
         - taskobj, task class from drawmodel.tasks
+
+        NOTES:
+        - self.Shapes is like list of lists, where lower lists are [shapename, tform params]
+            e.g., for ml2 [note: might be different for different task versions]
+            [['line',{'x': array(1.5),
+               'y': array(0.),
+               'th': array(0.),
+               'sx': array(2.),
+               'sy': array(2.),
+               'order': 'trs'}],
+             ['circle',
+              {'x': array(0.),
+               'y': array(1.5),
+               'th': array(0.),
+               'sx': array(0.7),
+               'sy': array(0.7),
+               'order': 'trs'}]
         """
 
         # Extract data
         self.Strokes = taskobj.Strokes
 
-        print("TODO: convert to program")
-        self.Program = None
-        # self.Program = Told.Task["TaskNew"]["Task"]["program"]
-        # self.Name = self.Params[""]
+        taskobj.program_extract()
+        self.Program = taskobj.Program
+
+        taskobj.objects_extract()
+        self.Shapes = taskobj.Objects
+        self.Shapes = [[S["obj"], S["tform"]] for S in self.Shapes] # conver to general format
+        for i in range(len(self.Shapes)):
+            self.Shapes[i][1]["theta"] = self.Shapes[i][1]["th"]
+            del self.Shapes[i][1]["th"]
 
     def _initialize_drawnn(self, program=None, shapes=None):
         """
@@ -97,7 +119,6 @@ class TaskClass(object):
         extracted from program. these are still symbolic. 
         --- can pass in shapes, in which case program will be None. I did this since 
         havent figured out best way to evaluate program.
-
         - strokes, is like shapes, but in numbers. This is computed automatically.
         """
 
@@ -128,7 +149,15 @@ class TaskClass(object):
         in_ = self.Params["input_ver"]
         out_ = "abstract"
 
+        # print(in_, out_)
+        # print(self.Strokes)
+
         self.Strokes = [self._convertCoords(s, in_, out_) for s in self.Strokes]
+
+        # print(self.Strokes)
+        # assert False
+
+        print("TODO (drawmodel-->taskgeneral): convert coords for self.Shapes. Do this in ml2 taskobject")
 
         # Convert strokes to points
         self.Points = np.stack([ss for s in self.Strokes for ss in s], axis=0) # flatten Strokes
@@ -219,7 +248,7 @@ class TaskClass(object):
 
 
 
-    #############################3
+    #############################
     def program2shapes(self, program):
         assert False, "not done, see __init__ for what need to do."
         shapes =[]
@@ -246,7 +275,7 @@ class TaskClass(object):
             - params, different options:
             --- list, will be passed into transform in order.
             --- dict, will be passed into transform as kwargs.
-            --- params order: [x=0, y=0, sx=1, sy=1, th=0, order="trs"]
+            --- params order: [x=0, y=0, sx=1, sy=1, theta=0, order="trs"]
             --- Note: can pass in None to get defaults.
             === NOTES
             - now line is centered at 0,0. Original primitives centered at (0.5,0)
@@ -287,6 +316,19 @@ class TaskClass(object):
 
 
 
+    ############ FILTERS
+    # def filter_by_shapes(self, F):
+    #     """ general purpose, for figuring whheter this task passes filter criteria. 
+    #     supports different ways of formatting F
+    #     INPUT
+    #     - F, different versions:
+    #     --- list of dicts, where each dict has the shape and range for params, where if fall
+    #     within range for all p[arams then consider this a pass. e..g, 
+    #     F = [{"shape":"circle", }]
+
+
+
+    ############ SAVING
     def save(self, sdir, suffix):
         """ save all this as pickle
         saves as f"{sdir}/task_{suffix}.pkl"

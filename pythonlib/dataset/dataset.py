@@ -446,10 +446,12 @@ class Dataset(object):
             self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
 
     ############### TASKS
-    def load_tasks_helper(self):
+    def load_tasks_helper(self, reinitialize_taskobjgeneral=True):
         """ To load tasks in TaskGeneral class format.
         Must have already asved them beforehand
         - Uses default path
+        - reinitialize_taskobjgeneral, then reinitializes, which is uiseful if code for
+        general taskclas updates.
         RETURN:
         - self.Dat has new column called Task
         NOTE: fails if any row is not found.
@@ -495,11 +497,19 @@ class Dataset(object):
         def F(x):
             trialcode = x["trialcode"]
             T = _get_task(Tasks, trialcode)
+
+            # Reinitalize tasks
+            if reinitialize_taskobjgeneral:
+                from pythonlib.drawmodel.taskgeneral import TaskClass
+                taskobj = T.Params["input_params"]
+                Tnew = TaskClass()
+                # print(taskobj.Task)
+                Tnew.initialize("ml2", taskobj)
+                T = Tnew
             return T
 
         self.Dat = applyFunctionToAllRows(self.Dat, F, "Task")      
         print("added new column self.Dat[Task]")  
-
 
 
 
@@ -585,6 +595,8 @@ class Dataset(object):
                 return "train"
             elif x["taskgroup"] in ["G2", "G3", "G4", "test_fixed", "test_random"]:
                 return "test"
+            elif x["taskgroup"] in ["undefined"]:
+                return "undefined"
             else:
                 print(x)
                 assert False, "huh"
