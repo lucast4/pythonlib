@@ -259,6 +259,20 @@ class Dataset(object):
         return all(outs)
 
 
+    def filterByTask(self, filtdict, kind="any_shape_in_range", return_ver="dataset"):
+        """ uses method in TaskGeneral class. 
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        # Make a new column, indicating whether passes filter
+        def F(x):
+            return x["Task"].filter_by_shapes(filtdict, kind)
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "tmp")
+
+        # filter
+        return self.filterPandas({"tmp":[True]}, return_ver=return_ver)
+
+
 
     def filterPandas(self, filtdict, return_ver = "indices"):
         """
@@ -2729,7 +2743,6 @@ class Dataset(object):
                 print("dont know this: ", k)
 
         return suff
-        # suff =         self.animal()
 
     def save_state(self, SDIR_MAIN, SDIR_SUB):
         """
@@ -2833,7 +2846,7 @@ class Dataset(object):
 
 
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True):
+        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False):
         """ plot multiple trials in a grid.
         - idxs, if list of indices, then plots those.
         --- if an integer, then plots this many random trials.
@@ -2881,15 +2894,15 @@ class Dataset(object):
             from pythonlib.tools.plottools import plotGridWrapper
             if which_strokes in ["strokes_beh", "parses"]:
                 plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
-                    add_stroke_number=add_stroke_number)
+                    add_stroke_number=add_stroke_number, centerize=centerize)
             elif which_strokes == "strokes_task":
                 # plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, 
                 #     add_stroke_number=add_stroke_number)
-                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True)
+                plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, centerize=centerize)
             else:
                 assert False
             data = [strokes_list[i] for i in idxs]
-            fig= plotGridWrapper(data, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes)
+            fig= plotGridWrapper(data, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
 
         if return_idxs:
             return fig, idxs

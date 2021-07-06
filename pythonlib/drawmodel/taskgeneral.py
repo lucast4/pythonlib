@@ -317,14 +317,58 @@ class TaskClass(object):
 
 
     ############ FILTERS
-    # def filter_by_shapes(self, F):
-    #     """ general purpose, for figuring whheter this task passes filter criteria. 
-    #     supports different ways of formatting F
-    #     INPUT
-    #     - F, different versions:
-    #     --- list of dicts, where each dict has the shape and range for params, where if fall
-    #     within range for all p[arams then consider this a pass. e..g, 
-    #     F = [{"shape":"circle", }]
+    def filter_by_shapes(self, F, kind):
+        """ general purpose, for figuring whheter this task passes filter criteria. 
+        supports different ways of formatting F
+        INPUT
+        - F, different versions:
+        --- list of dicts, where each dict has the shape and range for params, where if fall
+        within range for all p[arams then consider this a pass. e..g, 
+        F = [{"shape":"circle"}]
+        - kind, kind of filter.
+        """
+
+        if kind=="any_shape_in_range":
+            # return True if any shape has features that all fall within ranges for the
+            # features designated in F. Any features not designated will be ignored.
+            # e.g., F = {"x":[-0, 0.8], "y":[-1.6, -1.5], "sy":[0, 0.5]}
+            # NOTE: can pass in list len 0, if want to get exactly that value: e.g.,:
+            # F = {"x":[0], "y":[-1.5]}
+
+            def _check_shape(ind, feature, minval, maxval):
+                # returns True if shape ind's feature is between minval and maxval.
+                # is inclusive.
+                if self.Shapes[ind][1][feature]>=minval and self.Shapes[ind][1][feature]<=maxval:
+                    return True
+                else:
+                    return False
+
+            for ind in range(len(self.Shapes)):
+                check_list = []
+                for feature, valrange in F.items():
+                    assert isinstance(valrange, list)
+                    if len(valrange)==1:
+                        minval = valrange[0]
+                        maxval = valrange[0]
+                    else:
+                        minval = valrange[0]
+                        maxval = valrange[1]
+                    check_list.append(_check_shape(ind, feature, minval, maxval))
+                if all(check_list):
+                    # at least one shape (this) has passed. that is enough.
+                    return True
+
+            # none of the shapes passed all checks
+            return False
+
+        else:
+            print(kind)
+            print(F)
+            assert False, "not coded"
+
+                        
+
+
 
 
 

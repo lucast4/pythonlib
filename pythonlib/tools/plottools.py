@@ -517,6 +517,8 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     NOTE: will overlay plots if multiple pltos on same on.
     """
 
+    if titles is not None:
+        assert isinstance(titles, list)
     if cols is None or rows is None:
         # get so rows is 0, 1, 2, ... and cols is 0,0,0,...
         cols = []
