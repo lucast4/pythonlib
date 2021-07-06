@@ -81,9 +81,12 @@ class Dataset(object):
         - ver, str
         --- "single", endures that there is one and only one.
         --- "mult", allows multiple. if want animal or expt to 
-        - rule, some datasets defined by a "rule". 
-        iterate over pass in lists of strings.
+        - rule, some datasets defined by a "rule". To skip, pass in "" or None
+        NOTE: for animal, expt, or rule, can pass in lists of strings. Must use ver="mult"
         """
+        if rule is None:
+            rule = ""
+
         if ver=="single":
             pathlist = self.find_dataset(animal, expt, assert_only_one=True, rule=rule)
             self._main_loader(pathlist, None, animal_expt_rule=[(animal, expt, rule)])
@@ -95,10 +98,13 @@ class Dataset(object):
                 animal = [animal]
             if isinstance(expt, str):
                 expt = [expt]
+            if isinstance(rule, str):
+                rule = [rule]
             for a in animal:
                 for e in expt:
-                    pathlist.extend(self.find_dataset(a, e, True, rule=rule))
-                    aer_list.append((a,e,rule))
+                    for r in rule:
+                        pathlist.extend(self.find_dataset(a, e, True, rule=r))
+                        aer_list.append((a,e,r))
             self._main_loader(pathlist, None, animal_expt_rule=aer_list)
 
 
@@ -637,11 +643,45 @@ class Dataset(object):
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
-        ###### remove empty strokes
-        # for 
-
+        
         ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
         assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
+
+        ### reset tvals to the new earliest data
+        self._get_standard_time()
+
+        # Sort so is in increasing by date
+        self.Dat = self.Dat.sort_values("tvalfake", axis=0).reset_index(drop=True)
+
+
+    # i.e. tvals from probedat might not be accurate if here combining multiple datsets
+    def _get_standard_time(self, first_date=None):
+        """ get real-world time for each trial, but using a 
+        decimalized version that is not actual time, but is
+        good for plotting timecourses. relative to first_date, so that
+        for example, noon on first day is 1.5
+        INPUTS:
+        - first_date, if None, then uses the earlisest date over trials. Otherwise
+        pass in int or string (format YYMMDD)
+        RETURNS:
+        - modifies self.Dat, removes tval col and adds new col called "tvalfake"
+        """
+        from pythonlib.tools.datetools import standardizeTime
+        
+        # Remove old tvals.
+        if "tval" in self.Dat.columns:
+            self.Dat = self.Dat.drop("tval", axis=1)
+
+        # Add new tvals.
+        if first_date is None:
+            first_date = min(self.Dat["date"])
+
+        first_date = str(first_date) + "-000000"
+        def F(x):
+            dt = x["datetime"]
+            return standardizeTime(dt, first_date, daystart=0.417, dayend=0.792)
+        self.Dat= applyFunctionToAllRows(self.Dat, F, "tvalfake")
+
 
 
     def find_dataset(self, animal, expt, assert_only_one=True, rule=""):
@@ -2659,6 +2699,12 @@ class Dataset(object):
 
 
     ############## BEHAVIOR ANALYSIS
+    def score_visual_distance(self):
+        """
+        extract scalar score for each trial, based on position-wise distance
+        """
+
+
     def extract_beh_features(self, feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
         """ extract features, one val per row, 
         INPUT:
@@ -2937,6 +2983,10 @@ class Dataset(object):
 
         fig = sns.catplot(data=self.Dat, x="block", y="taskgroup", hue="monkey_train_or_test", 
             row="date", col="epoch", aspect=2)
+        figlist.append(fig)
+
+        fig = sns.catplot(data=self.Dat, x="tvalday", y="taskgroup", hue="monkey_train_or_test", 
+            row="task_stagecategory", col="epoch", aspect=2)
         figlist.append(fig)
 
         # fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="online_abort", 
