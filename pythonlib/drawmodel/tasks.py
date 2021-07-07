@@ -15,7 +15,12 @@ class TaskClass(object):
         _, tasklist = Probedat.pd2strokes(Probedat.Probedat) [this
         is same, but has also "strokes" and "fixpos"
         ... (nothing else coded so far)
+        NOTE: leave task as None if just want to initialize blank.
         """
+
+        if task is None:
+            return
+
         self.Task = task
         if "strokes" not in self.Task.keys():
             assert False, "see Probedat.pd2strokes for how to get this."
@@ -55,6 +60,294 @@ class TaskClass(object):
         del self.Task["y"]
         del self.Task["x_rescaled"]
         del self.Task["y_rescaled"]
+
+
+    ################## NAMING THE TASK (CATEGORIES)
+    def info_is_new(self):
+        """ true if this is a new task version
+        """
+        """ is this new (MakeDrawTasks) or old? 
+        only after 8/30/20 could they be new.
+        RETURNS:
+        - True, new
+        - False, old
+        """
+        task = self.Task
+        isnew = False
+        if "TaskNew" in task.keys():
+            if len(task["TaskNew"])>0:
+                isnew=True
+        return isnew
+
+    def info_is_fixed(self):
+        """ if True, then fixed, False, then random
+            [Copied from drawmonkey utils
+        """
+        if self.info_summarize_task()["stage"]=="triangle_circle":
+            # since was random, but actualyl only small set of fixed tasks.
+            return True
+        
+        info = self.info_summarize_task()
+        if info is None:
+            # thne this is old version. they were never "fixed"
+            return False
+
+        if info["prototype"]==0 and info["saved_setnum"] is None and info["resynthesized"]==0:
+            # then this is new random task sampled each block.
+            return False
+        else:
+            return True
+
+    def info_summarize_task(self):
+        """ helper to extract summary information
+        [Copied from drawmonkey utils
+        """
+
+        if self.info_is_new()==False:
+            return None
+
+        task = self.Task
+
+        if "constraints_to_skip" not in task.keys():
+            # then this was when I used general version in block params
+            if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
+                co = ""
+            else:
+                co = getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]["constraints_to_skip"]
+        else:
+            co = task["constraints_to_skip"]
+
+        if "TaskNew" not in task.keys():
+            p = 0
+            saved_setnum = []
+        else:
+            try:
+                if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
+                    p = 0
+                else:
+                    p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
+            except Exception as err:
+                print(err)
+                print(task)
+                print(task['TaskNew'])
+                print("This is old task version. how to handle?")
+                assert False
+
+            if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
+                if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
+                    saved_setnum = None
+                else:    
+                    saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
+            else:
+                saved_setnum = None
+
+        # was this resynthesized?
+        resynthesized = 0
+        rpath = None
+        rtrial = None
+        rsetnum = None
+        rsetname = None
+        if "savedTaskSet" in task.keys():
+            if len(task["savedTaskSet"])>0:
+                if task["savedTaskSet"]["reloaded"][0][0]==1:
+                    resynthesized = 1
+                    rpath = task["savedTaskSet"]["path"]
+                    rtrial = int(task["savedTaskSet"]["trial"][0][0])
+
+                    idx = task["savedTaskSet"]["path"].find("set")
+                    rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
+                    rsetname = task["savedTaskSet"]["path"][:idx-1]
+        else:
+            resynthesized = 0
+            rpath = None
+            rtrial = None
+            rsetnum = None
+            rsetname = None
+
+
+        if "feedback_ver_prms" not in task.keys():
+            fp = None
+        else:
+            fp = task["feedback_ver_prms"]
+
+        # === get task number.
+        # This identifies task if is prototype or savedsetnum.
+        # This may not identify, if is random task, or resynthesized task.
+        taskcat = task["TaskNew"]["Task"]["stage"]
+        taskstr = task["TaskNew"]["Task"]["str"]
+        idx = taskstr.find(taskcat)
+        tasknum = int(taskstr[idx+len(taskcat)+1:])
+
+        probe = {
+            "probe":task["probe"][0][0], 
+            "feedback_ver":task["feedback_ver"], 
+            "feedback_ver_prms":fp,
+            "constraints_to_skip":co, 
+            "prototype":p,
+            "saved_setnum":saved_setnum,
+            "tasknum":tasknum, 
+            "resynthesized":resynthesized, 
+            "resynthesized_path":rpath, 
+            "resynthesized_trial":rtrial, 
+            "resynthesized_setnum":rsetnum, 
+            "resynthesized_setname":rsetname, 
+            "stage":self.Task["stage"]
+            }
+        return probe
+    
+    def info_generate_unique_name(self, strokes=None, nhash = 6):
+        """ This is simialr to in utils, but here is more confident that each task
+        is unique. 
+        INPUTS:
+        - strokes, uses self.Strokes unless pass in strokes.
+        - nhash, num digits to use.
+        NOTE:
+        - here uses all pts, not just those at endpoints, since that important for sme
+        tasks. Differs from tools.utils, where ignores inside since same task might
+        have diff num pts at different times.
+        """
+        MIN = 1000
+
+        if strokes is None:
+            strokes = self.Strokes
+
+        # Collect each x,y coordinate, and flatten it into vals.
+        vals = []
+        # for S in self.Strokes:
+        #     vals.extend(S[0])
+        #     vals.extend(S[-1])
+        for S in strokes:
+            for SS in S:
+                vals.extend(SS)
+                # vals.extend(SS[1])
+        # print(np.diff(vals))
+        # tmp = np.sum(np.diff(vals))
+        # vals = np.asarray(vals)
+
+        vals = np.asarray(vals)
+        # vals = vals+MIN # so that is positive. taking abs along not good enough, since suffers if task is symmetric.
+
+        # Take product of sum of first and second halves.
+        # NOTE: checked that np.product is bad - it blows up.
+        # do this splitting thing so that takes into account sequence.
+        tmp1 = np.sum(vals[0::4])
+        tmp2 = np.sum(vals[1::4])
+        tmp3 = np.sum(vals[2::4])
+        tmp4 = np.sum(vals[3::4])
+
+        # rescale to 1
+        # otherwise some really large, some small.
+        # divie by 10 to make sure they are quite large.
+        tmp1 = tmp1/np.max([np.floor(tmp1)/10, 1])
+        tmp2 = tmp2/np.max([np.floor(tmp2)/10, 1])
+        tmp3 = tmp3/np.max([np.floor(tmp3)/10, 1])
+        tmp4 = tmp4/np.max([np.floor(tmp4)/10, 1])
+
+
+        # tmp1 = 1+tmp1-np.floor(tmp1)
+        # tmp2 = 1+tmp2-np.floor(tmp2)
+        # tmp3 = 1+tmp3-np.floor(tmp3)
+        # print(tmp1, tmp2, tmp3, tmp4)
+        # assert False
+
+        # tmp1 = np.sum(vals)
+        # tmp = np.sum(vals)
+
+        # Take only digits after decimal pt.
+        if True:
+            tmp = tmp1*tmp2*tmp3*tmp4
+            # print(tmp)
+            tmp = tmp-np.floor(tmp)
+            tmp = str(tmp)
+            # print(tmp)
+            # assert False
+        else:
+            # This doesnt work well, all tmps end up lookgin the same. 
+            tmp = np.log(np.abs(tmp1)) + np.log(np.abs(tmp2)) + np.log(np.abs(tmp3))
+            print(tmp)
+            tmp = str(tmp)
+            ind = tmp.find(".")
+            tmp = tmp[:ind] + tmp[ind+1:]
+        _hash = tmp[2:nhash+2]
+
+        # Compose the task name
+        taskcat = self.info_name_this_task_category()
+        tasknum = self.info_summarize_task()["tasknum"]
+        return f"{taskcat}_{tasknum}-{_hash}"
+
+    # SCRATCH - to compare tasks names before and after update hash code.
+    # answers whether task that are diff (but only one name before) now succesflyll 
+    # split inot diff names.
+    # dat = {}
+    # dat2 = {}
+    # for i in range(len(dfthis)):
+    #     name_new = dfthis.iloc[i]["Task"].Params["input_params"].info_generate_unique_name()
+    # #     name_old = dfthis.iloc[i]["unique_task_name"]
+    #     name_old = dfthis.iloc[i]["character"]
+        
+    #     if name_old in dat.keys():
+    #         dat[name_old].append(name_new)
+    #     else:
+    #         dat[name_old] = [name_new]
+        
+    #     if name_new in dat2.keys():
+    #         dat2[name_new].append(name_old)
+    #     else:
+    #         dat2[name_new] = [name_old]
+        
+    # dat = {k:list(set(v)) for k, v in dat.items()}
+    # dat2 = {k:list(set(v)) for k, v in dat2.items()}
+
+
+    # task = "mixture2-ss-52_1-376117"
+    # row_variable = "date"
+    # figb, figt = plot_beh_grid_singletask_alltrials(D, task, row_variable)
+    # # figb.savefig(f"{sdirthis}/{task}-beh.pdf");
+    # # figt.savefig(f"{sdirthis}/{task}-task.pdf");
+    # # plt.close("all")
+
+
+
+
+
+    def info_name_this_task_category(self):
+        """ 
+        Quick, to give unique name dependingon whther is fixed, ranodm, and 
+        if fixed, then what set num is it?
+        [Copied from utils, similar to make unique name]
+        """
+        info = self.info_summarize_task()
+        task = self.Task
+        if self.info_is_fixed():
+            if info["resynthesized"]==1:
+                taskname = f"{task['stage']}-rsyn-{info['resynthesized_setname']}-{info['resynthesized_setnum']}-{info['resynthesized_trial']}"
+            elif info["saved_setnum"] is not None:
+                taskname = f"{task['stage']}-ss-{info['saved_setnum']}"
+                # print(taskname)
+            elif info["prototype"]==1:
+                taskname = f"{task['stage']}-pt"
+            elif task["stage"]=="triangle_circle":
+                # then OK, hard coded to maek this a fixed task.
+                assert False, "not coded"
+                # taskname = _name(actuallyfixed=True)
+            else:
+                assert False, "i am confyused - not sure in what way this task is 'fixed'"
+
+        else:
+            taskname = f"{task['stage']}-random"
+
+        # === hard coded cases
+        # if task['str']=="triangle_circle_1" and filedata["params"]["expt"]=="arc2":
+        #     # these are same, but problem is that in figures9 I saved this as a set, while
+        #     # previously it was protytpye.
+        #     if append_hash_even_for_fixed:
+        #         h = f"-{_hash(nhash)}"
+        #     else:
+        #         h = ""
+        #     taskname = f"{task['str']}-savedset-1{h}"
+
+        return taskname
+
 
 
 
@@ -127,10 +420,11 @@ class TaskClass(object):
     ############# CONVERT TO OBJECTS
     # Objects is list of primitives, each with its own independent transofmation (locaiton, etc)
 
-    def objects_extract(self):
+    def objects_extract(self, fail_if_no_match=False):
         """ Initial extraction of objects (and their transforms).
         RETURNS:
         - modified self.Objects, which is list of dicts, one for each object.
+        - fail_if_no_match, then is fail if any subprograms not converted succesfulyl into object.
         NOTE:
         - There are multiple sources of this information. Get all, and make sure they corroborate.
         Also useful for me so here saving notes that might be useful later.
@@ -158,7 +452,7 @@ class TaskClass(object):
         self.program_extract()
         Objects = []
         for i in range(len(self.Program)):
-            Objects.append(self.program_interpret_subprog(i))
+            Objects.append(self.program_interpret_subprog(i, fail_if_no_match=fail_if_no_match))
         self.Objects = Objects
 
 
@@ -358,7 +652,24 @@ class TaskClass(object):
                     return None
 
         elif kind=="reflect":
-            assert False, "note: this is not standard ordered affine features, see https://github.com/lucast4/dragmonkey/blob/master/MonkeyLogicCode/task/drag/utils/tasks/taskDatabase.m"
+            if len(feats)>0:
+                theta = feats[0]
+                if len(theta)==0:
+                    from math import pi
+                    theta = np.asarray(pi/2)
+            else:
+                from math import pi
+                theta = pi/2
+            if len(feats)>1:
+                doreflect = feats[1]    
+            else:
+                doreflect = np.asarray(1.)
+
+
+            out["type"] = "reflect"
+            out["kind"] = "default"
+            out["theta"] = theta
+            out["doreflect"] = doreflect
 
         elif kind=="arc":
             # Is a stroke, but arc has 2 additional params before features
@@ -397,7 +708,7 @@ class TaskClass(object):
             assert False, "confirm that is correct assumption that the 1: items are features in order."
         return out
 
-    def program_interpret_subprog(self, ind_subprog):
+    def program_interpret_subprog(self, ind_subprog, fail_if_no_match=True):
         """ Decides if a subprogram is a "standard" object, like an 
         object primitive.
         And what is the final transformation in space
@@ -410,7 +721,7 @@ class TaskClass(object):
         self.program_extract()
         program = self.Program
 
-        def _compare_to_primitive_templates(lines_good, fail_if_no_match=True):
+        def _compare_to_primitive_templates(lines_good, fail_if_no_match=fail_if_no_match):
             """ checks if this matches predefined templates for action primitives.
             INPUTS:
             - lines_good, 
@@ -470,6 +781,8 @@ class TaskClass(object):
                 print(len(lines_good))
                 [print(l) for l in lines_good]
                 assert False, "failed to find match..."
+            else:
+                return None
 
         def _compose_transformations(lines_good):
             """ given multiple lines, extract final transformation, 
@@ -530,12 +843,15 @@ class TaskClass(object):
             lines_obj = lines_good[:2]
             lines_tform = lines_good[2:]
         else:
-            print(self.Task)
-            [print(l) for l in lines_good]
-            assert False, "coudl be either (1) obj needs multipel lines, like square, or (2) multiple lines of tform (e.g., global). solution: try both cases (where take last 1, 2, 3,,..) lines as tform. stop when get that first N-1 lines are a valid primitive"
-            # assume last line is tform
-            lines_obj = lines_good[:-1]
-            lines_tform = lines_good[-1:]
+            if fail_if_no_match:
+                print(self.Task)
+                [print(l) for l in lines_good]
+                assert False, "coudl be either (1) obj needs multipel lines, like square, or (2) multiple lines of tform (e.g., global). solution: try both cases (where take last 1, 2, 3,,..) lines as tform. stop when get that first N-1 lines are a valid primitive"
+            else:
+                out = {
+                    "obj":None,
+                    "tform":None}
+                return out
 
         # print(len(lines_good))
         # print(lines_tform)
@@ -580,6 +896,10 @@ def convertTask2Strokes(task, concat_timesteps=False, interp=None, fake_timestep
     - 7/16/20 - FIXED so that accurately splits into strokes, instead of asuming that NDOTS is 
     15. Now doesn't use NDOTS, instead uses onsets saved by matlab.
     """
+
+    if "strokes" in task.keys():
+        return task["strokes"]
+
     if False:
         # OLD: does not split into multiple strokes.
         strokes = np.concatenate((task["x_rescaled"], task["y_rescaled"]), axis=0).T

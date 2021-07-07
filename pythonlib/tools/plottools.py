@@ -597,3 +597,14 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     return fig
 
 
+def get_ylim(vals, pertile=[1.5, 98.5]):
+    """ helper, to get ylims for plotting, whch remove outliers,
+    """
+    # Then remove outliers.
+    YLIM = np.percentile(vals[~np.isnan(vals)], pertile)
+    ydelt = YLIM[1]-YLIM[0]
+
+    # THis, so doesnt cut off lower data
+    YLIM[0]-=0.1*ydelt
+    YLIM[1]+=0.1*ydelt
+    return YLIM

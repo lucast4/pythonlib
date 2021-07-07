@@ -1,6 +1,8 @@
 """ for seaborn plotting"""
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 def rotateLabel(ax, rotation=45, horizontalalignment="right"):
     """ seaborn, maek sure to add labels for catplot
@@ -90,3 +92,54 @@ def map_function_tofacet(fig, func):
         # ax.axhline(0, alpha=0.2, **kws)
 
     fig.map(F)
+
+
+def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None, grouping=None,
+    ALPHA = 0.5, doscatter=True, domean=True, squeeze_ylim=True):
+    """ plot timecourse, both scatter of pts and overlay means"""
+    
+    if grouping:
+        tmp = df[grouping].unique().tolist()
+        colors = ["r", "b", "g", "k"]
+        if len(tmp)<=len(colors):
+            PALLETE = {t:c for t, c in zip(tmp, colors)}
+        else:
+            PALLETE=None
+    else:
+        PALLETE = None
+
+    if YLIM is None and squeeze_ylim and doscatter:
+        from .plottools import get_ylim
+        YLIM = get_ylim(df[feat])
+
+    g = sns.FacetGrid(df, row=row, col=col, height=4, aspect=2, 
+                      sharex=True, sharey=True, ylim=YLIM)
+
+    # Different plots, depening on if timecourse, or summaries.
+    if xval=="tvalfake":
+        xvalmean = "tvalday"
+        scatplot = sns.scatterplot
+        meanplot = sns.lineplot
+    elif xval=="epoch":
+        xvalmean = "epoch"
+        scatplot = sns.swarmplot
+        meanplot = sns.pointplot
+    else:
+        print(xval)
+        assert False, "not sure what is mean summary for this xval"
+
+    if domean:
+        g.map(meanplot, xvalmean, feat, **{"err_style":"bars", "ci":68, "color":"k", "linewidth":2})
+    if doscatter:
+        if xval=="tvalfake":
+            g.map(sns.scatterplot, xval, feat, "epoch", **{"marker":"x", 
+                                                          "alpha":ALPHA,
+                                                                  "s":40, 
+                                                                  "palette":PALLETE})
+        elif xval=="epoch":
+            g.map(sns.swarmplot, xval, feat, "epoch", **{"alpha":ALPHA,
+                                                                  "s":4, 
+                                                                  "palette":PALLETE})
+    g.map(plt.axhline, **{"color":[0.7, 0.7, 0.7]})
+
+    return g

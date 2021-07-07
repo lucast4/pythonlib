@@ -87,19 +87,31 @@ def _groupingParams(D, expt):
         plantime_cats = {0.: "short", 1000.: "long"}
         feature_names = [f for f in feature_names if f not in 
             ["time_touchdone", "dist_touchdone", "offset_speed", "alignment"]] # exclude alignment if there is only one trial per task.
+    elif expt=="lines5":
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["straight", "bent"]
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]
     else:
         assert False
+
+
     D = D.filterPandas(F, return_ver="dataset")
 
     # classify based on plan times
-    F = lambda x: plantime_cats[x["plan_time"]]
-    D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
+    if len(plantime_cats)>0:
+        F = lambda x: plantime_cats[x["plan_time"]]
+        D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, features_to_remove_outliers
 
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
-    remove_outliers=False, sequence_match_kind=None):
+    remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
+    score_all_pairwise_within_task=False):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -133,6 +145,17 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         tmp[tmp<0.] = 0.
         D.Dat["plan_time"] = tmp
 
+    # (3) Apply grouping variabples + prune dataset
+    print("- starting/ending len (grouping params):")
+    print(len(D.Dat))
+    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, features_to_remove_outliers \
+        = _groupingParams(D, expt)
+    print(len(D.Dat))
+
+
+    # Only keep characters that have at lesat one trial across all grouping levels.
+    D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
+
     # -- std of stroke and gaps
     if "motorevents" in D.Dat.columns:
         def F(x, ver):
@@ -149,54 +172,51 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "stroke"), "sdur_std")
         D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "gap"), "gdur_std")
 
-    # -- hausdorff, offline score
-    def F(x):
-        return distscalarStrokes(x["strokes_beh"], x["strokes_task"], "position_hd")
-    D.Dat = applyFunctionToAllRows(D.Dat, F, "hdoffline")
+    ### EXTRACT FEATURES
+    # - hausdorff, offline score
+    D.extract_beh_features(feature_list = FEATURE_NAMES)
+    D.score_visual_distance()
 
     # -- pull out variables into separate columns
-    for col in ["motortiming", "motorevents"]:
-        keys = D.Dat[col][0].keys()
-        for k in keys:
-            def F(x):
-                return x[col][k]
-            D.Dat = applyFunctionToAllRows(D.Dat, F, k)
+    if extract_motor_stats:
+        for col in ["motortiming", "motorevents"]:
+            keys = D.Dat[col][0].keys()
+            for k in keys:
+                def F(x):
+                    return x[col][k]
+                D.Dat = applyFunctionToAllRows(D.Dat, F, k)
 
-    # - derived motor stats
-    D.Dat["stroke_speed"] = D.Dat["dist_strokes"]/D.Dat["sdur"]
-    D.Dat["gap_speed"] = D.Dat["dist_gaps"]/D.Dat["isi"]
-    D.Dat["onset_speed"] = D.Dat["dist_raise2firsttouch"]/D.Dat["time_raise2firsttouch"]
-    D.Dat["offset_speed"] = D.Dat["dist_touchdone"]/D.Dat["time_touchdone"]
+        # - derived motor stats
+        D.Dat["stroke_speed"] = D.Dat["dist_strokes"]/D.Dat["sdur"]
+        D.Dat["gap_speed"] = D.Dat["dist_gaps"]/D.Dat["isi"]
+        D.Dat["onset_speed"] = D.Dat["dist_raise2firsttouch"]/D.Dat["time_raise2firsttouch"]
+        D.Dat["offset_speed"] = D.Dat["dist_touchdone"]/D.Dat["time_touchdone"]
 
-    # D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"] + D.Dat["dist_raise2firsttouch"] + D.Dat["dist_touchdone"]
-    # D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"] + D.Dat["time_raise2firsttouch"] + D.Dat["time_touchdone"]
-    # D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
-    D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"]
-    D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"]
-    D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
+        # D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"] + D.Dat["dist_raise2firsttouch"] + D.Dat["dist_touchdone"]
+        # D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"] + D.Dat["time_raise2firsttouch"] + D.Dat["time_touchdone"]
+        # D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
+        D.Dat["total_distance"] = D.Dat["dist_strokes"] + D.Dat["dist_gaps"]
+        D.Dat["total_time"] = D.Dat["sdur"] + D.Dat["isi"]
+        D.Dat["total_speed"] = D.Dat["total_distance"]/D.Dat["total_time"]
 
-    D.Dat["dist_per_gap"] = D.Dat["dist_gaps"]/(D.Dat["nstrokes"]-1)
-    D.Dat["dist_per_stroke"] = D.Dat["dist_strokes"]/(D.Dat["nstrokes"])
+        D.Dat["dist_per_gap"] = D.Dat["dist_gaps"]/(D.Dat["nstrokes"]-1)
+        D.Dat["dist_per_stroke"] = D.Dat["dist_strokes"]/(D.Dat["nstrokes"])
 
-
-
-    # (3) Apply grouping variabples + prune dataset
-    print("- starting/ending len (grouping params):")
-    print(len(D.Dat))
-    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, features_to_remove_outliers = _groupingParams(D, expt)
-    print(len(D.Dat))
 
     # (4) Sequences more similar within group than between?
-    from pythonlib.dataset.analy import score_all_pairwise_within_task
-    from pythonlib.dataset.analy import score_alignment
-    DIST_VER = "dtw_split_segments"
+    if score_all_pairwise_within_task:
+        from pythonlib.dataset.analy import score_all_pairwise_within_task
+        from pythonlib.dataset.analy import score_alignment
+        DIST_VER = "dtw_split_segments"
 
-    # - score all pairwise, trials for a given task
-    SCORE_COL_NAMES = score_all_pairwise_within_task(D, GROUPING, GROUPING_LEVELS,
-        DIST_VER, DONEG=True)
+        # - score all pairwise, trials for a given task
+        SCORE_COL_NAMES = score_all_pairwise_within_task(D, GROUPING, GROUPING_LEVELS,
+            DIST_VER, DONEG=True)
 
-    # - score alignment
-    score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
+        # - score alignment
+        score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
+    else:
+        SCORE_COL_NAMES = []
 
 
     # - score beh sequence rank relative to parses
@@ -236,9 +256,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         D.removeOutlierRowsTukey(F, niqr=2.5, replace_with_nan=True)
     if remove_outliers:
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
-
-    # Only keep characters that have at lesat one trial across all grouping levels.
-    D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
@@ -533,4 +550,63 @@ def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list):
             assert False
     D.Dat = applyFunctionToAllRows(D.Dat, F, "alignment")
 
+def taskmodel_assign_score(D, expt="lines5"):
+    """ Quick and dirty, to replicate what did in Probedat, for scoring datsate.
+    Uses probedat here just to extract Params.
+    Note: only works for lines5 currently - the chunkmodel functin.
+    OUTPUT:
+    - new columnds in D.Dat, with names as in model_score_names
+    - model_score_names, list of strings.
+    """
+    from pythonlib.drawmodel.taskmodel import Model, makeParseFunction, getParamsWrapper
+    from pythonlib.drawmodel.taskmodel import Dataset as DatasetModel
 
+    assert expt=="lines5", "otherwise make this more general purpose params"
+
+    # -- 2) Fit different models.
+    model_score_names = []
+    for likeliver, priorver, parse_ver, chunkmodel, posterior_ver, name in zip(
+        ["segments", "segments"],
+        ["uniform","uniform"], 
+        ["chunks", "chunks"],
+        ["3line", None],
+        ["maxlikeli", "maxlikeli"],
+        ["3line", "linePlusL"]):
+
+#         PD = ProbedatTaskmodel([])
+
+        # 3) Buidl model
+        if name in ["linePlusL", "linePlusL_combine", "onechunk"]:
+            chunkmodel = makeParseFunction(name)
+            
+        assert chunkmodel is not None, "need to replace this with ParseFunction.."
+        PARAMS, PARAMS_MODEL = getParamsWrapper(priorver=priorver, parse_ver=parse_ver, 
+                                            chunkmodel=chunkmodel, name=name,
+                                            posterior_ver=posterior_ver, 
+                                            likeliver=likeliver)
+
+        PARAMS_DATA, PARAMS_MODEL = getParamsWrapper(priorver, parse_ver, chunkmodel,
+            name, posterior_ver, likeliver)
+
+        # Prepare dataset
+        strokes = D.Dat["strokes_beh"].to_list()
+        strokes_task = D.Dat["strokes_task"].to_list()
+        fix = D.Dat["origin"].to_list()
+        tasks = [D.Dat["Task"].iloc[i].Params["input_params"].Task for i in range(len(D.Dat))]
+        for stask, f, T in zip(strokes_task, fix, tasks):
+            T["strokes"] = stask
+            T["fixpos"] = f
+    
+        # Score using this model.
+        mod = Model(PARAMS_MODEL)
+        data = DatasetModel(strokes, tasks, PARAMS=PARAMS)
+        data.applyModel(mod)
+
+        # Assign scores back into dataset
+        assert len(D.Dat)==len(data.trials)
+        namethis = f"MOD_{name}"
+        D.Dat[namethis] = [t["posterior"] for t in data.trials]
+        model_score_names.append(namethis)
+
+            
+    return model_score_names

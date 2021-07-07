@@ -89,8 +89,9 @@ class TaskClass(object):
         self.Shapes = taskobj.Objects
         self.Shapes = [[S["obj"], S["tform"]] for S in self.Shapes] # conver to general format
         for i in range(len(self.Shapes)):
-            self.Shapes[i][1]["theta"] = self.Shapes[i][1]["th"]
-            del self.Shapes[i][1]["th"]
+            if self.Shapes[i][1] is not None:
+                self.Shapes[i][1]["theta"] = self.Shapes[i][1]["th"]
+                del self.Shapes[i][1]["th"]
 
     def _initialize_drawnn(self, program=None, shapes=None):
         """
@@ -144,6 +145,7 @@ class TaskClass(object):
         """ initial conversion of input coordinate system into abstract system
         Modifies: Strokes and Points. 
         TODO: have not done for self.Program and self.Strokes
+        print("TODO (drawmodel-->taskgeneral): convert coords for self.Shapes. Do this in ml2 taskobject")
         """
 
         in_ = self.Params["input_ver"]
@@ -157,7 +159,6 @@ class TaskClass(object):
         # print(self.Strokes)
         # assert False
 
-        print("TODO (drawmodel-->taskgeneral): convert coords for self.Shapes. Do this in ml2 taskobject")
 
         # Convert strokes to points
         self.Points = np.stack([ss for s in self.Strokes for ss in s], axis=0) # flatten Strokes
@@ -244,7 +245,16 @@ class TaskClass(object):
             taskstr = self.Params["input_params"].Task["str"]
             idx = taskstr.find(taskcat)
             tasknum = int(taskstr[idx+len(taskcat)+1:])
+        else:
+            assert False
         return taskcat, tasknum
+
+    def get_category_setnum(self):
+        if self.Params["input_ver"]=="ml2":
+            taskcat = self.Params["input_params"].info_name_this_task_category()   
+            return taskcat
+        else:
+            assert False
 
 
 

@@ -19,6 +19,8 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
     NOTES:
     - plots both strokes_ver and "strokes_task"
     """
+
+
     from pythonlib.tools.plottools import plotGridWrapper
 
     # extract data to plot
@@ -39,17 +41,16 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
         col_labels = col_labels, row_labels=row_labels)
 
 
-    plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, naked=True)
+    # plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, naked=True)
+    plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, naked=True)
     figtask = plotGridWrapper(strokestasklist, plotfunc, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
         col_labels = col_labels, row_labels=row_labels)
 
     return figbeh, figtask
 
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
-
-
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
-    plotfuncbeh=None):
+    plotfuncbeh=None, max_n_per_grid=1):
     """
     Helper (USEFUL) for plotting 2d grid of beh (strokes), with columns as unique tasks, and
     rows as flexible grouping variable.
@@ -87,10 +88,11 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
     dfthis = applyFunctionToAllRows(dfthis, row_mapper, "row")
     dfthis = applyFunctionToAllRows(dfthis, col_mapper, "col")
 
+
     # tasknames too long, so prune for plotting
-    tasklist_titles = [t[:18] + "..." for t in tasklist]
+    tasklist_titles = [t[:10] + ".." + t[-5:] for t in tasklist]
     # Plot
-    figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=1, 
+    figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, 
         col_labels = tasklist_titles, row_labels=row_levels, plotfuncbeh=plotfuncbeh, 
         **plotkwargs)
 
@@ -134,7 +136,6 @@ def plot_beh_grid_singletask_alltrials(D, task, row_variable, row_levels=None, p
     # PLOT
     figb, figt = plot_dat_grid_inputrowscols(dfplot, row_labels=row_levels, plotfuncbeh=None, **plotkwargs)
 
-
     return figb, figt
 
 def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=None, plotkwargs = {},
@@ -169,4 +170,31 @@ def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=No
     plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, strokes_ypos_list=strokespeed_list, ax=ax, ylabels=labels)
     return fig
 
+
+def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True):
+    """
+    Plot timecourse, (feature vs. tval) to summarize an expt. Separate 
+    columns (character) and rows (taskgroup) and colors (epochs).
+    Overlays indivitual trials and within day mean. 
+    - xval, string, for what to use on x axis:
+    --- "tvalfake", then is time
+    --- "epoch" then is grouping across trials, based on epoch.
+    - features_list, list of strings, columns of D.Dat, where values are scalars
+    - grouping, string, where defines levels (for colored epochs)
+    NOTE:
+    - this used in model expt timecurse analyses
+    """
+    from pythonlib.tools.snstools import timecourse_overlaid
+    DF = D.Dat
+    # YLIM = [0, 6]
+    row = "task_stagecategory"
+    col = "taskgroup"
+    figlist = []
+    for f in features_list:
+        # feat = f"FEAT_{f}"
+        feat = f
+        fig = timecourse_overlaid(DF, feat, xval=xval, row=row, col=col, grouping=grouping,
+         doscatter=doscatter, domean=domean)
+        figlist.append(fig)
+    return figlist
 

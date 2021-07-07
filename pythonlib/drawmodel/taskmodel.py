@@ -243,6 +243,11 @@ class Model(object):
         - params, tuple of params, flexible depending on ver
         """
 
+        if len(scores_all)==0:
+            print(ver)
+            print(params)
+            assert False
+
         if ver=="divide":
             # simple, just divide by sum of alls cores
             # if any is negative, then subtracts it.
@@ -270,7 +275,7 @@ class Model(object):
                     # then subtract mean. this useful if large variation across trials for mean
                     scores_all = scores_all - np.mean(scores_all)
                 scores_all = params[0]*scores_all
-            probs = softmax(scores_all)
+            probs = softmax(scores_all) 
             # probs = softmax(scores_all)
             return probs
         else:
@@ -612,19 +617,6 @@ class Dataset(object):
         out["post_scores"] = np.array([t["posterior"] for t in self.trials])
         return out
 
-
-
-    
-class Taskset(object):
-    
-    def __init__(self, tasks):
-        """ tasks should be list of dicts. this will format tasks 
-        so that will go into the Dataset object smothly.
-        [ION PROGRESS] Not sure I actually need this. can just enter
-        tasks directly into the Dataset object.
-        """
-
-        self.tasks = tasks # list of dicts.
 
 
 def makeLikeliFunction(ver="segments", norm_by_num_strokes=True, 

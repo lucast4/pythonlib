@@ -210,8 +210,6 @@ class Dataset(object):
             metadats[i]["expt"] = aer[1]
             metadats[i]["rule"] = aer[2]
 
-
-
         self.Dat = pd.concat(dat_list, axis=0)
         self.Metadats = metadats
 
@@ -336,6 +334,7 @@ class Dataset(object):
     def removeTrialsExistAcrossGroupingLevels(self, GROUPING, GROUPING_LEVELS):
         """ only keeps trials that exist across all grouping levels (conditions on character)
         """
+        _checkPandasIndices(self.Dat)
 
         tasklist = self.Dat["character"].unique().tolist()
         inds_to_remove = []
@@ -533,6 +532,8 @@ class Dataset(object):
 
 
 
+
+
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
         """ True if single, False, if you 
@@ -551,6 +552,12 @@ class Dataset(object):
         print("=== CLEANING UP self.Dat ===== ")
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
+        # dfthis = self.Dat[self.Dat["random_task"]==False]
+        # dfthis = self.Dat
+        # tasklist = dfthis["unique_task_name"]
+        # print([t for t in tasklist if "set-53" in t])
+        # # print(sorted(dfthis["unique_task_name"]))
+        # assert False
 
         ####### Remove online aborts
         # print("ORIGINAL: online abort values")
@@ -628,7 +635,52 @@ class Dataset(object):
         self.Dat = self.Dat.reset_index(drop=True)
 
 
-        ######## assign a "character" name to each task.
+
+        ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
+        assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
+
+        ### reset tvals to the new earliest data
+        self._get_standard_time()
+
+        # Sort so is in increasing by date
+        self.Dat = self.Dat.sort_values("tvalfake", axis=0).reset_index(drop=True)
+
+        # Remove trial day since this might not be accurate anymore (if mixing datasets)
+        if "trial_day" in self.Dat.columns:
+            self.Dat = self.Dat.drop("trial_day", axis=1)
+
+        # Replace epoch with rule, if that exists
+        def F(x):
+            idx = x["which_metadat_idx"]
+            if self.Metadats[idx]["rule"]:
+                return self.Metadats[idx]["rule"]
+            else:
+                return idx+1
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+
+        # Add new column where abort is now True or False (since None was hjard to wrok with)
+        def F(x):
+            if x["online_abort"] is None:
+                return False
+            else:
+                return True
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "aborted")
+        self.Dat["online_abort_ver"] = self.Dat["online_abort"] # so not confused in previous code for Non
+        self.Dat = self.Dat.drop("online_abort_ver", axis=1)
+
+        if "Task" in self.Dat.columns:
+            # Replace unique name with new one, if tasks have been loaded
+            def F(x):
+                return x["Task"].Params["input_params"].info_generate_unique_name()
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "unique_task_name")
+
+            # task cartegories should include setnum
+            def F(x):
+                return x["Task"].get_category_setnum()
+            from pythonlib.tools.pandastools import applyFunctionToAllRows
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "task_stagecategory")
+        
+        # assign a "character" name to each task.
         def F(x):
             if x["random_task"]:
                 # print(x["task_stagecategory"])
@@ -640,18 +692,14 @@ class Dataset(object):
                 return x["unique_task_name"]
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
 
+
+        # Remove any trials that were online abort.
+        self.Dat = self.Dat[self.Dat["aborted"]==False]
+        print("Removed online aborts")
+
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
-        
-        ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
-        assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
-
-        ### reset tvals to the new earliest data
-        self._get_standard_time()
-
-        # Sort so is in increasing by date
-        self.Dat = self.Dat.sort_values("tvalfake", axis=0).reset_index(drop=True)
 
 
     # i.e. tvals from probedat might not be accurate if here combining multiple datsets
@@ -679,8 +727,15 @@ class Dataset(object):
         first_date = str(first_date) + "-000000"
         def F(x):
             dt = x["datetime"]
-            return standardizeTime(dt, first_date, daystart=0.417, dayend=0.792)
+            # return standardizeTime(dt, first_date, daystart=0.417, dayend=0.792)
+            return standardizeTime(dt, first_date)
         self.Dat= applyFunctionToAllRows(self.Dat, F, "tvalfake")
+
+        # tvalday is just the day (plus 0.6) useful for plotting
+        def F(x):
+            return np.floor(x["tvalfake"])+0.6
+        self.Dat= applyFunctionToAllRows(self.Dat, F, "tvalday")
+
 
 
 
@@ -2699,10 +2754,24 @@ class Dataset(object):
 
 
     ############## BEHAVIOR ANALYSIS
-    def score_visual_distance(self):
+    def score_visual_distance(self, DVER = "position_hd_soft", return_vals=False):
         """
         extract scalar score for each trial, based on position-wise distance
+        - return_vals, then returns list of vals, without modifiying self.Dat
         """
+        from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+        # Distance function
+        def F(x):
+            strokes_beh = x["strokes_beh"]
+            strokes_task = x["strokes_task"]
+            return distscalarStrokes(strokes_beh, strokes_task, DVER, 
+                                     do_spatial_interpolate=True, do_spatial_interpolate_interval = 10)
+        if return_vals:
+            df = applyFunctionToAllRows(self.Dat, F, "hdoffline")
+            return df["hdoffline"].to_list()
+        else:
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "hdoffline")
 
 
     def extract_beh_features(self, feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
@@ -2733,13 +2802,16 @@ class Dataset(object):
                     x= [np.mean(strokeCircularity(strokes)) for strokes in self.Dat["strokes_beh"].values]
                 elif f=="dist":
                     x = [np.mean(strokeDistances(strokes)) for strokes in self.Dat["strokes_beh"].values]
+                elif f=="hdoffline":
+                    x = self.score_visual_distance(return_vals=True)
                 else:
                     print(f)
                     assert False
 
             print(f"Num nan/total, for {f}")
             print(sum(np.isnan(x)), "/", len(x))
-            self.Dat[f"FEAT_{f}"] = x
+            # self.Dat[f"FEAT_{f}"] = x
+            self.Dat[f] = x
             feature_list_names.append(f"FEAT_{f}")
 
         print("Added these features:")
@@ -3343,14 +3415,40 @@ def concatDatasets(Dlist):
 
     Dnew = Dataset([])
 
-    dflist = [D.Dat for D in Dlist]
-    Dnew.Dat = pd.concat(dflist)
+    if True:
+        # New, updates metadat.
+        ct = 0
+        dflist = []
+        metadatlist = []
+        for D in Dlist:
+            
+            if len(D.Metadats)>1:
+                print("check that this is working.. only confied for if len is 1")
+                assert False
 
-    del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+            # add to metadat index
+            df = D.Dat.copy()
+            df["which_metadat_idx"] = df["which_metadat_idx"]+ct
+            dflist.append(df)
 
-    Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+            # Combine metadats
+            metadatlist.extend([m for m in D.Metadats.values()])
 
-    print("Done!, new len of dataset", len(Dnew.Dat))
-    # Dnew.Metadats = copy.deepcopy(self.Metadats)
+            ct = ct+len(D.Metadats)
+        Dnew.Dat = pd.concat(dflist)
+        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+        Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
+        print("Done!, new len of dataset", len(Dnew.Dat))
+    else:
+        # OLD: did not update metadat.
+        dflist = [D.Dat for D in Dlist]
+        Dnew.Dat = pd.concat(dflist)
+
+        del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+
+        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+
+        print("Done!, new len of dataset", len(Dnew.Dat))
+        # Dnew.Metadats = copy.deepcopy(self.Metadats)
     return Dnew
 
