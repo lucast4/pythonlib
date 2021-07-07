@@ -654,9 +654,13 @@ class TaskClass(object):
         elif kind=="reflect":
             if len(feats)>0:
                 theta = feats[0]
-                if len(theta)==0:
-                    from math import pi
-                    theta = np.asarray(pi/2)
+                try:
+                    if len(theta)==0:
+                        from math import pi
+                        theta = np.asarray(pi/2)
+                except Exception as err:
+                    print(feats)
+                    raise err
             else:
                 from math import pi
                 theta = pi/2
@@ -702,10 +706,16 @@ class TaskClass(object):
             out["ctrlpts"] = ctrlpts
 
         else:
-            print(kind)
-            print(feats)
-            print(prims_list)
-            assert False, "confirm that is correct assumption that the 1: items are features in order."
+            # Generic
+            out["type"] = None
+            out["kind"] = None
+            out["affine"] = None
+
+        # else:
+        #     print(kind)
+        #     print(feats)
+        #     print(prims_list)
+        #     assert False, "confirm that is correct assumption that the 1: items are features in order."
         return out
 
     def program_interpret_subprog(self, ind_subprog, fail_if_no_match=True):

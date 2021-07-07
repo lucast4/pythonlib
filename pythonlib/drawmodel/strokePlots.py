@@ -159,6 +159,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         mark_stroke_onset=False
         # pcol = [[0.45, 0.3, 0.3]]
         pcol = [[0.3, 0.2, 0.2]]
+        alpha = 1
         plotver="onecolor"
 
 
