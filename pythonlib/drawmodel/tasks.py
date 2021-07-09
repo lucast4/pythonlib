@@ -655,9 +655,13 @@ class TaskClass(object):
             if len(feats)>0:
                 theta = feats[0]
                 try:
-                    if len(theta)==0:
-                        from math import pi
-                        theta = np.asarray(pi/2)
+                    if isinstance(theta, list):
+                        if len(theta)==0:
+                            from math import pi
+                            theta = np.asarray(pi/2)
+                    # if len(theta)==0:
+                    #     from math import pi
+                    #     theta = np.asarray(pi/2)
                 except Exception as err:
                     print(feats)
                     raise err

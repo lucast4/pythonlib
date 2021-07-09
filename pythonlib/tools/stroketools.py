@@ -39,6 +39,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         N = ["npts", 100], same time range, but 100 pts
         N = ["updnsamp", 1.5] then up or down samples (here up by 1.5)
         N = ["fsnew", 1000, 125] then targets new fs 1000, assuming
+        N = ["interval", interval], for spatial,
         initially 125.
         - base, 
         -- index, then replaces time with index before interpolating.
@@ -1038,6 +1039,7 @@ def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):
         assert False, "not coded"
     return strokes_list
 
+#### BELOW: IGNORE, INSTEAD USE WRAPPER.
 def getCircularPerm(strokes):
     """ get circular permutation of storkes, returning
     a list containing all permutations.

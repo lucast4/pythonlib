@@ -7,7 +7,8 @@ from ..drawmodel.strokePlots import plotDatStrokes
 from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
-    col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None):
+    col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
+    max_cols = 40, max_rows=40):
     """ in each grid position, plots a single trial; (e.. strokes)
     df must have two columns, row and col, which indicate where to plot each
     trial.
@@ -22,6 +23,14 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 
 
     from pythonlib.tools.plottools import plotGridWrapper
+
+    # only keep trials that are within the col range
+    a = len(df)
+    df = df[df["col"]<max_cols]
+    df = df[df["row"]<max_rows].reset_index(drop=True)
+    if len(df)<a:
+        print("Old len(df):", a)
+        print("New, removing if too many col or row:", len(df))
 
     # extract data to plot
     strokeslist = df[strokes_ver].values

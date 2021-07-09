@@ -95,7 +95,24 @@ def _groupingParams(D, expt):
         features_to_remove_outliers = []
         grouping_levels = ["straight", "bent"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]
+    elif expt=="linecircle":
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["null"]
+        feature_names = ["hdoffline"]
+    elif expt=="figures9":
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["straight", "bent"]
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]        
     else:
+        print(expt)
         assert False
 
 
@@ -608,5 +625,5 @@ def taskmodel_assign_score(D, expt="lines5"):
         D.Dat[namethis] = [t["posterior"] for t in data.trials]
         model_score_names.append(namethis)
 
-            
+
     return model_score_names

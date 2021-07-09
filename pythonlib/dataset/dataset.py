@@ -465,12 +465,13 @@ class Dataset(object):
             self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
 
     ############### TASKS
-    def load_tasks_helper(self, reinitialize_taskobjgeneral=True):
+    def load_tasks_helper(self, reinitialize_taskobjgeneral=True, redo_cleanup=True):
         """ To load tasks in TaskGeneral class format.
         Must have already asved them beforehand
         - Uses default path
         - reinitialize_taskobjgeneral, then reinitializes, which is uiseful if code for
         general taskclas updates.
+        - redo_cleanup, useful since some cleanup items require that tasks are already loaded.
         RETURN:
         - self.Dat has new column called Task
         NOTE: fails if any row is not found.
@@ -530,7 +531,8 @@ class Dataset(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, "Task")      
         print("added new column self.Dat[Task]")  
 
-
+        if redo_cleanup:
+            self._cleanup_using_tasks()
 
 
 
@@ -618,7 +620,7 @@ class Dataset(object):
         # For convenience, add column for whether task is train or test (from
         # monkey's perspective)
         def F(x):
-            if x["taskgroup"] in ["train_fixed", "train_random"]:
+            if x["taskgroup"] in ["train_fixed", "train_random", "T1"]:
                 return "train"
             elif x["taskgroup"] in ["G2", "G3", "G4", "test_fixed", "test_random"]:
                 return "test"
@@ -669,18 +671,43 @@ class Dataset(object):
         self.Dat = self.Dat.drop("online_abort_ver", axis=1)
 
         if "Task" in self.Dat.columns:
-            # Replace unique name with new one, if tasks have been loaded
-            def F(x):
-                return x["Task"].Params["input_params"].info_generate_unique_name()
-            self.Dat = applyFunctionToAllRows(self.Dat, F, "unique_task_name")
+            self._cleanup_using_tasks()
 
-            # task cartegories should include setnum
-            def F(x):
-                return x["Task"].get_category_setnum()
-            from pythonlib.tools.pandastools import applyFunctionToAllRows
-            self.Dat = applyFunctionToAllRows(self.Dat, F, "task_stagecategory")
-        
         # assign a "character" name to each task.
+        self._cleanup_rename_characters()
+
+        # Remove any trials that were online abort.
+        self.Dat = self.Dat[self.Dat["aborted"]==False]
+        print("Removed online aborts")
+
+        ####
+        self.Dat = self.Dat.reset_index(drop=True)
+
+    def _cleanup_using_tasks(self):
+        """ cleanups that require "Tasks" in columns,
+        i.e,, extract presaved tasks
+        """
+
+        assert "Task" in self.Dat.columns
+
+        # Replace unique name with new one, if tasks have been loaded
+        def F(x):
+            return x["Task"].Params["input_params"].info_generate_unique_name()
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "unique_task_name")
+
+        # task cartegories should include setnum
+        def F(x):
+            return x["Task"].get_category_setnum()
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "task_stagecategory")
+
+        # rename charactesrs
+        self._cleanup_rename_characters()
+
+
+    def _cleanup_rename_characters(self):
+        """ makes column called "character" which is the unique name for fixed tasks 
+        and the category name for random tasks."""
+
         def F(x):
             if x["random_task"]:
                 # print(x["task_stagecategory"])
@@ -691,14 +718,6 @@ class Dataset(object):
                 # print(x["unique_task_name"])
                 return x["unique_task_name"]
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
-
-
-        # Remove any trials that were online abort.
-        self.Dat = self.Dat[self.Dat["aborted"]==False]
-        print("Removed online aborts")
-
-        ####
-        self.Dat = self.Dat.reset_index(drop=True)
 
 
 
