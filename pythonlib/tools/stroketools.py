@@ -541,13 +541,19 @@ def convertTimeCoord(strokes_in, ver="dist", fakegapdist=0.):
     
     if ver=="dist":
         cumdist=0.
-        for strok in strokes:
+        for i, strok in enumerate(strokes):
             c = np.cumsum(np.linalg.norm(np.diff(strok[:,[0,1]], axis=0), axis=1))
             c = np.r_[0., c]
             distthis = c[-1] # copy to add to cumdist
             c += cumdist
             cumdist += distthis + fakegapdist
-            strok[:,2] = c
+            if strok.shape[1]>2:
+                strok[:,2] = c
+            else:
+                strok = np.c_[strok, c]
+                assert strok.shape[1]==3
+            strokes[i] = strok
+
     else:
         print(ver)
         assert False, "not coded"
@@ -1000,7 +1006,12 @@ def check_strokes_in_temporal_order(strokes):
         assert np.all(np.diff(times)>=0)
 
 
-
+def strokes_identical(strokes1, strokes2):
+    """ returns True if strokes1 and 2 are identical.
+    this includes having same sahpe, and same time stamps
+    """
+    return all([np.all(np.isclose(s1, s2)) for s1,s2 in zip(strokes1, strokes2)])
+    
 ################### STROKE PERMUTATION TOOLS
 
 def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):

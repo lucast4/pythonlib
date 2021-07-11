@@ -220,7 +220,7 @@ def get_topK_parses(img, k, score_fn, configs_per=100, trials_per=800,
 
 
 # ==== PLOTS
-def plotParses(parses, plot_timecourse=True, titles=None):
+def plotParses(parses, plot_timecourse=True, titles=None, ignore_set_axlim=False):
     from ..tools.stroketools import fakeTimesteps
     from .strokePlots import plotDatStrokes, plotDatStrokesTimecourse
     n = len(parses)
@@ -237,15 +237,16 @@ def plotParses(parses, plot_timecourse=True, titles=None):
     # = plot images
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*3, nrows*3))
     for i, (p, ax) in enumerate(zip(parses, axes.flatten())):
-        ax.set_xlim([0, 105])
-        ax.set_ylim([-105, 0])
-        plotDatStrokes(p, ax)
+        if not ignore_set_axlim:
+            ax.set_xlim([0, 105])
+            ax.set_ylim([-105, 0])
+        plotDatStrokes(p, ax, clean_ordered=True)
         if titles is None:
             ax.set_title(i)
         else:
             ax.set_title(titles[i])
             
-def summarizeParses(parses):
+def summarizeParses(parses, plot_timecourse=False, ignore_set_axlim=False):
     # Get total distance traveled (i.e., amount of ink)
     from pythonlib.drawmodel.features import strokeDistances, computeDistTraveled
 
@@ -312,7 +313,7 @@ def summarizeParses(parses):
     traveled_sorted = [t[1] for t in tmp]
     parses_sorted = [t[2] for t in tmp]
     titles = [f"dist_{d:.2f}-trav_{t:.2f}" for d, t, in zip(distances_sorted, traveled_sorted)]
-    plotParses(parses_sorted, plot_timecourse=False, titles=titles)
+    plotParses(parses_sorted, plot_timecourse=plot_timecourse, titles=titles, ignore_set_axlim=ignore_set_axlim)
     print(f"parses, sorted by distance traveled")
 
 

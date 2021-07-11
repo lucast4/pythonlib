@@ -2341,6 +2341,46 @@ class Dataset(object):
         return out
 
 
+    ################ PARSES GOOD [PARSER]
+    def _get_parser_sdir(self):
+        assert len(self.Metadats)==1, "only run this if one dataset"
+        return f"{self.Metadats[0]['path']}/parser_good"
+
+    def parser_extract_and_save_parses(self, quick=False):
+        """ 
+        """
+        # from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+        from pythonlib.tools.expttools import makeTimeStamp
+        from pythonlib.parser.parser import Parser
+
+        assert len(self.Metadats)==1, "only run this if one dataset"
+
+        sdir = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}-quick_{quick}"
+        os.makedirs(sdir, exist_ok=True)
+        print("Saving parses to : ", sdir) 
+
+        for row in self.Dat.iterrows():
+            trialcode = row[1]["trialcode"]
+            strokes_task = row[1]["strokes_task"]
+
+            P = Parser()
+            P.input_data(strokes_task)
+            P.parse_pipeline(quick=quick)
+            
+            # parses_list.append({
+            #     "Parser":P,
+            #     "trialcode":tc})
+
+            # strokes_task_perms = getStrokePermutationsWrapper(strokes_task, ver=permver, 
+            #     num_max=num_max)
+
+            # save
+            path = f"{sdir}/trialcode_{trialcode}.pkl"
+            # out = {"Planner":}
+            with open(path, "wb") as f:
+                pickle.dump(P, f)
+
+
 
     ################ PLANNER MODEL, like a simpler version of BPL
     def _get_planner_sdir(self):
