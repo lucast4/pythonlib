@@ -147,7 +147,7 @@ class Cost:
 
 
 
-    def score(self, strokes, task, return_feature_vecs = False):
+    def score(self, strokes, task=None, return_feature_vecs = False):
         """ given behavior (strokes) and task (task), 
         return a scalar score 
         - Note on conventions: 

@@ -220,27 +220,31 @@ def get_topK_parses(img, k, score_fn, configs_per=100, trials_per=800,
 
 
 # ==== PLOTS
-def plotParses(parses, plot_timecourse=True, titles=None, ignore_set_axlim=False):
+def plotParses(parses, plot_timecourse=True, titles=None, ignore_set_axlim=False,
+    jitter_each_stroke=True):
     from ..tools.stroketools import fakeTimesteps
     from .strokePlots import plotDatStrokes, plotDatStrokesTimecourse
     n = len(parses)
     ncols = 4
     nrows = int(np.ceil(n/ncols))
 
+    if jitter_each_stroke:
+        print("NOTE: jittering each stroke!!!")
     # = plot timecourses
     if plot_timecourse:
         fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*3, nrows*3))
-        for p, ax in zip(parses, axes.flatten()):
+        for p, ax in zip(parses, axes.flatten()[::-1]):
             p = fakeTimesteps(p, p[0], "in_order")
             plotDatStrokesTimecourse(p, ax, plotver="raw")
 
     # = plot images
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*3, nrows*3))
-    for i, (p, ax) in enumerate(zip(parses, axes.flatten())):
+    for i, (p, ax) in enumerate(zip(parses, axes.flatten()[::-1])):
         if not ignore_set_axlim:
             ax.set_xlim([0, 105])
             ax.set_ylim([-105, 0])
-        plotDatStrokes(p, ax, clean_ordered=True)
+        plotDatStrokes(p, ax, clean_ordered=True, 
+            jitter_each_stroke=jitter_each_stroke, alpha=0.5)
         if titles is None:
             ax.set_title(i)
         else:

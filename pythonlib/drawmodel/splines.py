@@ -3,7 +3,7 @@ converting between strokes and splines
 """
 import torch
 
-def strokes2splines(strokes, npts_ver="unif_space", nland=7):
+def strokes2splines(strokes, npts_ver="unif_space", nland=7, dist_int=1.):
     """ 
     Convert from strokes to splines, with the splines "rendered" back into
     the spatial coords.
@@ -32,7 +32,7 @@ def strokes2splines(strokes, npts_ver="unif_space", nland=7):
     strokes = [torch.tensor(s) for s in strokes]
     
     # make uniform in space
-    strokes = [unif_space(s) for s in strokes]
+    strokes = [unif_space(s, dist_int=dist_int) for s in strokes]
     if npts_ver=="unif_space":
         npts = [len(s) for s in strokes]
     

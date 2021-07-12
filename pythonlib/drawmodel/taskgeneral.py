@@ -16,8 +16,11 @@ class TaskClass(object):
         self.Params = {}
         self._initialized = False
         self.Name = None
+        self.Parser = None
+        self.Parses = None
 
-    def initialize(self, ver, params, coord_force_same_aspect_ratio=True):
+    def initialize(self, ver, params, coord_force_same_aspect_ratio=True,
+            convert_coords_to_abstract=True):
         """ General purpose, to initialize with params for
         this task. Is flexible, takes in many formats, converts
         each into general abstract format
@@ -25,6 +28,8 @@ class TaskClass(object):
         - ver, str, in {"drawnn", "ml2"}, indicates what format
         - params, flexible, what format depends on what ver.
         - coord_force_same_aspect_ratio, then for drawnn and ml2 coords,
+        - convert_coords_to_abstract, then self.Strokes, and others will be in abstract system.
+        otherwise keep in whatever was input.
         will make sure is asme aspect ratio as asbtract coords. Does this
         by padding the smaller dimension to match abstract (equally on both ends)
         """
@@ -51,7 +56,11 @@ class TaskClass(object):
 
         # Convert strokes to appropriate coordinate system
         # and generate Points
-        self._initialize_convcoords()
+        if convert_coords_to_abstract:
+            self._initialize_convcoords()
+
+        # Convert strokes to points
+        self.Points = np.stack([ss for s in self.Strokes for ss in s], axis=0) # flatten Strokes
 
         # Check that nothing goes out of bounds
         self._check_out_of_bounds()
@@ -141,7 +150,7 @@ class TaskClass(object):
         self.Shapes = None
 
 
-    def _initialize_convcoords(self):
+    def _initialize_convcoords(self, out_="abstract"):
         """ initial conversion of input coordinate system into abstract system
         Modifies: Strokes and Points. 
         TODO: have not done for self.Program and self.Strokes
@@ -149,7 +158,7 @@ class TaskClass(object):
         """
 
         in_ = self.Params["input_ver"]
-        out_ = "abstract"
+        # out_ = "abstract"
 
         # print(in_, out_)
         # print(self.Strokes)
@@ -160,8 +169,6 @@ class TaskClass(object):
         # assert False
 
 
-        # Convert strokes to points
-        self.Points = np.stack([ss for s in self.Strokes for ss in s], axis=0) # flatten Strokes
 
 
     def _preprocess(self):
@@ -278,7 +285,6 @@ class TaskClass(object):
 
 
     def shapes2strokes(self, shapes):
-
         def evaluateShape(shape, params):
             """ 
             - shape, is string name
@@ -377,8 +383,16 @@ class TaskClass(object):
             assert False, "not coded"
 
                         
+    ############ PARSER
+    def input_parser(self, Parser):
+        """ Parser class, input, is fine even if Parser is already done
+        """
+        self.Parser = Parser
 
-
+    def input_parses_strokes(self, parses_list):
+        """ Input list of parses, where each parse is a strokes
+        """
+        self.Parses = parses_list
 
 
 

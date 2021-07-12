@@ -1,4 +1,5 @@
 
+assert False, "use scorer inheritence"
 
 
 class Prior(object):

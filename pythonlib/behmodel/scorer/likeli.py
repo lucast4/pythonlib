@@ -1,5 +1,5 @@
 
-
+assert False, "use scorer inheritence"
 
 class Likeli(object):
     

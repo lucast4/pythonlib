@@ -465,7 +465,8 @@ class Dataset(object):
             self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
 
     ############### TASKS
-    def load_tasks_helper(self, reinitialize_taskobjgeneral=True, redo_cleanup=True):
+    def load_tasks_helper(self, reinitialize_taskobjgeneral=True, 
+            redo_cleanup=True, convert_coords_to_abstract=True):
         """ To load tasks in TaskGeneral class format.
         Must have already asved them beforehand
         - Uses default path
@@ -479,6 +480,8 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
+        if convert_coords_to_abstract==False:
+            assert reinitialize_taskobjgeneral==True, "otherwise convert_coords_to_abstract does nothing"
         assert len(self.Metadats)==1, "only works for single datasets"
         # Load tasks
         a = self.animals()
@@ -524,7 +527,8 @@ class Dataset(object):
                 taskobj = T.Params["input_params"]
                 Tnew = TaskClass()
                 # print(taskobj.Task)
-                Tnew.initialize("ml2", taskobj)
+                Tnew.initialize("ml2", taskobj, 
+                    convert_coords_to_abstract=convert_coords_to_abstract)
                 T = Tnew
             return T
 
@@ -2366,19 +2370,30 @@ class Dataset(object):
             P = Parser()
             P.input_data(strokes_task)
             P.parse_pipeline(quick=quick)
-            
-            # parses_list.append({
-            #     "Parser":P,
-            #     "trialcode":tc})
-
-            # strokes_task_perms = getStrokePermutationsWrapper(strokes_task, ver=permver, 
-            #     num_max=num_max)
 
             # save
             path = f"{sdir}/trialcode_{trialcode}.pkl"
             # out = {"Planner":}
             with open(path, "wb") as f:
                 pickle.dump(P, f)
+
+
+    def parser_load_presaved_parses(self, assume_only_one_parseset=True, quick=False):
+        pathbase = f"{self._get_parser_sdir()}/parses"
+        pathlist = findPath(pathbase, [[f"quick_{quick}"]], return_without_fname=True)
+        if assume_only_one_parseset and len(pathlist)>1:
+            assert False, "found >1 set, need to mnaually prune"
+        pathdir = pathlist[0]
+
+        def _findrow(x):
+            paththis = f"{pathdir}/trialcode_{x['trialcode']}.pkl"
+            with open(paththis, "rb") as f:
+                tmp = pickle.load(f)
+            return tmp
+
+        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parser")
+
+        return pathdir
 
 
 
@@ -3020,6 +3035,21 @@ class Dataset(object):
 
 
             # 
+
+    def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
+        add_stroke_number=True, centerize=False):
+        """ helper to plot multiplie trials when already have strokes extracted)
+        Assumes want to plot this like behavior.
+        """
+        from ..drawmodel.strokePlots import plotDatStrokes
+        import random
+        from pythonlib.tools.plottools import plotGridWrapper
+
+        plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
+            add_stroke_number=add_stroke_number, centerize=centerize)
+        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+
+        return fig
 
 
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 

@@ -31,6 +31,31 @@ class ParserStroke(object):
         self._check_data_consistency()
         self.convert_to_directed_edges()
 
+    def input_data_directed(self, list_eidir):
+        """ input directed edges.
+        - list_eidir is list of tuples, each a directed edge, e.g.
+        [(0, 1, 0), (1,4,0)].
+        Will check consistency of the ordering (so that edges chain up)
+        Will convert to list of nodes as well.
+        """
+
+        self.EdgesDirected = list_eidir
+        self.list_ni, self.list_ei = self.convert_from_directed_edges(self.EdgesDirected)
+        self._check_data_consistency()
+        self._check_lists_match()
+
+    def convert_from_directed_edges(self, list_eidir):
+        """ convert from list of directed edges to list_ni and list_ei
+        """
+        list_ni = []
+        for i, e in enumerate(self.EdgesDirected):
+            if i==0:
+                list_ni.append(e[0])
+            list_ni.append(e[1])
+
+        list_ei = self.EdgesDirected
+        return list_ni, list_ei
+
     def _check_data_consistency(self):
         """ make sure edges and nodes are consistent in  input data
         """
@@ -45,7 +70,15 @@ class ParserStroke(object):
             n1 = list_ni[i]
             n2 = list_ni[i+1]
             assert set((n1, n2)) == set(list_ei[i][:2]), "these nodes and edges dont match..."
+
+        if self.EdgesDirected is not None:
+            for i in range(len(self.EdgesDirected)-1):
+                e1 = self.EdgesDirected[i]
+                e2 = self.EdgesDirected[i+1]
+                assert e1[1]==e2[0], "not cahined up"
+
             
+
     def _check_lists_match(self):
         """
         Check that self.EdgesDirected is consistent with input list_ni and list_ei

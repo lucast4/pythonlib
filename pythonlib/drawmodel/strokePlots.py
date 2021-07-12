@@ -126,7 +126,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
     clean_ordered=False, clean_ordered_ordinal=False, clean_task=False, 
-    force_onsets_same_col_as_strokes=False, naked=False, mfc_input=None):
+    force_onsets_same_col_as_strokes=False, naked=False, mfc_input=None,
+    jitter_each_stroke=False):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -271,7 +272,15 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
             if strokenums_to_plot is not None:
                 if i not in strokenums_to_plot:
                     continue
-            ax.plot(s[:,0], s[:,1], color=color_order[i], linewidth=(3/5)*markersize,
+            if jitter_each_stroke:
+                from pythonlib.tools.stroketools import getMinMaxVals
+                minx, maxx, miny, maxy = getMinMaxVals(strokes)
+                delt = np.mean([maxx - minx, maxy-miny])
+                JIT = 0.02*delt*i
+                sthis = s+JIT   
+            else:
+                sthis = s
+            ax.plot(sthis[:,0], sthis[:,1], color=color_order[i], linewidth=(3/5)*markersize,
                 alpha=min([1, 1.5*alpha]))
     else:
         # Then concatenate and then plot. useful if want to define

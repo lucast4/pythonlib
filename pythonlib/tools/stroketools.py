@@ -1006,12 +1006,13 @@ def check_strokes_in_temporal_order(strokes):
         assert np.all(np.diff(times)>=0)
 
 
-def strokes_identical(strokes1, strokes2):
+def check_strokes_identical(strokes1, strokes2):
     """ returns True if strokes1 and 2 are identical.
     this includes having same sahpe, and same time stamps
     """
     return all([np.all(np.isclose(s1, s2)) for s1,s2 in zip(strokes1, strokes2)])
     
+
 ################### STROKE PERMUTATION TOOLS
 
 def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):
