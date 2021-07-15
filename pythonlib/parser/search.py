@@ -56,7 +56,9 @@ def search_parse(parse, score_fn=None, configs_per=100, trials_per=800, max_conf
     LT modifications:
     - score_fn, leave as None to take random
     """
-    assert trials_per >= configs_per
+    if trials_per<configs_per:
+        trials_per = configs_per
+    # assert trials_per >= configs_per
     ns = len(parse)
     
     # if ns > 9:

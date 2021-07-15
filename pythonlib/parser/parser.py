@@ -14,7 +14,7 @@ class Parser(object):
         """
         self.Params = {}
         self.Finalized=False # to ensure that after process strokes, dont try to do more stuff.
-
+        self.Parses = []
 
     def input_data(self, data, kind="strokes"):
         """ 
@@ -43,6 +43,9 @@ class Parser(object):
     #         direction_invariant=False, strokes_invariant=False)
 
     def make_graph_pipeline(self, plot=False, graph_mods = None, graph_mods_params = None):
+        """
+        didmod_all, True if actually modified graph
+        """
 
         # 1) Recenter strokes to positive coordinates
         self.strokes_translate_positive()
@@ -50,25 +53,48 @@ class Parser(object):
         self.skeletonize_strokes()
         self.graph_construct()
 
+        print(graph_mods)
+        # print(graph_mods_params)
+        # self.plot_graph()
+
         # Graph mods
-        for mod, params in zip(graph_mods, graph_mods_params):
-            if mod=="merge":
-                self.graphmod_merge_nodes_auto(**params)
-            elif mod=="splitclose":
-                self.graphmod_split_edges_auto(**params)
-            elif mod=="strokes_ends":
-                # endpoints for each stroke should match a node.
-                self.graphmod_add_nodes_strokes_endpoints(**params)
-            else:
-                assert False
+        didmod_all = False
+        if graph_mods is not None:
+            for mod, params in zip(graph_mods, graph_mods_params):
+                print("** APPLYING THIS GRAPHMOD: ", mod)
+                if mod=="merge":
+                    didmod = self.graphmod_merge_nodes_auto(**params) 
+                elif mod=="splitclose":
+                    didmod = self.graphmod_split_edges_auto(**params)
+                elif mod=="strokes_ends":
+                    # endpoints for each stroke should match a node.
+                    # params["strokes"] can be strokes, or string attribute (e.g., "StrokesInterp")
+                    if isinstance(params["strokes"], str):
+                        params["strokes"] = getattr(self, params["strokes"])
+                    self.graphmod_add_nodes_strokes_endpoints(**params)
+                    didmod = False # This never modifies the pts.
+                else:
+                    print(mod)
+                    assert False
+                print("** DONE: ")
+                didmod_all = didmod_all or didmod
+
+        #     self.plot_graph()
+        # print(self.Graph.edges)
+        # assert False
 
         if plot:
             self.plot_skeleton()
             self.plot_graph()
 
+        return didmod_all
+
+        # print(mod, params)
+        # self.plot_graph()
+        # assert False
 
     def parse_pipeline(self, N=1000, nwalk_det = 10, max_nstroke=400, max_nwalk=100, 
-            plot=False, quick=False, direction_invariant=False, strokes_invariant=False):
+            plot=False, quick=False, stroke_order_doesnt_matter=False, direction_within_stroke_doesnt_matter=False):
         """
         Full pipeline to get unique parses
         - N, how many. might not be exact since will remove reduntant parses
@@ -94,6 +120,7 @@ class Parser(object):
         # self.walk_extract_parses(10,50,50)
         self.walk_extract_parses(nwalk_det=nwalk_det, 
             max_nstroke=max_nstroke, max_nwalk=max_nwalk)
+        self.ParsesParams["N"] = N
 
         # Remove redundant
         self.parses_remove_redundant()
@@ -109,8 +136,8 @@ class Parser(object):
         self.parses_get_all_permutations(n_each = neach)
 
         ### Remove redundant permutations
-        self.parses_remove_redundant(direction_invariant=direction_invariant, 
-            strokes_invariant=strokes_invariant)
+        self.parses_remove_redundant(stroke_order_doesnt_matter=stroke_order_doesnt_matter, 
+            direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
         # Cleanup parses
 
@@ -130,6 +157,13 @@ class Parser(object):
             assert len(pts.shape)==2
 
         return pts + self.Translation["xy"]
+
+    def strokes_translate_forward(self, strokes):
+        """ applies original transform to new strokes.
+        doesnt modify self, just returns copy of strokes, mod
+        """
+        from pythonlib.tools.stroketools import translateStrokes
+        return translateStrokes(strokes, self.Translation["xy"])
 
     def strokes_translate_back(self, strokes):
         """ applies transformation back to original coordiantes,
@@ -216,8 +250,18 @@ class Parser(object):
         """
         from sknw import build_sknw
         self.Graph = build_sknw(self.Skeleton, multi=True)
+        self._graph_remove_zerolength_edge()
 
+    def _graph_remove_zerolength_edge(self):
+        # Remove any edges from node to itself
+        edges_to_remove = []
+        for ed in self.Graph.edges:
+            if ed[0]==ed[1]:
+                edges_to_remove.append(ed)
 
+        if len(edges_to_remove)>0:
+            print("Removing edges that go from a node to istself:")
+            self.modify_graph(edges_to_remove=edges_to_remove)
 
 
     ################# TOOLS, WROKING WOTH PARSERSTROKE
@@ -247,10 +291,11 @@ class Parser(object):
         """
 
         for i in range(len(self.Parses)):
-            list_ws = self.Parses[i]["list_walkers"]
-            list_ps = [self._walkerstroke_to_parserstroke(w) for w in list_ws]
-            self.Parses[i]["list_ps"] = list_ps
-            del self.Parses[i]["list_walkers"]
+            if "list_walkers" in self.Parses[i].keys():
+                list_ws = self.Parses[i]["list_walkers"]
+                list_ps = [self._walkerstroke_to_parserstroke(w) for w in list_ws]
+                self.Parses[i]["list_ps"] = list_ps
+                del self.Parses[i]["list_walkers"]
 
 
     ########## WALKING ON GRAPH (GET PARSES)
@@ -291,7 +336,6 @@ class Parser(object):
             ct+=1
 
         # save
-        self.Parses = []
         for s, n in zip(parses_strokes, parses_nodes):
             self.Parses.append(
                 {
@@ -313,6 +357,148 @@ class Parser(object):
             return True
         else:
             return False
+
+    #################### MANUAL ENTRY OF PARSES
+    def map_strokes_to_nodelists(self, strokes, thresh=5):
+        """ finds nodes aligned to strokes
+        OUT:
+        - list of paths, each path a list of nodes of len =2
+        NOTE:
+        - will fail iuf cannot find for some reason.
+        """
+
+        list_of_paths = []
+        for strok in strokes:
+            path = []
+            for ind in [0, -1]:
+                pt = strok[ind,:2]
+                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
+
+                if len(list_nodes)==0:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "this pt not close to a node, need to add fifrst?"
+                elif len(list_nodes)>1:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "found > 1 node, must merge close nodes first"
+                else:
+                    node = list_nodes[0]
+
+                path.append(node)
+            list_of_paths.append(path)
+        return list_of_paths
+
+    def map_strokes_to_edgelist(self, strokes, thresh=5):
+        """ 
+        returns list of edges [(1,2,0), ...]. makes sure that if a pair of nodes
+        have multiple possible edgse, takes teh edge that occurs more often (as you travel)
+        along the pts
+        """
+
+        def _traj_to_edgelist(traj):
+            """ traj is Nx2
+            """
+
+            last_visited_node = None
+            tracker = {}
+            list_of_edges = []
+            for i, pt in enumerate(traj[:,:2]):
+                nodes = self.find_close_nodes_to_pt(pt, only_one=True, thresh=thresh, take_closest=True)
+                
+                if len(nodes)==1:
+                    if last_visited_node is None:
+                        last_visited_node = nodes[0]
+
+                    elif last_visited_node is not None and nodes[0]!=last_visited_node:
+                        # then you have visisted a new node. 
+                        # if change last_visited_node, then pick the most visited edge, then reset.
+                        new_node = nodes[0]
+                        # print(i)
+                        # print(last_visited_node)
+                        # print(nodes)
+                        # print("HERE", tracker)
+                        # # pick out candidate edges that explain the just finished traj
+                        # edges_candidate = [ed for ed in tracker.keys() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                        # sort all candidate edges by how oten they visited
+                        edges_candidate = [(ed, nvisit) for ed, nvisit in tracker.items() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                        # sort and pick out most highly visited edge.
+                        edges_candidate = sorted(edges_candidate, key=lambda x: x[1]) # sort in ascending order.
+                        edge_just_done = edges_candidate[-1][0]
+
+                        if edge_just_done[0]==new_node:
+                            edge_just_done = (edge_just_done[1], edge_just_done[0], edge_just_done[2]) # mnake sure is in order.
+                        list_of_edges.append(edge_just_done)
+
+                        # reset everything
+                        last_visited_node = nodes[0]
+                        tracker = {}
+                    else:
+                        # do nothing, since nthing changed
+                        pass
+
+                if i==0 or i==traj.shape[0]:
+                    # print(i,pt)
+                    # print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert len(nodes)==1, "on and off should match a node..."
+
+                # find edges
+                edges, dists, inds = self.find_close_edge_to_pt(pt, thresh=thresh)
+
+                # only keep edges that involve the current node
+                edges = [ed for ed in edges if last_visited_node in ed[:2]]
+
+                # update tracker
+                for ed in edges:
+                    if ed in tracker.keys():
+                        tracker[ed] +=1
+                    else:
+                        tracker[ed] = 1
+            return list_of_edges
+
+        return [_traj_to_edgelist(traj) for traj in strokes]
+
+
+
+    def map_strokes_to_nodelists_entiretraj(self, strokes, thresh=5):
+        """ finds nodes aligned to strokes. includes all nodes, that are found along the 
+        trajectory. 
+        OUT:
+        - list of paths, each path a list of nodes of at lest len=2, but more if more are encountered.
+        - e.g,,: [[4, 2, 1], [3, 4, 5, 6], [8, 2, 0], [8, 5, 7]], means there are 4 strokes, each going
+        thru those nodes in those order.
+
+        NOTE:
+        - can guarantee that these nodes should be in order (modulo reversal)
+        - asserts that will find something for the first and last pts.
+        """
+
+        list_of_paths = []
+        for strok in strokes:
+            path = []
+            # start from first pt, and continue
+            for i in range(strok.shape[0]):
+                pt = strok[i,:2]
+                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
+
+                if i==0 or i==strok.shape[0]:
+                    assert len(list_nodes)==1, "must find a node at start and end."
+
+                if len(list_nodes)==1:
+                    node = list_nodes[0]
+                    if node not in path:
+                        path.append(node)
+                
+                if len(list_nodes)>1:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "found > 1 node, must merge close nodes first"
+
+            list_of_paths.append(path)
+        return list_of_paths
+
 
     def manually_input_parse(self, list_of_paths, use_all_edges=True):
         """
@@ -350,6 +536,46 @@ class Parser(object):
 
         self.Parses.append(newparse)
         print("Added new parse, ind:", len(self.Parses)-1)
+
+
+    def manually_input_parse_from_strokes(self, strokes, apply_transform=True):
+        """ wrapper, to auto find list of nodes, and input, for this storkes.
+        strokes must match the strokes coordinates that make up the graph.
+        - will fail if doesnt find a complete set of edges.
+        INPUT:
+        - apply_transform, then first transfomrs strokes (spatial) using same params
+        as did for the initial strokes entry.
+        """
+        from pythonlib.tools.graphtools import path_through_list_nodes, path_between_nodepair
+
+        if apply_transform:
+            strokes = self.strokes_translate_forward(strokes)
+
+        if False:
+            # Old version, problem is if there are >1 path between endpoints, then this fails.
+            # Find endpoint nodes for each stroke
+            list_of_nodes = self.map_strokes_to_nodelists(strokes)
+            # Conver these lenght 2 nodes to lists of directed edges
+            list_of_paths = []
+            for nodepair in list_of_nodes:
+                path = path_between_nodepair(self.Graph, nodepair)
+                list_of_paths.append(path)
+
+        # else:
+        #     list_of_nodes_traj = self.map_strokes_to_nodelists_entiretraj(strokes)
+        #     list_of_paths = []
+        #     for nodes in list_of_nodes_traj:
+        #         path = path_through_list_nodes(self.Graph, nodes)
+        #         list_of_paths.append(path)
+
+        #     # Conver these lenght 2 nodes to lists of directed edges
+        #     print(list_of_paths)
+        #     assert FAlse
+        else:
+            list_of_paths = self.map_strokes_to_edgelist(strokes)
+
+        # Inset this as a new parse
+        self.manually_input_parse(list_of_paths)
 
 
     ################### DO THINGS WITH PARSES [INDIV]
@@ -405,8 +631,8 @@ class Parser(object):
                 self.Parses[i]["strokes"] = self.parses_to_strokes(i)
 
 
-    def parses_remove_redundant(self, direction_invariant=True,
-        strokes_invariant=True):
+    def parses_remove_redundant(self, stroke_order_doesnt_matter=True,
+        direction_within_stroke_doesnt_matter=True):
         """ Finds parses that are the same and removes.
         by default, Same is defined as invariant to (1) stroke order,
         (2) within stroke direction and (3) for circle, circle permutation
@@ -425,8 +651,8 @@ class Parser(object):
                 # p1 = [p.list_ni for p in parses_tracker[i]]
                 # p2 = [p.list_ni for p in parses_tracker[ii]]
                 
-                if self.check_parses_is_identical(i, ii, direction_invariant=direction_invariant,
-                    strokes_invariant=strokes_invariant):
+                if self.check_parses_is_identical(i, ii, stroke_order_doesnt_matter=stroke_order_doesnt_matter,
+                    direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter):
                     if i in matches:
                         matches[i].append(ii)
                     else:
@@ -548,6 +774,10 @@ class Parser(object):
         - list of strokes.
         """
 
+        if kind=="list_of_paths":
+            # path is a list of directed edges.
+            parses = self.extract_parses_wrapper(ind, "parser_stroke_class")
+            return [p.extract_list_of_directed_edges() for p in parses]
         if kind == "parser_stroke_class":
             key = "list_ps"
         else:
@@ -568,14 +798,14 @@ class Parser(object):
             return [self.extract_parses_wrapper(i, kind) for i in range(len(self.Parses))]
 
 
-    def check_parses_is_identical(self, ind1, ind2, direction_invariant=True,
-        strokes_invariant=True):
+    def check_parses_is_identical(self, ind1, ind2, stroke_order_doesnt_matter=True,
+        direction_within_stroke_doesnt_matter=True):
         """
         returns true if parses are identical (with certain invariances, see below)
         INPUT:
         - ind1 and ind2 index tinto self.Parses (e.g., self.Parses[1])
-        - direction_invariant, then order of storkes doenst matter
-        - strokes_invariant, then the direction within each stroke doesnt matter.
+        - stroke_order_doesnt_matter, then order of storkes doenst matter
+        - direction_within_stroke_doesnt_matter, then the direction within each stroke doesnt matter.
         OUT: 
         - bool
 
@@ -604,12 +834,12 @@ class Parser(object):
         list2 = self.extract_parses_wrapper(ind2)
 
         # for each stroke, find its hash
-        list1 = [p.unique_path_id(invariant=strokes_invariant) for p in list1]
-        list2 = [p.unique_path_id(invariant=strokes_invariant) for p in list2]
+        list1 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list1]
+        list2 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list2]
 
 
         # since dont care about direction, sort each list (of tuples of ints)
-        if direction_invariant:
+        if stroke_order_doesnt_matter:
             list1 = sorted(list1)
             list2 = sorted(list2)
         
@@ -746,6 +976,7 @@ class Parser(object):
 
     def merge_nodes(self, nodes):
 
+
         def _merge_nodes(nodes, G):
             """ 
             - nodes, set of nodes, e..g, {3,4}
@@ -772,14 +1003,17 @@ class Parser(object):
                 othis = G.nodes[nthis]["o"]
 
                 for e in G.edges:
-                    if nthis in e:
+                    if nthis in e[:2]:
                         edg = G.edges[e]
 
                         # conver this edge to a new edge, using same pts
-                        nother = [n for n in e[:2] if n!=nthis][0]
+                        nother = [n for n in e[:2] if n!=nthis]
+                        assert len(nother)==1, "ytou might have repeat node? a-->a"
+                        nother = nother[0]
 
                         if set([nthis, nother])==pairthis:
                             # this is edge between the pair you are merging.
+                            # you have already added it.
                             continue
 
                         # construct a new edge
@@ -803,7 +1037,8 @@ class Parser(object):
                         edges_to_add.append((nnew, nother, {"pts":pts}))
         #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
                         edges_to_remove.append((nthis, nother, e[2]))
-                        
+                            
+
             nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
             nodes_to_remove = list(pairthis)
             self.modify_graph(nodes_to_add=nodes_to_add, nodes_to_remove=nodes_to_remove, 
@@ -819,6 +1054,8 @@ class Parser(object):
         such pairs remain
         """
 
+        did_mod = False
+
         pairthis = self.find_closest_nodes_under_thresh(thresh=thresh)
         print("Merging this pair of nodes: ", pairthis)         
         while pairthis is not None:
@@ -832,6 +1069,8 @@ class Parser(object):
                 print("No more pairs to merge - done!")
             else:
                 print("Merging this pair of nodes: ", pairthis)         
+            did_mod = True
+        return did_mod
 
 
     def graphmod_add_nodes_strokes_endpoints(self, strokes, thresh=10):
@@ -855,6 +1094,7 @@ class Parser(object):
 
                 # Split graph at each of the extracted edges
                 for ed, ind in zip(edges, inds):
+                    print("**Splitting, adding strokes endpoints", ed, ind)
                     self.split_edge(ed, ind)
 
     def split_edge(self, edge, ind):
@@ -941,6 +1181,7 @@ class Parser(object):
 
         ct = 0
         e, d, i, n = self.find_closest_edge_to_split(thresh)
+        didmod = False
         while e is not None:
             
             if ct>20:
@@ -950,12 +1191,22 @@ class Parser(object):
             print("**Splitting edge", e, "Merging with node:", n)
             nnew = self.split_edge(e, i)
             
+            # self.plot_graph() 
             # Must then merge these two pts.
             print("Merging: ", {n, nnew})
             self.merge_nodes({n, nnew})
 
+            # self.plot_graph() 
+            # Merge any other nodes that are now too close.
+            self.graphmod_merge_nodes_auto(thresh=thresh)
+
             e, d, i, n = self.find_closest_edge_to_split(thresh)
 
+            # self.plot_graph()
+            # assert False
+
+            didmod=True
+        return didmod
 
 
     # GRAPHMOD - tools
@@ -1073,66 +1324,92 @@ class Parser(object):
 
 
 
-    def find_close_nodes_to_pt(self, pt, thresh=10):
+    def find_close_nodes_to_pt(self, pt, thresh=10, only_one=False, take_closest=False):
         """
+        only_one, then fails if >1. ok if 0.
+        take_closest, then takes closest if there are multiple.
         OUT:
         - list_nodes, list of ints. empty if none.
         """
 
         list_nodes = []
+        distances = []
         for n in self.Graph.nodes:
             o = self.Graph.nodes[n]["o"]
-            if np.linalg.norm(pt-o)<thresh:
+            d = np.linalg.norm(pt-o)
+            if d<thresh:
                 list_nodes.append(n)
+                distances.append(d)
+        if only_one:
+            if len(list_nodes)>1:
+                assert False
+        if take_closest:
+            if len(list_nodes)>0:
+                tmp = [(n,d) for n,d in zip(list_nodes, distances)]
+                tmp = sorted(tmp, key=lambda x:x[1])
+                list_nodes = [tmp[0][0]]
         return list_nodes
 
-    # def map_pt_to_node(self, pt, thresh=15):
-    #     """ 
-    #     return node close to this pt.
-    #     return None if none.
-    #     if >1, then fails.
-    #     """
-    #     list_nodes = self.find_close_nodes_to_pt(pt, thresh)
 
-    #     if len(list_nodes)==0:
-    #         print(pt)
-    #         assert False, "this pt not close to a node, need to add fifrst?"
-    #     elif len(list_nodes)>1:
-    #         print(pt)
-    #         assert False, "found > 1 node, must merge close nodes first"
-    #     else:
-    #         node = list_nodes[0]
+    
 
 
-    def map_strokes_to_nodelists(self, strokes, thresh=15):
-        """ finds nodes aligned to strokes
-        OUT:
-        - list of paths, each path a list of nodes of len =2
-        NOTE:
-        - will fail iuf cannot find for some reason.
+    ########## FILTER/CLEAN UP PARSES
+    def filter_single_parse(self, ver, ind):
+        """ returns True/False, where True means
+        bad (should remove)
         """
 
-        list_of_paths = []
-        for strok in strokes:
-            path = []
-            for ind in [0, -1]:
-                pt = strok[ind,:2]
-                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
+        if ver=="any_path_has_redundant_edge":
+            """ fails whether same or diff dir
+            only checks within each path (turn on yourself).
+            # 1) Find parses where there are paths where repeat an edge (in the same path)
+            # could repeat in same or diff direction
+            """
+            list_of_paths = self.extract_parses_wrapper(ind, "list_of_paths")
+            PS = self.extract_parses_wrapper(ind)[0]
 
-                if len(list_nodes)==0:
-                    print(pt)
-                    assert False, "this pt not close to a node, need to add fifrst?"
-                elif len(list_nodes)>1:
-                    print(pt)
-                    assert False, "found > 1 node, must merge close nodes first"
-                else:
-                    node = list_nodes[0]
+            def _path_does_repeat_edge(path):
+                """ returns True if this path has a repeated edge (can be either dir)
+                """
+                for i in range(len(path)):
+                    for ii in range(i+1, len(path)):
+                        if PS._edges_are_same(path[i], path[ii]):
+                            return True
+                return False
 
-                path.append(node)
-            list_of_paths.append(path)
-        return list_of_paths
+            # check each path
+            if any([_path_does_repeat_edge(path) for path in list_of_paths]):
+                return True
+        if ver=="any_two_paths_have_common_edge":
+            """ this common edge can be in either direction
+            """
+            list_of_paths = self.extract_parses_wrapper(ind, "list_of_paths")
+            PS = self.extract_parses_wrapper(ind)[0]
 
+            # conpare all pairs of paths
+            for i in range(len(list_of_paths)):
+                for ii in range(i+1, len(list_of_paths)):
+                    path1 = list_of_paths[i]
+                    path2 = list_of_paths[ii]
+                    for e1 in path1:
+                        for e2 in path2:
+                            if PS._edges_are_same(e1, e2):
+                                return True
+        return False
 
+    def filter_all_parses(self, ver, do_remove=True):
+        """ 
+        Rturns list of True False same len as parses, where True means is bad and should
+        remove. 
+        if do_remove, then does remove from self.Parses
+        """
+        badlist = [self.filter_single_parse(ver, i) for i in range(len(self.Parses))]
+        self.Parses = [self.Parses[i] for i, x in enumerate(badlist) if not x]
+        print(f"Removed {[i for i, x in enumerate(badlist) if x]}")
+        print(f"Removed {sum(badlist)} parses.")
+        return badlist
+            
 
 
     ########## POST PROCESSING
@@ -1213,9 +1490,21 @@ class Parser(object):
 
     ########## PRINTING
     def print_parse_info(self, ind):
-
         for p in self.Parses[ind]["list_ps"]:
             p.print_elements(verbose=False)
+
+    def print_parse_concise(self, ind):
+        out = f"{ind} = "
+        for i, p in enumerate(self.Parses[ind]["list_ps"]):
+            out+=f"{i}:{p.EdgesDirected} - "
+            # p.print_elements(verbose=False)        
+        print(out)
+
+    def print_parse_concise_all(self):
+        """ print all parses, each a single line"""
+        for i in range(len(self.Parses)):
+            self.print_parse_concise(i)
+
 
 
 
@@ -1274,9 +1563,21 @@ class Parser(object):
 
 
 
-    def plot_parses(self):
-        assert False, "see summarize_parses"
-        pass
+    def plot_parses(self, inds=None, Nmax=50):
+        """ new, quick, to just plot parses, not in cluding summary states, etc
+        """
+        from pythonlib.dataset.dataset import Dataset
+        import random
+        D = Dataset([])
+        if inds==None:
+            # then plot all
+            inds = random.sample(range(len(self.Parses)), Nmax)
+        parses_list = self.extract_all_parses_as_list()
+        parses_list = [parses_list[i] for i in inds]
+        titles = inds
+        titles = [str(i) for i in inds]
+        # print(len(parses_list))
+        D.plotMultStrokes(parses_list,titles=titles, jitter_each_stroke=True)
 
     def plot_single_parse(self, ind):
         from pythonlib.drawmodel.parsing import plotParses
@@ -1284,13 +1585,21 @@ class Parser(object):
         plotParses([parse], ignore_set_axlim=True)
 
 
-    def summarize_parses(self, nmax = 50):
+    def summarize_parses(self, nmax = 50, inds=None):
         from pythonlib.drawmodel.parsing import summarizeParses
         import random
+        if len(self.Parses)==0:
+            return
         parses = self.extract_all_parses_as_list()
+        self.plot_skeleton()
+        self.plot_graph()
+        if inds is not None:
+            parses = [parses[i] for i in inds]
+        print("FOUND THIS MANY PARSES: ", len(parses))
         if len(parses)>nmax:
             parses = random.sample(parses, nmax)
         summarizeParses(parses, plot_timecourse=True, ignore_set_axlim=True)
+
 
 # from pythonlib.drawmodel.parsing import plotParses, summarizeParses
 

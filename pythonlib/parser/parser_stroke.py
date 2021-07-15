@@ -56,6 +56,12 @@ class ParserStroke(object):
         list_ei = self.EdgesDirected
         return list_ni, list_ei
 
+    def extract_list_of_directed_edges(self):
+        """ returns as list of directed edges (i.e., a "path")
+        """
+        return [ed for ed in self.EdgesDirected]
+
+
     def _check_data_consistency(self):
         """ make sure edges and nodes are consistent in  input data
         """
@@ -91,8 +97,14 @@ class ParserStroke(object):
         assert list_ni==self.list_ni
 
         for e1, e2 in zip(self.EdgesDirected, self.list_ei):
-            assert set(e1[:2])==set(e2[:2])
-            assert e1[2]==e2[2]
+            assert self._edges_are_same(e1, e2)
+
+    def _edges_are_same(self, e1, e2):
+        """ returns True if edges are the same (can be in oppopsite dir)"""
+        if set(e1[:2])==set(e2[:2]) and e1[2]==e2[2]:
+            return True
+        else:
+            return False
 
     def do_flip(self):
         """ switch state, whether stroke is flipped.
@@ -293,7 +305,6 @@ class ParserStroke(object):
             print(f"edges: {self.list_ei}")
 
         print(f"dir edges: {self.EdgesDirected}")
-
 
 
 

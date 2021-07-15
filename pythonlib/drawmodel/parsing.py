@@ -250,7 +250,7 @@ def plotParses(parses, plot_timecourse=True, titles=None, ignore_set_axlim=False
         else:
             ax.set_title(titles[i])
             
-def summarizeParses(parses, plot_timecourse=False, ignore_set_axlim=False):
+def summarizeParses(parses, plot_timecourse=False, ignore_set_axlim=False, titles=None):
     # Get total distance traveled (i.e., amount of ink)
     from pythonlib.drawmodel.features import strokeDistances, computeDistTraveled
 

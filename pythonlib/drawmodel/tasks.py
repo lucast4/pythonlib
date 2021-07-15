@@ -61,6 +61,9 @@ class TaskClass(object):
         del self.Task["x_rescaled"]
         del self.Task["y_rescaled"]
 
+        # 2) Pull all useful stuff into top level
+
+
 
     ################## NAMING THE TASK (CATEGORIES)
     def info_is_new(self):
@@ -375,6 +378,57 @@ class TaskClass(object):
 
     ####################### GET FEATURES
     # (see efficiency cost model)
+
+
+    ###################### GET CHUNKS
+    def chunks_extract_models(self):
+        """ what models were pre-entered when constructed this task?
+        OUT:
+        - dict, where each item is a single model, and value is list of chunks
+        e.g.:
+        {'linePlusL': [[[0, 1], [2, 3]]], '3line': [[[0], [1], [2], [3]]]}
+        """
+        return task2chunklist(self.Task)
+
+
+    def chunks_extract(self, model="eachstroke"):
+        """ 
+        OUT:
+        - list_of_chunks, where each chunk corresponds to a single parse (or strokes).
+        --- e.g,, list_of_chunks = [
+            [[0, 1], 2], 
+            [[0, 2], 1]]
+        (doesnt do permutations or whatever, just waht is entered in task)
+        """        
+        task = self.Task
+        if isinstance(model, str):
+            strokestask = self.Strokes # only used for extracting default, if usinbg eachstroke.
+            chunklist = task2chunklist(task)
+            chunks = chunklist2chunks(chunklist, strokestask, model)
+        elif callable(model):
+            # then model is a fucntion
+            chunks = model(task)
+        else:
+            print(model)
+            assert False, "not sure what is"
+            
+        return chunks
+
+
+    def chunks_convert_to_strokes(self, list_of_chunks, reorder=False, thresh=10, sanity_check=False):
+        """
+        INPUT:
+        - list_of_chunks, where each chunk corresponds to a single parse (or strokes).
+        --- e.g,, list_of_chunks = [
+            [[0, 1], 2], 
+            [[0, 2], 1]]
+        - reorder, then returns so strokes ordered in space. fails if there are branching.
+        OUT:
+        - list_of_strokes, same strcuture as loc.
+        """
+        return chunks2parses(list_of_chunks, self.Strokes, reorder=reorder,
+            thresh=thresh, sanity_check=sanity_check)
+
 
 
     ####################### GET PARSES
@@ -1030,7 +1084,7 @@ def convertTask2Strokes(task, concat_timesteps=False, interp=None, fake_timestep
 #     return parses
 
 
-def chunks2parses(chunks, strokes, default="eachstroke"):
+def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False):
     """ for this chunks (list of chunks) and model, extract
     each way to chunking strokes. e.g.
     [[0,1], 2] leads to chuning of strokes 0 and 1
@@ -1039,12 +1093,21 @@ def chunks2parses(chunks, strokes, default="eachstroke"):
     chunklist = getTrialsTaskChunks(...))
     - NOTE: 3rd dim (time) might not make sense).
     - parses_list is len of num chunks, each element a strokes.
-    - default, what to do if dont find chunk? 
     --- eachstroke, then will treat each stroke as chunk,
+    INPUT:
+    - chunks, 
+    --- e.g,, chunks = [
+        [[0, 1], 2], 
+        [[0, 2], 1]]
+    OUT:
+    - strokes, same structure as chunks, but instead of ints, have np arrays (Nx2)
     """
+    from pythonlib.tools.stroketools import concatStrokes
     parses_list = []
     for c in chunks:
-        strokesnew = [np.concatenate([strokes[i] for i in s], axis=0) for s in c]
+        # strokesnew = [np.concatenate([strokes[i] for i in s], axis=0) for s in c]
+        strokesnew = [concatStrokes([strokes[i] for i in s], 
+            reorder=reorder, thresh=thresh, sanity_check=sanity_check)[0] for s in c]
         parses_list.append(strokesnew)
 
     # === remove temporal inforamtion from parses (since innacuarte)
@@ -1059,6 +1122,10 @@ def chunklist2chunks(chunklist, strokes, model, default="eachstroke"):
     Returns one strokes object for each way of chunking.
     - default, what to do if dont find chunk? 
     --- eachstroke, then will treat each stroke as chunk,
+    OUT:
+    --- e.g,, chunks = [
+        [[0, 1], 2], 
+        [[0, 2], 1]]
     """
     if model not in chunklist.keys():
         if default=="eachstroke":
@@ -1090,6 +1157,9 @@ def task2parses(task, model):
         assert False, "not sure what is"
         
     parses_list = chunks2parses(chunks, strokestask)
+    print(chunks)
+    print(parses_list)
+    assert False
 
     # === get all permutations for parses (output will be list of strokes)
     parses_allperms = []
