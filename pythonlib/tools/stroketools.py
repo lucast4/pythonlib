@@ -780,7 +780,8 @@ def translateStrokes(strokes, xy):
     # strokes_copy = [S[:,[0,1]] + xy for S in strokes]
 
     from ..drawmodel.primitives import transform
-
+    # strokes = [s.copy() for s in strokes]
+    
     if strokes[0].shape[1]==3:
         strokes, time = _stripTimeDimension(strokes)
     else:
@@ -1131,4 +1132,130 @@ def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_p
             ax = plt.subplot(3,3,i+2)
             # plotDatStrokes(strokes, ax)
             plotDatStrokes(S, ax, plotver="strokes_order")
+
+def concatStrokes(strokes, reorder=False, thresh=10, sanity_check=False):
+    """ combines strokes (list of np array) into strokes of 
+    length 1 (still a list of a single np array)
+    - reorder, then makes sure that the first coord of n+1 is close to
+    the last coord of n. to do so, first start with orientation of s1,
+    then looks for the next stroke and so on. Fails if there are multiple
+    possibiklities. (i.e., this only works if the strokes are a single
+    connected path, no brnaching). must pass in thresh, for calling pts coonected.
+    in pxiels
+    - sanity_check, then checks that output matches input pts exactly. This is additional 
+    to the default chewcks.
+    NOTE:
+    - Default sanity checks: if either fail to connect a single time, or findmultiple
+    connections (e..g, branch), or your thresh was not good value, then will walways fail;.
+    """
+    if reorder==False:
+        return [np.concatenate(strokes,axis=0)]
+    else:
+
+        def _dist(pt1, pt2):
+            return np.linalg.norm(pt1-pt2)
+
+        def _find_strok_to_append(strokes_reordered, strokes_orig):
+            out = None
+            for i, s in enumerate(strokes_orig):
+                for pos in [0, -1]: # try both ends
+                    if pos==0:
+                        pt = strokes_reordered[0][0,:2]
+                    else:
+                        pt = strokes_reordered[-1][-1, :2]
+                    if _dist(s[0,:2], pt)<thresh:
+                        if pos==0:
+                            flip = True
+                        else:
+                            flip = False
+                        assert out is None
+                        out = (i, pos, flip)
+                    elif _dist(s[-1,:2], pt)<thresh:
+                        if pos==-1:
+                            flip = True
+                        else:
+                            flip = False
+                        assert out is None
+                        out = (i, pos, flip)
+            if out is None:
+                assert False, "didnt find"
+            return out
+
+        # OLD METHOD, DOESNT WORK WELL since doesnt work if new strok can variably go to front or back.
+        # def _find_ind_matching_stroke(sthis, strokes, return_none_if_fail=True):
+        #     """ finds which stroke in strokes is connected to 
+        #     sthis (i.e. to the last coord in sthis)
+        #     returns ind, flip, 
+        #     where ind indexes into strokes, and flip is bool indicating whether to flip 
+        #     it
+        #     """
+        #     pt = sthis[-1, :2]
+        #     for i, s in enumerate(strokes):
+        #         if _dist(s[0,:2], pt)<thresh:
+        #             print(_dist(s[0,:2], pt))
+        #             return i, False
+        #         elif _dist(s[-1,:2], pt)<thresh:
+        #             print(_dist(s[-1,:2], pt))
+        #             return i, True
+        #     if return_none_if_fail:
+        #         return None, None
+        #     else:
+        #         assert False, "did not find any"
+
+        # strokes_reordered = []
+        # strokes_orig = [s.copy() for s in strokes]
+        # strok_last = strokes_orig.pop(0)
+        # strokes_reordered.append(strok_last) # start with first stroke.
+        # ct = 0
+        # while len(strokes_orig)>0 and ct<len(strokes)+1:
+        #     # Try appending to the end
+        #     ind, flip = _find_ind_matching_stroke(strok_last, strokes_orig)
+        #     if ind is not None:
+        #         if flip:
+        #             strokes_reordered.append(strokes_orig.pop(ind)[::-1])
+        #         else:
+        #             strokes_reordered.append(strokes_orig.pop(ind))
+        #     else:
+        #         # Try appending to the front
+        #         ind, flip = _find_ind_matching_stroke(strokes_reordered[0][::-1], strokes_orig)
+        #         if ind is None:
+        #             assert False, "strokes noit actually connected?"
+        #         flip = not flip # since sthis was flipped to enter.
+        #         if flip:
+        #             strokes_reordered.insert(0, strokes_orig.pop(ind)[::-1])
+        #         else:
+        #             strokes_reordered.insert(0, strokes_orig.pop(ind))
+
+        #     ct+=1
+
+
+        if len(strokes)>2:
+            assert False, "check this, havent checkdd on len >2"
+        strokes_reordered = []
+        strokes_orig = [s.copy() for s in strokes]
+        strokes_reordered.append(strokes_orig.pop(0)) # start with first stroke.
+        ct = 0
+        while len(strokes_orig)>0 and ct<len(strokes)+1:
+            # look for next stroke to append
+            i, pos, flip = _find_strok_to_append(strokes_reordered, strokes_orig)
+             # = out
+            snew = strokes_orig.pop(i)
+            if flip:
+                snew = snew[::-1]
+            if pos==-1:
+                strokes_reordered.append(snew)
+            elif pos==0:
+                strokes_reordered.insert(0, snew)
+            else:
+                assert False
+
+            ct+=1
+
+        strokes_out = concatStrokes(strokes_reordered)
+        if sanity_check:
+            assert strokes_out[0].shape[0]==np.sum([s.shape[0] for s in strokes]), "lost pts?"
+            from pythonlib.drawmodel.strokedists import distscalarStrokes
+            assert np.isclose(distscalarStrokes(strokes, strokes_out, "position_hd"), 0)
+        return strokes_out
+
 
