@@ -6,7 +6,7 @@ class Scorer(object):
     def __init__(self):
 
         self.ScoreFunction = None
-
+        self.NormFunction = None
 
     def input_score_function(self, func):
         """ 
@@ -20,8 +20,19 @@ class Scorer(object):
 
         self.ScoreFunction = func
 
+    def input_norm_function(self, func):
+        """ 
+        Normalizes raw scores. 
+        """
+
+        self.NormFunction = func
+
     def score(self, *args):
         return self.ScoreFunction(*args)
+
+    def score_and_norm(self, *args):
+        scores = self.score(*args)
+        return self.NormFunction(scores)
 
     # def score_task(task):
     #     """

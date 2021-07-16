@@ -46,3 +46,23 @@ def prepare_trial(D, ind):
     return Beh, Task
 
 
+def score_dataset(D, BehModel, saveon=True, sdir=""):
+    """ scores each trial using this BehModel
+    Returns list of posterior scores, same length as D.Dat
+    """
+    if saveon:
+        assert len(sdir)>0
+        
+    list_postscores = []
+    for indtrial in range(len(D.Dat)):
+        if indtrial%50==0:
+            print(indtrial)
+        post = BehModel.score_single_trial_dataset(D, indtrial)
+        list_postscores.append(post)
+
+    if saveon:
+        import pickle
+        path = f"{sdir}/posterior_scores.pkl"
+        with open(path, "wb") as f:
+            pickle.dump(list_postscores, f)
+

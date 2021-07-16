@@ -2,6 +2,8 @@
 
 """
 
+import numpy as np
+
 
 
 def makeLikeliFunction(ver="segments", norm_by_num_strokes=True, 
@@ -44,4 +46,26 @@ def makeLikeliFunction(ver="segments", norm_by_num_strokes=True,
             dists_all.append(dist)
         return dists_all
     return likeliFunction
+
+
+
+def likeli_dataset(parser_names = ["parser_graphmod", "parser_nographmod"]):
+    """ 
+    Get likeli function that operates on a datset (single ind)
+    - Also assumes that operates on all parses.
+    OUT:
+    - Scorer
+    """    
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+    def F(D, ind):
+        strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
+        list_of_parsestrokes = D.parser_list_of_parses(ind, kind="strokes", parser_names=parser_names)
+        scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_of_parsestrokes])
+        return 1/scores
+    
+    Li = Scorer()
+    Li.input_score_function(F)
+    return Li
 

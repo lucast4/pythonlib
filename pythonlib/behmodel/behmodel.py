@@ -1,4 +1,5 @@
-
+import numpy as np
+import matplotlib.pyplot as plt
 
 class BehModel(object):
     """
@@ -13,8 +14,11 @@ class BehModel(object):
         self.Likeli = None
         self.Poster = None
 
+        self.Dat = None 
+        self.IndTrial = None
 
         self._prior_scores = None
+        self._prior_probs = None
         self._likeli_scores = None
         self._behavior = None
         self._task = None
@@ -71,6 +75,100 @@ class BehModel(object):
         # 3) Posterior
         self._posterior_score = self.Poster.score(likelis, priors)
         return self._posterior_score
+
+
+    def score_single_trial_dataset(self, D, ind):
+        """ 
+        Requires:
+        - priorscorer and likeliscorer both take in a D and ind
+        INPUT:
+        - D, Dataset,
+        - ind, trial
+        OUTPUT:
+        - score.
+        """
+
+        probs = self.Prior.score_and_norm(D, ind)
+        likelis = self.Likeli.score(D, ind)
+
+        self._prior_probs = probs
+        self._likeli_scores = likelis
+
+        self._posterior_score = self.Poster.score(likelis, probs)
+
+        # save here
+        self.Dat = D 
+        self.IndTrial = ind
+
+        return self._posterior_score
+
+
+    #################### FOR PLOTTING
+
+    def inds_sorted_increasing(self, sort_by):
+        """ return inds, 
+        sorted by either:
+        "prior", "likeli"
+        OUT:
+        - inds, scores
+        """
+
+        if sort_by=="prior":
+            scores = self._prior_probs
+        elif sort_by=="likeli":
+            scores = self._likeli_scores
+        elif sort_by=="post":
+            assert False, "not done"
+        inds = list(np.argsort(scores))
+        scores = [scores[i] for i in inds]
+        return inds, scores
+
+
+
+    def plot_sorted_by(self, sort_by, N=20):
+
+        def make_title(ind):
+            pri = self._prior_probs[ind]*100
+            likeli = self._likeli_scores[ind]*100
+
+            return f"pri:{pri:.2f}, li{likeli:.2f}"
+        
+        list_of_parsestrokes = self.Dat.parser_list_of_parses(self.IndTrial, kind="strokes")
+
+        ## -- Plot the actual trial
+        self.Dat.plotMultTrials([self.IndTrial], which_strokes="strokes_beh")
+        self.Dat.plotMultTrials([self.IndTrial], which_strokes="strokes_task")
+
+        ## -- Plot trials, sorted by their scores
+        inds, scores = self.inds_sorted_increasing(sort_by)
+        liststrokes = [list_of_parsestrokes[i] for i in inds]
+        assert len(inds)==len(liststrokes)
+
+        # Plot bottom N
+        # scores = list(np.log(scores)) # logprobs
+        indsthis = inds[:N]
+        scoresthis = scores[:N]
+        strokeslist = liststrokes[:N]
+        # titles = [f"{sort_by[:3]}:{s:.2f}" for s in scoresthis]
+        titles = [make_title(ind) for ind in indsthis]
+        self.Dat.plotMultStrokes(strokeslist, titles=titles);
+            
+        indsthis = inds[::-1][:N]
+        scoresthis = scores[::-1][:N]
+        strokeslist = liststrokes[::-1][:N]
+        titles = [make_title(ind) for ind in indsthis]
+        self.Dat.plotMultStrokes(strokeslist, titles=titles);
+
+    def plot_scatter_likeli_prior(self, log_probs=True):
+        fig, ax = plt.subplots(1,1, figsize=(6,6))
+        if log_probs:
+            p = np.log(self._prior_probs)
+        else:
+            p = self._prior_probs
+        ax.plot(p, self._likeli_scores, "xk")
+        ax.set_xlabel('prior probs')
+        ax.set_ylabel('likeli scores')
+        return fig
 
 
 
