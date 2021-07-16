@@ -860,6 +860,22 @@ class Dataset(object):
         """
         return sorted(list(set(self.Dat["expt"])))
 
+    def rules(self):
+
+        return sorted(list(set([M["rule"] for M in self.Metadats.values()])))
+
+    def identifier_string(self):
+        """ string, useful for saving
+        """
+        
+        a = "_".join(self.animals())
+        e = "_".join(self.expts())
+        r = "_".join(self.rules())
+
+        return f"{a}_{e}_{r}"
+# se
+
+
 
     ################# SPATIAL OPERATIONS
     def recenter(self, method, apply_to="both"):
@@ -2440,7 +2456,7 @@ class Dataset(object):
         return P
 
 
-    def parser_extract_and_save_parses(self, ver, quick=False):
+    def parser_extract_and_save_parses(self, ver, quick=False, saveon=True, savenote=""):
         """ 
         """
         # from pythonlib.tools.stroketools import getStrokePermutationsWrapper
@@ -2449,23 +2465,24 @@ class Dataset(object):
 
         assert len(self.Metadats)==1, "only run this if one dataset"
 
-        sdir = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}-ver_{ver}-quick_{quick}"
+        sdir = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}-ver_{ver}-quick_{quick}-{savenote}"
         os.makedirs(sdir, exist_ok=True)
         print("Saving parses to : ", sdir) 
 
         
         # 1) Quickly save dict mapping trialcode --> unique task name
-        dict_trialcode_taskname = {}
-        for i in range(len(self.Dat)):
-            trialcode = self.Dat.iloc[i]["trialcode"]
-            taskname = self.Dat.iloc[i]["unique_task_name"]
-            dict_trialcode_taskname[trialcode]=taskname
-        # save other things
-        path = f"{sdir}/dict_trialcode_taskname.pkl"
-        with open(path, "wb") as f:
-            pickle.dump(dict_trialcode_taskname, f)
-        from pythonlib.tools.expttools import writeDictToYaml
-        writeDictToYaml(dict_trialcode_taskname, f"{sdir}/dict_trialcode_taskname.yaml")
+        if saveon:
+            dict_trialcode_taskname = {}
+            for i in range(len(self.Dat)):
+                trialcode = self.Dat.iloc[i]["trialcode"]
+                taskname = self.Dat.iloc[i]["unique_task_name"]
+                dict_trialcode_taskname[trialcode]=taskname
+            # save other things
+            path = f"{sdir}/dict_trialcode_taskname.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(dict_trialcode_taskname, f)
+            from pythonlib.tools.expttools import writeDictToYaml
+            writeDictToYaml(dict_trialcode_taskname, f"{sdir}/dict_trialcode_taskname.yaml")
 
         # 2) Get parses.
         taskname_list = []
@@ -2475,9 +2492,9 @@ class Dataset(object):
             if taskname in taskname_list:
                 continue
             P = self.parser_extract_parses_single(i, ver,
-                plot=False, quick=False,
-                nwalk_det = 10, max_nstroke=200, max_nwalk=50, N=1000,
+                plot=False, quick=quick
                 )
+            taskname_list.append(taskname)
         # for row in self.Dat.iterrows():
         #     trialcode = row[1]["trialcode"]
         #     strokes_task = row[1]["strokes_task"]
@@ -2487,28 +2504,130 @@ class Dataset(object):
         #     P.parse_pipeline(quick=quick)
 
             # save
-            path = f"{sdir}/trialcode_{trialcode}.pkl"
-            # out = {"Planner":}
-            with open(path, "wb") as f:
-                pickle.dump(P, f)
+            if saveon:
+                path = f"{sdir}/trialcode_{trialcode}.pkl"
+                # out = {"Planner":}
+                with open(path, "wb") as f:
+                    pickle.dump(P, f)
 
 
-    def parser_load_presaved_parses(self, assume_only_one_parseset=True, quick=False):
+    def parser_load_presaved_parses(self, list_parseparams, list_suffixes=None,
+        finalize=True):
+        """ warpper to load multiple parses, each into a diffefenrt coilumn in self.Dat, with names based on 
+        list_suffixes.
+        e.g.,:
+        list_parse_params = [
+            {"quick":True, "ver":"graphmod", "savenote":"fixed_True"},
+            {"quick":True, "ver":"nographmod", "savenote":"fixed_True"}]
+        list_suffixes = ["graphmod", "nographmod"]
+        """
+
+        if list_suffixes is not None:
+            assert len(list_suffixes)==len(list_parseparams)
+
+        for parse_params, suffix in zip(list_parseparams, list_suffixes):
+            self._parser_load_presaved_parses(parse_params, suffix=suffix, finalize=finalize)
+
+
+    def _parser_load_presaved_parses(self, parse_params = None, 
+        assume_only_one_parseset=True, suffix=None, finalize=True):
+        """ helper, to load a single set of parses, which are defined by their parse_params, which 
+        indexes into a saved set of ata.
+        - Fails if any tiral is faield to nbe found
+        INPUT:
+        - suffix, new columns will be called parser_{suffix}, useful if exrtracting multiple parsers, then merging
+        """
+
+        if parse_params is None:
+            parse_params = {"quick":False, "ver":"graphmod", "savenote":""}
+
         pathbase = f"{self._get_parser_sdir()}/parses"
-        pathlist = findPath(pathbase, [[f"quick_{quick}"]], return_without_fname=True)
+        pathlist = findPath(pathbase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
         if assume_only_one_parseset and len(pathlist)>1:
             assert False, "found >1 set, need to mnaually prune"
         pathdir = pathlist[0]
 
         def _findrow(x):
-            paththis = f"{pathdir}/trialcode_{x['trialcode']}.pkl"
+            P = self.load_trial_data_wrapper(pathdir, x['trialcode'], x['unique_task_name'])
+            if finalize:
+                P.finalize()
+            return P
+            # paththis = f"{pathdir}/trialcode_{x['trialcode']}.pkl"
+            # with open(paththis, "rb") as f:
+            #     tmp = pickle.load(f)
+            # return tmp
+
+        colname = f"parser_{suffix}"
+        print(f"*Loaded parses into {colname}")
+        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, colname)
+
+        return pathdir
+
+
+    def parser_list_of_parses(self, indtrial, kind="summary", 
+        parser_names = ["parser_graphmod", "parser_nographmod"]):
+        """ return list of parses for this trial, in summary format, 
+        i.e., each parse is list of dicts.
+        IN:
+        - parser_names, col in self.Dat
+        OUT:
+        - list (nparse) of list (ntraj) of dicts.
+        (is concatneated, if there are multiple parser_names)
+        """
+        list_of_p = []
+        for name in parser_names:
+            P = self.Dat.iloc[indtrial][name]
+            plist = P.extract_all_parses_as_list(kind=kind)
+            if kind=="summary":
+                for p in plist:
+                    for pp in p:
+                        pp["parser_name"] = name
+            list_of_p.extend(plist)
+        return list_of_p
+
+
+    def parser_list_of_parsers(self, indtrial, parser_names = ["parser_graphmod", "parser_nographmod"]):
+        """ returns list of parsers
+        e.g., [P1, P2]
+        """
+        list_of_parsers = [self.Dat.iloc[indtrial][pname] for pname in parser_names]
+        return list_of_parsers
+
+
+    def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, return_none_if_nopkl=False):
+        """ looks for file. if not find, then looks in dict to find other trial that has 
+        same taskname
+        - Assumes that saved datapoint is shared across trials that have same task
+        """
+        paththis = f"{pathdir}/trialcode_{trialcode}.pkl"
+        import os
+        if os.path.isfile(paththis):
+            # then load it
             with open(paththis, "rb") as f:
                 tmp = pickle.load(f)
             return tmp
-
-        self.Dat = applyFunctionToAllRows(self.Dat, _findrow, "parser")
-
-        return pathdir
+        else:
+            if return_none_if_nopkl:
+                # if cant find file, then just return None
+                return None
+            else:
+                # try to find it looking for same task, different trial. if fail, then raise error.
+                # Read dict
+                pathdict = f"{pathdir}/dict_trialcode_taskname.pkl"
+                with open(pathdict, "rb") as f:
+                    dict_trialcode_taskname = pickle.load(f)
+                if dict_trialcode_taskname[trialcode]==unique_task_name:
+                    list_tc_same_task = [k for k,v in dict_trialcode_taskname.items() if v==unique_task_name]
+                    # try to load each of these trialcodes
+                    for tc in list_tc_same_task:
+                        tmp = self.load_trial_data_wrapper(pathdir, tc, unique_task_name, return_none_if_nopkl=True)
+                        if tmp is not None:
+                            return tmp
+                    print(trialcode, unique_task_name)
+                    assert False, "did not find task, both pkl, or thru other tasks with same taskname."
+                else:
+                    assert False, "task name changed since you saved this data?"
+        assert False, "shouldnt have gotten here.."
 
 
 
