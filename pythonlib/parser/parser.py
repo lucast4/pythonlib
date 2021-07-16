@@ -1,5 +1,7 @@
 """
 7/9/21 - Good for parsing directly from strokes (task image)
+NOTES:
+- each parse will be in different memory loation, even if it looks the same.
 """
 
 import numpy as np
@@ -111,9 +113,9 @@ class Parser(object):
         # self.graph_construct()
         
         if quick:
-            N=50
+            N=500 # this is usually quick
             nwalk_det = 5
-            max_nstroke=60
+            max_nstroke=80
             max_nwalk=20
 
         # Walk on graph
@@ -252,12 +254,28 @@ class Parser(object):
         self.Graph = build_sknw(self.Skeleton, multi=True)
         self._graph_remove_zerolength_edge()
 
-    def _graph_remove_zerolength_edge(self):
-        # Remove any edges from node to itself
+    def _graph_remove_zerolength_edge(self, dist_thresh=20):
+        """
+        Remove any edges from node to itself
+        - dist_thresh, only removes if the cum dist along the edge is less
+        than this.
+        """
+
+
         edges_to_remove = []
         for ed in self.Graph.edges:
             if ed[0]==ed[1]:
-                edges_to_remove.append(ed)
+                # print(self.Graph.edges[ed])
+                # only remove if this edge has short distance for pts
+                from pythonlib.drawmodel.features import strokeDistances
+                d = strokeDistances([self.Graph.edges[ed]["pts"]])[0]
+                # make sure each node has other edges that would still remain
+                nodes = ed[:2]
+                nedges_per_node = [len(list(self.Graph.edges(n))) for n in nodes]
+
+                # only remoive if fails distance treshold, and ther are other exdges remining
+                if d<dist_thresh and all([n>1 for n in nedges_per_node]):
+                    edges_to_remove.append(ed)
 
         if len(edges_to_remove)>0:
             print("Removing edges that go from a node to istself:")
@@ -270,6 +288,11 @@ class Parser(object):
         single ParserStroke instance"""
         from .parser_stroke import ParserStroke
         PS = ParserStroke()
+        if len(ws.list_ni)<2 or len(ws.list_ei)<1:
+            self.plot_graph()
+            print(ws.list_ni)
+            print(ws.list_ei)
+            assert False, "why?"
         PS.input_data(ws.list_ni, ws.list_ei)
         return PS
 
@@ -780,6 +803,20 @@ class Parser(object):
             return [p.extract_list_of_directed_edges() for p in parses]
         if kind == "parser_stroke_class":
             key = "list_ps"
+        elif kind=="strokes":
+            key = "strokes"
+            # return [p["strokes"] for p in self.Parses[ind]]
+        elif kind=="summary":
+            # returns list of dicts, where each item has keys: "edges", "walker", "traj"
+            # i.e. combines all of the others.
+            list_of_edges = self.extract_parses_wrapper(ind, "list_of_paths")
+            list_of_walkers = self.extract_parses_wrapper(ind)
+            list_of_trajs = self.extract_parses_wrapper(ind, "strokes")
+            out = []
+            for e,w,t in zip(list_of_edges, list_of_walkers, list_of_trajs):
+                out.append({"edgesdir":e, "walker":w, "traj":t})
+            return out
+
         else:
             assert False, "not coded"
         return [p for p in self.Parses[ind][key]]
@@ -794,6 +831,8 @@ class Parser(object):
         if kind=="strokes":
             self.parses_fill_in_all_strokes()
             return [p["strokes"] for p in self.Parses]
+        elif kind=="summary":
+            return [self.extract_parses_wrapper(i, kind="summary") for i in range(len(self.Parses))]
         else:
             return [self.extract_parses_wrapper(i, kind) for i in range(len(self.Parses))]
 
@@ -1077,6 +1116,7 @@ class Parser(object):
         """ add nodes for each endpoint for each stroke (or do nothing
         if it already exists)
         """
+        print(thresh)
         for strok in strokes:
             for ind in [0, -1]:
                 pt = strok[ind, :2]
@@ -1087,7 +1127,13 @@ class Parser(object):
                     # then add a node
                     edges, dists, inds= self.find_close_edge_to_pt(pt, thresh=thresh)
                 elif len(list_ni)>1:
-                    assert False, "first do merge"
+                    # Then skip. This is usally when edge of a line is close to another
+                    # node, for natural reasons.
+                    continue
+                    # self.plot_graph()
+                    # print(pt)
+                    # print(list_ni)
+                    # assert False, "first do merge"
                 else:
                     # fine, already has a single node.
                     continue
@@ -1097,6 +1143,7 @@ class Parser(object):
                     print("**Splitting, adding strokes endpoints", ed, ind)
                     self.split_edge(ed, ind)
 
+
     def split_edge(self, edge, ind):
         def _split_edge(edge, ind, G):
             """ split this edge at this index along its pts
@@ -1105,8 +1152,10 @@ class Parser(object):
             # First, make the new node
             # pt for the new node
             print("split edge start")
-            print(edge)
-            print(G.edges)
+            print("this edge", edge)
+            print("at this ind", ind)
+            print("len of edge", self.Graph.edges[edge]["pts"].shape)
+            print("all edges", G.edges)
             onew = G.edges[edge]["pts"][ind]   
             
             # figure out orientation of pts
@@ -1115,14 +1164,18 @@ class Parser(object):
             n2 = edge[1]
             o1 = G.nodes[n1]["o"]
             o2 = G.nodes[n2]["o"]
-            if self.check_pts_orientation(pts, o1):
-                # then pts goes from n1 to n2.
-                assert self.check_pts_orientation(pts, o2)==False
+            if self.check_pts_orientation(pts, o1, return_none_on_tie=True) is None:
+                # then either way is fine
+                pass
             else:
-                # n1 is always the one closest to pts[0]
-                assert self.check_pts_orientation(pts, o2)==True
-                n1 = edge[1]
-                n2 = edge[0]
+                if self.check_pts_orientation(pts, o1):
+                    # then pts goes from n1 to n2.
+                    assert self.check_pts_orientation(pts, o2)==False
+                else:
+                    # n1 is always the one closest to pts[0]
+                    assert self.check_pts_orientation(pts, o2)==True
+                    n1 = edge[1]
+                    n2 = edge[0]
 
             # New pts
             nnew = max(G.nodes)+1
@@ -1225,6 +1278,9 @@ class Parser(object):
             if return_none_on_tie:
                 return None
             else:
+                print(d1, d2)
+                print(o)
+                print(pts[0], pts[-1])
                 assert False
         if d1<d2:
             return True
@@ -1505,7 +1561,10 @@ class Parser(object):
         for i in range(len(self.Parses)):
             self.print_parse_concise(i)
 
-
+    def print_graph(self):
+        nodes = self.Graph.nodes
+        edges = self.Graph.edges
+        print(f"NODES: {nodes} -- EDGES: {edges}")
 
 
     ########## PLOTTING
@@ -1571,7 +1630,9 @@ class Parser(object):
         D = Dataset([])
         if inds==None:
             # then plot all
-            inds = random.sample(range(len(self.Parses)), Nmax)
+            inds = range(len(self.Parses))
+        if len(inds)>Nmax:
+            inds = random.sample(inds, Nmax)
         parses_list = self.extract_all_parses_as_list()
         parses_list = [parses_list[i] for i in inds]
         titles = inds

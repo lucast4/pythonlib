@@ -41,8 +41,13 @@ class ParserStroke(object):
 
         self.EdgesDirected = list_eidir
         self.list_ni, self.list_ei = self.convert_from_directed_edges(self.EdgesDirected)
-        self._check_data_consistency()
-        self._check_lists_match()
+        try:
+            self._check_data_consistency()
+            self._check_lists_match()
+        except Exception as err:
+            print("**FAILING consistent check. Printing elemtsn:")
+            self.print_elements()
+            raise
 
     def convert_from_directed_edges(self, list_eidir):
         """ convert from list of directed edges to list_ni and list_ei
@@ -67,6 +72,11 @@ class ParserStroke(object):
         """
         list_ni = self.list_ni
         list_ei = self.list_ei
+
+        if len(list_ei)==0 or len(list_ni)==0:
+            print("No data,,,")
+            self.print_elements()
+            assert False
 
         assert isinstance(list_ni, list) and isinstance(list_ni[0], int)
         assert isinstance(list_ei, list) and isinstance(list_ei[0], tuple) and isinstance(list_ei[0][0], int) and all([len(x)==3 for x in list_ei])
@@ -149,7 +159,7 @@ class ParserStroke(object):
 
 
     def unique_path_id(self, invariant=False):
-        """ wrapper, to decide what kind of invariance automaticlaly, given
+        """ wrapper, will return unique id, first decide what kind of invariance automaticlaly, given
         the current path kind
         """
 
