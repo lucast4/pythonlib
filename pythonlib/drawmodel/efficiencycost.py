@@ -26,16 +26,15 @@ from scipy.special import logsumexp
 
 
 class Cost:
-    def __init__(
-        self, params=None):
+    def __init__(self, params=None):
         """ params is dict. flexible, and whatever keys are active will dictate what
         features are considered
         """
         if params is None:
             params = self.getDefaultParams()
         
-        self.initialize(params)
-        self.updateThetas(params)
+        self._initialize(params)
+        self._updateThetas()
 
     def getDefaultParams(self):
         """
@@ -60,20 +59,26 @@ class Cost:
         return params
 
 
-    def initialize(self, params):
+    def _initialize(self, params):
         """ initialize model based on keys in params
         """
 
-        self.Params = params
+        if "screenHV" not in params:
+            _params = self.getDefaultParams()
+            params["screenHV"] = _params["screenHV"]
+        if "thetas" not in params:
+            _params = self.getDefaultParams()
+            params["thetas"] = _params["thetas"]
 
         # 2) what is scale of screen? for normalizing units
         # (goal is diagoal is ~2)
-        if "screenHV" in self.Params:
-            self.Params["screenDiagPixHalf"] = \
-            0.5*np.linalg.norm(self.Params["screenHV"])
+        if "screenHV" in params:
+            params["screenDiagPixHalf"] = \
+            0.5*np.linalg.norm(params["screenHV"])
 
+        self.Params = params
 
-    def updateThetas(self, params):
+    def _updateThetas(self):
         """ takes params["thetas"], which is dict, with
         paramname: (params), and updates self.Params.
         Leaves untouched things in self.Params not related to 
@@ -82,7 +87,7 @@ class Cost:
         subsequent code should work fine even if dont.
         """
 
-        self.Params["thetas"] = params["thetas"]
+        # self.Params["thetas"] = params["thetas"]
 
         # 1) make sure all params are in tuple or list format.
         for k, p in self.Params["thetas"].items():
@@ -99,35 +104,11 @@ class Cost:
 
         self.Params["thetavec"] = np.array(self.Params["thetavec"])
 
-    # def updateParams(self, params):
-    #     """ given new params, preprocesses and puts ot
-    #     self.Params. 
-    #     - makes usre they are in format tuple (theta, **others...)
-    #     - updates the theta vector extracted from params
-    #     """
-
-    #     self.Params = params
-
-    #     # 1) make sure all params are in tuple or list format.
-    #     for k, p in self.Params["thetas"].items():
-    #         if not isinstance(p, tuple) and not isinstance(p, list):
-    #             # then is scalar.
-    #             self.Params["thetas"][k] = tuple([p])
-
-    #     # 3) save feature param vectors, easy to take dot products with features
-    #     self.Params["thetavec"] = []
-    #     self.Params["thetanames"] = []
-    #     for k, v in self.Params["thetas"].items():
-    #         self.Params["thetavec"].append(v[0])
-    #         self.Params["thetanames"].append(k)
-
-    #     self.Params["thetavec"] = np.array(self.Params["thetavec"])
-
     def score_features(self, feature_vec):
         """ given feature vec, return score. So this doesnt work directly with
         the motor behavior. assumes your've already extracted features 
         INPUT:
-        - feature_vec, {list, dict}
+        - feature_vec, type in {np.array, list, dict}
         --- if list, then must be in order of self.Params["thetanames"]
         --- if dict, then the names of features must be subsets of params. 
         format is feature_vec = {paramname: value}
@@ -136,17 +117,49 @@ class Cost:
         if isinstance(feature_vec, list):
             assert False, "not coded"
 
-        thetas = self.Params["thetas"]
-        print(feature_vec)  
+        if isinstance(feature_vec, dict):
+            thetas = self.Params["thetas"]
+            # Get weighted sum of feature vec.
+            score = 0.
+            for k, v in feature_vec.items():
+                score += thetas[k]*feature_vec[k]
+        else:
+            thetavec = self.Params["thetavec"]
+            assert thetavec.shape==feature_vec.shape
+            score = np.dot(feature_vec, thetavec)
 
-        # Get weighted sum of feature vec.
-        score = 0.
-        for k, v in feature_vec.items():
-            score += thetas[k]*feature_vec[k]
         return score
 
 
+    ########################### BATCH OPERATIONS (multiple trials)
+    # --- PROBABILITIES
+    def scoreSoftmax(self, value, valueall, debug=False):
+        # returns softmax probability for cost
+        # valueall would be the distribution of options (e.g, all permuations)
+        """get log probs for this sequence (value) rleative to its permutations (valueall).
+        confirmed that np.exp(valuenorm) is prob"""
+        # wraps score and scoreSoftmax
+        # takes unnormalized score (cost) and logsumexp of all sequences (costall), or a subset (Nperm)
+        # and outputs the noramlzied score (costnorm)
+        if debug:
+            print("value")
+            print(value)
+            print("value all:")
+            print(valueall[:10])
 
+            print("these are log of softmax probabiltiies. should be identical")
+            print(value - logsumexp(valueall))
+            print(np.log(np.exp(value)/sum(np.exp(valueall))))
+            print("this is probabilit:")
+            print(np.exp(value)/sum(np.exp(valueall)))
+            print(np.exp(value - logsumexp(valueall)))
+        logprob = value - logsumexp(valueall)
+        return value - logsumexp(valueall)
+
+
+
+
+    ########################### DEALS WITH FEATURES
     def score(self, strokes, task=None, return_feature_vecs = False):
         """ given behavior (strokes) and task (task), 
         return a scalar score 
@@ -184,7 +197,8 @@ class Cost:
                 assert f is not None
 
         # score, dot using combined feat vec
-        score = np.dot(featvec, self.Params["thetavec"])
+        self.score_features(featvec)
+        # score = np.dot(featvec, self.Params["thetavec"])
 
         if return_feature_vecs:
             return featvec, score
@@ -569,24 +583,6 @@ class Cost:
             
             return cost
         
-    def scoreSoftmax(self, value, valueall, debug=False):
-        # returns softmax probability for cost
-        # valueall would be the distribution of options (e.g, all permuations)
-        assert False, "not checked"
-        if debug:
-            print("value")
-            print(value)
-            print("value all:")
-            print(valueall[:10])
-
-            print("these are log of softmax probabiltiies. should be identical")
-            print(logsumexp(valueall))
-            print(value - logsumexp(valueall))
-            print(np.log(np.exp(value)/sum(np.exp(valueall))))
-            print("this is probabilit:")
-            print(np.exp(value)/sum(np.exp(valueall)))
-        return value - logsumexp(valueall)
-    
 
     ## ====== HELPER FUNCTIONS
     def printPlotSummary(self, strokes, task):

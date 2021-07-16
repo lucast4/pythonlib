@@ -214,26 +214,6 @@ class Model(object):
         assert np.sum([p["prob"] for p in parses])-1<0.0001, "Did not normalize properly, probs dont sum to 1."
 
 
-
-
-
-    # def normscore(self, score, scores_all, ver):
-    #     """given one scalar (score) and list of scalars 
-    #     across parses, and a method (ver), output anormalized
-    #     score
-    #     TODO: dont use divide. 
-    #     (it doesnt work well if there exist different signs.)
-    #     """
-
-    #     if ver=="divide":
-    #         # simple, just divide by sum of alls cores
-    #         return (score)/np.sum(scores_all)
-    #     elif ver=="softmax":
-    #         # softmax. first normalize scores so that within similar range
-    #         # dividing by sum of absolute values of scores.. this is hacky...
-
-    #     else:
-    #         assert False, "not coded!"
     def normscore(self, scores_all, ver, params=None):
         """given lsit of scalars (scores_all)  
         across parses, and a method (ver), output probabilsitys in 
@@ -242,44 +222,10 @@ class Model(object):
         (it doesnt work well if there exist different signs.)
         - params, tuple of params, flexible depending on ver
         """
+        from pythonlib.behmodel.scorer.utils import normscore
 
-        if len(scores_all)==0:
-            print(ver)
-            print(params)
-            assert False
+        probs = normscore(scores_all, ver, params)
 
-        if ver=="divide":
-            # simple, just divide by sum of alls cores
-            # if any is negative, then subtracts it.
-            # is very hacky!!!
-            if np.any(scores_all>0) and np.any(scores_all<0):
-                scores_all = scores_all - np.min(scores_all)
-            s_sum = np.sum(scores_all)
-            return scores_all/s_sum
-            # return (score)/np.sum(scores_all)
-        elif ver=="softmax":
-            # softmax. first normalize scores so that within similar range
-            # dividing by mean of absolute values of scores.. this is hacky...
-            from scipy.special import softmax
-            # scores_all = np.array([-5, 10, 25])
-            # sumabs = np.sum(np.absolute(scores_all))
-
-            # standardize scores. first subtract mean score. then divide by MAD
-            if params is None:
-                scores_all = scores_all - np.mean(scores_all)
-                meanabs = np.mean(np.absolute(scores_all))
-                if meanabs>0:
-                    scores_all = scores_all/meanabs
-            else:
-                if params[1]==True:
-                    # then subtract mean. this useful if large variation across trials for mean
-                    scores_all = scores_all - np.mean(scores_all)
-                scores_all = params[0]*scores_all
-            probs = softmax(scores_all) 
-            # probs = softmax(scores_all)
-            return probs
-        else:
-            assert False, "not coded!"
 
     def getLikelis(self, trial, PARAMS=None):
         """ given a trial object, which already has parses extracted,
@@ -305,27 +251,9 @@ class Model(object):
         priors = np.array([p["prob"] for p in parses])
         likelis = np.array([p["likeli"] for p in parses])
 
-        if ver=="top1":
-            c = np.random.choice(np.flatnonzero(priors == priors.max())) # this randomly chooses, if there is tiebreaker.
-            post = likelis[c]
-        elif ver=="maxlikeli":
-            # is positive control, take the maximum likeli parse
-            c = np.random.choice(np.flatnonzero(likelis == likelis.max()))
-            post = likelis[c]
-        elif ver=="weighted":
-            # baseline - weighted sum of likelihoods by prior probabilities
-            post = np.average(likelis, weights=priors)
-        elif ver=="likeli_weighted":
-            # uses likelihoods as weights.. this is like apositive control..
-            # 1) convert likelis to probabilities by softmax
-            probs = self.normscore(likelis, ver="softmax")
-            post = np.average(likelis, weights=probs)
-        else:
-            assert False, "not coded"
-
-
+        from pythonlib.behmodel.scorer.utils import poseterior_score
+        post = posterior_score(likelis, priors, ver)
         trial["posterior"] = post
-
 
     
 class Dataset(object):

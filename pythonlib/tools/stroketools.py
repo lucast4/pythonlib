@@ -780,8 +780,6 @@ def translateStrokes(strokes, xy):
     # strokes_copy = [S[:,[0,1]] + xy for S in strokes]
 
     from ..drawmodel.primitives import transform
-    # strokes = [s.copy() for s in strokes]
-    
     if strokes[0].shape[1]==3:
         strokes, time = _stripTimeDimension(strokes)
     else:
