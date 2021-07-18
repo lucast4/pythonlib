@@ -30,6 +30,7 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
     
     # --- subtract model1 from model2 score
     DatThisTest["mod2_minus_mod1"] = DatThisTest[model_score_name_list[1]] - DatThisTest[model_score_name_list[0]]
+    print("mod2_minus_mod1:", model_score_name_list[1], "-", model_score_name_list[0])
     
     # aggregate over tasks
     # tasklist = set(DatThisTest["character"])

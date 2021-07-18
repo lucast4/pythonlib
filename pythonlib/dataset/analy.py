@@ -128,7 +128,7 @@ def _groupingParams(D, expt):
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
-    score_all_pairwise_within_task=False):
+    score_all_pairwise_within_task=False, extract_features = False, only_keep_trials_across_groupings=False):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -171,28 +171,31 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
 
     # Only keep characters that have at lesat one trial across all grouping levels.
-    D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
+    if only_keep_trials_across_groupings:
+        D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
 
     # -- std of stroke and gaps
-    if "motorevents" in D.Dat.columns:
-        def F(x, ver):
-            ons = x["motorevents"]["ons"]
-            offs = x["motorevents"]["offs"]
-            if len(ons)==1:
-                return np.nan
-            strokedurs = np.array(offs) - np.array(ons)
-            gapdurs = np.array(ons)[1:] - np.array(offs)[:-1]
-            if ver=="stroke":
-                return np.std(strokedurs)
-            elif ver=="gap":
-                return np.std(gapdurs)
-        D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "stroke"), "sdur_std")
-        D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "gap"), "gdur_std")
+    if extract_motor_stats:
+        if "motorevents" in D.Dat.columns:
+            def F(x, ver):
+                ons = x["motorevents"]["ons"]
+                offs = x["motorevents"]["offs"]
+                if len(ons)==1:
+                    return np.nan
+                strokedurs = np.array(offs) - np.array(ons)
+                gapdurs = np.array(ons)[1:] - np.array(offs)[:-1]
+                if ver=="stroke":
+                    return np.std(strokedurs)
+                elif ver=="gap":
+                    return np.std(gapdurs)
+            D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "stroke"), "sdur_std")
+            D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "gap"), "gdur_std")
 
     ### EXTRACT FEATURES
     # - hausdorff, offline score
-    D.extract_beh_features(feature_list = FEATURE_NAMES)
-    D.score_visual_distance()
+    if extract_features:
+        D.extract_beh_features(feature_list = FEATURE_NAMES)
+        D.score_visual_distance()
 
     # -- pull out variables into separate columns
     if extract_motor_stats:
@@ -276,6 +279,12 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
+
+    # Print outcomes
+    print("GROUPING", GROUPING)
+    print("GROUPING_LEVELS", GROUPING_LEVELS)
+    print("FEATURE_NAMES", FEATURE_NAMES)
+    print("SCORE_COL_NAMES", SCORE_COL_NAMES)
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
@@ -541,31 +550,44 @@ def score_all_pairwise_within_task(D,  GROUPING,
     return colnames
 
 
-def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list):
+def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list, suffix=""):
     """ 2 x 2 alignment, where there are two monkey priors, and two scores (model scores).
     each row is one particular level, but has a score for each score_name_list.
     INPUTS:
     - monkey_prior_levels, list of levels.
     - score_name_list, list of names (coilumns)
+    OUT:
+    - modifies D in place.
     NOTE:
     ** ORDER matters, monkey_prior and score_name must be aligned.
     - score is assumed to be more positive --> better score.
     """
 
+    for prior, score in zip(monkey_prior_levels, score_name_list):
+        print(f"{prior} - aligned with - {score}")
+        assert prior in score, "are they not aligned?"
 
     # 1) get difference of scores
-    D.Dat["mod2_minus_mod1"] = D.Dat[score_name_list[1]] - D.Dat[score_name_list[0]]
+    if len(suffix)>0:
+        suffix = "_" + suffix
+    colname_m2_m1 = f"mod2_minus_mod1{suffix}"
+    D.Dat[colname_m2_m1] = D.Dat[score_name_list[1]] - D.Dat[score_name_list[0]]
 
     # 2) for each row, its alignemnet 
     def F(x):
         if x[monkey_prior_col]==monkey_prior_levels[0]:
-            return -x["mod2_minus_mod1"]
+            return -x[colname_m2_m1]
         elif x[monkey_prior_col]==monkey_prior_levels[1]:
-            return x["mod2_minus_mod1"]
+            return x[colname_m2_m1]
         else:
             print(x)
             assert False
-    D.Dat = applyFunctionToAllRows(D.Dat, F, "alignment")
+
+    newcol = f"alignment_trials{suffix}"
+    print("New alignmment col: ", newcol)
+    D.Dat = applyFunctionToAllRows(D.Dat, F, newcol)
+
+    return colname_m2_m1, newcol
 
 def taskmodel_assign_score(D, expt="lines5"):
     """ Quick and dirty, to replicate what did in Probedat, for scoring datsate.
@@ -627,3 +649,71 @@ def taskmodel_assign_score(D, expt="lines5"):
 
 
     return model_score_names
+
+
+
+
+def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
+    """
+    populate new column with list of strokes for all other trials
+    IN:
+    - Dlist, list of D, where each D is a single dataset holding a single epoch (i.e)
+    i.e., grouping level. doesnt' have to be, but that is how I did.
+    NOTES:
+    - each D in Dlist will have one new columns per grouping level, which will be all strokes
+    across all D in Dlist which are from that grouping_level (escept your own trial's stroke)
+    """
+    from .dataset import concatDatasets
+
+    # 1) Concat all datasets of interest, so can get all cross-parses
+    Dall = concatDatasets(Dlist) # holds pool of strokes
+    for D in Dlist:
+        for group in GROUPING_LEVELS:
+#             group = "straight" # which group's strokes to keep
+#             Dthis = D # which one to modify
+            
+            def _get_strokes(D, task, group):
+                """ returns all strokes for this task and this group, given a dataset D
+                """
+                dfthis = D.Dat[(D.Dat["unique_task_name"]==task) & (D.Dat[GROUPING]==group)]
+                inds = dfthis.index.to_list()
+                trialcodes = dfthis["trialcode"]
+                strokes = dfthis["strokes_beh"]
+                return trialcodes, strokes
+
+            list_list_strokes = []
+            for i in range(len(D.Dat)):
+                task = D.Dat.iloc[i]["unique_task_name"]
+                tcthis = D.Dat.iloc[i]["trialcode"]
+
+                trialcodes, strokes = _get_strokes(Dall, task, group)
+
+                # only keep strokes that are not from the current trial
+                list_strokes = []
+                for tc, s in zip(trialcodes, strokes):
+                    if tcthis!=tc:
+                        list_strokes.append(s)
+
+                list_list_strokes.append(list_strokes)
+
+            parsesname = f"strokes_beh_group_{group}"
+            D.Dat[parsesname] = list_list_strokes
+    
+    # to confirm concat didnt modify
+    for D in Dlist:
+        D._check_consistency()
+        
+    # Only keep rows which have strokes across all models
+    list_col_names = [f"strokes_beh_group_{group}" for group in GROUPING_LEVELS]
+    for D in Dlist:
+        def remove(D, i):
+            # True if any of cols are empty
+            x = [len(D.Dat.iloc[i][col])==0 for col in list_col_names]
+            if any(x):
+                return True
+            else:
+                return False
+        inds_remove = [i for i in range(len(D.Dat)) if remove(D, i)]
+        D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
+        
+    

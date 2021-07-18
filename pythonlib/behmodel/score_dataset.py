@@ -50,9 +50,13 @@ def score_dataset(D, BehModel, saveon=True, sdir=""):
     """ scores each trial using this BehModel
     Returns list of posterior scores, same length as D.Dat
     """
+
+    assert False, "also save trialcodes"
+    assert False, "also save preprocessing params for this dataset"
+    
     if saveon:
         assert len(sdir)>0
-        
+
     list_postscores = []
     for indtrial in range(len(D.Dat)):
         if indtrial%50==0:

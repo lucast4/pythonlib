@@ -17,12 +17,46 @@ class BehModel(object):
         self.Dat = None 
         self.IndTrial = None
 
+        self.UniqueID = None
+
         self._prior_scores = None
         self._prior_probs = None
         self._likeli_scores = None
         self._behavior = None
         self._task = None
         self._posterior_score = None
+
+        self._list_input_args = ("dat", "trial") # args in order.
+
+    def unique_id(self, set_id_to_this=None, ver="random_num"):
+        """ a string that identifies this model
+        - if set_id_to_this, then will set the ID and not change. will only
+        allow to run once.
+        - ver,
+        --- "timestamp", then sets as this.
+        NOTE:
+        - if not yet set, then will set.
+        - always returns string.
+        """
+        if self.UniqueID is not None:
+            return self.UniqueID
+        else:
+            if set_id_to_this is not None:
+                self.UniqueID = set_id_to_this
+                assert isinstance(set_id_to_this, str)
+            else:
+                if ver=="timestamp":
+                    from pythonlib.tools.expttools import makeTimeStamp
+                    ts = makeTimeStamp()
+                    self.UniqueID = ts
+                elif ver=="random_num":
+                    import random
+                    self.UniqueID = str(random.randint(10e8, 10e9))[:6]
+                else:
+                    assert False, "not sure how"
+
+        return self.UniqueID
+
         
     def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer):
         """ 
@@ -101,6 +135,22 @@ class BehModel(object):
         self.IndTrial = ind
 
         return self._posterior_score
+
+    def score_likelis_trial(self, D, ind):
+        """
+        get list of likelis for all parses for this single line of dataset D
+        OUT:
+        - np array
+        NOTE:
+        - does not save in model mmeory.
+        """
+
+        likelis = self.Likeli.score(D, ind)
+        return likelis
+
+
+
+
 
 
     #################### FOR PLOTTING

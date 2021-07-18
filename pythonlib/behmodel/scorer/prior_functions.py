@@ -95,6 +95,28 @@ def makePriorFunction(ver="uniform"):
 
 
 ############## USING FEATURE EXTRACTOR
+def prior_feature_extractor_base():
+    """ has norm, but no scoring fucntion
+    """
+    
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.behmodel.scorer.utils import normscore
+    from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
+    from pythonlib.drawmodel.efficiencycost import Cost
+
+    # Normalizer
+    def norm(list_scores):
+        beta = 1
+        params = [beta, False]
+        probs = normscore(list_scores, "softmax", params)
+        return probs
+
+    # Scorer
+    Pr = Scorer()
+    Pr.input_norm_function(norm)
+    return Pr
+
+
 def prior_feature_extractor(hack_lines5=True, 
     parser_names = ["parser_graphmod", "parser_nographmod"], rule=None):
     """ combines FeatureExtractor and MotorCost to do:

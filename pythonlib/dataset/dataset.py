@@ -126,6 +126,7 @@ class Dataset(object):
             self._store_dataframes(inputs, append_list)
         if not self._reloading_saved_state:
             self._cleanup()
+            self._check_consistency()
 
 
     def _store_dataframes(self, inputs, append_list):
@@ -350,7 +351,7 @@ class Dataset(object):
                 inds_to_remove.extend(dfthis.index.tolist())
 
         print("removing these inds (lack trials in at least one grioupuibg level):")
-        print(inds_to_remove)
+        print(inds_to_remove, "N=", len(inds_to_remove))
         self.Dat = self.Dat.drop(inds_to_remove, axis=0).reset_index(drop=True)
 
 
@@ -549,6 +550,19 @@ class Dataset(object):
             return False
         else:
             return True
+
+    def _check_consistency(self):
+        """ sanity checks, should run this every time after fully load 
+        a Dataset object and enter data
+        """
+
+        # No repeated unique trials
+        assert len(self.Dat["trialcode"].unique().tolist()) == len(self.Dat), "unique trials occur in multipel rows.., did you concat dset to isetlf?"
+
+
+        _checkPandasIndices(self.Dat)
+
+
 
     ############# CLEANUP
     def _cleanup(self, remove_dot_strokes=True):
@@ -2594,6 +2608,27 @@ class Dataset(object):
         return list_of_parsers
 
 
+    def parser_load_precomputed_posteriors(self, model_id):
+        """ Load list of posetrtior scores (scalars, one for each row of self.Dat), precomputed
+        using the model (model_id)
+        IN:
+        - model_id, [expt, mod], where expt and mod are strings, e.g., ["pilot", "bent"]
+        OUT:
+        - assigns scores to a new column, called "parser_post_{expt}_{mod}"
+        """
+        SDIR = "/data2/analyses/main/model_comp/planner"
+        sdir = f"{SDIR}/{model_id[0]}/dset_{self.identifier_string()}-vs-mod_{model_id[1]}"
+        path = f"{sdir}/posterior_scores.pkl"
+        with open(path, "rb") as f:
+            scores = pickle.load(f)
+        assert len(scores)==len(self.Dat)
+        colname = f"parser_postscores_{model_id[0]}_{model_id[1]}"
+        self.Dat[colname] = scores
+        print("added scores to columns in self.Dat:", colname)
+
+
+
+    ############### GENERAL PURPOSE, FOR LOADING
     def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, return_none_if_nopkl=False):
         """ looks for file. if not find, then looks in dict to find other trial that has 
         same taskname
@@ -3416,6 +3451,23 @@ class Dataset(object):
 
 
     ################ ANALYSIS HELPERS
+    def analy_get_all_inds_with_same_task(self):
+        """
+        returns indices for other trials
+        
+        """
+        assert False, "havent figured out how to remove the ind for each own trial."
+        def F(x):
+            print(dir(x))
+            task = x["unique_task_name"]
+            inds = self.Dat[self.Dat["unique_task_name"]==task].index.to_list()
+            print(inds)
+            assert False
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "inds_same_task")
+
+
+
     def analy_get_tasks_strongesteffect(self, grouping, grouping_levels, feature,
         dfunc = lambda x,y: y-x, df_in=None, return_vals_sorted=False):
         """ Extract tasks which have greatest difference along some feature (column),
@@ -3725,6 +3777,7 @@ def mergeTwoDatasets(D1, D2, on_="rowid"):
     cols = cols.append(pd.Index([on_]))
     df = pd.merge(df1, df2[cols], how="outer", on=on_, validate="one_to_one")
     
+
     return df
 
 
@@ -3733,7 +3786,6 @@ def concatDatasets(Dlist):
     Main goal is to concatenate D.Dat. WIll attempt to keep track of 
     Metadats, but have not confirmed that this is reliable yet.
     NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
-
     """
 
     Dnew = Dataset([])
@@ -3773,5 +3825,8 @@ def concatDatasets(Dlist):
 
         print("Done!, new len of dataset", len(Dnew.Dat))
         # Dnew.Metadats = copy.deepcopy(self.Metadats)
+
+    # Check consisitency
+    Dnew._check_consistency()
     return Dnew
 
