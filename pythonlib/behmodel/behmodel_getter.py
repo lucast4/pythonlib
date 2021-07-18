@@ -57,3 +57,48 @@ def models_monkey_vs_self(GROUPING_LEVELS):
         
     return list_models, list_model_names
 
+
+def quick_getter(modelclass, vectorized_priors=False):
+    """ For this modelclass (string) returns
+    list of beh models (BMs).
+    Sort of hard coded currently, just for testing)
+    """
+
+    if modelclass=="lines5":
+
+        # Generate models
+        list_mod = []
+        list_modnames = []
+        for rule_model in ["straight", "bent"]:
+
+            # Prior
+            if vectorized_priors:
+                Pr = prior_scorer_quick(ver="lines5", input_parsesflat=True)
+            else:
+                Pr = prior_scorer_quick(ver="lines5", input_parsesflat=False)
+
+            # Likeli
+            Li = likeli_scorer_quick(ver="base")
+
+            # Post
+            Po = poster_dataset()
+
+            # Model
+            BM = BehModel()
+            BM.input_model_components(Pr, Li, Po)
+            
+            # BM._list_input_args_likeli = ("dat", "trial", "modelname")
+            # BM._list_input_args_prior = ("parsesflat")
+            BM._list_input_args_likeli = ("dat", "trial", "modelname")
+            
+            if vectorized_priors:
+                BM._list_input_args_prior = ("parsesflat", "trialcode", "modelname")
+            else:
+                BM._list_input_args_prior = ("dat", "trial", "modelname")
+
+            list_mod.append(BM)
+            list_modnames.append(rule_model)
+    else:
+        assert False
+
+    return list_mod, list_modnames

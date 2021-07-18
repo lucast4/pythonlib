@@ -358,7 +358,9 @@ class Dataset(object):
     def removeNans(self, columns=None):
         """ remove rows that have nans for the given columns
         INPUTS:
-        - columns, list of column names. if None, then uses all columns.
+        - columns, list of column names. 
+        --- if None, then uses all columns.
+        --- if [], then doesnt do anything
         RETURNS:
         [modifies self.Dat]
         """
@@ -370,9 +372,13 @@ class Dataset(object):
         if columns is None:
             tmpcol = self.Dat.columns
         else:
+            if len(columns)==0:
+                print("not removing nans, since columns=[]")
+                return
             tmpcol = columns
         for c in tmpcol:
             print(c, ':', np.sum(self.Dat[c].isna()))
+
         if columns is None:
             self.Dat = self.Dat.dropna()
         else:
@@ -2593,9 +2599,10 @@ class Dataset(object):
             P = self.Dat.iloc[indtrial][name]
             plist = P.extract_all_parses_as_list(kind=kind)
             if kind=="summary":
-                for p in plist:
+                for i, p in enumerate(plist):
                     for pp in p:
                         pp["parser_name"] = name
+                        pp["ind_in_parser"] = i
             list_of_p.extend(plist)
         return list_of_p
 
@@ -2627,6 +2634,37 @@ class Dataset(object):
         print("added scores to columns in self.Dat:", colname)
 
 
+    def parser_flatten(self, parser_names = ["parser_graphmod", "parser_nographmod"]):
+        """ take parsers (each a single object) from multiple columns (each a parser_name)
+        and combines all and flattens into a new column called "parser_all_flat"
+        - each parse represented as a list of p, where p is a dict holding all representations.
+        - also holds reference back to origianl Parser, in case want to call it.
+        """
+        
+        for pname in parser_names:
+            assert pname in self.Dat.columns, "this parser no exist"
+
+        list_list_parses = []
+        for indtrial in range(len(self.Dat)):
+            list_list_parses.append(self.parser_list_of_parses(indtrial, parser_names=parser_names))
+        
+        self.Dat["parses_behmod"] = list_list_parses
+        print("flattend parsers and moved to new col: ", "parses_behmod")
+        print("Parsers:", parser_names)
+
+    def parserflat_extract_strokes(self, ind):
+        """ extract list of parses, where each parse is a strokes (i.e. a list of Nx2 array)
+        """
+        
+        list_list_p = self.Dat.iloc[ind]["parses_behmod"]
+        return [[p["traj"] for p in list_p] for list_p in list_list_p]
+
+    def parser_names(self):
+        """ gets names of all columns that start with 'parser_'
+        OUT:
+        - list of str.
+        """
+        return [col for col in self.Dat.columns if "parser_"==col[:7]]
 
     ############### GENERAL PURPOSE, FOR LOADING
     def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, return_none_if_nopkl=False):

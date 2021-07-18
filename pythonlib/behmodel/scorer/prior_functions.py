@@ -178,3 +178,83 @@ def prior_feature_extractor(hack_lines5=True,
     return Pr
 
 
+def prior_scorer_quick(ver, input_parsesflat=False):
+    """ Good quick, better than above (here latest) since doesnt pass in Parsers, but 
+    passes in list_of_p, so dont bneed to specify here how to parse.
+    """
+
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.behmodel.scorer.utils import normscore
+    from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
+    from pythonlib.drawmodel.efficiencycost import Cost
+
+
+    if ver=="lines5":
+
+        # 1) Extract features
+        # One feature extract for all models, since they are working on the same parses
+        F = FeatureExtractor()
+        
+        # 2) Scorers, these will differ based on model.
+        dict_MC = {}
+        params1 = {}
+        params1["thetas"] = {
+            "circ":10.,
+            "dist":0.,
+            "circ_max":10.,
+            "nstrokes":0.,
+        }
+        dict_MC["bent"] = Cost(params1)
+
+        params1 = {}
+        params1["thetas"] = {
+            "circ":-10.,
+            "dist":0.,
+            "circ_max":-10.,
+            "nstrokes":0.,
+        }
+        dict_MC["straight"] = Cost(params1)
+
+
+        if input_parsesflat:
+            def priorscorer(list_parses, trialcode, rule):
+                MC = dict_MC[rule]
+                # NOTE: computing feature vectors is slow part.
+                mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
+                    hack_lines5=True)
+                list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+                return list_scores
+        else:
+            def priorscorer(D, indtrial, rule):
+                MC = dict_MC[rule]
+                # NOTE: computing feature vectors is slow part.
+                if True:
+                    # input dataset
+                    mat_features = F.list_featurevec_from_flatparses(D, indtrial, 
+                        hack_lines5=True)
+                else:
+                    mat_features = [np.zeros(4) for _ in range(len(D.Dat.iloc[indtrial]["parses_behmod"]))]
+                # for feature_vec in mat_features:
+                #     print(feature_vec.shape)
+                #     assert False
+                if True:
+                    list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+                else:
+                    list_scores = np.zeros(mat_features.shape[0])
+                return list_scores
+
+        # Normalizer
+        def norm(list_scores):
+            beta = 1
+            params = [beta, False]
+            probs = normscore(list_scores, "softmax", params)
+            return probs
+
+        # Scorer
+        Pr = Scorer()
+        Pr.input_score_function(priorscorer)
+        Pr.input_norm_function(norm)
+    else:
+        assert False, "not coded"
+
+    return Pr

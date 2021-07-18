@@ -2,6 +2,7 @@
 score this datapoint """
 import numpy as np
 
+from pythonlib.drawmodel.features import strokeCircularity, strokeDistances
 
 class FeatureExtractor(object):
     def __init__(self, STROKE_DIR_DOESNT_MATTER=True):
@@ -16,6 +17,8 @@ class FeatureExtractor(object):
 
         self.Params = {}
         self.Params["STROKE_DIR_DOESNT_MATTER"] = STROKE_DIR_DOESNT_MATTER
+
+        self._Tracker = {}
 
     # def list_featurevec_from_list_p(self, list_of_p, hack_lines5 = False):
     #     """ 
@@ -91,7 +94,6 @@ class FeatureExtractor(object):
     #     return list_featurevecs
 
 
-
     def list_featurevec_from_mult_parser(self, D, ind, 
         parser_names = ["parser_graphmod", "parser_nographmod"],
         hack_lines5 = False):
@@ -124,13 +126,9 @@ class FeatureExtractor(object):
         OUT:
         - list of featurevecs, one for each parse in P
         """
-        from pythonlib.drawmodel.features import strokeCircularity, strokeDistances
 
         tracker = {}
         STROKE_DIR_DOESNT_MATTER = self.Params["STROKE_DIR_DOESNT_MATTER"]
-
-        def _path_to_key(walker):
-            return walker.unique_path_id(invariant=STROKE_DIR_DOESNT_MATTER)
 
         def _path_to_feature_vec(traj):
             feat = (
@@ -140,7 +138,7 @@ class FeatureExtractor(object):
 
         def feature_single_p(p):
             # first check if this is already saved
-            key = _path_to_key(p["walker"])
+            key = self._path_to_key(p)
             if key in tracker:
                 return tracker[key]
             else:
@@ -184,3 +182,253 @@ class FeatureExtractor(object):
         return list_featurevecs
 
 
+    ############### USING pre-flattened parses
+    def _path_to_feature_vec(self, p, list_features=[]):
+        feat = []
+        traj = p["traj"]
+
+        for f in list_features:
+            if f =="circ":
+                x = strokeCircularity([traj])[0]
+            elif f=="dist":
+                x = strokeDistances([traj])[0]
+            else:
+                print(f)
+                assert False
+            feat.append(x)
+        # feat = (
+        #     strokeCircularity([traj])[0],
+        #     strokeDistances([traj])[0])
+
+        return feat
+
+
+    def _tracker_keys(self, D, indtrial, p):
+        """ returns len 4 list
+        D can be datsaet, or can be a string (since dataset shouldnt bvary for
+        this featureextracter, normalyl.)
+        """
+        if isinstance(D, str):
+            a = D   
+        else:
+            a = D.identifier_string()
+        b = indtrial
+        c = p["parser_name"]
+        d = self._path_to_key(p)
+
+        keys = [a,b,c,d]
+
+        return keys
+
+    def tracker_get(self, D, indtrial, p):
+        """ checks if this combo of dataset, trial, and parse is done
+        - need this conjunction in case the same feature extractor used across
+        different datasets and trials
+        OUT:
+        - feature_vec if it exists,
+        - otherwise None
+        """
+
+        # if a not in self._tracker.keys():
+        #     return None
+        # if b not in self._tracker[a].keys():
+        #     return None
+        # if c not in self._tracker[a][b]:
+        #     return None
+        # if d not in self._tracker[a][b][c][d]
+        # return self._tracker[a][b][c][d]
+
+        list_keys = self._tracker_keys(D, indtrial, p)
+        this = self._Tracker
+        for key in list_keys:
+            if key not in this:
+                return None 
+            else:
+                this = this[key]
+        return this
+
+    def tracker_add(self, D, indtrial, p, feature_vec):
+        """ checks if this combo of dataset, trial, and parse is done
+        - need this conjunction in case the same feature extractor used across
+        different datasets and trials
+        OUT:
+        None
+        """
+
+        list_keys = self._tracker_keys(D, indtrial, p)
+        this = self._Tracker
+        for key in list_keys[:3]:
+            if key not in this:
+                this[key] = {}
+            this = this[key]
+
+        this[list_keys[3]] = feature_vec
+
+
+    def list_featurevec_from_flatparses_directly(self, list_parses, indtrial, 
+        hack_lines5=False):
+        """ same as 
+        list_featurevec_from_flatparses, but here pass in list of parses, 
+        IN:
+        - list_parses, list of list of p, i.e., this holds all parses for one
+        - indtrial, is important for keeping track of edges.
+        row of D.Dat, e.g,, list_parses = D.Dat.iloc[0]["parses_behmod"]
+        """
+        if hack_lines5:
+            list_features = ["circ", "dist"]
+        else:
+            assert hack_lines5==True, "not coded"
+
+        def feature_single_p(p):
+            # first check if this is already saved
+            # key = _path_to_key(p["walker"])
+
+            feat = self.tracker_get("dummy", indtrial, p)
+            if feat is not None:
+                # print("got saved")
+                return feat
+            else:
+                # get new
+                feat = self._path_to_feature_vec(p, list_features=list_features)
+                self.tracker_add("dummy", indtrial, p, feat)
+                # print("got new")
+                return feat
+
+        def featurevec_single_trial(list_of_p):
+            """ a single trial is a list of ps
+                e..g, for trial ind, 
+                list_of_p = P.extract_parses_wrapper(ind, "summary")
+            OUT:
+            - feature_vec, (N,) shape np array.
+            """
+
+            list_of_features = []
+            for p in list_of_p:
+                list_of_features.append(feature_single_p(p))
+
+            # Take average over all strokes
+            mat_of_features = np.stack(list_of_features) # N x nfeat
+            feature_vec = np.mean(mat_of_features, axis=0)
+
+            # Add other features
+            # - max circ across trajs
+            feature_vec = np.append(feature_vec, np.max(mat_of_features[:,0]))
+
+            #- nstrokes
+            nstrokes = len(list_of_p)
+            feature_vec = np.append(feature_vec, nstrokes)
+
+            return feature_vec
+        
+        list_list_p = list_parses
+        nfeat = 4
+        mat_features = np.empty((len(list_list_p), nfeat))
+        for i, list_of_p in enumerate(list_list_p):
+            # list_of_p = P.extract_parses_wrapper(ind, "summary")
+            feature_vec = featurevec_single_trial(list_of_p)
+            mat_features[i, :] = feature_vec
+            # list_featurevecs.append(feature_vec)
+
+        return mat_features
+
+
+    def list_featurevec_from_flatparses(self, D, indtrial, 
+        hack_lines5=False):
+        """ 
+        Similar to above.
+        Tracker keeps track of edges for all parsers in the dict.
+        OUT:
+        - list of np arrays, one for each parse in this indtrial.
+        """
+
+        if hack_lines5:
+            list_features = ["circ", "dist"]
+        else:
+            assert hack_lines5==True, "not coded"
+
+        STROKE_DIR_DOESNT_MATTER = self.Params["STROKE_DIR_DOESNT_MATTER"]
+
+        # initialize tracker if needed
+        # parser_names = D.parser_names()
+        # for name in parser_names:
+        #     if name not in tracker.keys():
+        #         tracker[name] = {}
+
+
+        def feature_single_p(p):
+            # first check if this is already saved
+            # key = _path_to_key(p["walker"])
+
+            feat = self.tracker_get(D, indtrial, p)
+            if feat is not None:
+                # print("got saved")
+                return feat
+            else:
+                # get new
+                feat = self._path_to_feature_vec(p, list_features=list_features)
+                self.tracker_add(D, indtrial, p, feat)
+                # print("got new")
+                return feat
+
+        def featurevec_single_trial(list_of_p):
+            """ a single trial is a list of ps
+                e..g, for trial ind, 
+                list_of_p = P.extract_parses_wrapper(ind, "summary")
+            OUT:
+            - feature_vec, (N,) shape np array.
+            """
+
+            list_of_features = []
+            for p in list_of_p:
+                list_of_features.append(feature_single_p(p))
+
+            # Take average over all strokes
+            mat_of_features = np.stack(list_of_features) # N x nfeat
+            feature_vec = np.mean(mat_of_features, axis=0)
+
+            # Add other features
+            # - max circ across trajs
+            feature_vec = np.append(feature_vec, np.max(mat_of_features[:,0]))
+
+            #- nstrokes
+            nstrokes = len(list_of_p)
+            feature_vec = np.append(feature_vec, nstrokes)
+
+            return feature_vec
+        
+        if False:
+            # list appending
+            list_featurevecs = []
+            list_list_p = D.Dat.iloc[indtrial]["parses_behmod"]
+            for list_of_p in list_list_p:
+                # list_of_p = P.extract_parses_wrapper(ind, "summary")
+                feature_vec = featurevec_single_trial(list_of_p)
+                list_featurevecs.append(feature_vec)
+            mat_features = np.asarray(list_featurevecs)
+        else:
+            # np array
+            list_list_p = D.Dat.iloc[indtrial]["parses_behmod"]
+            nfeat = 4
+            mat_features = np.empty((len(list_list_p), nfeat))
+            for i, list_of_p in enumerate(list_list_p):
+                # list_of_p = P.extract_parses_wrapper(ind, "summary")
+                feature_vec = featurevec_single_trial(list_of_p)
+                mat_features[i, :] = feature_vec
+                # list_featurevecs.append(feature_vec)
+
+
+        # if want to keep printing to see how much is cached.
+        # if "Red_lines5_straight" in self._Tracker:
+        #     print(len(self._Tracker["Red_lines5_straight"]))
+
+        return mat_features
+
+
+    ########### HELPERS
+    def _path_to_key(self, p):
+        """ tuple of ints, a unique path id
+        (coincatnates list of edges)
+        """
+        x = p["walker"].unique_path_id(invariant=self.Params["STROKE_DIR_DOESNT_MATTER"])
+        assert isinstance(x, tuple)
+        return x

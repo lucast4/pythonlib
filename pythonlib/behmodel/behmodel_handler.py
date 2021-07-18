@@ -11,7 +11,9 @@ class BehModelHandler(object):
         self.PriorProbs = None
         self.Posteriors = None
 
-    def input_data(self, dataset, list_models, list_model_ids=None, allow_separate_likelis=False):
+    def input_data(self, dataset, list_models, 
+        list_model_ids=None, allow_separate_likelis=False,
+        parsers_to_flatten = ['parser_graphmod', 'parser_nographmod']):
         """
         IN:
         - dataset, a single D object
@@ -19,6 +21,8 @@ class BehModelHandler(object):
         - list_model_ids, list of strings. if dont enter, then will generate
         auto based on timestamps.
         - allow_separate_likelis, then issue is will take longer if they dont share.
+        - parsers_to_flatten, by default will flatten these parsers into list of parses, 
+        where ach parse is a list of walks. This will go into a new column: "parses_behmod"
         OUT:
         - assigns to self.Dat, self.ListModels
         NOTE:
@@ -27,6 +31,9 @@ class BehModelHandler(object):
         --- Assume all models applied to the same one dataset.
         --- Otherwise models hve different priors and posetiro scorers.
         """
+
+        self._parsers_to_flatten = parsers_to_flatten
+        self._allow_separate_likelis = allow_separate_likelis
 
         self.D = dataset
         self.ListModels = list_models
@@ -47,8 +54,7 @@ class BehModelHandler(object):
 
         assert len(self.DictModels)==len(self.ListModels), "probably keys are same."
 
-        self._allow_separate_likelis = allow_separate_likelis
-        if allow_separate_likelis:
+        if self._allow_separate_likelis:
             self.Likelis = {name:[] for name in self.DictModels.keys()} # list of likelsi.
         else:
             self.Likelis = []  # model --> list of likelis
@@ -59,6 +65,8 @@ class BehModelHandler(object):
     def preprocess(self):
         """
         """
+        # Flatten parsers
+        self.D.parser_flatten(self._parsers_to_flatten)
 
         if self._allow_separate_likelis==False:
             # self.Likeli = self.ListModels[0].Likeli # asssuems all use same likeli
@@ -77,6 +85,8 @@ class BehModelHandler(object):
                             print(a)
                             assert False, "model likeli functions are different. just make separate BehModelHandlers if this is the case, or set allow_separate_likelis True"
 
+
+
     def _score_helper(self, scorever, modelname, i):
         """
         - General purpose for extracting list of scores (priors or likelis) for this trial(i)
@@ -88,20 +98,30 @@ class BehModelHandler(object):
         Mod = self.DictModels[modelname]
 
         # what args this needs?
-        args = None
-        if Mod._list_input_args==("dat","trial"):
-            args = (self.D, i)
-        else:
-            if len(Mod._list_input_args)>2:
-                if Mod._list_input_args[2]=="modelname":
+
+        def _get_args(list_of_argstrings):
+            args = None
+            if list_of_argstrings==("dat","trial"):
+                args = (self.D, i)
+            elif list_of_argstrings == ("dat", "trial", "modelname"):
                     args = (self.D, i, modelname)
-        if args is None:
-            print(Mod._list_input_args)
-            assert False
+            elif list_of_argstrings == ("parsesflat"):
+                assert False, "if this, then shouldnt pass in args one by one... should use applyFuncToAllRows"
+                args = (self.D, i, modelname)
+            else:
+                assert False
+
+            if args is None:
+                print(list_of_argstrings)
+                assert False
+            return args
+
 
         if scorever=="prior":
+            args = _get_args(Mod._list_input_args_prior)
             return Mod.Prior.score_and_norm(*args)
         elif scorever=="likeli":
+            args = _get_args(Mod._list_input_args_likeli)
             return Mod.Likeli.score(*args)
         else:
             print(scorever)
@@ -109,7 +129,7 @@ class BehModelHandler(object):
 
 
     ##### PROCESS FOR SCORING
-    def compute_store_likelis(self):
+    def compute_store_likelis(self, force_run=False):
         """ doesnt care about model. just compute likelis and save them, for each
         line in datsaet.
         NOTE;
@@ -120,7 +140,7 @@ class BehModelHandler(object):
             list_likelis = []
             for i in range(len(self.D.Dat)):
                 if i%50==0:
-                    print(i)
+                    print("likeli", i)
                 likelis = self._score_helper("likeli", modname, i)
                 # likelis = Mod.Likeli.score(self.D, i)
                 list_likelis.append(likelis)
@@ -128,7 +148,7 @@ class BehModelHandler(object):
             return list_likelis
 
         if self._allow_separate_likelis==False:
-            if len(self.Likelis)==0:
+            if len(self.Likelis)==0 or force_run==True:
                 # use the first
                 name = self.ListModelsIDs[0]
                 self.Likelis = _get_list_likelis(name)
@@ -136,19 +156,20 @@ class BehModelHandler(object):
                 print("skipping compute likelis since done")
         else:
             for name in self.DictModels.keys():
-                if len(self.Likelis[name])==0:
+                if len(self.Likelis[name])==0 or force_run==True:
                     self.Likelis[name] = _get_list_likelis(name)
                 else:
                     print("skipping compute likelis since done, mod= ", name)
 
 
-    def compute_store_priorprobs(self): 
+    def compute_store_priorprobs(self, force_run=False): 
         """
+        - force_run, then redoes, even if already donea nd saved.
         OUT:
         - svaes into : self.PriorProbs[modelid][trial]
         """
 
-        if self.PriorProbs is not None:
+        if self.PriorProbs is not None and force_run==False:
             print("skipping prior compute, since already done")
             return
 
@@ -157,10 +178,41 @@ class BehModelHandler(object):
             self.PriorProbs[name] = []
             for indtrial in range(len(self.D.Dat)):
                 if indtrial%50==0:
-                    print(name, indtrial)
+                    print("priors", name, indtrial)
                 probs = self._score_helper("prior", name, indtrial)
                 # probs = Mod.Prior.score_and_norm(self.D, indtrial)
                 self.PriorProbs[name].append(probs)
+
+    def compute_store_priorprobs_vectorized(self):
+        """ 
+        - Assumes that prior scorer takes in list of parses as an argument.
+        this way can vectorize computation over all rows of Dat
+        NOTE:
+        This seems to be about 4-5x faster than compute_store_priorprobs, on datsaet
+        with about 250 rows (trials) and about 20-100 parses each.
+        Tested on Red - lines5 - straight.
+        See notebook: devo_taskmodel_finalized_071121
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        if self.PriorProbs is not None and force_run==False:
+            print("skipping prior compute, since already done")
+            return
+
+        self.PriorProbs = {}
+        for name, Mod in self.DictModels.items():
+            print("probs, getting vectorized across all trials", name)
+            def F(x):
+                if Mod._list_input_args_prior==("parsesflat", "trialcode", "modelname"):
+                    args = (x["parses_behmod"], x["trialcode"], name)
+                else:
+                    print(Mod._list_input_args_prior)
+                    assert False
+                probs = Mod.Prior.score_and_norm(*args)
+                return probs
+            dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
+            self.PriorProbs[name] = dfthis["priorprobs"].to_list()
+
 
     def compute_store_posteriors(self):
         """
@@ -173,7 +225,7 @@ class BehModelHandler(object):
             self.Posteriors[name] = []
             for indtrial in range(len(self.D.Dat)):
                 if indtrial%50==0:
-                    print(name, indtrial)
+                    print("posterior", name, indtrial)
 
                 likelis = self._get_list_likelis(name, indtrial)
                 probs = self.PriorProbs[name][indtrial]

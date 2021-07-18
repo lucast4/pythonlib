@@ -69,3 +69,25 @@ def likeli_dataset(parser_names = ["parser_graphmod", "parser_nographmod"]):
     Li.input_score_function(F)
     return Li
 
+def likeli_scorer_quick(ver):
+    """ quick return of scorere, given ver
+    OUT:
+    - Scorer
+    """
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+    if ver=="base":
+        def F(D, ind,  modelname):
+            # include modelname just becuase prior needs it...
+            strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
+            list_of_parsestrokes = D.parserflat_extract_strokes(ind) # list of strokes
+            scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_of_parsestrokes])
+            return 1/scores
+    else:
+        print(ver)
+        assert False, "not coded"
+    
+    Li = Scorer()
+    Li.input_score_function(F)
+    return Li

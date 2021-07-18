@@ -115,8 +115,8 @@ def _groupingParams(D, expt):
         print(expt)
         assert False
 
-
-    D = D.filterPandas(F, return_ver="dataset")
+    if len(F)>0:
+        D = D.filterPandas(F, return_ver="dataset")
 
     # classify based on plan times
     if len(plantime_cats)>0:
@@ -141,7 +141,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     sequence assignment is accurate/confident.
     NOTE:
     - if D.Dat ends up being empty, then returns None
-
+    - if all flags False, then doesnt do any mods to D, just returns groupings, etc.
     """
     from pythonlib.tools.pandastools import filterPandas, aggregGeneral, applyFunctionToAllRows
     from pythonlib.drawmodel.strokedists import distscalarStrokes

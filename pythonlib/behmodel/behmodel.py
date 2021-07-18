@@ -7,6 +7,8 @@ class BehModel(object):
 
     def __init__(self):
         """
+        IN:
+        - parse
         """
         self.Params = {}
 
@@ -27,6 +29,24 @@ class BehModel(object):
         self._posterior_score = None
 
         self._list_input_args = ("dat", "trial") # args in order.
+
+    def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer):
+        """ 
+        IN:
+        - all scorers are instances of the Scorer class.
+        - signatures:
+        --- prior_scorer.score(parse_single)
+        --- likeli_scorer.score(beh_single, parse_single)
+        --- posterior_scorer.score(prior_scores, likeli_scores)
+        --- where parse_single and beh_single are strokes types.
+        OUT:
+        - assigns to fields
+        """
+
+        self.Prior = prior_scorer
+        self.Likeli = likeli_scorer
+        self.Poster = posterior_scorer
+
 
     def unique_id(self, set_id_to_this=None, ver="random_num"):
         """ a string that identifies this model
@@ -58,22 +78,6 @@ class BehModel(object):
         return self.UniqueID
 
         
-    def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer):
-        """ 
-        IN:
-        - all scorers are instances of the Scorer class.
-        - signatures:
-        --- prior_scorer.score(parse_single)
-        --- likeli_scorer.score(beh_single, parse_single)
-        --- posterior_scorer.score(prior_scores, likeli_scores)
-        --- where parse_single and beh_single are strokes types.
-        OUT:
-        - assigns to fields
-        """
-
-        self.Prior = prior_scorer
-        self.Likeli = likeli_scorer
-        self.Poster = posterior_scorer
 
 
 
@@ -172,8 +176,6 @@ class BehModel(object):
         inds = list(np.argsort(scores))
         scores = [scores[i] for i in inds]
         return inds, scores
-
-
 
     def plot_sorted_by(self, sort_by, N=20):
 
