@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 class BehModelHandler(object):
 
@@ -9,6 +10,8 @@ class BehModelHandler(object):
 
         # self.Likelis = None # hold likeli for each parse for each trial
         self.PriorProbs = None
+        self.PriorLogProbs = None
+        self.LikelisLogProbs = None
         self.Posteriors = None
 
     def input_data(self, dataset, list_models, 
@@ -161,6 +164,22 @@ class BehModelHandler(object):
                 else:
                     print("skipping compute likelis since done, mod= ", name)
 
+    def compute_store_likelis_logprobs(self, force_run=False):
+
+        if self._allow_separate_likelis==False:
+            # use the first
+            if self.LikelisLogProbs is None or force_run==True:
+                name = self.ListModelsIDs[0]
+                # for i in range(len(self.Likelis)):
+                    # scores = self.Likelis[i]
+                    # scores = 100*scores
+                    # logprobs = self.DictModels[name].Likeli.norm(scores)
+                self.LikelisLogProbs = [self.DictModels[name].Likeli.norm(scores) for scores in self.Likelis]
+            else:
+                print("skipping compute log-likelis since done")
+
+        else:
+            assert False, "code this"
 
     def compute_store_priorprobs(self, force_run=False): 
         """
@@ -168,7 +187,7 @@ class BehModelHandler(object):
         OUT:
         - svaes into : self.PriorProbs[modelid][trial]
         """
-
+        assert False, "dotn use this anymore. this takes probs, but I prior scorefun normalizes to logprobs."
         if self.PriorProbs is not None and force_run==False:
             print("skipping prior compute, since already done")
             return
@@ -183,7 +202,8 @@ class BehModelHandler(object):
                 # probs = Mod.Prior.score_and_norm(self.D, indtrial)
                 self.PriorProbs[name].append(probs)
 
-    def compute_store_priorprobs_vectorized(self):
+
+    def compute_store_priorprobs_vectorized(self, force_run=False):
         """ 
         - Assumes that prior scorer takes in list of parses as an argument.
         this way can vectorize computation over all rows of Dat
@@ -195,23 +215,29 @@ class BehModelHandler(object):
         """
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-        if self.PriorProbs is not None and force_run==False:
+        if self.PriorLogProbs is not None and force_run==False:
             print("skipping prior compute, since already done")
             return
 
+        self.PriorLogProbs = {}
         self.PriorProbs = {}
         for name, Mod in self.DictModels.items():
-            print("probs, getting vectorized across all trials", name)
+            print("logprobs, getting vectorized across all trials", name)
             def F(x):
                 if Mod._list_input_args_prior==("parsesflat", "trialcode", "modelname"):
                     args = (x["parses_behmod"], x["trialcode"], name)
+                elif Mod._list_input_args_prior==("parsesflat", "trialcode"):
+                    args = (x["parses_behmod"], x["trialcode"])
                 else:
                     print(Mod._list_input_args_prior)
                     assert False
-                probs = Mod.Prior.score_and_norm(*args)
-                return probs
+                logprobs = Mod.Prior.score_and_norm(*args)
+                return logprobs
             dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
-            self.PriorProbs[name] = dfthis["priorprobs"].to_list()
+            self.PriorLogProbs[name] = dfthis["priorprobs"].to_list()
+
+            # convert to probs
+            self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
 
 
     def compute_store_posteriors(self):
@@ -228,21 +254,68 @@ class BehModelHandler(object):
                     print("posterior", name, indtrial)
 
                 likelis = self._get_list_likelis(name, indtrial)
-                probs = self.PriorProbs[name][indtrial]
-
+                probs = self._get_list_probs(name, indtrial)
                 post = Mod.Poster.score(likelis, probs)
+                # print(likelis)
+                # print(probs)
+                # print(post)
+                # print(np.argmax(likelis))
+                # print(likelis[np.argmax(likelis)])
+                # print(probs[np.argmax(likelis)])
+                # assert False
                 self.Posteriors[name].append(post)
+
+    def final_score(self, modelname, per_trial=False, prob=False):
+        """ 
+        Sum of posteriors (which are log probs)
+        """
+        post_score = np.sum(self.Posteriors[modelname])
+        if per_trial:
+            post_score = post_score/len(self.Posteriors[modelname])
+        if prob:
+            post_score = np.exp(post_score)
+
+        return post_score
 
 
     ##### GETTERS
-    def _get_list_likelis(self, modname, indtrial):
-        if self._allow_separate_likelis:
-            return self.Likelis[modname][indtrial]
+    def _get_list_probs(self, modname, indtrial):
+        """ get prior, in formate needed for computing posterior
+        """
+
+        if self.DictModels[modname]._poster_use_log_prior:
+            this = self.PriorLogProbs
         else:
-            return self.Likelis[indtrial]
+            this = self.PriorProbs
+        return this[modname][indtrial]
+
+    def _get_list_likelis(self, modname, indtrial):
+        """ get likeli, in formate needed for computing posterior
+        """
+
+        if self.DictModels[modname]._poster_use_log_likeli:
+            this = self.LikelisLogProbs
+        else:
+            this = self.Likelis
+
+        if self._allow_separate_likelis:
+            return this[modname][indtrial]
+        else:
+            return this[indtrial]
 
 
-    ##### PLOTTING
+    ##### PARAMS
+    def params_prior(self, modelname):
+        """
+        Get the params for prior, including 
+        - norm function
+        - for motor cost model in the prior
+        """
+        out = {
+            "MotorCost":self.DictModels[modelname].Prior.Objects["MotorCost"].Params,
+            "main":self.DictModels[modelname].Prior.Params
+        }
+        return out
 
 
     ##### POST-PROCESS
@@ -266,4 +339,306 @@ class BehModelHandler(object):
         return list_col_names
 
 
+    #### EXTRACT DATA
+    def extract_list_parsesstrokes(self, indtrial):
+        return self.D.parserflat_extract_strokes(indtrial)
 
+    def extract_inds_trials_sorted(self, modelname, sort_by="posterior"):
+        """ returns list of inds, sorted in increaseing order of sortby
+        """
+        if sort_by=="posterior":
+            scores = self.Posteriors[modelname]
+        else:
+            print(sort_by)
+            assert False, "not coded"
+
+        inds = np.argsort(scores)
+        return inds, np.array([scores[i] for i in inds])
+
+
+    def extract_priors_likelis(self, modelname, indtrial, inds_parses=None, sort_by=None,
+        log_probs = True, log_likelis=False):
+        """ can choose to get for specific inds paress. will do this _before_ sorting.
+        returns lists:
+        - inds, priors, likelis
+        """
+
+        if log_probs:
+            priors = self.PriorLogProbs[modelname][indtrial]
+        else:
+            priors = self.PriorProbs[modelname][indtrial]
+        if log_likelis:
+            likelis = self.LikelisLogProbs[indtrial]
+        else:
+            likelis = self.Likelis[indtrial]
+
+
+        if inds_parses is None:
+            inds_parses = range(len(priors))
+
+        priors = [priors[i] for i in inds_parses]
+        likelis = [likelis[i] for i in inds_parses]
+
+        if sort_by is not None:
+            tmp = [(p, l, i) for p,l, i in zip(priors, likelis, inds_parses)]
+            if sort_by=="prior":
+                tmp = sorted(tmp, key=lambda x:x[0])
+            elif sort_by=="likeli":
+                tmp = sorted(tmp, key=lambda x:x[1])
+            else:
+                assert False
+            priors = [t[0] for t in tmp]
+            likelis = [t[1] for t in tmp]
+            inds_parses = [t[2] for t in tmp]
+
+        return priors, likelis, inds_parses
+
+    def extract_info_single_parse(self, indtrial, indparse,
+        log_prob = False, increase_probs = False, increase_likeli=False):
+        """
+        For ghenerating a string that can use as title for this single parse.
+        combines likeli, prior (across all models).
+        """
+
+        out = []
+        out.append(int(indparse))
+
+        if log_prob:
+            assert increase_probs==False
+
+        for modelname in self.ListModelsIDs:
+            priors, likelis, _ = self.extract_priors_likelis(
+                modelname, indtrial, inds_parses=[indparse], sort_by=None)
+            if log_prob:
+                priors = [np.log(p) for p in priors]
+            if increase_likeli is not False:
+                likelis = [increase_likeli*l for l in likelis]
+            if increase_probs is not False:
+                priors = [increase_probs*p for p in priors]
+            out.append(modelname)
+            out.append(priors[0])
+        out.append("likeli")
+        out.append(likelis[0])
+
+        outstring = ""
+        for i, o in enumerate(out):
+            if i>0:
+                outstring += "_"
+
+            if isinstance(o, str):
+                outstring += o[:3]
+            elif isinstance(o, int):
+                outstring += str(o)
+            else:
+                outstring += f"{o:.1f}"
+
+        return out, outstring
+
+
+    def summarize_results_trial(self, modelname, indtrial):
+        """
+        return dict with some useful summary scores
+        """
+
+        out = {}
+
+        likelis = self.Likelis[indtrial]
+        logprobs = self.PriorLogProbs[modelname][indtrial]
+
+        # Prob assigned to max likeli:
+        from pythonlib.behmodel.scorer.utils import posterior_score
+        out["logprob_of_maxlikeli"] = posterior_score(likelis, logprobs, "prob_of_max_likeli")
+
+        # Rank of max-likeli parse, based on prior scores.
+        # i.e. take the highest prior for model. where does that trial rank compared to animal?
+        plist, llist, _ = self.extract_priors_likelis(modelname, indtrial, sort_by="likeli")
+        from pythonlib.tools.listtools import rankinarray1_of_minofarray2
+        plist = plist[::-1]
+        llist = llist[::-1]
+
+        ind = rankinarray1_of_minofarray2(llist, plist, look_for_max=True)[0]
+        out["rank_of_maxprior_compared_to_monkey"] = ind        
+
+        return out
+
+
+
+    ##### PLOTTING
+    def plotMultStrokes(self, list_strokes, **kwargs):
+        return self.D.plotMultStrokes(list_strokes, ncols=8, **kwargs)
+
+
+    def plot_parses_trial(self, indtrial, list_indparses=None, Nmax = 20):
+        """ plot for this trial all parses in the order given by
+        list_indparses. If dont specitfy, then plot 20 random
+        """
+        import random
+
+        def make_title(ind):
+            pri = self._prior_probs[ind]*100
+            likeli = self._likeli_scores[ind]*100
+
+            return f"pri:{pri:.2f}, li{likeli:.2f}"
+        
+
+        ## -- Plot the actual behavior on this trial
+        self.D.plotMultTrials([indtrial], which_strokes="strokes_beh")
+        self.D.plotMultTrials([indtrial], which_strokes="strokes_task")
+
+        list_of_parsestrokes = self.extract_list_parsesstrokes(indtrial)
+
+        if list_indparses is None:
+            list_indparses = range(len(list_of_parsestrokes))
+            # subsample
+            if len(list_indparses)>Nmax:
+                list_indparses = random.sample(list_indparses, Nmax)
+                print("Got random sample of inds")
+
+        # titles
+        titles = [self.extract_info_single_parse(indtrial, indparse, False, 100, 100)[1] for indparse in list_indparses]
+        # titles = list_indparses
+
+        ## -- Plot trials, sorted by their scores
+        liststrokes = [list_of_parsestrokes[i] for i in list_indparses]
+        self.plotMultStrokes(liststrokes, titles=titles)
+
+    ####### OVERVIEW PLOTS
+    def plot_overview_trial(self, modelname, indtrial):
+        """ 
+        """
+
+        # 1) Plot likeli and priors
+        fig, axes = plt.subplots(3, 1, sharex=False, figsize=(13,10))
+        for sort_by, ax in zip([None, "prior", "likeli"], axes.flatten()):
+            priors, likelis, _ = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by, log_probs=False)
+            x = np.arange(len(priors))
+
+        #     ax = axes[0]
+            ax.set_title(f"sorted by: {sort_by}")
+            ax.plot(x, priors, "-ok", label="prior")
+            ax.set_ylim(0)
+            ax.set_ylabel("bk=prior")
+            ax2 = ax.twinx()
+            ax2.plot(x, likelis, "-or", label="likeli")
+            ax2.set_ylabel("rd=likeli")
+
+        # 1b) Plot, using log probs (both prior and likeli)
+        fig, axes = plt.subplots(3, 1, sharex=False, figsize=(13,10))
+        for sort_by, ax in zip([None, "prior", "likeli"], axes.flatten()):
+            priors, likelis, _ = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by, log_probs=True, log_likelis=True)
+            x = np.arange(len(priors))
+
+        #     ax = axes[0]
+            ax.set_title(f"sorted by: {sort_by}")
+            ax.plot(x, priors, "-ok", label="prior")
+            ax.set_ylabel("bk=prior")
+            ax.set_ylim(top=0.)
+            ax2 = ax.twinx()
+            ax2.plot(x, likelis, "-or", label="likeli")
+            ax2.set_ylabel("rd=likeli")
+            ax2.set_ylim(top=0.)
+
+
+            
+        # 2) Scatter likeli and prior
+        fig, axes = plt.subplots(1, 2, sharex=False, figsize=(12,6))
+        priors, likelis, _ = self.extract_priors_likelis(modelname, indtrial, sort_by=None, log_probs=False)
+
+        ax = axes.flatten()[0]
+        ax.plot(priors, likelis, "ok")
+        ax.set_ylabel('likeli');
+        ax.set_xlabel('prior probs');
+        ax = axes.flatten()[1]
+        ax.plot(np.log(priors), likelis, "ok")
+        ax.set_ylabel('likeli');
+        ax.set_xlabel('log probs');
+
+
+        # 3) Plot parses, given list of inds
+        # pri
+        sort_by = "prior"
+        inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by)[2]
+        self.plot_parses_trial(indtrial, inds_parses[::-1][:8])
+        sort_by = "likeli"
+        inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by)[2]
+        self.plot_parses_trial(indtrial, inds_parses[::-1][:8])
+
+
+
+    def plot_overview_results(self, modelname):
+        """
+        """
+        from pythonlib.tools.plottools import hist_with_means
+
+        list_outs = [self.summarize_results_trial(modelname, i) for i in range(len(self.D.Dat))]
+
+        fig, axes = plt.subplots(3,2, figsize=(18, 12))
+
+        # Rank of max prior trial (where 0 means this is also what monkey did)
+        list_ranks = np.array([o["rank_of_maxprior_compared_to_monkey"] for o in list_outs])
+        ax = axes.flatten()[0]
+        # ax.hist(list_ranks, bins = range(max(list_ranks)))
+        ax.set_title("rank_of_maxprior_compared_to_monkey")
+        ax.set_xlabel("0 is best")
+        hist_with_means(ax, list_ranks, bins = range(max(list_ranks)))
+
+        # Rank of max prior trial (where 0 means this is also what monkey did)
+        list_ranks = np.array([o["rank_of_maxprior_compared_to_monkey"] for o in list_outs])
+        ax = axes.flatten()[1]
+        # ax.hist(list_ranks, bins = 20)
+        hist_with_means(ax, list_ranks, bins = 20)
+        ax.set_title("rank_of_maxprior_compared_to_monkey")
+        ax.set_xlabel("0 is best")
+
+        # Model prob for max likeli
+        list_lprobs = np.array([o["logprob_of_maxlikeli"] for o in list_outs])
+        ax = axes.flatten()[2]
+        hist_with_means(ax, list_lprobs, bins = 20)
+        ax.set_title("model prob for max likeli trial")
+        ax.set_xlabel("log probs")
+
+        # Model prob for max likeli
+        ax = axes.flatten()[3]
+        hist_with_means(ax, np.exp(list_lprobs), bins = 20)
+        ax.set_title("model prob for max likeli trial")
+        ax.set_xlabel("probs")
+
+        ax = axes.flatten()[4]
+        ax.plot(list_ranks, list_lprobs, "ok")
+        ax.set_xlabel("rank_of_maxprior_compared_to_monkey")
+        ax.set_ylabel("model prob for max likeli trial")
+
+        # model params
+        prms = self.params_prior(modelname)
+        thetavec = prms["MotorCost"]["thetavec"]
+        ax = axes.flatten()[5]
+        ax.plot(range(len(thetavec)),thetavec, "-ok")
+        ax.set_title(f"softmax-beta: {prms['main']['norm'][0]:.2f}")
+
+        return fig
+
+
+
+def prepare_optimization_scipy(H, modelname):
+    """ prepare a function that can pass into scipy optimize.
+    assumes that thetavec = (bendiness, _,_,_),. where _ is stuff that not optimize.
+    """
+    
+    def func(prms):
+    #     norm = [prms[1]]
+    #     theta = [prms[:4]
+        
+        # do update
+        H.DictModels[modelname].Prior.Params["norm"] = [prms[1]]
+        H.DictModels[modelname].Prior.Objects["MotorCost"].Params["thetavec"][0] = prms[0]
+    #     print(H.DictModels[modelname].Prior.Params)
+    #     print(H.DictModels[modelname].Prior.Objects["MotorCost"].Params["thetavec"])
+
+        # recompute 
+        H.compute_store_priorprobs_vectorized(force_run=True)
+        H.compute_store_likelis()
+        H.compute_store_likelis_logprobs()
+        H.compute_store_posteriors()
+        return -H.final_score(modelname)
+        
+    return func

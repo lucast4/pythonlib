@@ -258,3 +258,81 @@ def prior_scorer_quick(ver, input_parsesflat=False):
         assert False, "not coded"
 
     return Pr
+
+
+def prior_scorer_quick_with_params(params0):
+    """ Good quick, better than above (here latest) since doesnt pass in Parsers, but 
+    passes in list_of_p, so dont bneed to specify here how to parse.
+    """
+
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.behmodel.scorer.utils import normscore
+    from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
+    from pythonlib.drawmodel.efficiencycost import Cost
+
+
+    # 1) Extract features
+    # One feature extract for all models, since they are working on the same parses
+    F = FeatureExtractor()
+    
+    # 2) Scorers, these will differ based on model.
+    # params1["thetas"] = {
+    #     "circ":10.,
+    #     "dist":0.,
+    #     "circ_max":10.,
+    #     "nstrokes":0.,
+    # }
+    MC = Cost(params0)
+
+    # def priorscorer(list_parses, trialcode, params):
+    #     """ params = tuple of scalars
+    #     """
+    #     # NOTE: computing feature vectors is slow part.
+    #     mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
+    #         hack_lines5=True)
+    #     MC.updateThetaVec(params)
+    #     print(mat_features.shape)
+    #     print(MC.Params)
+    #     assert False
+    #     list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+    #     return list_scores
+
+    # # Normalizer
+    # def norm(list_scores, params):
+    #     beta = params[0]
+    #     # beta = 1
+    #     probs = normscore(list_scores, "softmax", [beta, False])
+    #     return probs
+
+    def priorscorer(list_parses, trialcode):
+        """ params = tuple of scalars
+        """
+        # NOTE: computing feature vectors is slow part.
+        mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
+            hack_lines5=True)
+        list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+        return list_scores
+
+    # Normalizer
+    def norm(list_scores, params):
+        beta = params[0]
+        # beta = 1
+        log_probs = normscore(list_scores, "log_softmax", [beta, False])
+        return log_probs
+
+    # Scorer
+    Pr = Scorer()
+    # Pr.Params = {
+    #     "norm":(1.),
+    # }
+    Pr.input_score_function(priorscorer)
+    Pr.input_norm_function(norm)
+    # save F and MC
+    Pr.Objects = {
+        "FeatureExtractor":F,
+        "MotorCost":MC
+    }
+    Pr._do_score_with_params=False
+    Pr._do_norm_with_params=True
+
+    return Pr

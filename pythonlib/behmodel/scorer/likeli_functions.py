@@ -76,6 +76,7 @@ def likeli_scorer_quick(ver):
     """
     from pythonlib.behmodel.scorer.scorer import Scorer
     from pythonlib.drawmodel.strokedists import distscalarStrokes
+    from pythonlib.behmodel.scorer.utils import normscore
 
     if ver=="base":
         def F(D, ind,  modelname):
@@ -90,4 +91,16 @@ def likeli_scorer_quick(ver):
     
     Li = Scorer()
     Li.input_score_function(F)
+
+    # Normalization (to log probs)
+    def norm(list_scores, params):
+        beta = params[0]
+        # beta = 1
+        log_probs = normscore(list_scores, "log_softmax", [beta, False])
+        return log_probs
+        
+    Li.input_norm_function(norm)
+    Li._do_score_with_params=False
+    Li._do_norm_with_params=True
+
     return Li

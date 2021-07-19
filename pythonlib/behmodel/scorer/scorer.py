@@ -7,6 +7,9 @@ class Scorer(object):
 
         self.ScoreFunction = None
         self.NormFunction = None
+        self.Params = None # dict["score"] = (thetas)
+        self._do_score_with_params = False
+        self._do_norm_with_params = False
 
     def input_score_function(self, func):
         """ 
@@ -24,33 +27,24 @@ class Scorer(object):
         """ 
         Normalizes raw scores. 
         """
-
         self.NormFunction = func
 
     def score(self, *args):
-        return self.ScoreFunction(*args)
+        if self._do_score_with_params:
+            return self.ScoreFunction(*args, params=self.Params["score"])
+        else:
+            return self.ScoreFunction(*args)
+
+    def norm(self, scores):
+        """ scores is np array (N,) shape
+        """
+        if self._do_norm_with_params:
+            probs = self.NormFunction(scores, params=self.Params["norm"])
+        else:
+            probs = self.NormFunction(scores)
+        return probs
 
     def score_and_norm(self, *args):
         scores = self.score(*args)
-        return self.NormFunction(scores)
-
-    # def score_task(task):
-    #     """
-    #     task is taskObject class (general).
-    #     it should have at least fields "Strokes" and "Parses", but also anything
-    #     else that might be used for scoring prior.
-    #     """
-
-    #     assert False, "add a Parser field to TaskObject"
-
-    # def _score_strokes(strokes):
-    #     """ directly score these strokes (e.g., a single parse)
-    #     """
-
-    #     return self.ScoreFunction(strokes)
-
-
-
-
-
-
+        probs = self.norm(scores)
+        return probs

@@ -63,6 +63,14 @@ class Cost:
         """ initialize model based on keys in params
         """
 
+        if isinstance(params, tuple):
+            # Then you passed in thetavec directly, without names
+            thetavec = params
+            params = self.getDefaultParams()
+            assert False, "not completed need to figure out how deal with tuple"
+
+
+
         if "screenHV" not in params:
             _params = self.getDefaultParams()
             params["screenHV"] = _params["screenHV"]
@@ -77,6 +85,12 @@ class Cost:
             0.5*np.linalg.norm(params["screenHV"])
 
         self.Params = params
+
+    def updateThetaVec(self, thetavec):
+        """
+        """
+        self.Params["thetavec"] = np.array(thetavec)
+
 
     def _updateThetas(self):
         """ takes params["thetas"], which is dict, with
@@ -127,7 +141,6 @@ class Cost:
             thetavec = self.Params["thetavec"]
             assert thetavec.shape==feature_vec.shape
             score = np.dot(feature_vec, thetavec)
-
         return score
 
 

@@ -50,6 +50,34 @@ def normscore(scores_all, ver, params=None):
         scores_all = invtemp*scores_all
         probs = softmax(scores_all) 
         return probs
+    elif ver=="log_softmax":
+        # softmax. first normalize scores so that within similar range
+        # dividing by mean of absolute values of scores.. this is hacky...
+        from scipy.special import log_softmax
+        # scores_all = np.array([-5, 10, 25])
+        # sumabs = np.sum(np.absolute(scores_all))
+
+        # standardize scores. first subtract mean score. then divide by MAD
+        invtemp = 1
+        if params is None:
+            scores_all = scores_all - np.mean(scores_all)
+            meanabs = np.mean(np.absolute(scores_all))
+            if meanabs>0:
+                scores_all = scores_all/meanabs
+        elif params=="raw":
+            # do nothing to raw scores
+            pass
+        else:
+            invtemp = params[0]
+            subtrmean = params[1]
+
+            if subtrmean==True:
+                # then subtract mean. this useful if large variation across trials for mean
+                scores_all = scores_all - np.mean(scores_all)
+        scores_all = invtemp*scores_all
+        log_probs = log_softmax(scores_all) 
+        return log_probs
+
     else:
         assert False, "not coded!"
 
@@ -62,6 +90,10 @@ def posterior_score(likelis, priors, ver):
         # is positive control, take the maximum likeli parse
         c = np.random.choice(np.flatnonzero(likelis == likelis.max()))
         post = likelis[c]
+    elif ver=="prob_of_max_likeli":
+        # Return the prior prob for ind that is max likeli
+        c = np.random.choice(np.flatnonzero(likelis == likelis.max()))
+        post = priors[c]
     elif ver=="weighted":
         # baseline - weighted sum of likelihoods by prior probabilities
         post = np.average(likelis, weights=priors)
@@ -70,6 +102,15 @@ def posterior_score(likelis, priors, ver):
         # 1) convert likelis to probabilities by softmax
         probs = self.normscore(likelis, ver="softmax")
         post = np.average(likelis, weights=probs)
+    elif ver=="logsumexp":
+        # if likelis and priors are both logprobs, then goal is to get 
+        # p(d|M) = SUM[ p(d|parse)p(parse|M) ] where sum is over parses and d
+        # is a single datapoint (trial).
+        # If these two inner terms are given as log probs, then log(p(d|M)) is logsumexp(likeli+prior)
+        # So output will be log posterior prob.
+        from scipy.special import logsumexp
+        return logsumexp(likelis + priors)
+
     else:
         assert False, "not coded"
     return post

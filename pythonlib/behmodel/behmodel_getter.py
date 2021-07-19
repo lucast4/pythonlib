@@ -102,3 +102,90 @@ def quick_getter(modelclass, vectorized_priors=False):
         assert False
 
     return list_mod, list_modnames
+
+def quick_getter_with_params(modelclass):
+    """ For this modelclass (string) returns
+    list of beh models (BMs).
+    Sort of hard coded currently, just for testing)
+    NOTE:
+    - with_params, means params for prior are exposed, to allow fitting.
+    """
+
+    def _get_single_model(params0, ver_posterior="logsumexp"):
+
+        # Prior
+        Pr = prior_scorer_quick_with_params(params0)
+
+        # Likeli
+        Li = likeli_scorer_quick(ver="base")
+
+        # Post
+        Po = poster_dataset(ver=ver_posterior)
+
+        # Model
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po)
+        
+        # BM._list_input_args_likeli = ("dat", "trial", "modelname")
+        # BM._list_input_args_prior = ("parsesflat")
+        BM._list_input_args_likeli = ("dat", "trial", "modelname")
+        BM._list_input_args_prior = ("parsesflat", "trialcode")
+        BM._poster_use_log_likeli = True
+        BM._poster_use_log_prior = True
+
+        return BM
+
+    if modelclass=="lines5":
+
+        # Generate models
+        list_mod = []
+        list_modnames = []
+        for rule_model in ["straight", "bent"]:
+
+            params0 = {}
+            if rule_model=="straight":
+                # thetavec = (-10., 0., -10., 0)
+                params0["thetas"] = {
+                    "circ":-10.,
+                    "dist":0.,
+                    "circ_max":0.,
+                    "nstrokes":0.,
+                }
+            elif rule_model=="bent":
+                # thetavec = (10., 0., 10., 0)
+                params0["thetas"] = {
+                    "circ":10.,
+                    "dist":0.,
+                    "circ_max":0.,
+                    "nstrokes":0.,
+                }
+            else:
+                assert False
+
+            BM = _get_single_model(params0)
+            BM.Prior.Params = {
+                "norm":(1.,)
+            }
+            BM.Likeli.Params = {
+                "norm":(50.,)
+            }
+
+            # if rule_model=="straight":
+            #     BM.Prior.Params = {
+            #         "score":(-10., 0., -10., 0),
+            #         "norm":(1.),
+            #     }
+            # elif rule_model=="bent":
+            #     BM.Prior.Params = {
+            #         "score":(10., 0., 10., 0),
+            #         "norm":(1.),
+            #     }
+            # else:
+            #     assert False
+
+            list_mod.append(BM)
+            list_modnames.append(rule_model)
+    else:
+        assert False
+
+    return list_mod, list_modnames
