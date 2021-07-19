@@ -421,6 +421,18 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     ax.axis("square")
     # ax.set_aspect('equal', adjustable='datalim')
 
+def hist_with_means(ax, vals, **kwargs):
+    """ same, but overlays line for mean
+    """
+    from scipy.stats import sem
+    ax.hist(vals, **kwargs)
+    vmean = np.mean(vals)
+    vsem = sem(vals)
+    ax.axvline(vmean, color="k")
+    ax.axvline(vmean-vsem, color="r")
+    ax.axvline(vmean+vsem, color="r")
+
+
 def histogramMult(vals_list, nbins, ax=None, separate_plots=False):
     """ overlays multiple historgrams, making sure to 
     use same bins. first finds bins by taking all values and getting 
