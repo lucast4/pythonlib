@@ -704,6 +704,17 @@ class Dataset(object):
         self.Dat = self.Dat[self.Dat["aborted"]==False]
         print("Removed online aborts")
 
+        # dates for summary , make sure assigned
+        # for MD in self.Metadats.values():
+        #     print(MD[metadat_probedat])
+        list_dates = [MD["metadat_probedat"]["dates_for_summary"] for MD in self.Metadats.values()]
+        list_dates = [str(d) for dates in list_dates for d in dates]
+        # update "is in summary date column"
+        def F(x):
+            return str(x["date"]) in list_dates
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "insummarydates")
+        print("Updated columns: insummarydates, using Metadats")
+
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
