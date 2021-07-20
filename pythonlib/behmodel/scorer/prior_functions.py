@@ -95,8 +95,9 @@ def makePriorFunction(ver="uniform"):
 
 
 ############## USING FEATURE EXTRACTOR
-def prior_feature_extractor_base():
-    """ has norm, but no scoring fucntion
+def prior_base():
+    """ [GOOD] has norm, but no scoring fucntion
+    This outputs log probs normalized priors.
     """
     
     from pythonlib.behmodel.scorer.scorer import Scorer
@@ -104,16 +105,19 @@ def prior_feature_extractor_base():
     from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
     from pythonlib.drawmodel.efficiencycost import Cost
 
-    # Normalizer
-    def norm(list_scores):
-        beta = 1
-        params = [beta, False]
-        probs = normscore(list_scores, "softmax", params)
-        return probs
+
+    def norm(list_scores, params):
+        beta = params[0]
+        # beta = 1
+        log_probs = normscore(list_scores, "log_softmax", [beta, False])
+        return log_probs
 
     # Scorer
     Pr = Scorer()
     Pr.input_norm_function(norm)
+    Pr.Objects = {}
+    Pr._do_norm_with_params=True
+
     return Pr
 
 
@@ -130,6 +134,7 @@ def prior_feature_extractor(hack_lines5=True,
     from pythonlib.drawmodel.efficiencycost import Cost
 
 
+    assert False, "use prior_function_database"
     def priorscorer(D, indtrial):
         # 1) Extract features
         F = FeatureExtractor()
@@ -188,6 +193,7 @@ def prior_scorer_quick(ver, input_parsesflat=False):
     from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
     from pythonlib.drawmodel.efficiencycost import Cost
 
+    assert False, "use prior_function_database"
 
     if ver=="lines5":
 
@@ -264,45 +270,13 @@ def prior_scorer_quick_with_params(params0):
     """ Good quick, better than above (here latest) since doesnt pass in Parsers, but 
     passes in list_of_p, so dont bneed to specify here how to parse.
     """
-
-    from pythonlib.behmodel.scorer.scorer import Scorer
-    from pythonlib.behmodel.scorer.utils import normscore
-    from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
-    from pythonlib.drawmodel.efficiencycost import Cost
-
-
+    assert False, "use prior_function_database"
+    
     # 1) Extract features
     # One feature extract for all models, since they are working on the same parses
     F = FeatureExtractor()
-    
-    # 2) Scorers, these will differ based on model.
-    # params1["thetas"] = {
-    #     "circ":10.,
-    #     "dist":0.,
-    #     "circ_max":10.,
-    #     "nstrokes":0.,
-    # }
     MC = Cost(params0)
-
-    # def priorscorer(list_parses, trialcode, params):
-    #     """ params = tuple of scalars
-    #     """
-    #     # NOTE: computing feature vectors is slow part.
-    #     mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
-    #         hack_lines5=True)
-    #     MC.updateThetaVec(params)
-    #     print(mat_features.shape)
-    #     print(MC.Params)
-    #     assert False
-    #     list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
-    #     return list_scores
-
-    # # Normalizer
-    # def norm(list_scores, params):
-    #     beta = params[0]
-    #     # beta = 1
-    #     probs = normscore(list_scores, "softmax", [beta, False])
-    #     return probs
+    Pr = prior_base()
 
     def priorscorer(list_parses, trialcode):
         """ params = tuple of scalars
@@ -313,26 +287,68 @@ def prior_scorer_quick_with_params(params0):
         list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
         return list_scores
 
-    # Normalizer
-    def norm(list_scores, params):
-        beta = params[0]
-        # beta = 1
-        log_probs = normscore(list_scores, "log_softmax", [beta, False])
-        return log_probs
-
-    # Scorer
-    Pr = Scorer()
-    # Pr.Params = {
-    #     "norm":(1.),
-    # }
     Pr.input_score_function(priorscorer)
-    Pr.input_norm_function(norm)
-    # save F and MC
     Pr.Objects = {
         "FeatureExtractor":F,
         "MotorCost":MC
     }
     Pr._do_score_with_params=False
-    Pr._do_norm_with_params=True
 
+    return Pr
+
+
+### DATABASE OF PRIOR FUNCTIONS
+def prior_function_database(ver, params=None):
+    """ general purpose, holder of prior fucntions which can pass into scorere
+    """
+
+    from pythonlib.behmodel.scorer.scorer import Scorer
+    from pythonlib.behmodel.scorer.utils import normscore
+    from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
+    from pythonlib.drawmodel.efficiencycost import Cost
+
+    if ver=="monkey_vs_monkey":
+        """ uniform distribution over all monkey (other epcoh) parses
+        """
+        def func(D, ind, modelname):
+            """ 
+            modelname, name of epoch from which parses taken
+            """
+            parsesname = f"strokes_beh_group_{modelname}"
+            nparses = len(D.Dat.iloc[ind][parsesname])
+            return np.ones(nparses)    
+
+        Pr = prior_base()
+        Pr.input_score_function(func)
+
+    elif ver=="lines5":
+        params0 = {}
+        params0["thetas"] = {
+                "circ":0.,
+                "dist":0.,
+                "circ_max":0.,
+                "nstrokes":0.}
+        F = FeatureExtractor()
+        MC = Cost(params0)
+        Pr = prior_base()
+
+        def priorscorer(list_parses, trialcode):
+            """ params = tuple of scalars
+            """
+            # NOTE: computing feature vectors is slow part.
+            mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
+                hack_lines5=True)
+            list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+            return list_scores
+
+        Pr.input_score_function(priorscorer)
+        Pr.Objects = {
+            "FeatureExtractor":F,
+            "MotorCost":MC
+        }
+        Pr._do_score_with_params=False
+
+    else:
+        print(ver)
+        assert False
     return Pr

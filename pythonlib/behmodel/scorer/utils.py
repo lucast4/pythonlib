@@ -77,6 +77,13 @@ def normscore(scores_all, ver, params=None):
         scores_all = invtemp*scores_all
         log_probs = log_softmax(scores_all) 
         return log_probs
+    elif ver=="log":
+        # then assumes that scores are probs, and returns log probs
+        # must be positive. can be >1 (e.g., likelihoods)
+        MINPROB = 0.00001
+        scores_all[scores_all==0] == MINPROB
+        assert np.all(scores_all>0)
+        return np.log(scores_all)
 
     else:
         assert False, "not coded!"
