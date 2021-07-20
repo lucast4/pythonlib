@@ -3,16 +3,17 @@ This runs and saves thru Dataset code.
 """
 from pythonlib.dataset.dataset import Dataset
 
-QUICK = True # quick means fast parsing.
-FIXED = True # only do fixed tasks.
+QUICK = False # quick means fast parsing.
+FIXED = False # only do fixed tasks.
  
-def get_dataset(a,e,r,fixed_only=False):
+def get_dataset(a,e,r):
     D = Dataset([])
     D.load_dataset_helper(a, e, ver="mult", rule=r)
     D.load_tasks_helper()
 
     # Keep only the fixed tasks?
-    D = D.filterPandas({"random_task":[False]}, "dataset")
+    if FIXED:
+        D = D.filterPandas({"random_task":[False]}, "dataset")
     return D
 
 def run(a,e,r,v):
@@ -46,11 +47,11 @@ def run(a,e,r,v):
 
 
 
-if False:
+if True:
     # Multiprocessing.
     args1, args2, args3, args4 = [], [], [], []
-    # animal_list = ["Red", "Pancho"]
-    animal_list = ["Red"]
+    animal_list = ["Red", "Pancho"]
+    # animal_list = ["Red"]
     expt_list = ["lines5"]
     rule_list = ["straight", "bent"]
     ver_list = ["graphmod", "nographmod"]
