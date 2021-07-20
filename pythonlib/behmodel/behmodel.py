@@ -30,7 +30,9 @@ class BehModel(object):
 
         self._list_input_args = ("dat", "trial") # args in order.
 
-    def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer):
+    def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer,
+        list_input_args_likeli, list_input_args_prior, 
+        poster_use_log_likeli, poster_use_log_prior):
         """ 
         IN:
         - all scorers are instances of the Scorer class.
@@ -47,6 +49,15 @@ class BehModel(object):
         self.Likeli = likeli_scorer
         self.Poster = posterior_scorer
 
+        # self._list_input_args_likeli = ("dat", "trial")
+        # self._list_input_args_prior = ("parsesflat", "trialcode")
+        # self._poster_use_log_likeli = True
+        # self._poster_use_log_prior = True
+
+        self._list_input_args_likeli = list_input_args_likeli
+        self._list_input_args_prior = list_input_args_prior
+        self._poster_use_log_likeli = poster_use_log_likeli
+        self._poster_use_log_prior = poster_use_log_prior
 
     def unique_id(self, set_id_to_this=None, ver="random_num"):
         """ a string that identifies this model
