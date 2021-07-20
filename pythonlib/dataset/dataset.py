@@ -310,6 +310,18 @@ class Dataset(object):
             print(return_ver)
             assert False
 
+    def subsetDataset(self, inds):
+        """ returns a copy of self, with self.Dat only keeping inds
+        INdices will be reset
+        """
+        Dnew = self.copy()
+        Dnew.Dat = self.Dat.iloc[inds].reset_index(drop=True)
+        return Dnew
+
+
+
+
+
     def findPandas(self, col, list_of_vals, reset_index=True):
         """ returns slice of self.Dat, where rows are matched one-to-one to list_of_vals.
         INPUTS:
