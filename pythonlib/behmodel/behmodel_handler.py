@@ -13,6 +13,22 @@ class BehModelHandler(object):
         self.PriorLogProbs = None
         self.LikelisLogProbs = None
         self.Posteriors = None
+        self.ParamsInputHelper = None
+
+    def input_data_helper(self, dataset, modelclass, list_mrules):
+        """
+        Useful for reinstating a model after saving and loading
+
+        """
+        from .behmodel_getter import quick_getter_with_params
+        list_mod, list_modnames, kwargs = quick_getter_with_params(modelclass, list_mrules)
+        self.input_data(dataset, list_mod, list_modnames, **kwargs) 
+
+        # Save
+        self.ParamsInputHelper = {
+            "modelclass":modelclass,
+            "list_mrules":list_mrules
+        }
 
     def input_data(self, dataset, list_models, 
         list_model_ids=None, allow_separate_likelis=False,
@@ -59,8 +75,10 @@ class BehModelHandler(object):
 
         if self._allow_separate_likelis:
             self.Likelis = {name:[] for name in self.DictModels.keys()} # list of likelsi.
+            self.LikelisLogProbs = {name:[] for name in self.DictModels.keys()} # list of likelsi.
         else:
             self.Likelis = []  # model --> list of likelis
+            self.LikelisLogProbs  = []
 
         # Preprocess
         self.preprocess()
@@ -107,7 +125,7 @@ class BehModelHandler(object):
             if list_of_argstrings==("dat","trial"):
                 args = (self.D, i)
             elif list_of_argstrings == ("dat", "trial", "modelname"):
-                    args = (self.D, i, modelname)
+                args = (self.D, i, modelname)
             elif list_of_argstrings == ("parsesflat"):
                 assert False, "if this, then shouldnt pass in args one by one... should use applyFuncToAllRows"
                 args = (self.D, i, modelname)
@@ -168,7 +186,7 @@ class BehModelHandler(object):
 
         if self._allow_separate_likelis==False:
             # use the first
-            if self.LikelisLogProbs is None or force_run==True:
+            if len(self.LikelisLogProbs)==0 or force_run==True:
                 name = self.ListModelsIDs[0]
                 # for i in range(len(self.Likelis)):
                     # scores = self.Likelis[i]
@@ -179,7 +197,11 @@ class BehModelHandler(object):
                 print("skipping compute log-likelis since done")
 
         else:
-            assert False, "code this"
+            for name in self.DictModels.keys():
+                if len(self.LikelisLogProbs[name])==0 or force_run==True:
+                    self.LikelisLogProbs[name] = [self.DictModels[name].Likeli.norm(scores) for scores in self.Likelis[name]]
+                else:
+                    print("skipping compute log-likelis since done")
 
     def compute_store_priorprobs(self, force_run=False): 
         """
@@ -187,6 +209,7 @@ class BehModelHandler(object):
         OUT:
         - svaes into : self.PriorProbs[modelid][trial]
         """
+        assert "False, both vecorrized and not are in the compute_store_priorprobs_vectorized code"
         assert False, "dotn use this anymore. this takes probs, but I prior scorefun normalizes to logprobs."
         if self.PriorProbs is not None and force_run==False:
             print("skipping prior compute, since already done")
@@ -195,6 +218,7 @@ class BehModelHandler(object):
         self.PriorProbs = {}
         for name, Mod in self.DictModels.items():
             self.PriorProbs[name] = []
+
             for indtrial in range(len(self.D.Dat)):
                 if indtrial%50==0:
                     print("priors", name, indtrial)
@@ -221,26 +245,40 @@ class BehModelHandler(object):
 
         self.PriorLogProbs = {}
         self.PriorProbs = {}
+
         for name, Mod in self.DictModels.items():
-            print("logprobs, getting vectorized across all trials", name)
-            def F(x):
-                if Mod._list_input_args_prior==("parsesflat", "trialcode", "modelname"):
-                    args = (x["parses_behmod"], x["trialcode"], name)
-                elif Mod._list_input_args_prior==("parsesflat", "trialcode"):
-                    args = (x["parses_behmod"], x["trialcode"])
-                else:
-                    print(Mod._list_input_args_prior)
-                    assert False
-                logprobs = Mod.Prior.score_and_norm(*args)
-                return logprobs
-            dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
-            self.PriorLogProbs[name] = dfthis["priorprobs"].to_list()
+            
+            if Mod._list_input_args_prior[0]=="parsesflat":
+                print("logprobs, getting vectorized across all trials", name)
+                assert Mod._list_input_args_prior[0]=="parsesflat", "vectorized means need list parses as first argument."
+                def F(x):
+                    if Mod._list_input_args_prior==("parsesflat", "trialcode", "modelname"):
+                        args = (x["parses_behmod"], x["trialcode"], name)
+                    elif Mod._list_input_args_prior==("parsesflat", "trialcode"):
+                        args = (x["parses_behmod"], x["trialcode"])
+                    else:
+                        print(Mod._list_input_args_prior)
+                        assert False
+                    logprobs = Mod.Prior.score_and_norm(*args)
+                    return logprobs
+                dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
+                self.PriorLogProbs[name] = dfthis["priorprobs"].to_list()
+            else:
+                # old version, not vecotorized
+                print("Cant do vectorized priors - will be slower.")
+                self.PriorLogProbs[name] = []
+                for indtrial in range(len(self.D.Dat)):
+                    if indtrial%50==0:
+                        print("priors", name, indtrial)
+                    logprobs = self._score_helper("prior", name, indtrial)
+                    # probs = Mod.Prior.score_and_norm(self.D, indtrial)
+                    self.PriorLogProbs[name].append(logprobs)
 
             # convert to probs
             self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
 
 
-    def compute_store_posteriors(self):
+    def compute_store_posteriors(self, mode="train"):
         """
         OUT:
         - svaes into : self.Posteriors[modelid][trial]
@@ -253,9 +291,29 @@ class BehModelHandler(object):
                 if indtrial%50==0:
                     print("posterior", name, indtrial)
 
-                likelis = self._get_list_likelis(name, indtrial)
-                probs = self._get_list_probs(name, indtrial)
-                post = Mod.Poster.score(likelis, probs)
+                if mode=="train":
+                    likelis = self._get_list_likelis(name, indtrial)
+                elif mode=="test":
+                    # Then likelis should not be normalized, since want
+                    # posterior to be in units of (spatial distance)
+                    likelis = self._get_list_likelis(name, indtrial, log=False)
+                else:
+                    assert False
+
+                if mode=="train":
+                    probs = self._get_list_probs(name, indtrial)
+                elif mode=="test":
+                    probs = self._get_list_probs(name, indtrial, log=False)
+                else:
+                    assert False
+
+                if mode=="train":
+                    post = Mod.Poster.score(likelis, probs)
+                else:
+                    # take weighted sum of likelis.
+                    from pythonlib.behmodel.scorer.utils import posterior_score
+                    post = posterior_score(likelis, probs, ver="weighted")
+
                 # print(likelis)
                 # print(probs)
                 # print(post)
@@ -264,6 +322,15 @@ class BehModelHandler(object):
                 # print(probs[np.argmax(likelis)])
                 # assert False
                 self.Posteriors[name].append(post)
+
+
+    def compute_all(self, mode="train"):
+        """ scoring data """
+        self.compute_store_priorprobs_vectorized()
+        self.compute_store_likelis()
+        self.compute_store_likelis_logprobs()
+        self.compute_store_posteriors(mode=mode)
+
 
     def final_score(self, modelname, per_trial=False, prob=False):
         """ 
@@ -279,24 +346,42 @@ class BehModelHandler(object):
 
 
     ##### GETTERS
-    def _get_list_probs(self, modname, indtrial):
+    def _get_list_probs(self, modname, indtrial, log=None):
         """ get prior, in formate needed for computing posterior
+        log, if None, then uses whatever prescribed by the model
+        otherwise True/False forces to use that.
         """
 
-        if self.DictModels[modname]._poster_use_log_prior:
+        if log==True:
             this = self.PriorLogProbs
-        else:
+        elif log==False:
             this = self.PriorProbs
+        elif log==None:
+            if self.DictModels[modname]._poster_use_log_prior:
+                this = self.PriorLogProbs
+            else:
+                this = self.PriorProbs
+        else:
+            assert False
         return this[modname][indtrial]
 
-    def _get_list_likelis(self, modname, indtrial):
+    def _get_list_likelis(self, modname, indtrial, log=None):
         """ get likeli, in formate needed for computing posterior
+        log, if None, then uses whatever prescribed by the model
+        otherwise True/False forces to use that.
         """
 
-        if self.DictModels[modname]._poster_use_log_likeli:
+        if log==True:
             this = self.LikelisLogProbs
-        else:
+        elif log==False:
             this = self.Likelis
+        elif log==None:
+            if self.DictModels[modname]._poster_use_log_likeli:
+                this = self.LikelisLogProbs
+            else:
+                this = self.Likelis
+        else:
+            assert False
 
         if self._allow_separate_likelis:
             return this[modname][indtrial]
@@ -311,11 +396,40 @@ class BehModelHandler(object):
         - norm function
         - for motor cost model in the prior
         """
-        out = {
-            "MotorCost":self.DictModels[modelname].Prior.Objects["MotorCost"].Params,
-            "main":self.DictModels[modelname].Prior.Params
-        }
+        out = {}
+        if hasattr(self.DictModels[modelname].Prior, "Objects"):
+            if "MotorCost" in self.DictModels[modelname].Prior.Objects.keys():
+                out["MotorCost"] = self.DictModels[modelname].Prior.Objects["MotorCost"].Params
+        out["main"] = self.DictModels[modelname].Prior.Params
         return out
+
+    def params_prior_set(self, modelname, indict):
+        """ 
+        NOTE:
+        indict should correspond to out in self.params_prior
+        """
+        if "MotorCost" in indict.keys():
+            print("* Setting param, MotorCost", modelname, "to" , indict["MotorCost"])
+            self.DictModels[modelname].Prior.Objects["MotorCost"].Params = indict["MotorCost"]
+        self.DictModels[modelname].Prior.Params = indict["main"]
+        print("* Setting param, Main", modelname, "to" , indict["main"])
+
+    def params_dset(self, get_dataset=False):
+        out = {}
+        out["dset_id"] = self.D.identifier_string()
+        out["dset_trialcodes"] = self.D.Dat["trialcode"].to_list()
+        if get_dataset:
+            out["dset"] = self.D
+        return out
+
+    def params_model(self):
+        out = {
+            "modelnames":self.ListModelsIDs,
+            # "modelobjects":self.ListModels,
+            "allow_separate_likelis":self._allow_separate_likelis,
+            "parsers_to_flatten": self._parsers_to_flatten}
+        return out
+
 
 
     ##### POST-PROCESS
@@ -461,6 +575,41 @@ class BehModelHandler(object):
 
         return out
 
+
+
+    ##### SAVING 
+    def save_state(self, path):
+        state_dict = self.extract_state()
+
+    def extract_state(self, get_dataset=False):
+        """ can use to repopulate state, save etc
+        """
+
+        state = {}
+
+        # Prior params
+        state["prior_params"] = {}
+        for modname in self.ListModelsIDs:
+            state["prior_params"][modname] = self.params_prior(modname)
+
+        # Dataset information
+        out = self.params_dset(get_dataset=get_dataset)
+        for k, v in out.items():
+            state[k] = v
+
+        # Model info
+        out = self.params_model()
+        for k, v in out.items():
+            state[k] = v
+
+        # if used input helper
+        if self.ParamsInputHelper is not None:
+            state["input_helper_used"] = True
+            state["input_helper_params"] = self.ParamsInputHelper
+        else:            
+            state["input_helper_used"] = False
+            state["input_helper_params"] = None
+        return state
 
 
     ##### PLOTTING
@@ -624,21 +773,229 @@ def prepare_optimization_scipy(H, modelname):
     assumes that thetavec = (bendiness, _,_,_),. where _ is stuff that not optimize.
     """
     
-    def func(prms):
+    def func(prms, reg_coeff=np.array([0.0001, 0.001]), reg_mu=np.array([0, 1])):
     #     norm = [prms[1]]
     #     theta = [prms[:4]
         
         # do update
         H.DictModels[modelname].Prior.Params["norm"] = [prms[1]]
         H.DictModels[modelname].Prior.Objects["MotorCost"].Params["thetavec"][0] = prms[0]
-    #     print(H.DictModels[modelname].Prior.Params)
-    #     print(H.DictModels[modelname].Prior.Objects["MotorCost"].Params["thetavec"])
 
         # recompute 
         H.compute_store_priorprobs_vectorized(force_run=True)
         H.compute_store_likelis()
         H.compute_store_likelis_logprobs()
         H.compute_store_posteriors()
-        return -H.final_score(modelname)
+        loss_per_task = -H.final_score(modelname, per_trial=True)
+
+        # regularization
+        loss_reg = np.sum(reg_coeff*(np.array(prms) - reg_mu)**2)
+        # loss_reg = np.sum(tmp[:])
+        loss = loss_per_task + loss_reg
+
+        return loss
         
-    return func
+    params0 = (0., 1.)
+    return func, params0
+
+
+def cross_dataset_model(Dlist, list_models, list_model_names, allow_separate_likelis=False, 
+                        name_suffix=""):
+    list_bmh = []
+    for Dthis in Dlist:
+        print(Dthis.identifier_string())
+
+        # Generate models
+        H = BehModelHandler()
+        H.input_data(Dthis, list_models, 
+                     list_model_names, allow_separate_likelis=allow_separate_likelis)
+
+        # get likelis
+        H.compute_store_likelis()
+        H.compute_store_priorprobs()
+        H.compute_store_posteriors()
+
+        list_bmh.append({
+            "D":Dthis,
+            "H":H})
+
+    # Assign modeling results back into Dataset
+    for x in list_bmh:
+        H = x["H"]
+        list_col_names = H.results_to_dataset(suffix=name_suffix)
+
+def cross_dataset_model_wrapper_params(Dlist, model_class, GROUPING_LEVELS):
+    """ higher level wrapper, where now use H itself to load all model
+    classes. This useful since allows to save and reload states easily
+    """
+    ListBMH = []
+    list_dsets = []
+    ListH = []
+    for Dthis in Dlist:
+
+        # Generate models
+        H = BehModelHandler()
+        H.input_data_helper(Dthis, model_class, GROUPING_LEVELS)
+        ListH.append(H)
+
+        # H.input_data(Dthis, list_mod, 
+        #              list_mod_names, allow_separate_likelis=allow_separate_likelis)
+
+        # # get likelis
+        # H.compute_store_likelis()
+        # H.compute_store_priorprobs()
+        # H.compute_store_posteriors()
+
+        # for each combo of model and dataset, generate a function that takes in 
+        # params to optimize, and outputs score.
+
+        list_dsets.append(Dthis.identifier_string())
+        list_mod_names = H.ListModelsIDs
+        for modname in list_mod_names:
+            print("** dset: ", Dthis.identifier_string(), "model: ", modname)
+
+            func, params0 = prepare_optimization_scipy(H, modname)
+
+            ListBMH.append({
+                "id_dset":Dthis.identifier_string(),
+                "id_mod":modname,
+                "func":func,
+                "func_params0":params0,
+                "D":Dthis,
+                "H":H})
+
+    return ListBMH, list_dsets, ListH
+
+def cross_dataset_model_wrapper(Dlist, list_mod, list_mod_names, 
+    allow_separate_likelis=False):
+    """ MAIN WRAPPER:
+    Returns dict allowing you to index by dataset and model, while behind the scenes
+    it takes care of the shared dependencies between them.
+    OUT:
+    - list_bmh, list of dicts, where each dict represents one combo of dataset and model
+    NOTE:
+    - assumes that all models in list_mod apply to same dataset, and can either share likelis (True)
+    or not.
+    """
+
+    ListBMH = []
+    list_dsets = []
+    for Dthis in Dlist:
+
+        # Generate models
+        H = BehModelHandler()
+        H.input_data(Dthis, list_mod, 
+                     list_mod_names, allow_separate_likelis=allow_separate_likelis)
+
+        # # get likelis
+        # H.compute_store_likelis()
+        # H.compute_store_priorprobs()
+        # H.compute_store_posteriors()
+
+        # for each combo of model and dataset, generate a function that takes in 
+        # params to optimize, and outputs score.
+
+        list_dsets.append(Dthis.identifier_string())
+        for modname in list_mod_names:
+            print("** dset: ", Dthis.identifier_string(), "model: ", modname)
+
+            func, params0 = prepare_optimization_scipy(H, modname)
+
+            ListBMH.append({
+                "id_dset":Dthis.identifier_string(),
+                "id_mod":modname,
+                "func":func,
+                "func_params0":params0,
+                "D":Dthis,
+                "H":H})
+
+    return ListBMH, list_dsets
+
+
+def bmh_prepare_optimization(ListBMH):
+    for L in ListBMH:
+        modname = L["id_mod"]
+        H = L["H"]
+        func, params0 = prepare_optimization_scipy(H, modname)
+
+        L["func"] = func
+        L["func_params0"] = params0
+
+
+
+def bmh_score_single(ListBMH, id_dset, id_mod):
+    """ dont optimize params, just score using whataver params currently
+    present in model
+    """
+
+
+def bmh_optimize_single(ListBMH, id_dset, id_mod):
+    """ runs optimization for this single case
+    """
+    from pythonlib.tools.modfittools import minimize
+
+    this = [L for L in ListBMH if L["id_dset"]==id_dset and L["id_mod"]==id_mod]
+    assert len(this)==1
+    this = this[0]
+
+    res = minimize(this["func"], this["func_params0"])
+    return res
+
+
+
+def bmh_results_to_dataset(ListBMH, suffix=""):
+    """ helper to reassign scores back into Datasets, after you have finalized the
+    params for each dset-model combo
+    - suffix, for naming, usually this model class.
+    """
+
+    # Assign modeling results back into Dataset
+    for L in ListBMH:
+        H = L["H"]
+        H.results_to_dataset(suffix=suffix)
+
+
+def bmh_save(SDIR, Dlist, model_class, GROUPING_LEVELS, ListH, train_or_test):
+    """ 
+    NOTE:
+    - Only compatible with 
+    cross_dataset_model_wrapper_params
+    """
+    import os
+    import pickle
+
+    SAVEDICT = {}
+    SAVEDICT["Dlist"] = Dlist
+    SAVEDICT["model_class"] = model_class
+    SAVEDICT["GROUPING_LEVELS"] = GROUPING_LEVELS
+    SAVEDICT["ListH_statedicts"] = [H.extract_state() for H in ListH]
+
+
+    path = f"{SDIR}/BHM_SAVEDICT-{model_class}-{'_'.join(GROUPING_LEVELS)}-{train_or_test}.pkl"    
+    with open(path, "wb") as f:
+        pickle.dump(SAVEDICT, f) 
+
+def bmh_load(SDIR, model_class, GROUPING_LEVELS, train_or_test):
+    """ 
+    e.g, SDIR = '/data2/analyses/main/model_comp/planner/pilot-210719_210222/Red-lines5'
+    """
+    import os
+    import pickle
+    path = f"{SDIR}/BHM_SAVEDICT-{model_class}-{'_'.join(GROUPING_LEVELS)}-{train_or_test}.pkl"    
+
+    with open(path, "rb") as f:
+        SAVEDICT = pickle.load(f) 
+    
+    # 1) Extract skeleton
+    Dlist = SAVEDICT["Dlist"]
+    model_class = SAVEDICT["model_class"]
+    GROUPING_LEVELS = SAVEDICT["GROUPING_LEVELS"]
+    ListBMH, list_dsets, ListH= cross_dataset_model_wrapper_params(Dlist, model_class, GROUPING_LEVELS)
+
+    # update trained params
+    for H, statedict in zip(ListH, SAVEDICT["ListH_statedicts"]):
+        list_modname = statedict["prior_params"].keys()
+        for modname in list_modname:
+            H.params_prior_set(modname, statedict["prior_params"][modname])
+
+    return ListBMH, list_dsets, ListH
