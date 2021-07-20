@@ -11,6 +11,60 @@ from pythonlib.tools.expttools import makeTimeStamp, findPath
 import seaborn as sns
 
 
+class ColNames(object):
+    """ helper to get column names in D, given sets of model classes and rules
+    , and different manipulatios of the scores
+    """
+    def __init__(self, model_classes, model_rules):
+        # The order of model_rules matters, mod2 minus mod1...
+        self.Classes = model_classes
+        self.Rules = model_rules
+        
+    def colnames_score(self, mclass=None, mrule=None):    
+        if mclass is None:
+            return [col for mclass in self.Classes for col in self.colnames_score(mclass)]
+        if mrule is None:
+            return [self.colnames_score(mclass, mrule) for mrule in self.Rules]
+        else:
+            return f"behmodpost_{mrule}_{mclass}"
+        
+    def colnames_minus(self, mclass=None):
+        if mclass is None:
+            return [self.colnames_minus(mclass) for mclass in self.Classes]
+        return f"mod2_minus_mod1_{mclass}"
+        
+    def colnames_alignment_trials(self, mclass=None):
+        if mclass is None:
+            return [self.colnames_alignment_trials(mclass) for mclass in self.Classes]
+        return f"alignment_trials_{mclass}"
+        
+    def colnames_alignment_tasks(self, mclass=None):
+        if mclass is None:
+            return [self.colnames_alignment_tasks(mclass) for mclass in self.Classes]
+        return f"alignment_tasks_{mclass}"
+    
+    def get_model_rule_other(self, rulethis):
+        """ returns list of other modelrules
+        in order that was saved
+        """
+        assert rulethis in self.Rules
+        return [r for r in self.Rules if r!=rulethis]
+        
+    def get_all_cols(self, exclude=[]):
+        """ return list of col names, excluding if flexible.
+        """
+        out = []
+        if "score" not in exclude:
+            out.extend(self.colnames_score())
+        if "minus" not in exclude:
+            out.extend(self.colnames_minus())
+        if "alignment_trials" not in exclude:
+            out.extend(self.colnames_alignment_trials())
+        if "alignment_tasks" not in exclude:
+            out.extend(self.colnames_alignment_tasks())
+        return out
+        
+
 def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior_list, 
                                 model_score_name_list, savedir=None, return_DatThisAggPaired=False):
     """ All plots, where take cross product of prior model (monkey) and model (anythign else)
@@ -178,7 +232,142 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
         return DatThisAggPaired
 
 
-def plots_cross_prior_and_model_combined():
+def plots_cross_prior_and_model_combined(D, GROUPING, GROUPING_LEVELS, list_mclass, list_mrule,
+        savedir_this = "/tmp"):
     """ combines plots for positive control (monkey-monkey) and model
-    model-monkey - e..g, a single bar plot comparing alignemnt"""
-    print("See notebook drawnn --> test_on_monkey_tasks...")
+    model-monkey - e..g, a single bar plot comparing alignemnt. And any number 
+    of alternative model classes (in progress)
+    
+    NOTES:
+    - initallly developed in ("See notebook drawnn --> test_on_monkey_tasks...")
+    - STILL MESSY CODE.
+    """
+    from pythonlib.tools.pandastools import pivot_table
+    from pythonlib.dataset.analy import score_alignment
+    import pandas as pd
+    import seaborn as sns
+    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.plottools import plotScatter45
+
+
+    # Col Names getter
+    CN = ColNames(list_mclass, list_mrule)
+
+
+    # 1) For each model class, compute alignment (at level of trials)
+    COL_NAMES_MINUS = []
+    COL_NAMES_ALIGNMENT  = []
+    for mclass in list_mclass:
+    #     mclass = "planner"
+        SCORE_COL_NAMES_THIS = CN.colnames_score(mclass)
+        # SCORE_COL_NAMES_THIS = [f"behmodpost_{c}_{mclass}" for c in MODEL_NAMES]
+        colname_m2_m1, newcol = score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES_THIS, suffix=mclass)
+        COL_NAMES_MINUS.append(colname_m2_m1)
+        COL_NAMES_ALIGNMENT.append(newcol)
+
+
+
+    # DatThis = D.Dat
+    DatThis = D.filterPandas({"monkey_train_or_test":["test"]}, "dataframe")
+    COLS_KEEP = [col for col in CN.get_all_cols() if col in DatThis.columns]
+    print(COLS_KEEP)
+    DatThisAggPairedAll = pivot_table(DatThis, index=["character"], columns = GROUPING,
+                                   values=COLS_KEEP)
+    DatThisAggPairedAll = DatThisAggPairedAll.dropna().reset_index(drop=True)
+
+    def _get_samemod_minus_diffmod(DatThisAggPairedAll, datagrp, modelclass):
+        """ return score for same model minus for diff model, assuming
+        datagrp is the grp for data, and there is a corresponding model
+        OUT:
+        - np array, same len as DatThisAggPairedAll
+        e.g.;
+            datagrp = "bent"
+            modelclass = "mkvsmk"
+        """
+        rulesame = datagrp
+        tmp = CN.get_model_rule_other(rulesame)
+        assert len(tmp)<2, "hvae not coded for if multiple rules for this model"
+        rulediff = tmp[0]
+
+        scoresame = CN.colnames_score(modelclass, rulesame)
+        scorediff = CN.colnames_score(modelclass, rulediff)
+        
+        print(rulesame, " : (same)", scoresame, " - (diff)",  scorediff)
+        
+        vals = (DatThisAggPairedAll[scoresame][datagrp] - DatThisAggPairedAll[scorediff][datagrp]).values
+        return vals
+
+    # compute alignment for each model class
+    for modelclass in list_mclass:
+        assert len(GROUPING_LEVELS)==2, "not done"
+        list_vals = []
+        for datagrp in GROUPING_LEVELS:
+            vals = _get_samemod_minus_diffmod(DatThisAggPairedAll, datagrp, modelclass)
+            list_vals.append(vals)
+
+        colname_alignment = CN.colnames_alignment_tasks(modelclass)
+        DatThisAggPairedAll[colname_alignment] = np.mean(np.stack(list_vals, axis=1), axis=1)
+        print("** added this alignment column: ", colname_alignment)
+
+
+    # ===== BAR PLOTS, SHOWING ALL RAW SCORES
+    DatThisAggPairedAllFlat = pd.melt(DatThisAggPairedAll, id_vars = ["character"])
+    DatThisAggPairedAllFlat = DatThisAggPairedAllFlat.rename(columns={None:"model"})
+    # DatThisAggPairedAllFlat["model"].value_counts()
+
+    # PLOT
+    col_scores = CN.colnames_score()
+    df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(col_scores)]
+    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", ci=68, aspect=1.5)
+    #     fig = sns.catplot(data=df, x="monkey_prior", y="value", hue="model", kind="point", ci=68, aspect=1.5)
+    # sns.catplot(data=df, x="model", y="value", hue="monkey_prior", kind="bar", ci=68)
+    fig.savefig(f"{savedir_this}/pairedtasks_rawscores_allmodelspriors_bars.pdf")
+
+    col_minus = CN.colnames_minus()
+    df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(col_minus)]
+    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", ci=68)
+    rotateLabel(fig)
+    fig.savefig(f"{savedir_this}/pairedtasks_modeldiffscores_allmodelspriors_1.pdf")
+    fig = sns.catplot(data=df, x="model", y="value", hue=GROUPING, kind="bar", ci=68)
+    rotateLabel(fig)
+    fig.savefig(f"{savedir_this}/pairedtasks_modeldiffscores_allmodelspriors_2.pdf")
+
+
+    # compute alignement score.
+    colnames = CN.colnames_alignment_tasks()
+    df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(colnames)]
+    fig = sns.catplot(data=df, x="model", y="value", kind="bar", ci=68)
+    rotateLabel(fig)
+    fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_1.pdf")
+    fig = sns.catplot(data=df, x="model", y="value")
+    plt.axhline(0, color="k", alpha=0.5)
+    rotateLabel(fig)
+    fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_2.pdf")
+    fig = sns.catplot(data=df, x="model", y="value", kind="point", ci=68)
+    plt.axhline(0, color="k", alpha=0.5)
+    rotateLabel(fig)
+    fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_3.pdf")
+
+    # SCATTER PLOT
+    colnames = CN.colnames_minus()
+    SHARE_AX = False
+
+    col1 = GROUPING_LEVELS[0]
+    col2 = GROUPING_LEVELS[1]
+    #     df = DatThisAggPairedAll[value]
+    tasknames = [v.split("-")[0] for v in DatThisAggPairedAll["character"].values]
+    fig, axes = plt.subplots(1, 2, figsize=(10,5), sharex=SHARE_AX, sharey=SHARE_AX)
+    for value, ax in zip(colnames, axes.flatten()):
+    #         value = "mod2_minus_mod1_monkeymodel"
+        dfthis = DatThisAggPairedAll[value]
+        x = dfthis[col1]
+        y = dfthis[col2]
+
+        plotScatter45(x, y, ax, dotted_lines="plus", means=True, labels = None)
+        ax.set_xlabel(col1)
+        ax.set_ylabel(col2)
+        ax.set_title(value)
+        
+    fig.savefig(f"{savedir_this}/pairedtasks_modeldiffscores_scatters.pdf")
+
+
