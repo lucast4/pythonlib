@@ -56,6 +56,7 @@ class Cost:
             "endloc":(a(),  0., 0.),
             "jumpdir":(a(), 0.)
         }
+        params["transformation"] = {}
         return params
 
 
@@ -71,12 +72,14 @@ class Cost:
 
 
 
-        if "screenHV" not in params:
+        if "screenHV" not in params.keys():
             _params = self.getDefaultParams()
             params["screenHV"] = _params["screenHV"]
-        if "thetas" not in params:
+        if "thetas" not in params.keys():
             _params = self.getDefaultParams()
             params["thetas"] = _params["thetas"]
+        if "transformations" not in params.keys():
+            params["transformations"] = _params["transformations"]
 
         # 2) what is scale of screen? for normalizing units
         # (goal is diagoal is ~2)
@@ -90,6 +93,46 @@ class Cost:
         """
         """
         self.Params["thetavec"] = np.array(thetavec)
+
+    def params_ravel(self):
+        """ return a fl;attened array of params
+        use params_unravel to place back in
+        """
+        th = []
+
+        # 1) thetas
+        th.append(self.Params["thetavec"])
+        # 2) transformations
+        for k, v in self.Params["transformations"].items():
+            th.append(v)
+        out = np.concatenate(th)
+        assert len(out.shape)==1, "tform params are mats?"
+        return out
+
+
+    def params_unravel(self, th, return_leftover=False):
+        """ place back flattened params into self.Params.
+        th must be size (N,), and must fit perfectly inot 
+        the params. will fail if not.
+        """
+        assert len(th.shape)==1
+        assert isinstance(th, np.ndarray)
+        # 1) thetavec
+        inds = np.arange(len(self.Params["thetavec"]))
+        self.Params["thetavec"] = th[inds]
+        th = np.delete(th, inds)
+        
+        # 2) Transformations
+        for k, v in self.Params["transformations"].items():
+            inds = np.arange(len(v))
+            self.Params["transformations"][k] = th[inds]
+            th = np.delete(th, inds)
+        
+        if return_leftover:
+            return th
+        else:
+            assert len(th)==0, "inputed too many params"
+
 
 
     def _updateThetas(self):
@@ -142,6 +185,37 @@ class Cost:
             assert thetavec.shape==feature_vec.shape
             score = np.dot(feature_vec, thetavec)
         return score
+
+    def transform_features(self, feature_mat):
+        """ 
+        applies any transfomaritons instructed in params[transformations] for the particulare
+        IN:
+        - feature_mat, N x nfeats
+        OUT:
+        - feature_mat (also modifies in place, i think.)
+        """
+
+        def _index(tform):
+            return self.Params["thetanames"].index(tform)
+
+        for tform, prms in self.Params["transformations"].items():
+            if tform=="angle_travel":
+                from pythonlib.tools.vectools import angle_diff_vectorized
+                # find the index for this
+                ind = _index(tform)
+                angle0 = prms[0]
+                feature_mat[:, ind] = -angle_diff_vectorized(feature_mat[:,ind], angle0)
+            elif tform=="nstrokes":
+                # absolute value of difference from a mean num strokes
+                # take negative, 
+                ind = _index(tform)
+                nstrokes0 = prms[0]
+                nstrokes0 = np.max([0, nstrokes0])
+                feature_mat[:, ind] = -np.abs(feature_mat[:, ind] - nstrokes0)/2
+            else:
+                assert False, "not coded"
+        return feature_mat
+
 
 
     ########################### BATCH OPERATIONS (multiple trials)
