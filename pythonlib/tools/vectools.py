@@ -89,13 +89,31 @@ def angle_diff(a1, a2):
     """
     from math import pi
     
-    a = abs(a1-a2)
+    a = np.abs(a1-a2)
     a = a%(2*pi)
     if a <= pi:
         return a
     elif a > pi:
         assert a <= 2*pi
         return 2*pi - a
+
+def angle_diff_vectorized(a1, a2):
+    """ get difference between two angles.
+    will give smallest absolute difference.
+    - a1 and a2 in radians. can be - or +
+    - a1 and a2 are (N,1) arrays
+    """
+    from math import pi
+    
+    a = np.abs(a1-a2)
+    a = a%(2*pi)
+    a[a>pi] = 2*pi - a[a>pi]
+    if not np.all(a<=2*pi):
+        print(a)
+        print(a<=2*pi)
+    assert np.all(a<=2*pi)
+    return a
+
 
 
 

@@ -425,12 +425,14 @@ def hist_with_means(ax, vals, **kwargs):
     """ same, but overlays line for mean
     """
     from scipy.stats import sem
-    ax.hist(vals, **kwargs)
+    tmp = ax.hist(vals, **kwargs)
+    bins = tmp[1]
     vmean = np.mean(vals)
     vsem = sem(vals)
     ax.axvline(vmean, color="k")
     ax.axvline(vmean-vsem, color="r")
     ax.axvline(vmean+vsem, color="r")
+    return bins
 
 
 def histogramMult(vals_list, nbins, ax=None, separate_plots=False):
@@ -507,7 +509,8 @@ def getHistBinEdges(vals, nbins):
 def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5, 
                    origin="lower_left", max_n_per_grid=None, 
                    col_labels = None, row_labels=None, tight=True,
-                   aspect=0.8, ncols=6, titles=None, naked_axes=False):
+                   aspect=0.8, ncols=6, titles=None, naked_axes=False, 
+                   titles_on_y=False):
     """ wrapper to plot each datapoint at a given
     col and row.
     INPUT:
@@ -586,9 +589,15 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
 
         if titles is not None:
             if isinstance(titles[i], str):
-                ax.set_title(f"{titles[i]}")
+                if titles_on_y:
+                    ax.set_ylabel(f"{titles[i]}")
+                else:
+                    ax.set_title(f"{titles[i]}")
             else:
-                ax.set_title(f"{titles[i]:.2f}")
+                if titles_on_y:
+                    ax.set_ylabel(f"{titles[i]:.2f}")
+                else:
+                    ax.set_title(f"{titles[i]:.2f}")
         else:
             if col_labels:
                 if row==0:

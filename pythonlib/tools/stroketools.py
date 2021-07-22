@@ -587,6 +587,8 @@ def getStrokesFeatures(strokes):
     return outdict
 
 
+def splitTraj(traj, num=2):
+    return _splitarray(traj, num)
 
 def _splitarray(A, num=2):
     # split one numpy array into a list of two arrays
