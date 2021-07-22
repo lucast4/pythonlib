@@ -3367,7 +3367,7 @@ class Dataset(object):
             # 
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
-        add_stroke_number=True, centerize=False, jitter_each_stroke=False):
+        add_stroke_number=True, centerize=False, jitter_each_stroke=False, titles_on_y=False, SIZE=2.5):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
@@ -3377,7 +3377,8 @@ class Dataset(object):
 
         plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
             add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
-        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
+            titles_on_y=titles_on_y, SIZE=SIZE)
 
         return fig
 
