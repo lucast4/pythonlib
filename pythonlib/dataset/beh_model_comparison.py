@@ -20,6 +20,9 @@ class ColNames(object):
         self.Classes = model_classes
         self.Rules = model_rules
         
+        assert isinstance(model_rules, list)
+        assert isinstance(model_classes, list)
+
     def colnames_score(self, mclass=None, mrule=None):    
         if mclass is None:
             return [col for mclass in self.Classes for col in self.colnames_score(mclass)]
@@ -32,6 +35,16 @@ class ColNames(object):
         if mclass is None:
             return [self.colnames_minus(mclass) for mclass in self.Classes]
         return f"mod2_minus_mod1_{mclass}"
+
+    def colnames_minus_usingnames(self, mclass=None):
+        """ same but uses names of rules instead of just mod2 - mod1
+        """
+        assert len(self.Rules)==2
+        if mclass is None:
+            return [self.colnames_minus_usingnames(mclass) for mclass in self.Classes]
+
+        return f"{self.Rules[1]}_minus_{self.Rules[0]}_{mclass}"
+
         
     def colnames_alignment_trials(self, mclass=None):
         if mclass is None:
@@ -64,6 +77,11 @@ class ColNames(object):
             out.extend(self.colnames_alignment_tasks())
         return out
         
+
+def compute_model_score_differences(DatThisTest):
+    """
+    """
+
 
 def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior_list, 
                                 model_score_name_list, savedir=None, return_DatThisAggPaired=False):

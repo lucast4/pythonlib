@@ -125,9 +125,8 @@ def likeli_function_database(ver, params=None):
             return 1/scores
         Li = likeli_scorer_quick(ver="base")
         Li.input_score_function(func)
-    elif ver=="lines5":
+    elif ver in ["lines5", "default"]:
         Li = likeli_scorer_quick(ver="base")
-
     else:
         print(ver)
         assert False
