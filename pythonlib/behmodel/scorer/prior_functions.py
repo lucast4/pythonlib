@@ -347,6 +347,28 @@ def prior_function_database(ver, params=None):
             "MotorCost":MC
         }
         Pr._do_score_with_params=False
+    elif ver=="default_features":
+        # feature extractor and motor cost
+        F = FeatureExtractor(params["params_fe"])
+        MC = Cost(params["params_mc"])
+        Pr = prior_base()
+
+        def priorscorer(list_parses, trialcode):
+            """ params = tuple of scalars
+            """
+            # NOTE: computing feature vectors is slow part.
+            mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
+                hack_lines5=False)
+            mat_features = MC.transform_features(mat_features) 
+            list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+            return list_scores
+
+        Pr.input_score_function(priorscorer)
+        Pr.Objects = {
+            "FeatureExtractor":F,
+            "MotorCost":MC
+        }
+        Pr._do_score_with_params=False
 
     else:
         print(ver)

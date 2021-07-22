@@ -5,7 +5,7 @@ import numpy as np
 from pythonlib.drawmodel.features import strokeCircularity, strokeDistances
 
 class FeatureExtractor(object):
-    def __init__(self, STROKE_DIR_DOESNT_MATTER=True):
+    def __init__(self, params, STROKE_DIR_DOESNT_MATTER=True):
         """ params is dict. flexible, and whatever keys are active will dictate what
         features are considered
         - Main focus is working with parses in Parser format.
@@ -17,6 +17,7 @@ class FeatureExtractor(object):
 
         self.Params = {}
         self.Params["STROKE_DIR_DOESNT_MATTER"] = STROKE_DIR_DOESNT_MATTER
+        self.ListFeatures = params["features"]
 
         self._Tracker = {}
 
@@ -191,7 +192,7 @@ class FeatureExtractor(object):
             if f =="circ":
                 x = strokeCircularity([traj])[0]
             elif f=="dist":
-                x = strokeDistances([traj])[0]
+                x = strokeDistances([traj])[0]/100 # 100
             else:
                 print(f)
                 assert False
@@ -200,6 +201,38 @@ class FeatureExtractor(object):
         #     strokeCircularity([traj])[0],
         #     strokeDistances([traj])[0])
 
+        return feat
+
+    def _strokes_to_feature_vec(self, list_of_p, list_features=[]):
+        feat = []
+        strokes = [p["traj"] for p in list_of_p]
+
+        for f in list_features:
+            if f=="angle_travel":
+                # from center to center
+                # NOTE: also see motor efficiency, for endpoitn to enpoitn, and norm to ground truth vector.
+                from pythonlib.drawmodel.features import strokesAngleOverall
+                if len(strokes)==1:
+                    # then split into 2
+                    from pythonlib.tools.stroketools import splitTraj
+                    strokesthis = splitTraj(strokes[0])
+                else:
+                    strokesthis = strokes
+                x = strokesAngleOverall(strokesthis)
+                # print(x)
+                # print(strokes)
+                # print(len(strokes))
+                # from pythonlib.drawmodel.strokePlots import plotDatStrokes
+                # import matplotlib.pyplot as plt
+                # fig, ax = plt.subplots()
+                # plotDatStrokes(strokes, ax=ax)
+                # assert False, "just check"
+            elif f=="nstrokes":
+                x = len(strokes)
+            else:
+                print(f)
+                assert False
+            feat.append(x)
         return feat
 
 
@@ -275,9 +308,21 @@ class FeatureExtractor(object):
         row of D.Dat, e.g,, list_parses = D.Dat.iloc[0]["parses_behmod"]
         """
         if hack_lines5:
-            list_features = ["circ", "dist"]
+            list_feature_names = ["circ", "dist"]
         else:
-            assert hack_lines5==True, "not coded"
+            list_feature_names = self.ListFeatures
+
+        list_feature_names_trajlevel = [name for name in list_feature_names if name in ["circ", "dist"]]
+        list_feature_names_strokeslevel = [name for name in list_feature_names if name in ["angle_travel", "nstrokes"]]
+        assert len(list_feature_names_trajlevel) + len(list_feature_names_strokeslevel) == len(list_feature_names)
+        assert len(set(list_feature_names))==len(list_feature_names), "otherwise the putting back in place algo will not work, since uses index"
+        # Inds that will use for putting things back in place
+        inds_list_features = []
+        for fthis in list_feature_names_trajlevel:
+            inds_list_features.append(list_feature_names.index(fthis))
+        for fthis in list_feature_names_strokeslevel:
+            inds_list_features.append(list_feature_names.index(fthis))
+
 
         def feature_single_p(p):
             # first check if this is already saved
@@ -289,13 +334,56 @@ class FeatureExtractor(object):
                 return feat
             else:
                 # get new
-                feat = self._path_to_feature_vec(p, list_features=list_features)
+                feat = self._path_to_feature_vec(p, list_features=list_feature_names_trajlevel)
                 self.tracker_add("dummy", indtrial, p, feat)
                 # print("got new")
                 return feat
 
-        def featurevec_single_trial(list_of_p):
-            """ a single trial is a list of ps
+        def feature_single_listofp(list_of_p):
+            feat = self._strokes_to_feature_vec(list_of_p, list_features=list_feature_names_strokeslevel)
+            return feat
+
+        # def featurevec_single_parse(list_of_p):
+        #     """ a single parse is equibalent to strokes.
+        #          is a list of ps
+        #         e..g, for trial ind, 
+        #         list_of_p = P.extract_parses_wrapper(ind, "summary")
+        #     OUT:
+        #     - feature_vec, (N,) shape np array.
+        #     """
+            
+        #     for f in list_feature_names:
+        #         if f in ["circ", "dist"]:
+        #             # do separateyl for each traj, then take average
+
+
+        #         elif f in ["angle_travel"]:
+
+        #         else:
+        #             assert False
+
+
+        #     list_of_features = []
+        #     for p in list_of_p:
+        #         list_of_features.append(feature_single_p(p))
+
+        #     # Take average over all strokes
+        #     mat_of_features = np.stack(list_of_features) # N x nfeat
+        #     feature_vec = np.mean(mat_of_features, axis=0)
+
+        #     # Add other features
+        #     # - max circ across trajs
+        #     feature_vec = np.append(feature_vec, np.max(mat_of_features[:,0]))
+
+        #     #- nstrokes
+        #     nstrokes = len(list_of_p)
+        #     feature_vec = np.append(feature_vec, nstrokes)
+
+        #     return feature_vec
+
+        def featurevec_single_parse(list_of_p):
+            """ a single parse is equibalent to strokes.
+                 is a list of ps
                 e..g, for trial ind, 
                 list_of_p = P.extract_parses_wrapper(ind, "summary")
             OUT:
@@ -310,23 +398,41 @@ class FeatureExtractor(object):
             mat_of_features = np.stack(list_of_features) # N x nfeat
             feature_vec = np.mean(mat_of_features, axis=0)
 
-            # Add other features
-            # - max circ across trajs
-            feature_vec = np.append(feature_vec, np.max(mat_of_features[:,0]))
+            if hack_lines5==True:
+                # Add other features
+                # - max circ across trajs
+                feature_vec = np.append(feature_vec, np.max(mat_of_features[:,0]))
 
-            #- nstrokes
-            nstrokes = len(list_of_p)
-            feature_vec = np.append(feature_vec, nstrokes)
+                #- nstrokes
+                nstrokes = len(list_of_p)
+                feature_vec = np.append(feature_vec, nstrokes)
 
             return feature_vec
         
-        list_list_p = list_parses
-        nfeat = 4
-        mat_features = np.empty((len(list_list_p), nfeat))
-        for i, list_of_p in enumerate(list_list_p):
+        nfeat = len(list_feature_names)
+        mat_features = np.empty((len(list_parses), nfeat))
+
+
+        for i, list_of_p in enumerate(list_parses):
             # list_of_p = P.extract_parses_wrapper(ind, "summary")
-            feature_vec = featurevec_single_trial(list_of_p)
-            mat_features[i, :] = feature_vec
+            
+            feature_vec_p = featurevec_single_parse(list_of_p)
+            feature_vec_listofp = feature_single_listofp(list_of_p)
+
+            # put features back into main thing
+            out = np.empty(len(list_feature_names))
+            ct = 0
+            for fthis, val in zip(list_feature_names_trajlevel, feature_vec_p):
+                ind = inds_list_features[ct]
+                out[ind] = val
+                ct+=1
+            for fthis, val in zip(list_feature_names_strokeslevel, feature_vec_listofp):
+                ind = inds_list_features[ct]
+                out[ind] = val
+                ct+=1
+
+
+            mat_features[i, :] = out
             # list_featurevecs.append(feature_vec)
 
         return mat_features

@@ -53,7 +53,7 @@ def quick_getter(modelclass, vectorized_priors=False):
     return list_mod, list_modnames
 
 
-def get_single_model(ver, params=None):
+def get_single_model(ver, params_input=None):
     """ GOOD , get single BM.
     given ver and params, should always give same object
     """
@@ -76,6 +76,144 @@ def get_single_model(ver, params=None):
         BM.Likeli.Params = {
             "norm":(50.,)
         }
+    elif ver=="bd":
+        # bendiness + direction
+        params_mc = {}
+        params_mc["thetas"] = {
+                "circ":0.,
+                "angle_travel":0.}
+        params_mc["transformations"] = {
+                "angle_travel":tuple([0.])}                
+        params_fe = {
+            "features":["circ", "angle_travel"]   
+        }
+        Pr = prior_function_database("default_features", 
+            {"params_mc":params_mc,
+            "params_fe":params_fe
+            })        
+        Li = likeli_function_database("default")
+        Po = poster_dataset(ver="logsumexp")
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po,
+            list_input_args_likeli = ("dat", "trial"),
+            list_input_args_prior = ("parsesflat", "trialcode"),
+            poster_use_log_likeli = True,
+            poster_use_log_prior = True)
+        BM.Prior.Params = {
+            "norm":(1.,)
+        }
+        BM.Likeli.Params = {
+            "norm":(50.,)
+        }
+
+    elif ver=="bdn":
+        # bendiness + direction
+        params_mc = {}
+        params_mc["thetas"] = {
+                "circ":0.,
+                "angle_travel":0., 
+                "nstrokes":0.
+                }
+        params_mc["theta_limits"] = [
+            (-20, 20),
+            (0., 10),
+            (0., 10)
+        ]
+        params_mc["transformations"] = {
+                "angle_travel":tuple([0.]),
+                "nstrokes":tuple([3.])}                
+        params_fe = {
+            "features":["circ", "angle_travel", "nstrokes"]   
+        }
+        Pr = prior_function_database("default_features", 
+            {"params_mc":params_mc,
+            "params_fe":params_fe
+            })        
+        Li = likeli_function_database("default")
+        Po = poster_dataset(ver="logsumexp")
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po,
+            list_input_args_likeli = ("dat", "trial"),
+            list_input_args_prior = ("parsesflat", "trialcode"),
+            poster_use_log_likeli = True,
+            poster_use_log_prior = True)
+        BM.Prior.Params = {
+            "norm":(1.,)
+        }
+        BM.Likeli.Params = {
+            "norm":(50.,)
+        }
+
+    elif ver[:12]=="mix_features" and len(ver)>12:
+        # e.g., "mix_features_bdn", then the codes are bdn.
+        # This useful since allows this string to be a unique model class code.
+        codes = ver[13:]
+        # convert to list
+        codes = [x for x in codes]
+        return get_single_model(ver="mix_features",params_input= {"feature_codes":codes})
+
+
+    elif ver=="mix_features":
+        # then pass in params. e.g,:
+        # params_input["features"]= {
+        #     "circ": [0, None],
+        #     "angle_travel": [0., tuple([0.])],
+        #     "nstrokes": [0., tuple([3.])]
+        # }
+
+        if "features" in params_input.keys():
+            # Then you give me the actual values
+            F = params_input["features"]
+            params_mc = {}
+            params_mc["thetas"] = {feat: prms[0] for feat, prms in F.items()}
+            params_mc["transformations"] = {feat: prms[1] for feat, prms in F.items() if prms[1] is not None}
+            params_fe = {
+                "features":list(F.keys())
+            }
+        else:
+            # Then you use pre-saved values:
+            def _get_param(feat_code):
+                """
+                """
+                if feat_code=="b":
+                    return "circ", [0, None]
+                elif feat_code=="d":
+                    return "angle_travel", [0., tuple([0.])]
+                elif feat_code=="n":
+                    return "nstrokes", [0., tuple([3.])]
+                else:
+                    assert False
+
+            feature_codes = params_input["feature_codes"]
+            F = {_get_param(code)[0]:_get_param(code)[1] for code in feature_codes}
+            params_mc = {}
+            params_mc["thetas"] = {feat: prms[0] for feat, prms in F.items()}
+            params_mc["transformations"] = {feat: prms[1] for feat, prms in F.items() if prms[1] is not None}
+            params_fe = {
+                "features":list(F.keys())
+            }
+
+        Pr = prior_function_database("default_features", 
+            {"params_mc":params_mc,
+            "params_fe":params_fe
+            })        
+        Li = likeli_function_database("default")
+        Po = poster_dataset(ver="logsumexp")
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po,
+            list_input_args_likeli = ("dat", "trial"),
+            list_input_args_prior = ("parsesflat", "trialcode"),
+            poster_use_log_likeli = True,
+            poster_use_log_prior = True)
+        BM.Prior.Params = {
+            "norm":(1.,)
+        }
+        BM.Likeli.Params = {
+            "norm":(50.,)
+        }
+
+
+
     elif ver=="mkvsmk":
         Pr = prior_function_database("monkey_vs_monkey")
         Li = likeli_function_database("monkey_vs_monkey")
@@ -125,6 +263,20 @@ def quick_getter_with_params(modelclass, list_mrules):
             list_mod.append(BM)
             list_modnames.append(grp)
         allow_separate_likelis = True
+    elif modelclass in ["bd", "bdn"]:
+        # (bendiness, direction)
+        for i, grp in enumerate(list_mrules):
+            BM = get_single_model(modelclass)
+            list_mod.append(BM)
+            list_modnames.append(grp)
+        allow_separate_likelis = True
+    elif modelclass[:12]=="mix_features":
+        for i, grp in enumerate(list_mrules):
+            BM = get_single_model(modelclass)
+            list_mod.append(BM)
+            list_modnames.append(grp)
+        allow_separate_likelis = True
+
     else:
         assert False
 
