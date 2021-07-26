@@ -360,7 +360,8 @@ def prior_function_database(ver, params=None):
             mat_features = F.list_featurevec_from_flatparses_directly(list_parses, trialcode, 
                 hack_lines5=False)
             mat_features = MC.transform_features(mat_features) 
-            list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
+            list_scores = MC.score_features_mat(mat_features)
+            # list_scores = np.array([MC.score_features(feature_vec) for feature_vec in mat_features])
             return list_scores
 
         Pr.input_score_function(priorscorer)

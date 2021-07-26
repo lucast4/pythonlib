@@ -82,9 +82,7 @@ class Scorer(object):
         th = np.append(th, self.Params["norm"])
         if return_reg_mus:
             reg_mu.append(1.)   
-        out = th.squeeze()
-        print(out)
-        assert False, "rewrite this code so out is always correct size"
+        out = th
         assert len(out.shape)==1
 
         if return_reg_mus:
@@ -105,6 +103,7 @@ class Scorer(object):
 
         # 2) norm
         self.Params["norm"] = th[:1]
-        th = np.delete(th, [0])
+        # th = np.delete(th, [0])
 
-        assert len(th)==0, "inputed too many params"
+
+        assert len(th)==1, "inputed too many params"

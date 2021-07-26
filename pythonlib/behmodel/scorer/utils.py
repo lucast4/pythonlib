@@ -1,5 +1,10 @@
 
-import numpy as np
+DEBUG = False # Jax
+if DEBUG:
+    import jax.numpy as np
+else:
+    import numpy as np
+
 def normscore(scores_all, ver, params=None):
     """given lsit of scalars (scores_all)  
     across parses, and a method (ver), output probabilsitys in 
@@ -13,6 +18,10 @@ def normscore(scores_all, ver, params=None):
         print(ver)
         print(params)
         assert False
+
+
+    # scores_all = np.asarray(scores_all, dtype=np.float32)
+    scores_all = np.asarray(scores_all)
 
     if ver=="divide":
         # simple, just divide by sum of alls cores
@@ -74,7 +83,10 @@ def normscore(scores_all, ver, params=None):
             if subtrmean==True:
                 # then subtract mean. this useful if large variation across trials for mean
                 scores_all = scores_all - np.mean(scores_all)
+        invtemp = np.asarray(invtemp, dtype=np.float32)
         scores_all = invtemp*scores_all
+        if DEBUG:
+            from jax.nn import log_softmax
         log_probs = log_softmax(scores_all) 
         return log_probs
     elif ver=="log":
@@ -115,7 +127,10 @@ def posterior_score(likelis, priors, ver):
         # is a single datapoint (trial).
         # If these two inner terms are given as log probs, then log(p(d|M)) is logsumexp(likeli+prior)
         # So output will be log posterior prob.
-        from scipy.special import logsumexp
+        if DEBUG:
+            from jax.scipy.special import logsumexp
+        else:
+            from scipy.special import logsumexp
         return logsumexp(likelis + priors)
 
     else:
