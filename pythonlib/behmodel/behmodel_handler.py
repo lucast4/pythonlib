@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+DEBUG = True
+
 class BehModelHandler(object):
 
 
@@ -278,7 +280,8 @@ class BehModelHandler(object):
                     self.PriorLogProbs[name].append(logprobs)
 
             # convert to probs
-            self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
+            if False:
+                self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
 
 
     def compute_store_posteriors(self, force_run=True, mode="train"):
@@ -892,6 +895,10 @@ def prepare_optimization_scipy(H, modelname, hack_lines5=False):
     assumes that thetavec = (bendiness, _,_,_),. where _ is stuff that not optimize.
     """
     
+    if DEBUG:
+        import jax.numpy as np
+    else:
+        import numpy as np
     if hack_lines5:
         def func(prms, reg_coeff=np.array([0.0001, 0.001]), reg_mu=np.array([0, 1])):
         #     norm = [prms[1]]
@@ -1099,7 +1106,19 @@ def bmh_optimize_single(ListBMH, id_dset, id_mod, bounds=None):
     res = minimize(this["func"], this["func_params0"], bounds=bounds)
     return res
 
+def bmh_optimize_single_jax(ListBMH, id_dset, id_mod):
+    """ runs optimization for this single case
+    Uses Jax
+    Doesnt work with bounds.
+    """
+    from jax.scipy.optimize import minimize
 
+    this = [L for L in ListBMH if L["id_dset"]==id_dset and L["id_mod"]==id_mod]
+    assert len(this)==1
+    this = this[0]
+
+    res = minimize(this["func"], this["func_params0"], method="BFGS")
+    return res
 
 def bmh_results_to_dataset(ListBMH, suffix=""):
     """ helper to reassign scores back into Datasets, after you have finalized the
