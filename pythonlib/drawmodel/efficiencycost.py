@@ -24,6 +24,7 @@ from scipy.special import logsumexp
 # from pythonlib.tools.dicttools import printOverviewKeyValues, filterSummary
 # from pythonlib.tools.snstools import addLabel
 
+DEBUG = False # setting up Jax version
 
 class Cost:
     def __init__(self, params=None):
@@ -44,7 +45,6 @@ class Cost:
         for computing that feature.
         """
 
-        import numpy as np
         a = lambda: np.random.rand()
         params = {
             "screenHV":[1024, 768]
@@ -110,26 +110,81 @@ class Cost:
         return out
 
 
+    # def params_unravel(self, th, return_leftover=False):
+    #     """ place back flattened params into self.Params.
+    #     th must be size (N,), and must fit perfectly inot 
+    #     the params. will fail if not.
+    #     """
+    #     import jax.numpy as np
+
+    #     assert len(th.shape)==1
+    #     assert not isinstance(th, list) or isinstance(th, tuple), "should use np or jax"
+        
+    #     # 1) thetavec
+    #     inds = np.arange(len(self.Params["thetavec"]))
+        
+    #     ct = 0
+    #     print("input len:", th)
+    #     print("return return_leftover", return_leftover)
+    #     inds2 = np.arange(ct, ct+len(self.Params["thetavec"]))
+    #     print(ct, inds, inds2)
+    #     ct+=len(inds2)
+
+    #     self.Params["thetavec"] = th[inds]
+
+    #     th = np.delete(th, inds)
+
+    #     # 2) Transformations
+    #     for k, v in self.Params["transformations"].items():
+    #         inds = np.arange(len(v))
+
+    #         inds2 = np.arange(ct, ct+len(v))
+    #         print(ct, inds, inds2)
+    #         ct+=len(inds2)
+
+    #         self.Params["transformations"][k] = th[inds]
+    #         th = np.delete(th, inds)
+            
+    #     print("leftover", th)
+    #     print("leftover inds", np.arange(ct, len(th)))
+    #     assert False
+    #     if return_leftover:
+    #         return th
+    #     else:
+    #         assert len(th)==0, "inputed too many params"
+
+
     def params_unravel(self, th, return_leftover=False):
         """ place back flattened params into self.Params.
         th must be size (N,), and must fit perfectly inot 
         the params. will fail if not.
+        # NOTE: new version, where doesnt use delete..
         """
+        import jax.numpy as np
+
         assert len(th.shape)==1
-        assert isinstance(th, np.ndarray)
-        # 1) thetavec
-        inds = np.arange(len(self.Params["thetavec"]))
-        self.Params["thetavec"] = th[inds]
-        th = np.delete(th, inds)
+        assert not isinstance(th, list) or isinstance(th, tuple), "should use np or jax"
         
+        # 1) thetavec
+        ct = 0
+        inds = np.arange(ct, ct+len(self.Params["thetavec"]))
+        ct+=len(inds)
+        self.Params["thetavec"] = th[inds]
+
         # 2) Transformations
         for k, v in self.Params["transformations"].items():
-            inds = np.arange(len(v))
+
+            inds = np.arange(ct, ct+len(v))
+            ct+=len(inds)
+
             self.Params["transformations"][k] = th[inds]
-            th = np.delete(th, inds)
-        
+            
+        # print("leftover", th)
+        inds = np.arange(ct, len(th))
+        # print("leftover inds", np.arange(ct, len(th)))
+        # assert False
         if return_leftover:
-            return th
+            return th[inds]
         else:
             assert len(th)==0, "inputed too many params"
 
@@ -161,6 +216,22 @@ class Cost:
 
         self.Params["thetavec"] = np.array(self.Params["thetavec"])
 
+    def score_features_mat(self, feature_mat):
+        """
+        - feature_mat, shape (N x k), 
+        - thetavec, shape (k,)
+
+        OUT:
+        - scores, (N,)
+
+        """
+        thetavec = self.Params["thetavec"]
+        assert thetavec.shape[0]==feature_mat.shape[1]
+        if DEBUG:
+            import jax.numpy as np
+        score_vec = np.dot(feature_mat, thetavec)
+        return score_vec
+
     def score_features(self, feature_vec):
         """ given feature vec, return score. So this doesnt work directly with
         the motor behavior. assumes your've already extracted features 
@@ -183,7 +254,13 @@ class Cost:
         else:
             thetavec = self.Params["thetavec"]
             assert thetavec.shape==feature_vec.shape
+            if DEBUG:
+                import jax.numpy as np
             score = np.dot(feature_vec, thetavec)
+
+        print("SCORE (theta x feats):", score)
+
+
         return score
 
     def transform_features(self, feature_mat):
@@ -204,14 +281,16 @@ class Cost:
                 # find the index for this
                 ind = _index(tform)
                 angle0 = prms[0]
-                feature_mat[:, ind] = -angle_diff_vectorized(feature_mat[:,ind], angle0)
+                if not DEBUG:
+                    feature_mat[:, ind] = -angle_diff_vectorized(feature_mat[:,ind], angle0)
             elif tform=="nstrokes":
                 # absolute value of difference from a mean num strokes
                 # take negative, 
                 ind = _index(tform)
                 nstrokes0 = prms[0]
-                nstrokes0 = np.max([0, nstrokes0])
-                feature_mat[:, ind] = -np.abs(feature_mat[:, ind] - nstrokes0)/2
+                if not DEBUG:
+                    nstrokes0 = np.max([0, nstrokes0])
+                    feature_mat[:, ind] = -np.abs(feature_mat[:, ind] - nstrokes0)
             else:
                 assert False, "not coded"
         return feature_mat
@@ -718,7 +797,6 @@ class Cost:
 
 
 # from scipy.optimize import minimize as minim
-# import numpy as np
 # def minimize(fun, numparams):
 #     params0=np.random.uniform(-8, 8, size=numparams)
 #     # params = tuple([1])
