@@ -160,7 +160,10 @@ class Cost:
         the params. will fail if not.
         # NOTE: new version, where doesnt use delete..
         """
-        import jax.numpy as np
+        if DEBUG:
+            import jax.numpy as np
+        else:
+            import numpy as np
 
         assert len(th.shape)==1
         assert not isinstance(th, list) or isinstance(th, tuple), "should use np or jax"
@@ -169,7 +172,14 @@ class Cost:
         ct = 0
         inds = np.arange(ct, ct+len(self.Params["thetavec"]))
         ct+=len(inds)
-        self.Params["thetavec"] = th[inds]
+        try:
+            self.Params["thetavec"] = th[inds]
+        except Exception as err:
+            print(th)
+            print(inds)
+            print(th.shape)
+            print(inds.shape)
+            raise err
 
         # 2) Transformations
         for k, v in self.Params["transformations"].items():
@@ -229,6 +239,8 @@ class Cost:
         assert thetavec.shape[0]==feature_mat.shape[1]
         if DEBUG:
             import jax.numpy as np
+        else:
+            import numpy as np
         score_vec = np.dot(feature_mat, thetavec)
         return score_vec
 
@@ -256,10 +268,9 @@ class Cost:
             assert thetavec.shape==feature_vec.shape
             if DEBUG:
                 import jax.numpy as np
+            else:
+                import numpy as np
             score = np.dot(feature_vec, thetavec)
-
-        print("SCORE (theta x feats):", score)
-
 
         return score
 

@@ -176,11 +176,17 @@ def get_single_model(ver, params_input=None):
                 """
                 """
                 if feat_code=="b":
+                    # bendiness
                     return "circ", [0, None]
                 elif feat_code=="d":
+                    # direction
                     return "angle_travel", [0., tuple([0.])]
                 elif feat_code=="n":
+                    # num strokes
                     return "nstrokes", [0., tuple([3.])]
+                # elif feat_code=="":
+                #     # num strokes
+                #     return "nstrokes", [0., tuple([3.])]
                 else:
                     assert False
 

@@ -214,6 +214,7 @@ if __name__=="__main__":
     SDIR = "/data2/analyses/main/model_comp/planner"
 
     SUBSAMPLE = False
+    N = 50
     animal = "Red"
     expt = "lines5"
     rule_list = ["straight", "bent"]
@@ -227,11 +228,15 @@ if __name__=="__main__":
         D.load_dataset_helper(animal, expt, rule=rule)
         
         if SUBSAMPLE:
-            D.subsampleTrials(1,10)
+            D.subsampleTrials(1,2)
+            if len(D.Dat)>N:
+                import random
+                inds = sorted(random.sample(range(len(D.Dat)), N))
+                D = D.subsetDataset(inds)
             
         D.load_tasks_helper()
         
-        D.filterPandas({"random_task":[False], "insummarydates":[True]}, "modify")
+        D.filterPandas({"random_task":[False], "insummarydates":[ONLY_SUMMARY_DATES]}, "modify")
         
         if LOAD_ALL_PARSES:
             list_parse_params = [
@@ -282,7 +287,7 @@ if __name__=="__main__":
     # list_model_class = ["mix_features_bdn", "mix_features_bd", "mix_features_bn", "mix_features_dn", 
     #                     "mix_features_b", "mix_features_d", "mix_features_n", "mkvsmk", "lines5"]
     # list_model_class = ["mix_features_bd", "mix_features_dn", "mix_features_d", "mkvsmk"]
-    list_model_class = ["mix_features_dn", "mix_features_d", "mkvsmk"]
+    list_model_class = ["mix_features_bd", "mkvsmk"]
     for model_class in list_model_class:
         for D, rule in zip(Dlist, rule_list):
 

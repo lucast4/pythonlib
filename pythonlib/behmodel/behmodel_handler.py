@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-DEBUG = True
+DEBUG = False
 
 class BehModelHandler(object):
 
@@ -283,6 +283,15 @@ class BehModelHandler(object):
             if False:
                 self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
 
+    def convert_prior_logprobs_to_probs(self):
+        """ only runs if probs is not yet gotten 
+        - iterates overa ll models
+        """
+
+        for name in self.ListModelsIDs:
+            if name not in self.PriorProbs.keys():
+                self.PriorProbs[name] = [np.exp(thisarr) for thisarr in self.PriorLogProbs[name]]
+
 
     def compute_store_posteriors(self, force_run=True, mode="train"):
         """
@@ -341,6 +350,8 @@ class BehModelHandler(object):
             self.compute_store_posteriors(force_run=True, mode=mode)
         elif mode=="test":
             self.compute_store_priorprobs_vectorized(force_run=True)
+            # make sure that probs gotten
+            self.convert_prior_logprobs_to_probs()
             self.compute_store_likelis(force_run=True)
             self.compute_store_likelis_logprobs(force_run=True)
             self.compute_store_posteriors(force_run=True, mode=mode)
@@ -899,6 +910,7 @@ def prepare_optimization_scipy(H, modelname, hack_lines5=False):
         import jax.numpy as np
     else:
         import numpy as np
+
     if hack_lines5:
         def func(prms, reg_coeff=np.array([0.0001, 0.001]), reg_mu=np.array([0, 1])):
         #     norm = [prms[1]]

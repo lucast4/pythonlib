@@ -62,7 +62,7 @@ def normscore(scores_all, ver, params=None):
     elif ver=="log_softmax":
         # softmax. first normalize scores so that within similar range
         # dividing by mean of absolute values of scores.. this is hacky...
-        from scipy.special import log_softmax
+        # from scipy.special import log_softmax
         # scores_all = np.array([-5, 10, 25])
         # sumabs = np.sum(np.absolute(scores_all))
 
@@ -87,6 +87,9 @@ def normscore(scores_all, ver, params=None):
         scores_all = invtemp*scores_all
         if DEBUG:
             from jax.nn import log_softmax
+        else:
+            from scipy.special import log_softmax
+
         log_probs = log_softmax(scores_all) 
         return log_probs
     elif ver=="log":
