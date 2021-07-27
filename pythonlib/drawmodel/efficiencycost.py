@@ -303,7 +303,7 @@ class Cost:
                     nstrokes0 = np.max([0, nstrokes0])
                     # feature_mat[:, ind] = -np.abs(feature_mat[:, ind] - nstrokes0)
                     # feature_mat[:, ind] = -(feature_mat[:, ind] - nstrokes0)**2
-                    feature_mat[:, ind] = 1/(1+(feature_mat[:, ind] - nstrokes0)**2)
+                    feature_mat[:, ind] = 1/(1+(feature_mat[:, ind] - nstrokes0)**2) # so that stays positive.
             elif tform=="dist_travel":
                 # take inverse, so lower numbers are worse.
                 ind = _index(tform)
