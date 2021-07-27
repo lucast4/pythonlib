@@ -229,6 +229,20 @@ class FeatureExtractor(object):
                 # assert False, "just check"
             elif f=="nstrokes":
                 x = len(strokes)
+            elif f=="dist_travel":
+                # total distance travel, center to center, including position of fixation.
+                from pythonlib.drawmodel.features import computeDistTraveled
+
+                if len(strokes)==1:
+                    # then split into 2
+                    from pythonlib.tools.stroketools import splitTraj
+                    strokesthis = splitTraj(strokes[0])
+                else:
+                    strokesthis = strokes
+
+                orig = list_of_p[0]["origin"]
+                x = computeDistTraveled(strokesthis, orig, center_to_center=True)/200
+
             else:
                 print(f)
                 assert False
@@ -313,7 +327,7 @@ class FeatureExtractor(object):
             list_feature_names = self.ListFeatures
 
         list_feature_names_trajlevel = [name for name in list_feature_names if name in ["circ", "dist"]]
-        list_feature_names_strokeslevel = [name for name in list_feature_names if name in ["angle_travel", "nstrokes"]]
+        list_feature_names_strokeslevel = [name for name in list_feature_names if name in ["angle_travel", "nstrokes", "dist_travel"]]
         assert len(list_feature_names_trajlevel) + len(list_feature_names_strokeslevel) == len(list_feature_names)
         assert len(set(list_feature_names))==len(list_feature_names), "otherwise the putting back in place algo will not work, since uses index"
         # Inds that will use for putting things back in place

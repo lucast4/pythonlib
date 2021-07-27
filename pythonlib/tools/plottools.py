@@ -424,6 +424,9 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
 def hist_with_means(ax, vals, **kwargs):
     """ same, but overlays line for mean
     """
+    if len(np.unique(vals))==1:
+        print(vals)
+        assert False, "need variety"
     from scipy.stats import sem
     tmp = ax.hist(vals, **kwargs)
     bins = tmp[1]

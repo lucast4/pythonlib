@@ -2662,6 +2662,8 @@ class Dataset(object):
         and combines all and flattens into a new column called "parser_all_flat"
         - each parse represented as a list of p, where p is a dict holding all representations.
         - also holds reference back to origianl Parser, in case want to call it.
+        NOTE:
+        - also save location of origin in the first p for each list of p (i.e., each parse)
         """
         
         for pname in parser_names:
@@ -2670,7 +2672,12 @@ class Dataset(object):
         list_list_parses = []
         for indtrial in range(len(self.Dat)):
             list_list_parses.append(self.parser_list_of_parses(indtrial, parser_names=parser_names))
-        
+
+            # Put origin in the first p for each parse.
+            origin = self.Dat.iloc[indtrial]["origin"]
+            for list_p in list_list_parses[-1]:
+                list_p[0]["origin"] = origin
+
         self.Dat["parses_behmod"] = list_list_parses
         print("flattend parsers and moved to new col: ", "parses_behmod")
         print("Parsers:", parser_names)

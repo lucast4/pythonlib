@@ -1105,6 +1105,38 @@ def bmh_score_single(ListBMH, id_dset, id_mod):
     present in model
     """
 
+def bmh_score_grid(ListBMH, id_dset, id_mod, params_grid):
+    """ 
+    params_grid is list of np.arrays, list must be same length as 
+    params that pass into func. 
+    """
+    # Grid search
+    # COST LANDSCAPE
+    # # array_norms = np.linspace(0.1, 2, 5)
+    # #     array_norms = np.linspace(0.1, 2, 4)
+    # array_norms = np.asarray([1.])
+    from itertools import product
+
+    this = [L for L in ListBMH if L["id_dset"]==id_dset and L["id_mod"]==id_mod]
+    assert len(this)==1
+    this = this[0]
+    func = this["func"]
+    H = this["H"]
+
+    out = []
+    for prms in product(*params_grid):
+        prms = np.array(prms)
+        print("Currently doing params: ", prms)
+        cost = func(prms)
+        out.append({
+            "cost":cost,
+            "prms":prms,
+            "dset":id_dset,
+            "mod":id_mod            
+        })
+    return out
+
+
 
 def bmh_optimize_single(ListBMH, id_dset, id_mod, bounds=None):
     """ runs optimization for this single case

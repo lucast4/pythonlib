@@ -184,9 +184,9 @@ def get_single_model(ver, params_input=None):
                 elif feat_code=="n":
                     # num strokes
                     return "nstrokes", [0., tuple([3.])]
-                # elif feat_code=="":
-                #     # num strokes
-                #     return "nstrokes", [0., tuple([3.])]
+                elif feat_code=="t":
+                    # travel distance (center to center)
+                    return "dist_travel", [0., tuple([-1.])]
                 else:
                     assert False
 

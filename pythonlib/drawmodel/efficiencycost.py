@@ -302,6 +302,13 @@ class Cost:
                 if not DEBUG:
                     nstrokes0 = np.max([0, nstrokes0])
                     feature_mat[:, ind] = -np.abs(feature_mat[:, ind] - nstrokes0)
+            elif tform=="dist_travel":
+                # generally flip sign, so that lower numbers are worse.
+                ind = _index(tform)
+                multiplier = prms[0] # make this -1 usually.
+                if not DEBUG:
+                    feature_mat[:, ind] = multiplier*feature_mat[:, ind]
+
             else:
                 assert False, "not coded"
         return feature_mat

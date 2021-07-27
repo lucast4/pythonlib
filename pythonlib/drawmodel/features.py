@@ -106,7 +106,8 @@ def strokeCurvature(strokes):
 
 ####### ONE VALUE SUMMARIZING STROKES
 def computeDistTraveled(strokes, origin=None, include_lift_periods=True, 
-    include_origin_to_first_stroke=True, doneloc=None, include_transition_to_done=False):
+    include_origin_to_first_stroke=True, doneloc=None, include_transition_to_done=False,
+    center_to_center=False):
     """ assume start at origin. assumes straight line movements
     between strokes, and travel along stroke during strokes.
     by default includes times when not putting down ink.
@@ -115,12 +116,22 @@ def computeDistTraveled(strokes, origin=None, include_lift_periods=True,
     - include_transition_to_done, then includes gap between end of last stroke and done button. 
     Must pass in doneloc.
     - include_origin_to_first_stroke, then must pass in origin.
+    - center_to_center, then instead of endpoint to endpoint, uses stroke centers.
     """
     
     if include_transition_to_done:
         assert doneloc is not None
     if include_origin_to_first_stroke:
         assert origin is not None
+    if center_to_center:
+        assert include_lift_periods==True, "otherwise pointless, since not considering within-stroke distances"
+
+    if center_to_center:
+        # convert strokes so that all pts in a stroke are its center pts
+        centers = getCentersOfMass(strokes)
+        strokesthis = [np.repeat(c.reshape(1,-1), 3, 0) for c in centers]
+    else:
+        strokesthis = strokes
 
     cumdist = 0
 
@@ -129,19 +140,19 @@ def computeDistTraveled(strokes, origin=None, include_lift_periods=True,
         # - Get inter-stroke movements
         if not include_origin_to_first_stroke:
             # then say you started at locaiton of first touch
-            origin = strokes[0][0, :2]
+            origin = strokesthis[0][0, :2]
 
         prev_point = origin
-        for S in strokes:
+        for S in strokesthis:
             cumdist += np.linalg.norm(S[0,:2] - prev_point)
             prev_point = S[-1, :2]
 
         # - Include to done button
         if include_transition_to_done:
-            cumdist += np.linalg.norm(doneloc - strokes[-1][-1,:2])
+            cumdist += np.linalg.norm(doneloc - strokesthis[-1][-1,:2])
     
     # - Get stroke distances
-    cumdist += np.sum(strokeDistances(strokes))
+    cumdist += np.sum(strokeDistances(strokesthis))
     return cumdist
 
 

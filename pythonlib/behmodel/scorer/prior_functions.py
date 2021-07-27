@@ -4,6 +4,63 @@
 
 import numpy as np
 
+
+# FROM parsing code (older)
+# def score_function(parses, ver="ink", normalization = "inverse", test=False,
+#                   use_torch=False, origin=None):
+#     """ 
+#     - ver, str, determines what score to use
+#     --- "ink", then total distnace traveled on page
+#     --- "travel", then total distance traveled, including
+#     gaps, starting from position of first touch.
+#     - normalization, how to normalize raw distnace. distance will
+#     be that more positive is more worse. 
+#     --- inverse take inverse, so that now less positive is worse.
+#     --- negative, ...
+#     """
+#     from pythonlib.drawmodel.features import strokeDistances, computeDistTraveled
+
+#     if test:
+#         # then just return random number, one for each parse
+#         return torch.tensor([random.random() for _ in range(len(parses))])    
+    
+#     if ver=="ink":
+#         # === Total ink used
+#         distances = [np.sum(strokeDistances(strokes)) for strokes in parses]
+#     elif ver=="travel":
+#         # conisder origin to be onset of first storke.
+#         # Note: has issue in that a single stroke task, flipped, is idnetical cost to the same task unflipped.
+#         # leads to problems later since unique(score) is used to throw out redundant parses.
+#         distances_traveled = [computeDistTraveled(strokes, origin=strokes[0][0,[0,1]]) for strokes in parses]
+#         distances = distances_traveled
+#     elif ver=="travel_from_orig":
+#         # pass in origin. 
+#         assert origin is not None, " must pass in coordinate for origin"
+#         distances_traveled = [computeDistTraveled(strokes, origin=origin) for strokes in parses]
+#         distances = distances_traveled
+
+#     elif ver=="nstrokes":
+#         # num strokes
+#         # == plit histogram of num strokes
+#         nstrokes = [len(p) for p in parses]        
+#     else:
+#         print(ver)
+#         assert False, "not codede"
+        
+#     if use_torch:
+#         distances = torch.tensor(distances)
+#     else:
+#         distances = np.array(distances)
+        
+#     if normalization=="inverse":
+#         return 1/distances
+#     elif normalization=="negative":
+#         return -distances
+#     else:
+#         print(normalization)
+#         assert False, "not coded"
+
+
 # def makePriorFunction(ver="uniform"):
 #     """ returns a function that can pass into Model,
 #     which does the job of computing prior (i.e., for each model parse 
