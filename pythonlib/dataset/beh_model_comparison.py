@@ -96,6 +96,7 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
     from pythonlib.tools.plottools import plotScatter45
     ALPHA = 0.2
 
+    print(model_score_name_list, monkey_prior_list)
     assert len(model_score_name_list)==2, "not coded for otherwise"
     assert len(monkey_prior_list)==2, "not coded for otherwise"
 
@@ -374,7 +375,9 @@ def plots_cross_prior_and_model_combined(D, GROUPING, GROUPING_LEVELS, list_mcla
     col2 = GROUPING_LEVELS[1]
     #     df = DatThisAggPairedAll[value]
     tasknames = [v.split("-")[0] for v in DatThisAggPairedAll["character"].values]
-    fig, axes = plt.subplots(1, 2, figsize=(10,5), sharex=SHARE_AX, sharey=SHARE_AX)
+    ncol = 3
+    nrow = int(np.ceil(len(colnames)/ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(ncol*4,nrow*4), sharex=SHARE_AX, sharey=SHARE_AX)
     for value, ax in zip(colnames, axes.flatten()):
     #         value = "mod2_minus_mod1_monkeymodel"
         dfthis = DatThisAggPairedAll[value]
