@@ -16,15 +16,49 @@ class MultBehModelHandler(object):
     def __init__(self):
         
         self.DictTrainedH = {}
+        self.DictTrainedBMH = {}
+        self.ListMrule = {}
+        self.DictMrule = {}
 
-    def _load_pretrained_models(self, SDIR, list_mclass, list_mrule):
+        self.ListMclass = []
+
+    def load_untrained_models(self, Dlist, model_class, list_rules):
+        """ Load a set of models, all of same class (model_class)
+        but can be multiple rules.
+        - Useful if want models that dont beed to be trained - e.g., random
+        or positive controls
+        - Dlist can be len >1 if you would like to somehow update each model's params
+        based on Dlist.
+        """
+        ListBMH, list_dsets, ListH= cross_dataset_model_wrapper_params(Dlist, model_class, list_rules)
+
+        # Convert ListBMH to DictBMH
+        for L in ListBMH:
+            model_rule = L["id_mod"]
+            key = (model_class, model_rule)
+            self.DictTrainedH[key] = L["H"]
+            self.DictTrainedBMH[key] = L
+            print("-- GOT THIS UNTRAINED MODEL: ", model_class, model_rule)
+
+        # save
+        self.ListMclass = list(set(self.ListMclass + [model_class]))
+        list_rules = [x[1] for x in self.DictTrainedH.keys() if x[0]==model_class]
+        self.DictMrule[model_class] = list_rules
+
+        print("** OUTCOME:")
+        print("classes:", self.ListMclass)
+        print("rules:", self.DictMrule)
+        print("extracted trained models: ", self.DictTrainedH)
+
+    def load_pretrained_models(self, SDIR, list_mclass, list_mrule):
         """ 
+        Will append loaded models every time load. (Wil overwrite, if these models
+        have already prevlsioly loaded)
         """
 
         train_or_test = "train"
 
         ## First, reload pre-saved models
-        DictH = {} # mclass, mrule
         for model_class in list_mclass:
             for mrule in list_mrule:
                 ListBMH, list_dsets, ListH = bmh_load(SDIR, model_class, [mrule], train_or_test)
@@ -32,14 +66,13 @@ class MultBehModelHandler(object):
                 for L in ListBMH:
                     model_rule = L["id_mod"]
                     key = (model_class, model_rule)
-                    DictH[key] = L["H"]
-        self.DictTrainedH = DictH
+                    self.DictTrainedH[key] = L["H"]
+                    self.DictTrainedBMH[key] = L
+                    print("-- GOT THIS PRETRAINED MODEL: ", model_class, model_rule)
 
         # save
-        self.ListMclass = list_mclass
-        self.ListMrule = {}
-        self.DictMrule = {}
-        for mclass in self.ListMclass:
+        self.ListMclass = list(set(self.ListMclass + list_mclass))
+        for mclass in list_mclass:
             list_rules = [x[1] for x in self.DictTrainedH.keys() if x[0]==mclass]
             self.DictMrule[mclass] = list_rules
 
@@ -56,6 +89,7 @@ class MultBehModelHandler(object):
         OUT:
         - Modifies self, to add self.DictTestH_SameDset
         """
+        assert False, "use apply_models_to_mult_new_dataset"
 
         DlistThis = [D]
         self.DictTestH_SameDset = {}
@@ -214,12 +248,22 @@ if __name__=="__main__":
     SDIR = "/data2/analyses/main/model_comp/planner"
 
     SUBSAMPLE = False
-    N = 50
+    N = 100
     animal = "Red"
     expt = "lines5"
-    rule_list = ["straight", "bent"]
+    # rule_list = ["straight", "bent"]
+    rule_list = ["straight"]
     LOAD_ALL_PARSES = True
     ONLY_SUMMARY_DATES = True
+
+
+    # GROUPING_LEVELS = rule_list
+    # model_class = "mkvsmk"
+    # list_model_class = ["mix_features_bdn", "mix_features_bd", "mix_features_bn", "mix_features_dn", 
+    #                     "mix_features_b", "mix_features_d", "mix_features_n", "mkvsmk", "lines5"]
+    # list_model_class = ["mix_features_bd", "mix_features_dn", "mix_features_d", "mkvsmk"]
+    # list_model_class = ["mix_features_bd", "mkvsmk"]
+    list_model_class = ["mix_features_tbnd", "mix_features_bnd", "mix_features_tnd", "mix_features_tbd"]
 
     # LOAD ALL DATASETS
     Dlist  = []
@@ -228,14 +272,13 @@ if __name__=="__main__":
         D.load_dataset_helper(animal, expt, rule=rule)
         
         if SUBSAMPLE:
-            D.subsampleTrials(1,2)
+            D.subsampleTrials(1,3)
             if len(D.Dat)>N:
                 import random
                 inds = sorted(random.sample(range(len(D.Dat)), N))
                 D = D.subsetDataset(inds)
             
         D.load_tasks_helper()
-        
         D.filterPandas({"random_task":[False], "insummarydates":[ONLY_SUMMARY_DATES]}, "modify")
         
         if LOAD_ALL_PARSES:
@@ -248,6 +291,7 @@ if __name__=="__main__":
                 {"quick":True, "ver":"graphmod", "savenote":"fixed_True"}]
             list_suffixes = ["graphmod"]
         D.parser_load_presaved_parses(list_parse_params, list_suffixes)
+        assert len(D.Dat)>0, "why"
         Dlist.append(D)
             
             
@@ -282,20 +326,23 @@ if __name__=="__main__":
     # Prepare strokes (other monkey) in dataset
     extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS)
 
-    GROUPING_LEVELS = rule_list
-    # model_class = "mkvsmk"
-    # list_model_class = ["mix_features_bdn", "mix_features_bd", "mix_features_bn", "mix_features_dn", 
-    #                     "mix_features_b", "mix_features_d", "mix_features_n", "mkvsmk", "lines5"]
-    # list_model_class = ["mix_features_bd", "mix_features_dn", "mix_features_d", "mkvsmk"]
-    list_model_class = ["mix_features_bd", "mkvsmk"]
     for model_class in list_model_class:
-        for D, rule in zip(Dlist, rule_list):
+        for rule in rule_list:
 
 
             # Get Dataset
-            Dlist_this = [DictD[(rule, "train")]]
+            Dthis = DictD[(rule, "train")]
+            Dlist_this = [Dthis]
             GROUPING_LEVELS_this = [rule]
             ListBMH, list_dsets, ListH= cross_dataset_model_wrapper_params(Dlist_this, model_class, GROUPING_LEVELS_this)
+
+            if len(Dthis.Dat)==0:
+                print(rule)
+                assert False
+
+            if len(Dthis.animals())==0 or len(Dthis.expts())==0 or len(Dthis.rules())==0:
+                print(Dthis.Dat)
+                assert False
 
             # Optimize
             if model_class=="mkvsmk":
@@ -306,9 +353,8 @@ if __name__=="__main__":
                     H.compute_store_posteriors()
     #         if model_class=="lines5":
             else:
-                bmh_optimize_single(ListBMH, D.identifier_string(),  rule)
+                bmh_optimize_single(ListBMH, Dthis.identifier_string(),  rule)
         
-
             ### Save
             bmh_save(SDIR, Dlist_this, model_class, GROUPING_LEVELS_this, ListH, "train")
 

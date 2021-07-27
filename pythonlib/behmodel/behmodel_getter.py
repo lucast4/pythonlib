@@ -186,7 +186,7 @@ def get_single_model(ver, params_input=None):
                     return "nstrokes", [0., tuple([3.])]
                 elif feat_code=="t":
                     # travel distance (center to center)
-                    return "dist_travel", [0., tuple([-1.])]
+                    return "dist_travel", [0., None]
                 else:
                     assert False
 
@@ -218,7 +218,23 @@ def get_single_model(ver, params_input=None):
             "norm":(50.,)
         }
 
-
+    elif ver=="random":
+        # pick random parse (weigh them evenly)
+        Pr = prior_function_database("random")        
+        Li = likeli_function_database("default")
+        Po = poster_dataset(ver="logsumexp")
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po,
+            list_input_args_likeli = ("dat", "trial"),
+            list_input_args_prior = ("parsesflat", "trialcode"),
+            poster_use_log_likeli = True,
+            poster_use_log_prior = True)
+        BM.Prior.Params = {
+            "norm":(1.,)
+        }
+        BM.Likeli.Params = {
+            "norm":(50.,)
+        }
 
     elif ver=="mkvsmk":
         Pr = prior_function_database("monkey_vs_monkey")
@@ -262,15 +278,8 @@ def quick_getter_with_params(modelclass, list_mrules):
             list_mod.append(BM)
             list_modnames.append(rule_model)
         allow_separate_likelis = False
-    elif modelclass=="mkvsmk":
+    elif modelclass in ["mkvsmk", "bd", "bdn", "random"]:
         # list_mrules = ["straight", "bent"]
-        for i, grp in enumerate(list_mrules):
-            BM = get_single_model("mkvsmk")
-            list_mod.append(BM)
-            list_modnames.append(grp)
-        allow_separate_likelis = True
-    elif modelclass in ["bd", "bdn"]:
-        # (bendiness, direction)
         for i, grp in enumerate(list_mrules):
             BM = get_single_model(modelclass)
             list_mod.append(BM)

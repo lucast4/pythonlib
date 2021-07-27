@@ -684,7 +684,46 @@ class BehModelHandler(object):
         else:            
             state["input_helper_used"] = False
             state["input_helper_params"] = None
+
+        # Extracted values
+        state["PriorProbs"] = self.PriorProbs
+        state["PriorLogProbs"] = self.PriorLogProbs
+        state["LikelisLogProbs"] = self.LikelisLogProbs
+        state["Likelis"] = self.Likelis
+        state["Posteriors"] = self.Posteriors
+
         return state
+
+    def apply_state(self, state):
+        """ load state, then repopulate.
+        will overwrite when needed
+        """
+
+        # modelnames = 
+
+
+        # TODO:
+        # if datasets already present, check that they match
+        # if not present, then add these
+        # out["dset_id"] = self.D.identifier_string()
+        # out["dset_trialcodes"] = self.D.Dat["trialcode"].to_list()
+        # if get_dataset:
+        #     out["dset"] = self.D
+
+        self.ListModelsIDs = state["modelnames"] 
+        self._allow_separate_likelis = state["allow_separate_likelis"]
+        self._parsers_to_flatten = state["parsers_to_flatten"]
+
+        for modelname in self.ListModelsIDs:
+            self.params_prior_set(modelname, state["prior_params"][modelname])
+        
+        self.ParamsInputHelper = state["input_helper_params"]
+
+        self.PriorProbs = state["PriorProbs"]
+        self.PriorLogProbs = state["PriorLogProbs"]
+        self.LikelisLogProbs = state["LikelisLogProbs"]
+        self.Likelis = state["Likelis"]
+        self.Posteriors = state["Posteriors"]
 
 
     ##### PLOTTING
@@ -943,9 +982,10 @@ def prepare_optimization_scipy(H, modelname, hack_lines5=False):
         bounds = [(0, 10.) for _ in range(len(params0))]
 
         # Make sure circulaitry can be both neg and positive (straight vs. bend)
-        if "circ" in H.params_prior(modelname)["MotorCost"]["thetanames"]:
-            ind = H.params_prior(modelname)["MotorCost"]["thetanames"].index("circ")
-            bounds[ind] = (-20., 20)
+        if "MotorCost" in H.params_prior(modelname):
+            if "circ" in H.params_prior(modelname)["MotorCost"]["thetanames"]:
+                ind = H.params_prior(modelname)["MotorCost"]["thetanames"].index("circ")
+                bounds[ind] = (-20., 20)
 
         def func(prms, reg_coeff=reg_coeff, reg_mu=reg_mu):
             # do update
@@ -966,7 +1006,7 @@ def prepare_optimization_scipy(H, modelname, hack_lines5=False):
             return loss
             
 
-    return func, params0
+    return func, params0, bounds
 
 
 def cross_dataset_model(Dlist, list_models, list_model_names, allow_separate_likelis=False, 
@@ -1031,13 +1071,14 @@ def cross_dataset_model_wrapper_params(Dlist, model_class, GROUPING_LEVELS):
             if model_class=="lines5":
                 func, params0 = prepare_optimization_scipy(H, modname, hack_lines5=True)
             else:
-                func, params0 = prepare_optimization_scipy(H, modname)
+                func, params0, bounds = prepare_optimization_scipy(H, modname)
 
             ListBMH.append({
                 "id_dset":Dthis.identifier_string(),
                 "id_mod":modname,
                 "func":func,
                 "func_params0":params0,
+                "func_bounds":bounds,
                 "D":Dthis,
                 "H":H})
 
@@ -1138,16 +1179,22 @@ def bmh_score_grid(ListBMH, id_dset, id_mod, params_grid):
 
 
 
-def bmh_optimize_single(ListBMH, id_dset, id_mod, bounds=None):
+def bmh_optimize_single(ListBMH, id_dset, id_mod):
     """ runs optimization for this single case
     """
     from pythonlib.tools.modfittools import minimize
 
     this = [L for L in ListBMH if L["id_dset"]==id_dset and L["id_mod"]==id_mod]
+    if len(this)!=1:
+        print(ListBMH)
+        print(id_dset)
+        print(id_mod)
+        assert False
     assert len(this)==1
     this = this[0]
 
-    res = minimize(this["func"], this["func_params0"], bounds=bounds)
+    res = minimize(this["func"], this["func_params0"], bounds=this["func_bounds"])
+
     return res
 
 def bmh_optimize_single_jax(ListBMH, id_dset, id_mod):

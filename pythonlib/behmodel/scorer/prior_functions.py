@@ -404,6 +404,19 @@ def prior_function_database(ver, params=None):
             "MotorCost":MC
         }
         Pr._do_score_with_params=False
+    elif ver=="random":
+        # assign same prob to each parse
+
+        def priorscorer(list_parses, trialcode):
+            """ params = tuple of scalars
+            """
+            return np.ones((len(list_parses)))
+
+        Pr = prior_base()
+        Pr.input_score_function(priorscorer)
+        Pr.Objects = {}
+        Pr._do_score_with_params=False
+
     elif ver=="default_features":
         # feature extractor and motor cost
         F = FeatureExtractor(params["params_fe"])
