@@ -294,7 +294,7 @@ class Dataset(object):
         # filtdict = {"traintest":traintest, "random_task":random_task}
 
         _checkPandasIndices(self.Dat)
-        print(f"Original length: {len(self.Dat)}")
+        # print(f"Original length: {len(self.Dat)}")
         if return_ver=="indices":
             return filterPandas(self.Dat, filtdict, return_indices=True)
         elif return_ver=="modify":
@@ -916,7 +916,6 @@ class Dataset(object):
         r = "_".join(self.rules())
 
         return f"{a}_{e}_{r}"
-# se
 
 
 
@@ -2675,7 +2674,7 @@ class Dataset(object):
 
             # Put origin in the first p for each parse.
             origin = self.Dat.iloc[indtrial]["origin"]
-            for list_p in list_list_parses[-1]:
+            for list_p in list_list_parses[-1]: # this trial
                 list_p[0]["origin"] = origin
 
         self.Dat["parses_behmod"] = list_list_parses
@@ -3229,6 +3228,53 @@ class Dataset(object):
         print(feature_list_names)
         
         return feature_list_names
+
+
+    ############# EXTRACT PREPROCESSED STROKES - for subsequent analyses
+    def extractStrokeLists(self, filtdict=None, recenter=False, rescale=False):
+        """ extract preprocessed strokes (task and beh) useful for 
+        computing visual distances
+        INPUT: 
+        - D, Dataset
+        - filtdict
+        --- e.g., F = {"epoch":[1], "taskgroup":["G3"]}
+        OUT:
+        - makes copy of D (note, will not have the interpolated strokes in it)
+        """
+        from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+        # -- preprocess strokes
+        if filtdict:
+            Dthis = self.filterPandas(filtdict, "dataset")
+        else:
+            Dthis = self.copy()
+
+        # ---- recenter
+        params =[]
+        if recenter:
+            params.append("recenter")
+        if rescale:
+            params.append("rescale_to_1")
+        if len(params)>0:
+            Dthis.preprocessGood(ver=None, params=params)
+
+        # Pull out dataframe
+        # -- get strokes
+        strokes_beh_list = Dthis.Dat["strokes_beh"].tolist()
+        strokes_task_list = Dthis.Dat["strokes_task"].tolist()
+
+        # ---- interpolate once
+        def dfunc(strokes_beh, strokes_task):
+            return distscalarStrokes(strokes_beh, strokes_task, "position_hd_soft", 
+                                     do_spatial_interpolate=True, do_spatial_interpolate_interval = 10,
+                                        return_strokes_only=True)
+        S = [dfunc(sb, st) for sb, st in zip(strokes_beh_list, strokes_task_list)]
+        
+        # break out
+        strokes_beh_list = [SS[0] for SS in S]
+        strokes_task_list = [SS[1] for SS in S]
+        
+        return strokes_beh_list, strokes_task_list, Dthis    
 
     ############# DAT dataframe manipualtions
     def grouping_append_col(self, grp_by, new_col_name):
