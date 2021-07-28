@@ -252,7 +252,7 @@ if __name__=="__main__":
     animal = "Red"
     expt = "lines5"
     # rule_list = ["straight", "bent"]
-    rule_list = ["straight"]
+    rule_list = ["bent"]
     LOAD_ALL_PARSES = True
     ONLY_SUMMARY_DATES = True
 
@@ -263,7 +263,8 @@ if __name__=="__main__":
     #                     "mix_features_b", "mix_features_d", "mix_features_n", "mkvsmk", "lines5"]
     # list_model_class = ["mix_features_bd", "mix_features_dn", "mix_features_d", "mkvsmk"]
     # list_model_class = ["mix_features_bd", "mkvsmk"]
-    list_model_class = ["mix_features_tbnd", "mix_features_bnd", "mix_features_tnd", "mix_features_tbd"]
+    # list_model_class = ["mix_features_tbnd", "mix_features_bnd", "mix_features_tnd", "mix_features_tbd"]
+    list_model_class = ["mix_features_td", "mix_features_bd", "mix_features_nd"]
 
     # LOAD ALL DATASETS
     Dlist  = []
