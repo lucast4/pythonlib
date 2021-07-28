@@ -140,9 +140,11 @@ def df2dict(df):
     return df.to_dict("records")
 
 
-def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True):
+def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True, just_return_newcol=False):
     """F is applied to each row. is appended to original dataframe. F(x) must take in x, a row object
     - validates that the output will be identically indexed rel input.
+    INPUT:
+    - just_return_newcol, then returns single column without merging with df.
     """
     # To debug:
     # def F(x):
@@ -158,6 +160,7 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True):
     # dfout = df.merge(dfnewcol, left_index=True, right_index=True).rename(columns={0:newcolname})
 
     # GET NEW SERIES
+    assert len(df)>0, "empty dataframe"
     dfnewcol = df.apply(F, axis=1).rename(newcolname) # rename, since series must be named.
 
     # DO MERGE
@@ -180,6 +183,9 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True):
 
     # dfout = df.merge(dfnewcol, how="left", left_index=True, right_index=True)
     # _checkDataframesMatch(df, dfnewcol)
+
+    if just_return_newcol:
+        return dfnewcol
 
     dfout = dfthis.merge(dfnewcol, how="left", left_index=True, right_index=True, validate="one_to_one")
 
@@ -359,8 +365,16 @@ def filterPandas(df, filtdict, return_indices=False):
         # print(k)
         # print(v)
 #         print(df[k].isin(v))
-        df = df[df[k].isin(v)]
-        # print(len(df))
+        if len(df)>0:
+            if isinstance(v[0], np.ndarray) or isinstance(df[k].values[0], np.ndarray):
+                from .nptools import isin_close
+                def _F(x):
+                    return isin_close(x[k], v)
+                trues = applyFunctionToAllRows(df, _F, just_return_newcol=True)
+            else:
+                trues = df[k].isin(v)
+            df = df[trues]
+            # print(len(df))
     if return_indices:
         return list(df.index)
     else:

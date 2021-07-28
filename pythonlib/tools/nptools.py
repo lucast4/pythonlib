@@ -45,3 +45,10 @@ def sortPop(X, dim, filt):
     # 3) return axes to original position
     Xcopy = np.moveaxis(Xcopy, 0, dim)
     return Xcopy   
+
+
+def isin_close(a, v):
+    """ returns True if a (number) is in v (vector) allowing
+    for tolerace. essentially a for loop using np.isclose
+    """
+    return np.any([np.isclose(a, b) for b in v])

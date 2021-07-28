@@ -41,18 +41,39 @@ def relplotOverlaid(df, line_category, color, **relplotkwargs):
     output per facet, or hue, etc, or they will be different colors if
     use hue=line_category. Here can make all the same color. 
     """
+    # print(relplotkwargs)
+    # assert False
     catlist = set(df[line_category])
     palette = {n:color for n in catlist}
     relplotkwargs["legend"]= False # since all same color, legend is useulse..
     relplotkwargs["palette"]= palette
+    relplotkwargs["data"] = df
     return sns.relplot(**relplotkwargs)
 
 
-def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=None):
-    g = sns.FacetGrid(data, row="block", sharex=True, sharey=True, height=3, aspect=3,
+def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=None,
+    height=3, aspect=3):
+    """
+    row="block"
+    """
+
+    # g = sns.FacetGrid(data, row=row, sharex=True, sharey=True, height=3, aspect=3,
+    #                  legend_out=True)
+    g = sns.FacetGrid(data, row=row, hue=hue, sharex=True, sharey=True, height=height, aspect=aspect,
                      legend_out=True)
-    g = g.map(sns.scatterplot, x, y, hue, palette=palette)
-    g = g.map(sns.lineplot, x, y, hue, palette=palette, legend="full")
+
+    catlist = set(data[hue])
+    palette = {n:"k" for n in catlist}
+
+    # print(x)
+    # print(y)
+    # print(hue)
+    # print(palette)
+    # assert False
+    # g = g.map(sns.scatterplot, x, y, hue=hue, palette=palette)
+    # g = g.map(sns.lineplot, x, y, hue=hue, palette=palette, legend="full")
+    g = g.map(sns.scatterplot, x, y, palette=palette)
+    g = g.map(sns.lineplot, x, y,  palette=palette, legend="full")
     return g
 
 
