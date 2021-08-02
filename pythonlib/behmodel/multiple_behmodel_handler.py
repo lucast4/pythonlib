@@ -22,6 +22,9 @@ class MultBehModelHandler(object):
 
         self.ListMclass = []
 
+        self.DictTestDH = {}
+        self.DictTestD = {}
+
     def load_untrained_models(self, Dlist, model_class, list_rules):
         """ Load a set of models, all of same class (model_class)
         but can be multiple rules.
@@ -50,24 +53,44 @@ class MultBehModelHandler(object):
         print("rules:", self.DictMrule)
         print("extracted trained models: ", self.DictTrainedH)
 
-    def load_pretrained_models(self, SDIR, list_mclass, list_mrule):
+    def load_pretrained_models(self, SDIR, list_mclass=None, list_mrule=None, delete_saved_D=True):
         """ 
         Will append loaded models every time load. (Wil overwrite, if these models
         have already prevlsioly loaded)
         """
+        from pythonlib.tools.expttools import findPath, extractStrFromFname
 
-        train_or_test = "train"
+        list_path = findPath(SDIR, [],"BHM_SAVEDICT", return_without_fname=False)
+        list_traintest = [extractStrFromFname(path, "-", 3) for path in list_path]
+        list_traintest = sorted(list(set(list_traintest)))
+        assert len(list_traintest)==1 and list_traintest[0] == "train", "not fit to training tasks?"
+        train_or_test = list_traintest[0]
+
+        if list_mclass is None:
+            # search for path
+            list_mclass = [extractStrFromFname(path, "-", 1) for path in list_path]
+            list_mclass =sorted(list(set(list_mclass)))
+            print("AUTO got this list_mclass: ", list_mclass)
+        if list_mrule is None:
+            list_mrule = [extractStrFromFname(path, "-", 2) for path in list_path]
+            list_mrule =sorted(list(set(list_mrule)))
+            print("AUTO got this list_mrule: ", list_mrule)
 
         ## First, reload pre-saved models
         for model_class in list_mclass:
             for mrule in list_mrule:
-                ListBMH, list_dsets, ListH = bmh_load(SDIR, model_class, [mrule], train_or_test)
+                ListBMH, _, _ = bmh_load(SDIR, model_class, [mrule], train_or_test)
                 # Convert ListBMH to DictBMH
                 for L in ListBMH:
                     model_rule = L["id_mod"]
                     key = (model_class, model_rule)
+                    if delete_saved_D:
+                        # Delete dataset
+                        del L["D"]
+                        L["H"].D = None
                     self.DictTrainedH[key] = L["H"]
                     self.DictTrainedBMH[key] = L
+
                     print("-- GOT THIS PRETRAINED MODEL: ", model_class, model_rule)
 
         # save
@@ -118,20 +141,23 @@ class MultBehModelHandler(object):
         self.Dtest_SameDset = D
 
 
-    def apply_models_to_mult_new_dataset(self, Dlist):
+    def apply_models_to_mult_new_dataset(self, Dlist, list_mclass=None):
         """ applies pretrained models to multiple new dataset D.
         IN: 
         - D, a single dataset. holding multiple epochs for exampkle, if want to apply all models to all epochs data
+        - list_mclass, which model classes to run. i..e, this takes mclasses that are defined in Training, and 
+        converst to test. If None, then runs all.
         OUT:
         - Modifies self, to add self.DictTestH_SameDset
         """
-        self.DictTestDH = {}
-        self.DictTestD = {}
+
+        if list_mclass is None:
+            list_mclass = self.ListMclass
 
         for D in Dlist:
             d_id = D.identifier_string()
             DlistThis = [D]
-            for mclass in self.ListMclass:
+            for mclass in list_mclass:
                 list_mrule = self.DictMrule[mclass]
                 print(DlistThis)
                 print(mclass)
@@ -161,13 +187,39 @@ class MultBehModelHandler(object):
                 }
             self.DictTestD[d_id] = D
 
-        self.initialize_colnames()
+        # update all modellists
+        self._update_test_models()
 
-        # get difference of scores
-        self.dataset_get_diffs()
+        self.dataset_assign_all()
+
+    def dataset_assign_all(self):
+        # Assign scores to Dat
+        for key, DH in self.DictTestDH.items():
+            mclass = key[1]
+            DH["H"].results_to_dataset(mclass)
+        self._initialize_colnames()
+        self._dataset_get_diffs()
+
+    def _update_test_models(self):
+        # Repopulate MBH_load.ListMclass
+
+        self.ListMclass = []
+        for k, v in self.DictTestDH.items():
+            self.ListMclass.append(k[1])
+        self.ListMclass = sorted(list(set(self.ListMclass)))
+
+        # Extract rules
+        for mclass in self.ListMclass:
+            list_mrule = sorted(set([mrule for H in self.list_H(mclass) for mrule in H.ListModelsIDs]))
+            self.DictMrule[mclass] = list_mrule
+
+    def print_summary(self):
+        print("APPLIED TO TEST DATA:")
+        print("self.ListMclass:", self.ListMclass)
+        print("self.DictMrule:", self.DictMrule)
 
 
-    def initialize_colnames(self):
+    def _initialize_colnames(self):
         """ assumes that each class has same set of rules..
         """
         from pythonlib.dataset.beh_model_comparison import ColNames
@@ -175,7 +227,7 @@ class MultBehModelHandler(object):
         self.ColNames = CN
 
 
-    def dataset_get_diffs(self):
+    def _dataset_get_diffs(self):
         """ get all score diffs"
         """
         for D in self.list_D():

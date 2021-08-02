@@ -16,7 +16,7 @@ class BehModelHandler(object):
         self.LikelisLogProbs = None
         self.Posteriors = None
         self.ParamsInputHelper = None
-
+        self.D = None
 
         self.ParsesVer = "parses_behmod" # where to look to extract list_parses
 
@@ -442,10 +442,11 @@ class BehModelHandler(object):
 
     def params_dset(self, get_dataset=False):
         out = {}
-        out["dset_id"] = self.D.identifier_string()
-        out["dset_trialcodes"] = self.D.Dat["trialcode"].to_list()
-        if get_dataset:
-            out["dset"] = self.D
+        if self.D is not None:
+            out["dset_id"] = self.D.identifier_string()
+            out["dset_trialcodes"] = self.D.Dat["trialcode"].to_list()
+            if get_dataset:
+                out["dset"] = self.D
         return out
 
     def params_model(self):
@@ -851,7 +852,8 @@ class BehModelHandler(object):
         # inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by)[2]
         # self.plot_parses_trial(indtrial, inds_parses[::-1][:8])
 
-    def plot_parses_ordered(self, indtrial, modelname=None, Nplot = 8, plot_beh_task=True, plots=["prior", "likeli"]):
+    def plot_parses_ordered(self, indtrial, modelname=None, Nplot = 8, plot_beh_task=True, 
+        plots=["prior", "likeli"]):
         """ 
         plot top N ordered by prior, likeli, and post
         If modelname is None, then plots all

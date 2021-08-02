@@ -263,6 +263,25 @@ class Dataset(object):
                 outs.append(v["metadat_probedat"]["finalized"])
         return all(outs)
 
+    def is_equal_to(self, other):
+        """ return True if self is equal to other, by passing certain diagnostics.
+        Is not fool-proof, but works for things that matter.
+        Checks:
+        - id string
+        - trialcodes match
+        - columns match.
+        """
+
+        if self.identifier_string() != other.identifier_string():
+            return False
+        if not all(self.Dat.columns == other.Dat.columns):
+            return False
+        if not all(self.Dat["trialcode"] == self.Dat["trialcode"]):
+            return False
+
+        return True
+
+
 
     def filterByTask(self, filtdict, kind="any_shape_in_range", return_ver="dataset"):
         """ uses method in TaskGeneral class. 
