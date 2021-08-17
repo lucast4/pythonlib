@@ -232,10 +232,12 @@ class BehModelHandler(object):
                 self.PriorProbs[name].append(probs)
 
 
-    def compute_store_priorprobs_vectorized(self, force_run=False):
+    def compute_store_priorprobs_vectorized(self, force_run=False, just_sanity_check=False):
         """ 
         - Assumes that prior scorer takes in list of parses as an argument.
         this way can vectorize computation over all rows of Dat
+        INPUTS:
+        - just_sanity_check, then will run and return without modifying anything in self.
         NOTE:
         This seems to be about 4-5x faster than compute_store_priorprobs, on datsaet
         with about 250 rows (trials) and about 20-100 parses each.
@@ -244,15 +246,12 @@ class BehModelHandler(object):
         """
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-        if self.PriorLogProbs is not None and force_run==False:
-            print("skipping prior compute, since already done")
-            return
+        
 
-        self.PriorLogProbs = {}
-        self.PriorProbs = {}
 
-        for name, Mod in self.DictModels.items():
-            
+        def _extract_probs(Mod):
+            """ returns list of probs for this Mod
+            """
             if Mod._list_input_args_prior[0]=="parsesflat":
                 print("logprobs, getting vectorized across all trials", name)
                 assert Mod._list_input_args_prior[0]=="parsesflat", "vectorized means need list parses as first argument."
@@ -267,17 +266,68 @@ class BehModelHandler(object):
                     logprobs = Mod.Prior.score_and_norm(*args)
                     return logprobs
                 dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
-                self.PriorLogProbs[name] = dfthis["priorprobs"].to_list()
+                list_probs = dfthis["priorprobs"].to_list()
             else:
                 # old version, not vecotorized
                 print("Cant do vectorized priors - will be slower.")
-                self.PriorLogProbs[name] = []
+                list_probs = []
                 for indtrial in range(len(self.D.Dat)):
                     if indtrial%50==0:
                         print("priors", name, indtrial)
                     logprobs = self._score_helper("prior", name, indtrial)
                     # probs = Mod.Prior.score_and_norm(self.D, indtrial)
-                    self.PriorLogProbs[name].append(logprobs)
+                    list_probs.append(logprobs)
+            return list_probs
+
+
+        if just_sanity_check:
+            PriorProbsCheck = {}
+            for name, Mod in self.DictModels.items():
+
+                list_probs = _extract_probs(Mod)
+                # self.PriorLogProbs[name] = []
+                PriorProbsCheck[name] = list_probs
+            return PriorProbsCheck
+
+
+        if self.PriorLogProbs is not None and force_run==False:
+            print("skipping prior compute, since already done")
+            return
+
+        self.PriorLogProbs = {}
+        self.PriorProbs = {}
+        
+        for name, Mod in self.DictModels.items():
+
+            # if Mod._list_input_args_prior[0]=="parsesflat":
+            #     print("logprobs, getting vectorized across all trials", name)
+            #     assert Mod._list_input_args_prior[0]=="parsesflat", "vectorized means need list parses as first argument."
+            #     def F(x):
+            #         if Mod._list_input_args_prior==("parsesflat", "trialcode", "modelname"):
+            #             args = (x["parses_behmod"], x["trialcode"], name)
+            #         elif Mod._list_input_args_prior==("parsesflat", "trialcode"):
+            #             args = (x["parses_behmod"], x["trialcode"])
+            #         else:
+            #             print(Mod._list_input_args_prior)
+            #             assert False
+            #         logprobs = Mod.Prior.score_and_norm(*args)
+            #         return logprobs
+            #     dfthis = applyFunctionToAllRows(self.D.Dat, F, "priorprobs")
+            #     list_probs = dfthis["priorprobs"].to_list()
+            # else:
+            #     # old version, not vecotorized
+            #     print("Cant do vectorized priors - will be slower.")
+            #     list_probs = []
+            #     for indtrial in range(len(self.D.Dat)):
+            #         if indtrial%50==0:
+            #             print("priors", name, indtrial)
+            #         logprobs = self._score_helper("prior", name, indtrial)
+            #         # probs = Mod.Prior.score_and_norm(self.D, indtrial)
+            #         list_probs.append(logprobs)
+
+            list_probs = _extract_probs(Mod)
+            # self.PriorLogProbs[name] = []
+            self.PriorLogProbs[name] = list_probs
 
             # convert to probs
             if False:
@@ -749,7 +799,15 @@ class BehModelHandler(object):
             ## -- Plot the actual behavior on this trial
             # self.D.plotMultTrials([indtrial], which_strokes="strokes_beh")
             # self.D.plotMultTrials([indtrial], which_strokes="strokes_task")
-            self.D.plotSingleTrial(indtrial)
+            fig = self.D.plotSingleTrial(indtrial)
+            
+            # add posetiro scores
+            tmp = ""
+            for name in self.ListModelsIDs:
+                p = self.Posteriors[name][indtrial]
+                tmp += f"{name}_{p:.3f}"
+            fig.suptitle(tmp)
+
 
         list_of_parsestrokes = self.extract_list_parsesstrokes(indtrial, modelname=modelname)
         
@@ -767,7 +825,8 @@ class BehModelHandler(object):
 
         ## -- Plot trials, sorted by their scores
         liststrokes = [list_of_parsestrokes[i] for i in list_indparses]
-        self.plotMultStrokes(liststrokes, titles=titles, titles_on_y=not abbrev)
+        fig = self.plotMultStrokes(liststrokes, titles=titles, titles_on_y=not abbrev)
+        return fig
 
     ####### OVERVIEW PLOTS
     def plot_prior_likeli_sorted(self, modelname, indtrial, sort_by, title=None):
@@ -790,6 +849,8 @@ class BehModelHandler(object):
         ax2 = ax.twinx()
         ax2.plot(x, likelis, "-or", label="likeli")
         ax2.set_ylabel("rd=likeli")
+
+        return fig
 
     def plot_overview_trial(self, modelname, indtrial):
         """ 
@@ -853,7 +914,7 @@ class BehModelHandler(object):
         # self.plot_parses_trial(indtrial, inds_parses[::-1][:8])
 
     def plot_parses_ordered(self, indtrial, modelname=None, Nplot = 8, plot_beh_task=True, 
-        plots=["prior", "likeli"]):
+        plots=["prior", "likeli"], title=None):
         """ 
         plot top N ordered by prior, likeli, and post
         If modelname is None, then plots all
@@ -868,7 +929,9 @@ class BehModelHandler(object):
         pbh = plot_beh_task
         for this in plots:
             inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=this)[2]
-            self.plot_parses_trial(indtrial, inds_parses[::-1][:Nplot], modelname=modelname, plot_beh_task=plot_beh_task)
+            fig = self.plot_parses_trial(indtrial, inds_parses[::-1][:Nplot], modelname=modelname, plot_beh_task=pbh)
+            if title is not None:
+                fig.suptitle(f"{title}-{this}")
             pbh = False
         # if "likeli" in plots:
         #     sort_by = "likeli"
@@ -877,6 +940,28 @@ class BehModelHandler(object):
         # sort_by = "poster"
         # inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by)[2]
         # self.plot_parses_trial(indtrial, inds_parses[::-1][:Nplot])
+
+    def print_overview_params(self):
+        """ Print params for all models
+        """
+
+        try:
+            modelclass = self.ParamsInputHelper["modelclass"]
+        except Exception as err:
+            modelclass = ""
+
+        # Prior
+        for mod in self.ListModelsIDs:
+            print(" ")
+            prms = self.params_prior(mod)
+            print("*", modelclass, mod)
+            for k, v in prms.items():
+                if isinstance(v, dict):
+                    print("**", k)
+                    for kk, vv in v.items():
+                        print("***", kk, vv)
+                else:
+                    print("**", k, v)
 
     def plot_overview_results(self, modelname):
         """
