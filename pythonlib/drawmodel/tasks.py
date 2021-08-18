@@ -111,91 +111,95 @@ class TaskClass(object):
 
         task = self.Task
 
-        if "constraints_to_skip" not in task.keys():
-            # then this was when I used general version in block params
-            if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
-                co = ""
-            else:
-                co = getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]["constraints_to_skip"]
-        else:
-            co = task["constraints_to_skip"]
+        probe = get_task_probe_info(task)
 
-        if "TaskNew" not in task.keys():
-            p = 0
-            saved_setnum = []
-        else:
-            try:
-                if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
-                    p = 0
-                else:
-                    p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
-            except Exception as err:
-                print(err)
-                print(task)
-                print(task['TaskNew'])
-                print("This is old task version. how to handle?")
-                assert False
+        probe["stage"] = self.Task["stage"]
+        
+        # if "constraints_to_skip" not in task.keys():
+        #     # then this was when I used general version in block params
+        #     if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
+        #         co = ""
+        #     else:
+        #         co = getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]["constraints_to_skip"]
+        # else:
+        #     co = task["constraints_to_skip"]
 
-            if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
-                if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
-                    saved_setnum = None
-                else:    
-                    saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
-            else:
-                saved_setnum = None
+        # if "TaskNew" not in task.keys():
+        #     p = 0
+        #     saved_setnum = []
+        # else:
+        #     try:
+        #         if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
+        #             p = 0
+        #         else:
+        #             p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
+        #     except Exception as err:
+        #         print(err)
+        #         print(task)
+        #         print(task['TaskNew'])
+        #         print("This is old task version. how to handle?")
+        #         assert False
 
-        # was this resynthesized?
-        resynthesized = 0
-        rpath = None
-        rtrial = None
-        rsetnum = None
-        rsetname = None
-        if "savedTaskSet" in task.keys():
-            if len(task["savedTaskSet"])>0:
-                if task["savedTaskSet"]["reloaded"][0][0]==1:
-                    resynthesized = 1
-                    rpath = task["savedTaskSet"]["path"]
-                    rtrial = int(task["savedTaskSet"]["trial"][0][0])
+        #     if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
+        #         if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
+        #             saved_setnum = None
+        #         else:    
+        #             saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
+        #     else:
+        #         saved_setnum = None
 
-                    idx = task["savedTaskSet"]["path"].find("set")
-                    rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
-                    rsetname = task["savedTaskSet"]["path"][:idx-1]
-        else:
-            resynthesized = 0
-            rpath = None
-            rtrial = None
-            rsetnum = None
-            rsetname = None
+        # # was this resynthesized?
+        # resynthesized = 0
+        # rpath = None
+        # rtrial = None
+        # rsetnum = None
+        # rsetname = None
+        # if "savedTaskSet" in task.keys():
+        #     if len(task["savedTaskSet"])>0:
+        #         if task["savedTaskSet"]["reloaded"][0][0]==1:
+        #             resynthesized = 1
+        #             rpath = task["savedTaskSet"]["path"]
+        #             rtrial = int(task["savedTaskSet"]["trial"][0][0])
+
+        #             idx = task["savedTaskSet"]["path"].find("set")
+        #             rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
+        #             rsetname = task["savedTaskSet"]["path"][:idx-1]
+        # else:
+        #     resynthesized = 0
+        #     rpath = None
+        #     rtrial = None
+        #     rsetnum = None
+        #     rsetname = None
 
 
-        if "feedback_ver_prms" not in task.keys():
-            fp = None
-        else:
-            fp = task["feedback_ver_prms"]
+        # if "feedback_ver_prms" not in task.keys():
+        #     fp = None
+        # else:
+        #     fp = task["feedback_ver_prms"]
 
-        # === get task number.
-        # This identifies task if is prototype or savedsetnum.
-        # This may not identify, if is random task, or resynthesized task.
-        taskcat = task["TaskNew"]["Task"]["stage"]
-        taskstr = task["TaskNew"]["Task"]["str"]
-        idx = taskstr.find(taskcat)
-        tasknum = int(taskstr[idx+len(taskcat)+1:])
+        # # === get task number.
+        # # This identifies task if is prototype or savedsetnum.
+        # # This may not identify, if is random task, or resynthesized task.
+        # taskcat = task["TaskNew"]["Task"]["stage"]
+        # taskstr = task["TaskNew"]["Task"]["str"]
+        # idx = taskstr.find(taskcat)
+        # tasknum = int(taskstr[idx+len(taskcat)+1:])
 
-        probe = {
-            "probe":task["probe"][0][0], 
-            "feedback_ver":task["feedback_ver"], 
-            "feedback_ver_prms":fp,
-            "constraints_to_skip":co, 
-            "prototype":p,
-            "saved_setnum":saved_setnum,
-            "tasknum":tasknum, 
-            "resynthesized":resynthesized, 
-            "resynthesized_path":rpath, 
-            "resynthesized_trial":rtrial, 
-            "resynthesized_setnum":rsetnum, 
-            "resynthesized_setname":rsetname, 
-            "stage":self.Task["stage"]
-            }
+        # probe = {
+        #     "probe":task["probe"][0][0], 
+        #     "feedback_ver":task["feedback_ver"], 
+        #     "feedback_ver_prms":fp,
+        #     "constraints_to_skip":co, 
+        #     "prototype":p,
+        #     "saved_setnum":saved_setnum,
+        #     "tasknum":tasknum, 
+        #     "resynthesized":resynthesized, 
+        #     "resynthesized_path":rpath, 
+        #     "resynthesized_trial":rtrial, 
+        #     "resynthesized_setnum":rsetnum, 
+        #     "resynthesized_setname":rsetname, 
+        #     "stage":self.Task["stage"]
+        #     }
         return probe
     
     def info_generate_unique_name(self, strokes=None, nhash = 6):
@@ -1175,3 +1179,135 @@ def task2parses(task, model):
             "order":orders,
             })
     return parses
+
+
+def get_task_probe_info(task):
+    """
+    task is not class, is dict from ml2.
+    Replaces getTrialsTaskProbeInfo in drawmonkey.utils, since this is used both here (pythonlib)
+    and there.
+    NOTE:
+    part of this will not work for old tasks (long time ago) since needs getTrialsBlockParamsHotkeyUpdated.
+    See below. If needed, import that 
+    """
+
+    if "constraints_to_skip" not in task.keys():
+        # Just putting None, since I don't use this ever (only used a long time ago, and those
+        # cases I am not analyzing using Dataset). See drawmonkey.utils.getTrialsTaskProbeInfo if 
+        # want to extract this.
+        co = None
+        # # then this was when I used general version in block params
+        # assert False, "need to bring in getTrialsBlockParamsHotkeyUpdated somehow"
+        # if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
+        #     co = ""
+        # else:
+        #     co = getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]["constraints_to_skip"]
+    else:
+        co = task["constraints_to_skip"]
+
+    if "TaskNew" not in task.keys():
+        p = 0
+        saved_setnum = []
+    else:
+        try:
+            if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
+                p = 0
+            else:
+                p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
+        except Exception as err:
+            print(err)
+            print(task)
+            print(task['TaskNew'])
+            print("This is old task version. how to handle?")
+            assert False
+
+        if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
+            if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
+                saved_setnum = None
+            else:    
+                saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
+        else:
+            saved_setnum = None
+
+    # was this resynthesized?
+    resynthesized = 0
+    rpath = None
+    rtrial = None
+    rsetnum = None
+    rsetname = None
+    if "savedTaskSet" in task.keys():
+        if len(task["savedTaskSet"])>0:
+            if task["savedTaskSet"]["reloaded"][0][0]==1:
+                resynthesized = 1
+                rpath = task["savedTaskSet"]["path"]
+                rtrial = int(task["savedTaskSet"]["trial"][0][0])
+
+                idx = task["savedTaskSet"]["path"].find("set")
+                rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
+                rsetname = task["savedTaskSet"]["path"][:idx-1]
+    else:
+        resynthesized = 0
+        rpath = None
+        rtrial = None
+        rsetnum = None
+        rsetname = None
+
+
+    if "feedback_ver_prms" not in task.keys():
+        fp = None
+    else:
+        fp = task["feedback_ver_prms"]
+
+    # === get task number.
+    # This identifies task if is prototype or savedsetnum.
+    # This may not identify, if is random task, or resynthesized task.
+    taskcat = task["TaskNew"]["Task"]["stage"]
+    taskstr = task["TaskNew"]["Task"]["str"]
+    idx = taskstr.find(taskcat)
+    if idx<0:
+        # COuld be because is hybrid
+        idxthis = taskcat.find("-")
+        if idxthis>0:
+            # taskcat = <cat1>-<cat2>
+            # taskstr = <cat1>_num1-<cat2>_num2
+            assert len([x for x in taskcat if x=="-"])==1, "multiple hyphens..."
+
+            cat1 = taskcat[:idxthis]
+            cat2 = taskcat[idxthis+1:]
+
+            idxhyphen = taskstr.find("-")
+            assert len([x for x in taskstr if x=="-"])==1, "multiple hyphens..."
+
+            num1 = taskstr[len(cat1)+1:idxhyphen]
+            num2 = taskstr[idxhyphen+len(cat2)+2:]
+
+            # new num is just concatenate these nums
+            tasknum = int(num1 + num2)
+
+            # print(taskcat, taskstr, cat1, cat2, num1, num2, tasknum)
+            # assert False
+
+        else:
+            print(taskstr)
+            print(taskcat)
+            print(idx)
+            assert False, "tascat not in taskstr"
+    else:
+        # then is good
+        tasknum = int(taskstr[idx+len(taskcat)+1:])
+
+    probe = {
+        "probe":task["probe"][0][0], 
+        "feedback_ver":task["feedback_ver"], 
+        "feedback_ver_prms":fp,
+        "constraints_to_skip":co, 
+        "prototype":p,
+        "saved_setnum":saved_setnum,
+        "tasknum":tasknum, 
+        "resynthesized":resynthesized, 
+        "resynthesized_path":rpath, 
+        "resynthesized_trial":rtrial, 
+        "resynthesized_setnum":rsetnum, 
+        "resynthesized_setname":rsetname, 
+        "stage":self.Task["stage"]
+        }
