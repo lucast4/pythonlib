@@ -511,7 +511,7 @@ def diff5pt(x, h=1):
     
     if isinstance(x, list):
         x = np.array(x)
-        
+
     if False:
         # doesnt work well - large discontnuities at edges.
         x = np.concatenate([x[0, None], x[0, None], x, x[-1, None], x[-1, None]])
@@ -521,7 +521,6 @@ def diff5pt(x, h=1):
                 x[0, None]+(x[0]-x[1]), 
                 x, 
                 x[-1, None]+(x[-1]-x[-2])])
-
 
     return (-x[4:] + 8*x[3:-1] - 8*x[1:-3] + x[:-4])/(12*h)
 
@@ -564,10 +563,12 @@ def strokesDiffsBtwPts(strokes):
     , but using  diff5pt (i./.e, like np.diff)"""
     from pythonlib.tools.stroketools import diff5pt
     def _diff(strok):
+        if len(strok)<2:
+            # then cant' do this
+            assert False, "need at least 2 pts"
         x = diff5pt(strok[:,0]).reshape(-1,1)
         y = diff5pt(strok[:,1]).reshape(-1,1)
         return np.concatenate([x, y], axis=1)
-        
     return [_diff(strok) for strok in strokes]
 
 
