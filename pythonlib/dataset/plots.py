@@ -109,7 +109,7 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
 
 
 def plot_beh_grid_singletask_alltrials(D, task, row_variable, row_levels=None, plotkwargs = {},
-    plotfuncbeh=None):
+    plotfuncbeh=None, max_cols = 40, max_rows = 40):
     """ given a singel task, plots all trials in df in a grid, where rows split into row_levels (grouped by row_variable)
     and columns are trials, in order encountered in df.
     INPUTS:
@@ -143,7 +143,8 @@ def plot_beh_grid_singletask_alltrials(D, task, row_variable, row_levels=None, p
     # dfplot = pd.concat(out)
 
     # PLOT
-    figb, figt = plot_dat_grid_inputrowscols(dfplot, row_labels=row_levels, plotfuncbeh=None, **plotkwargs)
+    figb, figt = plot_dat_grid_inputrowscols(dfplot, row_labels=row_levels, plotfuncbeh=None, 
+        max_cols = max_cols, max_rows = max_rows, **plotkwargs)
 
     return figb, figt
 

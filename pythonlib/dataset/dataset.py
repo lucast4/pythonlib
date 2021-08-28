@@ -3465,6 +3465,9 @@ class Dataset(object):
         from ..drawmodel.strokePlots import plotDatStrokes
         import random
 
+        if len(idxs)==0:
+            return
+
         if isinstance(idxs, int):
             N = len(self.Dat)
             k = idxs
@@ -3853,6 +3856,31 @@ class Dataset(object):
                 _check_task_sequences(self, task, unique=False)
 
             
+    def analy_reassign_monkeytraintest(self, key, list_train, list_test, list_other=[]):
+        """ redefine monkey train test based on value in column "key".
+        if a row[key] is in list_train, then is train, etc.
+        - enforces that list_train and list_test no overlap.
+        - enforces that each row will have an assignment.
+        """
+
+        # Make sure no common items
+        assert len([x for x in list_train if x in list_test])==0
+        assert len([x for x in list_train if x in list_other])==0
+        
+        def func(x):
+            if x[key] in list_train:
+                return "train"
+            elif x[key] in list_test:
+                return "test"
+            elif x[key] in list_other:
+                return "other"
+            else:
+                print(x)
+                assert False
+
+        self.Dat = applyFunctionToAllRows(self.Dat, func, "monkey_train_or_test")
+        print(self.Dat["monkey_train_or_test"].value_counts())
+
 
 
 

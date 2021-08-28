@@ -111,6 +111,14 @@ def _groupingParams(D, expt):
         features_to_remove_outliers = []
         grouping_levels = ["straight", "bent"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]        
+    elif expt == "gridlinecircle":
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["baseline", "linetocircle", "circletoline"]
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
     else:
         print(expt)
         assert False
@@ -716,4 +724,3 @@ def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
         inds_remove = [i for i in range(len(D.Dat)) if remove(D, i)]
         D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
         
-    

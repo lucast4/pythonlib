@@ -114,7 +114,7 @@ class TaskClass(object):
         probe = get_task_probe_info(task)
 
         probe["stage"] = self.Task["stage"]
-        
+
         # if "constraints_to_skip" not in task.keys():
         #     # then this was when I used general version in block params
         #     if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
@@ -492,8 +492,8 @@ class TaskClass(object):
         # V1: based on saved Objects
         if "Objects" in T.keys():
             # New version, like 6/2021 
-            shapes = T["Objects"]["Features"]["shapes"] # dict
-            shapes = self._program_line_dict2list(shapes)
+            shapes1 = T["Objects"]["Features"]["shapes"] # dict
+            shapes1 = self._program_line_dict2list(shapes1)
 
         # V2: if this is "mixture2" task, then the mixture2 params
         Task = T["Task"]
@@ -510,7 +510,12 @@ class TaskClass(object):
         self.program_extract()
         Objects = []
         for i in range(len(self.Program)):
-            Objects.append(self.program_interpret_subprog(i, fail_if_no_match=fail_if_no_match))
+            out = self.program_interpret_subprog(i, fail_if_no_match=fail_if_no_match)
+            if out["obj"] is None:
+                # replace it with the saved name
+                out["obj"] = shapes1[i]
+                assert len(shapes1)==len(self.Program), "Objects and Program don't match, not sure why"
+            Objects.append(out)
         self.Objects = Objects
 
 
@@ -911,6 +916,9 @@ class TaskClass(object):
         elif len(lines_good)==5 and self.Task["stage"] in ["_zigzag"]:
             lines_obj = lines_good[:4]
             lines_tform = lines_good[4:]
+        elif len(lines_good)==6 and self.Task["stage"] in ["_zigzag2"]:
+            lines_obj = lines_good[:5]
+            lines_tform = lines_good[5:]
         elif len(lines_good)==3 and self.Task["stage"] in ["_triangle1", "_square"]:
             lines_obj = lines_good[:2]
             lines_tform = lines_good[2:]
@@ -933,7 +941,7 @@ class TaskClass(object):
             tform = _compose_transformations(lines_tform)
         else:
             tform = None
-        
+
         # --- Return a dict
         out = {
             "obj":obj,
@@ -1309,5 +1317,6 @@ def get_task_probe_info(task):
         "resynthesized_trial":rtrial, 
         "resynthesized_setnum":rsetnum, 
         "resynthesized_setname":rsetname, 
-        "stage":self.Task["stage"]
         }
+
+    return probe
