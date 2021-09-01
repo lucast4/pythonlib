@@ -466,6 +466,60 @@ def append_col_with_grp_index(df, grp, new_col_name):
     return applyFunctionToAllRows(df, F, new_col_name)    
 
 
+def append_col_after_applying_to_group(df, groupby, cols_to_use, F, newcol):
+    """ F takes in a group (dframe) and outputs a series of same length.
+    appends the combined output to a new col with name newcol.
+    Confirmed that the locations (rows) will be correctly aligned with the original
+    dataframe.
+    - cols_to_use, will pull out datafram df.groupby(groupby)[cols_to_use]. is list. THis
+    goes into F.
+    - F, dataframe --> series (or list)
+    - newcol, name of new column
+    NOTE: is like applyFunctionToAllRows but here applies function taking in a group, not a row.
+    """
+
+    # groupby = "character"
+    # newcol = "test"
+
+    assert isinstance(cols_to_use, list), "so get dataframe out"
+
+    # 1) get the series.
+    df[newcol] = df.groupby(groupby)[cols_to_use].transform(F)
+    # dfnew[newcol] = dfnew[groupby]
+    # del dfnew[groupby]
+    # pd.concat([dfthis, dfnew], axis=1)
+
+    return df
+
+
+def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", randomize=False):
+    """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
+    e.g, if groupby has 2 levels (A and B), then this gives all rows with level A an index.
+    e.g.. like trial numbers for a given condition/task.
+    - randomize, then will randomize the indices (only within trails with same level of groupby)
+    """
+
+    # OLD method - avoid since it mutates
+    # dfthis = D.Dat
+    # def F(x):
+    #     # assign in chron order
+    #     x["test"] = range(len(x))
+    # #     x["test"] = 1
+    #     return x
+        
+    # dfthis = dfthis.groupby("character").apply(F)
+
+    def F(x):
+        # assign in chron order
+        out = list(range(len(x)))
+        if randomize:
+            from random import shuffle
+            shuffle(out)
+        return out
+
+    return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
+
+
 def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False):
     """
     Take a long-form datagrame, and convert into a wide form. 
