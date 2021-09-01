@@ -8,7 +8,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
     col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
-    max_cols = 40, max_rows=40):
+    max_cols = 40, max_rows=40, plot_task=True):
     """ in each grid position, plots a single trial; (e.. strokes)
     df must have two columns, row and col, which indicate where to plot each
     trial.
@@ -34,7 +34,6 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 
     # extract data to plot
     strokeslist = df[strokes_ver].values
-    strokestasklist = df["strokes_task"].values
     rowlist = df["row"].values
     collist = df["col"].values
 
@@ -50,14 +49,76 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
         col_labels = col_labels, row_labels=row_labels)
 
 
-    # plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, naked=True)
-    plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, naked=True)
-    figtask = plotGridWrapper(strokestasklist, plotfunc, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
-        col_labels = col_labels, row_labels=row_labels)
+    # Also plot tasks
+    if plot_task:
+        strokestasklist = df["strokes_task"].values
+        # plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_unordered=True, naked=True)
+        plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, naked=True)
+        figtask = plotGridWrapper(strokestasklist, plotfunc, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
+            col_labels = col_labels, row_labels=row_labels)
+    else:
+        figtask = None    
 
     return figbeh, figtask
 
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
+
+def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
+    max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
+    plotkwargs={}):
+    """ [GOOD] flexible helper, can choose what variable to group by.
+    INPUTS:
+    - row_group and col_group are what variable to group trials by along rows or columns. e..g,
+    row_group = "character" means that each row is a different character. In general, can use anything
+    that is a column in D.Dat and has discrete levels.
+    --- Can also enter:
+    ----- "trial" in which case rows/columns will be separte trials, generally in chron order.
+    ----- "trial_shuffled" shuffles within level. useful if too many trials.
+    - row_levels, col_levels, list of levels, where if None, then will auto get all levels. 
+    """
+
+    dfthis = D.Dat
+
+    def _assign_row_col_inds(dfthis, group, levels, new_col_name, other_group=None):
+        if group in ["trial", "trial_shuffled"]:
+            # then should be trialnum, based on the other group
+            assert other_group is not None
+            from pythonlib.tools.pandastools import append_col_with_index_in_group
+            dfthis = append_col_with_index_in_group(dfthis, other_group, colname = new_col_name,
+                randomize = group=="trial_shuffled")
+            labels = range(0, max(dfthis[new_col_name]))
+        else:
+            if levels is None:
+                levels = sorted(dfthis[group].unique().tolist())
+            map_ = {lev:i for i, lev in enumerate(levels)}
+            def mapper(x):
+                """ x is a df row --> index which row to plot"""
+                return map_[x[group]]
+            dfthis = applyFunctionToAllRows(dfthis, mapper, new_col_name)
+            labels = levels
+        return dfthis, labels
+
+    dfthis, row_labels = _assign_row_col_inds(dfthis, row_group, row_levels, "row", col_group)
+    dfthis, col_labels = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
+
+    # if labels too long, prune
+
+    col_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in col_labels]
+    row_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in row_labels]
+
+    # tasknames too long, so prune for plotting
+    # tasklist_titles = [t[:10] + ".." + t[-5:] for t in tasklist]
+    # Plot
+
+    # col_labels = 
+
+    figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, plotfuncbeh=plotfuncbeh, 
+        col_labels=col_labels, row_labels=row_labels,
+        max_cols=max_cols, max_rows=max_rows, **plotkwargs)
+
+    return figbeh, figtask
+
+
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
     plotfuncbeh=None, max_n_per_grid=1):
     """
@@ -142,6 +203,13 @@ def plot_beh_grid_singletask_alltrials(D, task, row_variable, row_levels=None, p
 
     # dfplot = pd.concat(out)
 
+    if "max_cols" in plotkwargs:
+        max_cols = plotkwargs["max_cols"]
+        del plotkwargs["max_cols"]
+    if "max_rows" in plotkwargs:
+        max_rows = plotkwargs["max_rows"]
+        del plotkwargs["max_rows"]
+
     # PLOT
     figb, figt = plot_dat_grid_inputrowscols(dfplot, row_labels=row_levels, plotfuncbeh=None, 
         max_cols = max_cols, max_rows = max_rows, **plotkwargs)
@@ -208,3 +276,21 @@ def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, d
         figlist.append(fig)
     return figlist
 
+def plot_beh_day_vs_trial(D, prim_list, SAVEDIR, Nmin_toplot=5, max_cols=40):
+    """ Plot raw behavior across days (rows) and trials (columns). 
+    Useful for seeing progression over learning (rows).
+    Each figure a unique scale and orientation
+    INPUT:
+        SAVEDIR, base dir. each prim is a subdir.
+        Nmin_toplot = 5 # only ploit if > this many trials across all days.
+        max_cols = 40 # max to plot in single day
+    """
+    assert False, "see analy/primtiives - port plot to here"
+
+
+def plot_one_trial_per_level(D):
+    """ plot a grid, where each location is one (random) trial for a level that is assigned
+    to that grid loc. levels are levels under one grouping variable.
+    - e.g., one trial per unique task.
+    """
+    assert False, "see analy --> primtives, port here."
