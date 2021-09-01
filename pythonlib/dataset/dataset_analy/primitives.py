@@ -8,7 +8,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-def preprocess(D):
+def preprocess(D, animal, expt):
     """ for preparaing for prim anslsyus.
     """
 
@@ -34,6 +34,57 @@ def preprocess(D):
         
     for ver in ["sx", "sy", "x", "y", "theta"]:
         D.Dat = applyFunctionToAllRows(D.Dat, lambda x:F(x, ver), ver)
+
+
+        # === Remove short strokes
+    if False:
+        # To plot distribution of stroke distances
+        from pythonlib.drawmodel.features import strokeDistances
+
+        strokeDistances(strokes)
+
+        listns = []
+        listdists = []
+        for i in range(len(D.Dat)):
+            strokes = D.Dat.iloc[i]["strokes_beh"]
+            for s in strokes:
+                listns.append(len(s))
+            listdists.extend(strokeDistances(strokes))
+        #         if len(s)<5:
+        #             print(i)
+        #             print(s)
+        #             assert False
+
+        plt.figure()
+        plt.hist(listns, 100)
+        plt.figure()
+        plt.hist(listdists, 100)
+        plt.figure()
+        plt.plot(listns, listdists, "xk")
+
+    THRESH = 10 # min num pts. Remove any trial for which all traj in strokes are shorter than this.
+    def F(x):
+        strokes = x["strokes_beh"]
+        tmp = [len(s)<THRESH for s in strokes]
+        if all(tmp):
+            return True
+        else:
+            return False
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "tmp")
+
+    # Remove all that are true
+    D = D.filterPandas({"tmp":[False]}, "dataset")
+    del D.Dat["tmp"]
+
+
+    # train or test defined by block
+    if expt=="primcat12":
+        # I made this just by looking at the primcat blocksequence code.
+        list_train = [1, 2, 3, 4, 5, 6, 7, 8, 9, 22, 23, 24, 25, 11, 26, 13, 15]
+        list_test = list(range(1, 36+1))
+        list_test = [x for x in list_test if x not in list_train]
+        list_other = [37, 38, 39, 40]
+    D.analy_reassign_monkeytraintest("block", list_train, list_test, list_other)
 
     return D
 
@@ -152,6 +203,7 @@ def plot_all(D, SAVEDIR, animal, expt):
     print(SDIRTHIS)
 
 
+    print("REPLACE THE FOLLOWING WITH code in analy.py")
     list_primtuple, list_days = extract_primtuple_list(D)
 
     # For each primtuple, check if has enough trials early and late
@@ -171,27 +223,6 @@ def plot_all(D, SAVEDIR, animal, expt):
                                             "sy":[primtuple[2]], "theta":[primtuple[3]]})
 
             DictDateInds[_hash(primtuple)][str(day)] = inds
-
-
-    from pythonlib.drawmodel.strokedists import distscalarStrokes, distanceStroksMustBePaired
-    def dfunc(strokes1, strokes2):
-        def _pick_single_strok(strokes):
-            # If strokes is len>1, then returns the longest strok
-            # takes most pts as proxy (not realy longest)
-            if len(strokes)==1:
-                return strokes
-            list_lens = [s.shape[0] for s in strokes]
-            ind = np.argmax(list_lens)
-            return [strokes[ind]]
-
-        # if any are >1 strokes, just take the first
-        strokes1 = _pick_single_strok(strokes1)
-        strokes2 = _pick_single_strok(strokes2)
-
-    #     return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian")
-        return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian_diffs")
-
-
 
     #### For each day, compute distance across categories
     # THIS more flexible than above, allows each prim to have diff days which call early and late
@@ -261,6 +292,27 @@ def plot_all(D, SAVEDIR, animal, expt):
     writeDictToYaml(DictDateEarlyLate, f"{SDIRTHIS}/DictDateEarlyLate.yaml")
     writeDictToYaml(DictDay, f"{SDIRTHIS}/DictDay.yaml")
     writeDictToYaml(DictDateInds, f"{SDIRTHIS}/DictDateInds.yaml")
+
+
+
+
+    from pythonlib.drawmodel.strokedists import distscalarStrokes, distanceStroksMustBePaired
+    def dfunc(strokes1, strokes2):
+        def _pick_single_strok(strokes):
+            # If strokes is len>1, then returns the longest strok
+            # takes most pts as proxy (not realy longest)
+            if len(strokes)==1:
+                return strokes
+            list_lens = [s.shape[0] for s in strokes]
+            ind = np.argmax(list_lens)
+            return [strokes[ind]]
+
+        # if any are >1 strokes, just take the first
+        strokes1 = _pick_single_strok(strokes1)
+        strokes2 = _pick_single_strok(strokes2)
+
+    #     return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian")
+        return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian_diffs")
 
 
     # compute across-category for early and late days
@@ -484,3 +536,85 @@ def plot_all(D, SAVEDIR, animal, expt):
 
     # sns.lineplot(data=DF_visual, x="early_or_late", y="dist", hue="ptuple1")    
 
+
+
+def plot_beh_all_combined(D, animal, expt, SAVEDIR, orientation="vertical",
+        niter = 5):
+    """ plot primitive (rows) x trials (coluns)
+    - separate plots for early vs. late 
+    and train vs. test.
+    (Written for primcat12)
+    - orientation,
+    --- vertical --> rows are primcat.
+    - niter, how many to plot for each (since is taking random exmaples.s)
+    """
+
+    from pythonlib.dataset.analy import preprocess_dates
+
+    for TRAIN in ["train", "test"]:
+
+        # only keep data with good dates
+        SAVEDIR_THIS = f"{SAVEDIR}/{TRAIN}/ALL_PRIMS_COMBINED_TRIALS/{orientation}"
+        os.makedirs(SAVEDIR_THIS, exist_ok=True)
+
+        ##### Good plot of raw behavior
+        # row: prim cats
+        # col: 4 examples + task
+    #     list_primtuple, list_date = extract_primtuple_list(D)
+
+    #     # Filter to only keep Dataset that has these primtuples
+    #     char_list = [x[0] for x in list_primtuple]
+    #     sx_list = [x[1] for x in list_primtuple]
+    #     sy_list = [x[2] for x in list_primtuple]
+    #     th_list = [x[3] for x in list_primtuple]
+
+    #     Dthis = D.filterPandas({"character":char_list, "sx":sx_list, "sy":sy_list, 
+    #                             "theta":th_list, "monkey_train_or_test":[TRAIN_TEST]}, "dataset")
+        Dthis = D.filterPandas({"monkey_train_or_test":[TRAIN]}, "dataset")
+
+        ### ASSIGN UNIQUE PRIMTUPLES AS A NEW COLUMN
+        # In general, assign a name based on aspects of Objects (shapes and parameters)
+        groupby = ["character", "sx", "sy", "theta"]
+        Dthis.grouping_append_col(groupby, "primtuple")
+
+        DictDateEarlyLate, DictDay, DictDateInds, Dthis = preprocess_dates(Dthis, 
+            "primtuple", animal, expt, return_filtered_dataset=True, SAVEDIR=SAVEDIR_THIS)
+
+        # only keep data that matches the primtuples present across all dayhs.
+        # For each row of dataset, figure out if it is in ealry or late, or neither
+        def F(x):
+            # doesnt have dates?
+            if x["primtuple"] not in DictDateEarlyLate:
+                print(x["primtuple"])
+                assert False
+
+            # check whether this row's data is in this date
+            datethis = x["date"]
+            dates_earlylate = DictDateEarlyLate[x["primtuple"]]
+            if datethis == dates_earlylate[0]:
+                return "early"
+            elif datethis == dates_earlylate[1]:
+                return "late"
+            else:
+                return "not_assigned"
+
+        Dthis.Dat = applyFunctionToAllRows(Dthis.Dat, F, "summary_date_epoch")
+
+
+        from pythonlib.dataset.plots import plot_beh_grid_flexible_helper    
+        for epoch in ["early", "late"]:
+            for i in range(niter):
+                plot_task = i==1
+                Dtmp = Dthis.filterPandas({"summary_date_epoch":[epoch]}, "dataset")
+            #     plot_beh_grid_flexible_helper(Dthis, row_group = "primtuple", col_group="trial",  max_n_per_grid=1, max_cols=3, max_rows=20)
+                if orientation == "vertical":
+                    figbeh, figtask = plot_beh_grid_flexible_helper(Dtmp, row_group = "primtuple", col_group="trial_shuffled",  
+                                                  max_n_per_grid=1, max_cols=6, max_rows=40, plot_task=plot_task)
+                elif orientation =="horizontal":
+                    figbeh, figtask = plot_beh_grid_flexible_helper(Dtmp, col_group = "primtuple", row_group="trial_shuffled",  
+                                                  max_n_per_grid=1, max_rows=6, max_cols=40, plot_task=plot_task)
+
+
+
+                figbeh.savefig(f"{SAVEDIR_THIS}/{epoch}-iter{i}-beh.pdf")
+                figtask.savefig(f"{SAVEDIR_THIS}/{epoch}-iter{i}-task.pdf")

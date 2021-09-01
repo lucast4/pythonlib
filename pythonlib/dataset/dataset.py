@@ -3588,6 +3588,7 @@ class Dataset(object):
 
 
     ################ ANALYSIS HELPERS
+
     def analy_get_all_inds_with_same_task(self):
         """
         returns indices for other trials
@@ -3666,6 +3667,7 @@ class Dataset(object):
             return tasklist_sorted
 
 
+
     def analy_singletask_df(self, task, row_variable, row_levels=None, return_row_levels=False):
         """ extract datafarme of just one task, with appended columns named
         "row" and "col" where col is trial num (in order seen in self.Dat) and row
@@ -3681,6 +3683,8 @@ class Dataset(object):
         if row_levels is None:
             row_levels = sorted(df[row_variable].unique().tolist())
 
+        # To number from 0, 1, ... for within each row level, iterate over them
+        # and each time reset their index, then save the index.
         out = []
         for i, lev in enumerate(row_levels):
             dfthis = df[df[row_variable]==lev]
