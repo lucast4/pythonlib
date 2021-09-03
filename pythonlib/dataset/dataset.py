@@ -40,8 +40,8 @@ class Dataset(object):
 
         if len(inputs)>0:
             self._main_loader(inputs, append_list)
-        else:
-            print("Did not load data!!!")
+        # else:
+        #     print("Did not load data!!!")
 
 
         self._possible_data = ["Dat", "BPL", "SF"]
@@ -3456,11 +3456,12 @@ class Dataset(object):
 
 
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False):
+        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False, nrand=None):
         """ plot multiple trials in a grid.
         - idxs, if list of indices, then plots those.
         --- if an integer, then plots this many random trials.
         - which_strokes, either "strokes_beh" (monkey) or "strokes_task" (stim)
+        - nrand, sample random N
         """
         from ..drawmodel.strokePlots import plotDatStrokes
         import random
@@ -3473,6 +3474,10 @@ class Dataset(object):
             k = idxs
             idxs = random.sample(range(N), k=k)
 
+        if nrand is not None:
+            if nrand < len(idxs):
+                idxs = sorted(random.sample(idxs, nrand))
+
         if which_strokes=="parses":
             # then pull out a random parse for each case
             assert "parses" in self.Dat.columns, "need to extract parses first..."
@@ -3483,6 +3488,10 @@ class Dataset(object):
                 strokes_list[i] = strokes_list[i][ithis]
         else:
             strokes_list = self.Dat[which_strokes].values
+
+        if titles is None:
+            # use trialcodes
+            titles = self.Dat.iloc[idxs]["trialcode"].tolist()
 
         if False:
             # Old version, obsolete...
@@ -3665,7 +3674,6 @@ class Dataset(object):
             return tasklist_sorted, vals_sorted
         else:
             return tasklist_sorted
-
 
 
     def analy_singletask_df(self, task, row_variable, row_levels=None, return_row_levels=False):

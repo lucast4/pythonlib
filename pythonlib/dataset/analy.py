@@ -21,6 +21,7 @@ def _groupingParams(D, expt):
     features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
     features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
 
+
     ### FILTER BLOCKS
     if expt == "neuralprep2":
         F = {
@@ -112,12 +113,23 @@ def _groupingParams(D, expt):
         grouping_levels = ["straight", "bent"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]        
     elif expt == "gridlinecircle":
+        animal = D.animals()
+        if len(animal)>1:
+            assert False, "params different for each animal.."
+        else:
+            animal = animal[0]
         F = {}
         grouping = "epoch"
         plantime_cats = {}
         features_to_remove_nan =  []
         features_to_remove_outliers = []
-        grouping_levels = ["baseline", "linetocircle", "circletoline"]
+        if animal in ["Diego", "Pancho"]:
+            grouping_levels = ["baseline", "linetocircle", "circletoline", "lolli"]
+        elif animal in ["Red"]:
+            grouping_levels = ["baseline", "Ltoline"]
+        else:
+            assert False
+
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
     else:
         print(expt)
