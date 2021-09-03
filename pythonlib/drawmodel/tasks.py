@@ -492,8 +492,25 @@ class TaskClass(object):
         # V1: based on saved Objects
         if "Objects" in T.keys():
             # New version, like 6/2021 
-            shapes1 = T["Objects"]["Features"]["shapes"] # dict
-            shapes1 = self._program_line_dict2list(shapes1)
+            if "Features" in T["Objects"]:
+                Feat = T["Objects"]["Features"]
+            elif "Features_Active" in T["Objects"]:
+                Feat = T["Objects"]["Features_Active"]
+            if isinstance(Feat, dict):
+                # print(Feat)
+                # print(type(Feat))
+                # for k, v in Feat.items():
+                #     print(k, v)
+                shapes1 = Feat["shapes"] # dict
+                shapes1 = self._program_line_dict2list(shapes1)
+            else:
+                # print("---")
+                # print(self.Task)
+                # print("---")
+                # for k, v in T.items():
+                #     print(k, v)
+                # assert False
+                shapes1 = None
 
         # V2: if this is "mixture2" task, then the mixture2 params
         Task = T["Task"]
@@ -514,7 +531,8 @@ class TaskClass(object):
             if out["obj"] is None:
                 # replace it with the saved name
                 out["obj"] = shapes1[i]
-                assert len(shapes1)==len(self.Program), "Objects and Program don't match, not sure why"
+                if shapes1 is not None:
+                    assert len(shapes1)==len(self.Program), "Objects and Program don't match, not sure why"
             Objects.append(out)
         self.Objects = Objects
 

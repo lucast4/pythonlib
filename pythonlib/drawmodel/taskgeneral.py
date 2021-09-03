@@ -331,6 +331,56 @@ class TaskClass(object):
         return strokes
 
 
+    ############# SHAPES
+    def _shape_to_string(self, shape):
+        """
+        Convert shape to a string, which is hashable.
+        shape is an item in self.Shapes. 
+        - shape, list, [shapename, dict_params], e./.g,"['line',
+      {'x': array(-1.7),
+       'y': array(1.7),
+       'sx': array(1.55),
+       'sy': array(1.55),
+       'order': 'trs',
+       'theta': array(1.57079633)}]
+       
+       RETURNS:
+       - string, e.g., linex-1.7y1.7sx1.55sy1.55ortrsth1.57
+       """
+        
+        import numpy as np
+        outstring = ""
+        
+        # name of object (e..g, line)
+        outstring += shape[0]
+        
+        # affine transofmr params
+        prms_in_order = ["x", "y", "sx", "sy", "order", "theta"]
+        for key in prms_in_order:
+            this = shape[1][key]
+            if isinstance(this, np.ndarray):
+                this = str(this)[:4]
+            outstring += f"{key[:2]}{this}"
+        
+        return outstring
+
+    def get_shapes_hash(self):
+        """ convert self.Shapes to a frozenset of strings, each string a unique shape based on 
+        category and affine params.
+        Operates on self.Shapes.
+        OUT:
+        - frozenset of strings. (frozen allows the output to be hashable)
+        --- e.g.,{'circlex-1.7y0.0sx0.7sy0.7ortrsth0.0', 'linex-1.7y1.7sx1.55sy1.55ortrsth1.57'}
+        NOTE:
+        - raises error if self.Shapes is empty
+        """
+
+        assert len(self.Shapes)>0, "old version of task? no shapes"
+
+        return frozenset((self._shape_to_string(sh) for sh in self.Shapes))
+
+
+
 
     ############ FILTERS
     def filter_by_shapes(self, F, kind):
@@ -381,6 +431,7 @@ class TaskClass(object):
             print(kind)
             print(F)
             assert False, "not coded"
+
 
                         
     ############ PARSER
