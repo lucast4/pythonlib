@@ -823,7 +823,6 @@ class Dataset(object):
 
 
 
-
     def find_dataset(self, animal, expt, assert_only_one=True, rule=""):
         """ helper to locate path for presaved (from Probedat) dataset
         can then use this toload  it
@@ -936,6 +935,25 @@ class Dataset(object):
 
         return f"{a}_{e}_{r}"
 
+
+    def get_sample_rate(self, ind):
+        """ 
+        ind is index in self.Dat
+        """
+        ind_md = self.Dat.iloc[ind]["which_metadat_idx"]
+        fs = self.Metadats[ind_md]["filedata_params"]["sample_rate"]
+        return fs
+            
+    def get_motor_stats(self, ind):
+        """ 
+        Simple - returns dict with all the motortiming and motorevent stats
+        """
+        out = {}
+        for k, v in self.Dat.iloc[ind]["motorevents"].items():
+            out[k]=v
+        for k, v in self.Dat.iloc[ind]["motortiming"].items():
+            out[k]=v
+        return out
 
 
     ################# SPATIAL OPERATIONS
@@ -3454,16 +3472,43 @@ class Dataset(object):
 
         return fig
 
+    def extractStrokeVels(self, list_inds):
+        """ extract stroke as instantaneous velocities
+        INPUT:
+        - list_inds, list of ints, for which strokes to use. If "all", then gets all.
 
-    def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False, nrand=None):
-        """ plot multiple trials in a grid.
-        - idxs, if list of indices, then plots those.
-        --- if an integer, then plots this many random trials.
-        - which_strokes, either "strokes_beh" (monkey) or "strokes_task" (stim)
-        - nrand, sample random N
+        RETURN:
+        - list of strokes_vels, which are each list of Nx1, so is
+        actually speed, not vel.
+        (None, if strok to oshort to get vel.)
         """
-        from ..drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.tools.stroketools import strokesVelocity
+  
+        if list_inds == "all":
+            list_inds = self.Dat.index.tolist()
+
+        list_strokes_vel = []
+        for ind in list_inds:
+            strokes = self.Dat.iloc[ind]["strokes_beh"]
+            fs = self.get_sample_rate(ind)
+            _, strokes_vel = strokesVelocity(strokes, fs, clean=True)
+            strokes_vel = [s[:,0] for s in strokes_vel] # remove time
+            for i in range(len(strokes_vel)):
+                if any([np.isnan(sv) for sv in strokes_vel[i]]):
+                    list_strokes_vel.append(None)   
+                    # print(strokes_vel)
+                    # print(list_inds)
+                    # print(strokes[i])
+                    # assert False
+                else:
+                    list_strokes_vel.append(strokes_vel)
+        return list_strokes_vel
+
+
+    def _plot_prepare_strokes(self, which_strokes, idxs, nrand=None, titles=None):
+        """
+        Helper to extract strokes
+        """
         import random
 
         if len(idxs)==0:
@@ -3489,31 +3534,69 @@ class Dataset(object):
         else:
             strokes_list = self.Dat[which_strokes].values
 
+        # Keep only data to plot.
+        strokes_list = [strokes_list[i] for i in idxs]
+
         if titles is None:
             # use trialcodes
             titles = self.Dat.iloc[idxs]["trialcode"].tolist()
 
-        if False:
-            # Old version, obsolete...
-            nrows = int(np.ceil(len(idxs)/ncols))
-            fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*2, nrows*2))
-            
-            for ind, (i, ax) in enumerate(zip(idxs, axes.flatten())):
-                if which_strokes in ["strokes_beh", "parses"]:
-                    plotDatStrokes(strokes_list[i], ax, clean_ordered=True)
-                elif which_strokes == "strokes_task":
-                    plotDatStrokes(strokes_list[i], ax, clean_unordered=True)
-                else:
-                    assert False
-                if not titles:
-                    ax.set_title(i)
-                elif isinstance(titles[ind], str):
-                    ax.set_title(f"{titles[ind]}")
-                else:
-                    ax.set_title(f"{titles[ind]:.2f}")
-        else:
-            # New version, uses grid wrapper
-            from pythonlib.tools.plottools import plotGridWrapper
+        return strokes_list, idxs, titles
+
+    def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
+        ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False, 
+        nrand=None, color_by=None):
+        """ plot multiple trials in a grid.
+        - idxs, if list of indices, then plots those.
+        --- if an integer, then plots this many random trials.
+        - which_strokes, either "strokes_beh" (monkey) or "strokes_task" (stim)
+        - nrand, sample random N
+        - color_by, if None, ignores. otherwise different ways to color strokes.
+        --- "speed", instantenous speed.
+        NOTE:
+        - returns None if fails to get any data.
+        """
+        from ..drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.tools.plottools import plotGridWrapper
+
+        strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
+            nrand=nrand, titles=titles)
+        if len(idxs)==0:
+            if return_idxs:
+                return None, None
+            else:
+                return None
+
+        # if isinstance(idxs, int):
+        #     N = len(self.Dat)
+        #     k = idxs
+        #     idxs = random.sample(range(N), k=k)
+
+        # if nrand is not None:
+        #     if nrand < len(idxs):
+        #         idxs = sorted(random.sample(idxs, nrand))
+
+        # if which_strokes=="parses":
+        #     # then pull out a random parse for each case
+        #     assert "parses" in self.Dat.columns, "need to extract parses first..."
+        #     strokes_list = [[a.copy() for a in strokes] for strokes in self.Dat["parses"].values] # copy, or else will mutate
+        #     # for the indices you want to plot, prune to just a single parse
+        #     for i in idxs:
+        #         ithis = random.randrange(len(strokes_list[i]))
+        #         strokes_list[i] = strokes_list[i][ithis]
+        # else:
+        #     strokes_list = self.Dat[which_strokes].values
+
+        # # Keep only data to plot.
+        # strokes_list = [strokes_list[i] for i in idxs]
+
+        # if titles is None:
+        #     # use trialcodes
+        #     titles = self.Dat.iloc[idxs]["trialcode"].tolist()
+
+        # Extract the final data
+        if color_by is None:
+            # Which plotting function?
             if which_strokes in ["strokes_beh", "parses"]:
                 plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
                     add_stroke_number=add_stroke_number, centerize=centerize)
@@ -3523,14 +3606,156 @@ class Dataset(object):
                 plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, centerize=centerize)
             else:
                 assert False
-            data = [strokes_list[i] for i in idxs]
+
+            # Plot
+            fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+
+        elif color_by=="speed":
+            # instantaneuos speed
+            
+            # -- function
+            assert which_strokes=="strokes_beh", "only coded for this currently"
+            from pythonlib.drawmodel.strokePlots import plotDatStrokesMapColor
+            # 0: strokes... 1: stroke_vel... 2: vmin... 3: vmax
+            plotfunc = lambda data, ax: plotDatStrokesMapColor(
+                data[0], ax, data[1], data[2], data[3])
+
+            # - get speed
+            strokes_vels_list = self.extractStrokeVels(idxs)
+            # dont keep if too short.
+            strokes_list = [strokes for strokes, sv in zip(strokes_list, strokes_vels_list) if sv is not None]
+            titles = [t for t, sv in zip(titles, strokes_vels_list) if sv is not None]
+            idxs = [i for i, sv in zip(idxs, strokes_vels_list) if sv is not None]
+            strokes_vels_list = [sv for sv in strokes_vels_list if sv is not None]
+
+            # -- data
+            data = []
+            for strokes, strokes_vel in zip(strokes_list, strokes_vels_list):
+                # Get the min and max vel
+                # vmin is min of mins across strokes.
+                x = [np.percentile(s, [1, 99]) for s in strokes_vel]
+                vmin = np.min([xx[0] for xx in x])
+                vmax = np.max([xx[1] for xx in x])
+                if np.isnan(vmin):
+                    print(x)
+                    # print([len(s) for s in strokes_vel])
+                    print(strokes_vel)
+                    assert False
+                data.append([strokes, strokes_vel, vmin, vmax])
+
+            # use the same speed across all trials.
+            if len(data)>0:
+                vmin = np.min([d[2] for d in data])
+                vmax = np.max([d[3] for d in data])
+                if np.isnan(vmin):
+                    print([d[2] for d in data])
+                    assert False
+                if np.isnan(vmax):
+                    print([d[3] for d in data])
+                    assert False
+                for d in data:
+                    d[2] = vmin
+                    d[3] = vmax
+            else:
+                if return_idxs:
+                    return None, None
+                else:
+                    return None
+
+            # -- Plot
+            # for d in data:
+            #     print([len(dd) for dd in d[0]])
+            #     print([dd[0] for dd in d[0]])
+
             fig= plotGridWrapper(data, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+        else:
+            print(color_by)
+            assert False, "not coded"
 
         if return_idxs:
             return fig, idxs
         else:
             return fig
         # return idxs
+
+
+    def plotMultTrialsTimecourse(self, idxs, plotver="speed", which_strokes="strokes_beh", return_idxs=False, 
+        ncols = 5, titles=None, naked_axes=False, nrand=None, align_to="go_cue"):
+        """ Plot a grid of trials timecourses.
+        """ 
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse, plotDatStrokesVelSpeed
+        from ..drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.tools.plottools import plotGridWrapper
+
+        strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
+            nrand=nrand, titles=titles)
+        if len(idxs)==0:
+            return
+
+        # get sampling rate
+        list_fs = [self.get_sample_rate(i) for i in idxs]
+        assert len(np.unique(list_fs))==1, "why have diff sample rate? easy fix, make plotfunc take in fs in data tuple"
+        fs = list_fs[0]
+
+        # whether to modify the time column for strokes
+        # by default, is aligned to first touch in strokes.
+        for strokes in strokes_list:
+            assert strokes[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
+            # assert strokes_list[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
+
+        if align_to=="go_cue":
+            # copy strokes.
+            strokes_list = [[s.copy() for s in strokes] for strokes in strokes_list] 
+            for ind, strokes in zip(idxs, strokes_list):
+
+                # get time from gocue to first touch
+                motor = self.get_motor_stats(ind)
+                x = motor["time_raise2firsttouch"] * 1000 # convert from s to ms.
+
+                if np.isnan(x):
+                    print("Here")
+                    print(x)
+                    print(ind)
+                    print(self.Dat.iloc[ind])
+                    assert False
+                # add to all times
+                # print(strokes)
+                for s in strokes:
+                    s[:,2] += x
+                # print(strokes)
+                # assert False
+
+                # ME = Dthis.Dat.iloc[1]["motorevents"]
+                # a = ME["ons"] - ME["raise"]
+
+                # MT = Dthis.Dat.iloc[1]["motortiming"]
+                # b = MT["time_raise2firsttouch"]
+
+                # assert a==b, "I forgot what my entries mean"
+
+        elif align_to=="first_stroke_onset":
+            # do nothing - this is default.
+            pass
+        else:
+            print(align_to)
+            assert False, "not coded"
+
+        # Which plotting function?
+        plotfunc = lambda strokes, ax: plotDatStrokesVelSpeed(strokes, ax, fs, plotver)
+
+        # Plot
+        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+
+        if return_idxs:
+            return fig, idxs
+        else:
+            return fig
+        # return idxs
+
+
+
+
+
 
     def plotOverview(self):
         """ quick plot of kinds of tasks present across days
