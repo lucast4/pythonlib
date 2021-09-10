@@ -88,21 +88,44 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma
     """ plot strokes, similar to plotDatStrokes, but the color is proportional
     to value in strokes_values, where first remapped to range (vmin, vmax), and
     uses color gradient based on that range
+    INPUT:
+    - strokes_values, list of len same as strokes. Can etiehr be:
+    --- list of scalars, all pts in a stroke are same color
+    --- list of np ararys, denoting color for each pt. 
     """
+
     from pythonlib.tools.plottools import colorGradient
 
     assert not np.any(np.isnan(strokes_values))
     
     ax.set_facecolor((0.9, 0.9, 0.9))
+
     # First get colors for each stroke
     color_list = []
-    for v in strokes_values:
-        col = colorGradient((v-vmin)/(vmax-vmin), cmap=cmap)
-        color_list.append(col)
+    if isinstance(strokes_values[0], np.ndarray) and (strokes_values[0].shape[0]>1 or strokes_values[0].shape[1]>1):
+        # Then you want to color each pt differently.
+        for i, (s, sv) in enumerate(zip(strokes, strokes_values)):
+            # cols = np.array([colorGradient((v-vmin)/(vmax-vmin), cmap=cmap) for v in sv])
+            sc = ax.scatter(s[:,0], s[:,1], c=sv, vmin=vmin, vmax=vmax, cmap = cmap)
+            # plt.colorbar(sc, cax=ax)
+            if mark_stroke_onset:
+                mfc = "b"
+                tcol= "b"
+                mec = "b"
+                markersize = markersize + 0.5
+                ax.plot(s[0,0], s[0,1], mec=mec, mfc= mfc, markersize=markersize+1.5, 
+                    marker="o", alpha= 0.75)
+                if add_stroke_number:
+                    ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
 
-    for i, (s, col) in enumerate(zip(strokes, color_list)):
-        ax.plot(s[:,0], s[:,1], color=col, linewidth=(3/5)*markersize,
-            alpha=min([1, 1.5*alpha]))
+    else:
+        for v in strokes_values:
+            col = colorGradient((v-vmin)/(vmax-vmin), cmap=cmap)
+            color_list.append(col)
+
+        for i, (s, col) in enumerate(zip(strokes, color_list)):
+            ax.plot(s[:,0], s[:,1], color=col, linewidth=(3/5)*markersize,
+                alpha=min([1, 1.5*alpha]))
 
     if mark_stroke_onset:
         for i, (s, col) in enumerate(zip(strokes, color_list)):
@@ -373,7 +396,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
 
 def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=5,
                           overlay_stroke_periods=False, pcol=None, alpha=0.8,
-                          nolegend=False):
+                          nolegend=False, readjust_x_tolims=False):
     """  wrapper, which both processes storkes and plots.
     pass in strokes and will autoamtically differnetiate to 
     get speed/vecopiotu. 
@@ -383,18 +406,27 @@ def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=5,
     """
     from ..tools.stroketools import strokesVelocity
 
-    if plotver=="speed":
-        i=1
-    elif plotver=="vel":
-        i=0
-    S = strokesVelocity(strokes, fs, lowpass_freq=lowpass_freq)[i]
+    if plotver == "raw":
+        # x y pos
+        plotDatStrokesTimecourse(strokes, ax=ax, plotver=plotver, 
+            overlay_stroke_periods=overlay_stroke_periods, alpha=alpha, 
+            nolegend=nolegend, color=pcol)
+    else:
+        if plotver=="speed":
+            i=1
+        elif plotver=="vel":
+            i=0
+        else:
+            assert False
 
-    plotDatStrokesTimecourse(S, ax=ax, plotver=plotver, 
-        overlay_stroke_periods=overlay_stroke_periods, alpha=alpha, 
-        nolegend=nolegend, color=pcol)
+        S = strokesVelocity(strokes, fs, lowpass_freq=lowpass_freq)[i]
+        plotDatStrokesTimecourse(S, ax=ax, plotver=plotver, 
+            overlay_stroke_periods=overlay_stroke_periods, alpha=alpha, 
+            nolegend=nolegend, color=pcol, readjust_x_tolims=readjust_x_tolims)
 
 def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
-    label=None, overlay_stroke_periods=True, alpha=0.8, nolegend=False):
+    label=None, overlay_stroke_periods=True, alpha=0.8, nolegend=False, 
+    readjust_x_tolims = True):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting, with time on the x axis
     - if color, then will overwrite color which is naturally different fro 
@@ -459,7 +491,7 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
             ax.legend() 
             ax.set_title(plotver)
 
-        ax.set_xlim((-0.1, strokes[-1][-1,tdim]+0.1))
+        # ax.set_xlim((-0.1, strokes[-1][-1,tdim]+0.1))
         ax.set_xlabel("time (sec)")
         # ---
         ax.axhline(color="k", linestyle = "--", alpha=0.5)
