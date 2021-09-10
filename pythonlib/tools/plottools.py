@@ -616,8 +616,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     if tight:
         fig.subplots_adjust(wspace=0, hspace=0)
 
-
-
+    # x and y lim should contain all data
     return fig
 
 

@@ -86,8 +86,55 @@ def preprocess(D, animal, expt):
         list_other = [37, 38, 39, 40]
     D.analy_reassign_monkeytraintest("block", list_train, list_test, list_other)
 
+
+    # Grouping, based on primtives kind
+    # In general, assign a name based on aspects of Objects (shapes and parameters)
+    groupby = ["character", "sx", "sy", "theta"]
+    D.grouping_append_col(groupby, "primtuple")
+
+    # Dates
     return D
 
+def clean_and_group_data(D, TRAIN, animal, expt, summary_date_epoch = None, SAVEDIR_THIS=None):
+    """ 
+    Extract subset of D, based on various criteria. Will note whether each trial
+    is in early or late (or undefined) stage, based on date. Only keep prims that have
+    data for both early and late.
+    prims that have data for both early and late dates.
+    - TRAIN, 'train' or 'test'.
+    - animal, expt...
+    - SAVEDIR_THIS, will save the dates dicts. None, to not save.
+    """
+    from pythonlib.dataset.analy import preprocess_dates
+
+    Dthis = D.filterPandas({"monkey_train_or_test":[TRAIN]}, "dataset")
+
+    ### ASSIGN UNIQUE PRIMTUPLES AS A NEW COLUMN
+    DictDateEarlyLate, DictDay, DictDateInds, Dthis = preprocess_dates(Dthis, 
+        "primtuple", animal, expt, return_filtered_dataset=True, SAVEDIR=SAVEDIR_THIS)
+
+    # For each row of dataset, figure out if it is in ealry or late, or neither
+    def F(x):
+        # doesnt have dates?
+        if x["primtuple"] not in DictDateEarlyLate:
+            print(x["primtuple"])
+            assert False
+
+        # check whether this row's data is in this date
+        datethis = x["date"]
+        dates_earlylate = DictDateEarlyLate[x["primtuple"]]
+        if datethis == dates_earlylate[0]:
+            return "early"
+        elif datethis == dates_earlylate[1]:
+            return "late"
+        else:
+            return "not_assigned"
+
+    Dthis.Dat = applyFunctionToAllRows(Dthis.Dat, F, "summary_date_epoch")
+
+    if summary_date_epoch is not None:
+        Dthis = Dthis.filterPandas({"summary_date_epoch":[summary_date_epoch]}, "dataset")
+    return Dthis, DictDateEarlyLate, DictDay, DictDateInds
 
 def extract_primlist(D):
     """ helper to pull out list of prim names (strings)
@@ -570,36 +617,36 @@ def plot_beh_all_combined(D, animal, expt, SAVEDIR, orientation="vertical",
 
     #     Dthis = D.filterPandas({"character":char_list, "sx":sx_list, "sy":sy_list, 
     #                             "theta":th_list, "monkey_train_or_test":[TRAIN_TEST]}, "dataset")
-        Dthis = D.filterPandas({"monkey_train_or_test":[TRAIN]}, "dataset")
 
-        ### ASSIGN UNIQUE PRIMTUPLES AS A NEW COLUMN
-        # In general, assign a name based on aspects of Objects (shapes and parameters)
-        groupby = ["character", "sx", "sy", "theta"]
-        Dthis.grouping_append_col(groupby, "primtuple")
+        if False:
+            Dthis = D.filterPandas({"monkey_train_or_test":[TRAIN]}, "dataset")
 
-        DictDateEarlyLate, DictDay, DictDateInds, Dthis = preprocess_dates(Dthis, 
-            "primtuple", animal, expt, return_filtered_dataset=True, SAVEDIR=SAVEDIR_THIS)
+            ### ASSIGN UNIQUE PRIMTUPLES AS A NEW COLUMN
+            DictDateEarlyLate, DictDay, DictDateInds, Dthis = preprocess_dates(Dthis, 
+                "primtuple", animal, expt, return_filtered_dataset=True, SAVEDIR=SAVEDIR_THIS)
 
-        # only keep data that matches the primtuples present across all dayhs.
-        # For each row of dataset, figure out if it is in ealry or late, or neither
-        def F(x):
-            # doesnt have dates?
-            if x["primtuple"] not in DictDateEarlyLate:
-                print(x["primtuple"])
-                assert False
+            # only keep data that matches the primtuples present across all dayhs.
+            # For each row of dataset, figure out if it is in ealry or late, or neither
+            def F(x):
+                # doesnt have dates?
+                if x["primtuple"] not in DictDateEarlyLate:
+                    print(x["primtuple"])
+                    assert False
 
-            # check whether this row's data is in this date
-            datethis = x["date"]
-            dates_earlylate = DictDateEarlyLate[x["primtuple"]]
-            if datethis == dates_earlylate[0]:
-                return "early"
-            elif datethis == dates_earlylate[1]:
-                return "late"
-            else:
-                return "not_assigned"
+                # check whether this row's data is in this date
+                datethis = x["date"]
+                dates_earlylate = DictDateEarlyLate[x["primtuple"]]
+                if datethis == dates_earlylate[0]:
+                    return "early"
+                elif datethis == dates_earlylate[1]:
+                    return "late"
+                else:
+                    return "not_assigned"
 
-        Dthis.Dat = applyFunctionToAllRows(Dthis.Dat, F, "summary_date_epoch")
-
+            Dthis.Dat = applyFunctionToAllRows(Dthis.Dat, F, "summary_date_epoch")
+        else:
+            Dthis = clean_and_group_data(D, TRAIN, animal, expt, SAVEDIR_THIS)
+            
 
         from pythonlib.dataset.plots import plot_beh_grid_flexible_helper    
         for epoch in ["early", "late"]:

@@ -335,20 +335,26 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
     """ gets velocity and speeds. 
     should first have filtered strokes to ~15-20hz. if not, then 
     activate flag to run filter here. 
+    INPUTS:
+    - fs, original sample rate (use this even if already filtered, as is always
+    done if use the getTrialsStrokes code in uitls, which Dataset does use). e..g
+    fs = filedata["params"]["sample_rate"]
+    - lowpass_freq, applies this to smooth at end.
     - fs_new, how much to downsample before doing 5pt differnetiation. 
-    assumes that have already filtered with lowpass below fs_new/2. if
-    have not, then set do_pre_filter=True, and will first filter data.
+    assumes that have already filtered with lowpass below fs_new/2 [yes, filters
+    at 15hz if use getTrialsStrokes. if have not, then set do_pre_filter=True,
+    and will first filter data.
     empriically, 30hz for fs_new wiorks well. the ;opwer ot is thje smoother
     the velocy (e.g, 10-15 woudl be good). 
-    - 
-
+    - clean, then this is what I consider good for plotting, smooth bumps, etc. used
+    in the wrapper code for plotting. 
+    - NOTES:
     Processing steps:
     - downsamples (linear)
     - 5pt differentiation method
     - upsamples
     - smooths by filtering.
     
-    - lowpass_freq, applies this to smooth at end.
     - if a strok is too short to compute velocity, then returns puts
     nan.
     - note: speed is first taking norm at each timebin, adn then smoothing then norm,.
@@ -360,6 +366,7 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
     strokes.
 
     """
+
     if clean:
         lowpass_freq = 5
         
