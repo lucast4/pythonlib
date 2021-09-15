@@ -133,7 +133,8 @@ def modPathFname(path, prefix=None, suffix=None):
     {prefix}-{path} or {path, without ext}-{suffix}-{ext}
     NOTES:
     - ok to entire full path, this code will pick out the lowest level filename.
-
+    RETURNS:
+    - new pathname
     """
     from pathlib import Path
     pathdir,pathname, ext = fileparts(path)
@@ -148,10 +149,12 @@ def modPathFname(path, prefix=None, suffix=None):
     print("Renamed path1 to path2:")
     print(path)
     print(pathout)
+    return pathout
 
 
 def findPath(path_base, path_hierarchy, path_fname="", ext="",
-    return_without_fname=False, sort_by="name", path_hierarchy_wildcard_on_ends=True):
+    return_without_fname=False, sort_by="name", path_hierarchy_wildcard_on_ends=True,
+    strings_to_exclude_in_path=[]):
     """ get list of data, searches thru paths.
     INPUT:
     - path_base, str, static, common across all possible
@@ -166,6 +169,9 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     final file name. (i..e, jsut gets the dir)s
     - sort_by, if "name", then alphabetically. otherwise {"size", "date"}. always incresaing order.
     - path_hierarchy_wildcard_on_ends, if true, allows /*[]*[]*/... otherwise does /[]*[]/
+    - strings_to_exclude_in_path, list of strings, will exclude  apath if any of these strings occurs anywhere in the
+    path.
+
     NOTES:
     The order
     matter. e..g,: 
@@ -249,6 +255,13 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
         print(sort_by)
         assert False, "not coded"
 
+    def string_check(path):
+        """ returns True if none of the strings to check are in the path
+        """
+        return all([s not in path for s in strings_to_exclude_in_path])
+
+    pathlist = [path for path in pathlist if string_check(path)]
+
     _summarize(pathlist)
 
     return pathlist
@@ -268,3 +281,15 @@ def get_common_path(pathlist):
     else:
         assert False
     return path_shared
+
+
+def load_yaml_config(path):
+    """ 
+    Load a file.yaml into an output dict
+    NOTE:
+    - path should have .yaml extension.
+    """
+    import yaml
+    with open(path) as file:
+        outdict = yaml.load(file, Loader=yaml.FullLoader)
+    return outdict
