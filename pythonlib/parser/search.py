@@ -7,7 +7,7 @@ import math
 import itertools
 import torch
 from pybpl.data import unif_space
-from pybpl.matlab.bottomup import generate_random_parses
+# from pybpl.matlab.bottomup import generate_random_parses
 
 # from ...omniglot.minimal_splines import fit_minimal_spline
 from .utils import sample_from_generator

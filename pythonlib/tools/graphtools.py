@@ -40,7 +40,7 @@ def path_through_list_nodes(graph, list_ni, inputted_all_nodes=True, maxn=10):
     for i in range(len(list_ni)-1):
         pair = [list_ni[i], list_ni[i+1]]
         list_of_edges = path_between_nodepair(graph, pair, maxn=maxn)
-        print("HERE", pair, list_of_edges)
+        # print("HERE", pair, list_of_edges)
         path.extend(list_of_edges)
 
     return path

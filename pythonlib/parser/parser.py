@@ -252,34 +252,8 @@ class Parser(object):
         """
         from sknw import build_sknw
         self.Graph = build_sknw(self.Skeleton, multi=True)
+
         self._graph_remove_zerolength_edge()
-
-    def _graph_remove_zerolength_edge(self, dist_thresh=20):
-        """
-        Remove any edges from node to itself
-        - dist_thresh, only removes if the cum dist along the edge is less
-        than this.
-        """
-
-
-        edges_to_remove = []
-        for ed in self.Graph.edges:
-            if ed[0]==ed[1]:
-                # print(self.Graph.edges[ed])
-                # only remove if this edge has short distance for pts
-                from pythonlib.drawmodel.features import strokeDistances
-                d = strokeDistances([self.Graph.edges[ed]["pts"]])[0]
-                # make sure each node has other edges that would still remain
-                nodes = ed[:2]
-                nedges_per_node = [len(list(self.Graph.edges(n))) for n in nodes]
-
-                # only remoive if fails distance treshold, and ther are other exdges remining
-                if d<dist_thresh and all([n>1 for n in nedges_per_node]):
-                    edges_to_remove.append(ed)
-
-        if len(edges_to_remove)>0:
-            print("Removing edges that go from a node to istself:")
-            self.modify_graph(edges_to_remove=edges_to_remove)
 
 
     ################# TOOLS, WROKING WOTH PARSERSTROKE
@@ -381,148 +355,7 @@ class Parser(object):
         else:
             return False
 
-    #################### MANUAL ENTRY OF PARSES
-    def map_strokes_to_nodelists(self, strokes, thresh=5):
-        """ finds nodes aligned to strokes
-        OUT:
-        - list of paths, each path a list of nodes of len =2
-        NOTE:
-        - will fail iuf cannot find for some reason.
-        """
-
-        list_of_paths = []
-        for strok in strokes:
-            path = []
-            for ind in [0, -1]:
-                pt = strok[ind,:2]
-                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
-
-                if len(list_nodes)==0:
-                    print(pt)
-                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
-                    assert False, "this pt not close to a node, need to add fifrst?"
-                elif len(list_nodes)>1:
-                    print(pt)
-                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
-                    assert False, "found > 1 node, must merge close nodes first"
-                else:
-                    node = list_nodes[0]
-
-                path.append(node)
-            list_of_paths.append(path)
-        return list_of_paths
-
-    def map_strokes_to_edgelist(self, strokes, thresh=5):
-        """ 
-        returns list of edges [(1,2,0), ...]. makes sure that if a pair of nodes
-        have multiple possible edgse, takes teh edge that occurs more often (as you travel)
-        along the pts
-        """
-
-        def _traj_to_edgelist(traj):
-            """ traj is Nx2
-            """
-
-            last_visited_node = None
-            tracker = {}
-            list_of_edges = []
-            for i, pt in enumerate(traj[:,:2]):
-                nodes = self.find_close_nodes_to_pt(pt, only_one=True, thresh=thresh, take_closest=True)
-                
-                if len(nodes)==1:
-                    if last_visited_node is None:
-                        last_visited_node = nodes[0]
-
-                    elif last_visited_node is not None and nodes[0]!=last_visited_node:
-                        # then you have visisted a new node. 
-                        # if change last_visited_node, then pick the most visited edge, then reset.
-                        new_node = nodes[0]
-                        # print(i)
-                        # print(last_visited_node)
-                        # print(nodes)
-                        # print("HERE", tracker)
-                        # # pick out candidate edges that explain the just finished traj
-                        # edges_candidate = [ed for ed in tracker.keys() if set(ed[:2])==set([last_visited_node, new_node])]
-
-                        # sort all candidate edges by how oten they visited
-                        edges_candidate = [(ed, nvisit) for ed, nvisit in tracker.items() if set(ed[:2])==set([last_visited_node, new_node])]
-
-                        # sort and pick out most highly visited edge.
-                        edges_candidate = sorted(edges_candidate, key=lambda x: x[1]) # sort in ascending order.
-                        edge_just_done = edges_candidate[-1][0]
-
-                        if edge_just_done[0]==new_node:
-                            edge_just_done = (edge_just_done[1], edge_just_done[0], edge_just_done[2]) # mnake sure is in order.
-                        list_of_edges.append(edge_just_done)
-
-                        # reset everything
-                        last_visited_node = nodes[0]
-                        tracker = {}
-                    else:
-                        # do nothing, since nthing changed
-                        pass
-
-                if i==0 or i==traj.shape[0]:
-                    # print(i,pt)
-                    # print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
-                    assert len(nodes)==1, "on and off should match a node..."
-
-                # find edges
-                edges, dists, inds = self.find_close_edge_to_pt(pt, thresh=thresh)
-
-                # only keep edges that involve the current node
-                edges = [ed for ed in edges if last_visited_node in ed[:2]]
-
-                # update tracker
-                for ed in edges:
-                    if ed in tracker.keys():
-                        tracker[ed] +=1
-                    else:
-                        tracker[ed] = 1
-            return list_of_edges
-
-        return [_traj_to_edgelist(traj) for traj in strokes]
-
-
-
-    def map_strokes_to_nodelists_entiretraj(self, strokes, thresh=5):
-        """ finds nodes aligned to strokes. includes all nodes, that are found along the 
-        trajectory. 
-        OUT:
-        - list of paths, each path a list of nodes of at lest len=2, but more if more are encountered.
-        - e.g,,: [[4, 2, 1], [3, 4, 5, 6], [8, 2, 0], [8, 5, 7]], means there are 4 strokes, each going
-        thru those nodes in those order.
-
-        NOTE:
-        - can guarantee that these nodes should be in order (modulo reversal)
-        - asserts that will find something for the first and last pts.
-        """
-
-        list_of_paths = []
-        for strok in strokes:
-            path = []
-            # start from first pt, and continue
-            for i in range(strok.shape[0]):
-                pt = strok[i,:2]
-                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
-
-                if i==0 or i==strok.shape[0]:
-                    assert len(list_nodes)==1, "must find a node at start and end."
-
-                if len(list_nodes)==1:
-                    node = list_nodes[0]
-                    if node not in path:
-                        path.append(node)
-                
-                if len(list_nodes)>1:
-                    print(pt)
-                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
-                    assert False, "found > 1 node, must merge close nodes first"
-
-            list_of_paths.append(path)
-        return list_of_paths
-
-
+    ############# MANUALLY ENTERING PARSES
     def manually_input_parse(self, list_of_paths, use_all_edges=True):
         """
         Manually enter a new parse by providing list of paths, where
@@ -980,9 +813,38 @@ class Parser(object):
         return list1==list2
 
 
-    ########## SPLIT/MERGE OPERATIONS
-    def find_closest_nodes_under_thresh(self, thresh):
 
+
+    ################ AUTOMATICALLY MODIFYING PARSE GRAPH
+    def _graph_remove_zerolength_edge(self, dist_thresh=20):
+        """
+        Remove any edges from node to itself
+        - dist_thresh, only removes if the cum dist along the edge is less
+        than this.
+        """
+        edges_to_remove = []
+        for ed in self.Graph.edges:
+            if ed[0]==ed[1]:
+                # print(self.Graph.edges[ed])
+                # only remove if this edge has short distance for pts
+                from pythonlib.drawmodel.features import strokeDistances
+                d = strokeDistances([self.Graph.edges[ed]["pts"]])[0]
+                # make sure each node has other edges that would still remain
+                nodes = ed[:2]
+                nedges_per_node = [len(list(self.Graph.edges(n))) for n in nodes]
+
+                # only remoive if fails distance treshold, and ther are other exdges remining
+                if d<dist_thresh and all([n>1 for n in nedges_per_node]):
+                    edges_to_remove.append(ed)
+
+        if len(edges_to_remove)>0:
+            print("Removing edges that go from a node to istself:")
+            self.modify_graph(edges_to_remove=edges_to_remove)
+
+
+    def find_closest_nodes_under_thresh(self, thresh): 
+        """ Finds nodes which are close to each other
+        """
         def _find_closest_nodes_under_thresh(thresh, G):
             """ find pairs of nodes that are closer than thresh
             OUT:
@@ -1012,82 +874,6 @@ class Parser(object):
         return _find_closest_nodes_under_thresh(thresh, self.Graph)
 
 
-
-    def merge_nodes(self, nodes):
-
-
-        def _merge_nodes(nodes, G):
-            """ 
-            - nodes, set of nodes, e..g, {3,4}
-            - G
-            OUT:
-            - modifies G to have new node (ind is max + 1), and new edges replacing old edges.
-            """
-            assert isinstance(nodes, set)
-            pairthis = nodes
-           
-            # new center
-            onew = np.round(np.mean(np.stack([G.nodes[n]["o"] for n in pairthis]), axis=0)).astype(np.int16)
-            nnew = max(list(G.nodes))+1
-
-            # remove all edges between these
-            elist = [e for e in G.edges if set(e[:2])==pairthis]
-
-            # add new edges to replace any old edges
-            edges_to_add = []
-            edges_to_remove = []
-            edges_to_remove.extend(elist)
-            for ni in [0, 1]:
-                nthis = list(pairthis)[ni]
-                othis = G.nodes[nthis]["o"]
-
-                for e in G.edges:
-                    if nthis in e[:2]:
-                        edg = G.edges[e]
-
-                        # conver this edge to a new edge, using same pts
-                        nother = [n for n in e[:2] if n!=nthis]
-                        assert len(nother)==1, "ytou might have repeat node? a-->a"
-                        nother = nother[0]
-
-                        if set([nthis, nother])==pairthis:
-                            # this is edge between the pair you are merging.
-                            # you have already added it.
-                            continue
-
-                        # construct a new edge
-        #                 weight = edg["weight"]
-        #                 visited = edg["visited"]
-                        pts = edg["pts"]
-
-                        # add the center to the end that is currently closest to the center
-                        d1 = np.linalg.norm(pts[0,:]-othis)
-                        d2 = np.linalg.norm(pts[-1,:]-othis)
-                        if d1<d2:
-                            pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
-                        else:
-                            pts = np.append(pts, onew.reshape(1,-1), axis=0)
-
-                        # Ideally remove the close pts, and replace with interpolated pts.
-                        # Or snap onto the strokes.
-
-                        # Add this new edge
-                #         G.add_edge(nnew, nother, pts=pts, weight=weight)
-                        edges_to_add.append((nnew, nother, {"pts":pts}))
-        #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
-                        edges_to_remove.append((nthis, nother, e[2]))
-                            
-
-            nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
-            nodes_to_remove = list(pairthis)
-            self.modify_graph(nodes_to_add=nodes_to_add, nodes_to_remove=nodes_to_remove, 
-                        edges_to_add=edges_to_add, edges_to_remove=edges_to_remove)
-            
-            return G
-
-        return _merge_nodes(nodes, self.Graph)
-
-
     def graphmod_merge_nodes_auto(self, thresh=50):
         """ automaticalyl merge airs of nodes that are closert than thershold until no
         such pairs remain
@@ -1112,11 +898,138 @@ class Parser(object):
         return did_mod
 
 
+    def find_closest_edge_to_split(self, thresh):
+        """ find any pts that are close to an edge (that the pt is not on)
+        return that edge, and the location on that edge that is closest to the pt
+        """
+
+        G = self.Graph
+        edges = []
+        dists = []
+        inds = []
+        nodes = []
+        for n in G.nodes:
+            for e in G.edges:
+                if n not in e[:2]:
+                    d, ind = self.min_dist_node_to_edge(n, e)
+                    if d<thresh:
+                        edges.append(e)
+                        dists.append(d)
+                        inds.append(ind)
+                        nodes.append(n)
+        if len(edges)==0:
+            return None, None, None, None
+        else:
+            # get the edge that has the case of closest node.
+            tmp = [(e, d, i, n) for e, d, i, n in  zip(edges, dists, inds, nodes)]
+            tmp = sorted(tmp, key=lambda x:x[1])
+            return tmp[0]
+
+
+
+    def graphmod_split_edges_auto(self, thresh=25):
+        """ automatilcaly split edgfes that re close to a pt, at
+        the location on edge closest to the pt.
+        """
+
+        ct = 0
+        e, d, i, n = self.find_closest_edge_to_split(thresh)
+        didmod = False
+        while e is not None:
+            
+            if ct>20:
+                print(G.nodes)
+                print(G.edges)
+                assert False, "recursive problem."
+            print("**Splitting edge", e, "Merging with node:", n)
+            nnew = self.split_edge(e, i)
+            
+            # self.plot_graph() 
+            # Must then merge these two pts.
+            print("Merging: ", {n, nnew})
+            self.merge_nodes({n, nnew})
+
+            # self.plot_graph() 
+            # Merge any other nodes that are now too close.
+            self.graphmod_merge_nodes_auto(thresh=thresh)
+
+            e, d, i, n = self.find_closest_edge_to_split(thresh)
+
+            # self.plot_graph()
+            # assert False
+
+            didmod=True
+        return didmod
+
+    ############## TOOLS FOR MODIFYING NODES MANUALLY
+    def remove_node(self, node):
+        """ Carefully removes a node. Connects up other nodes that were previously
+        connected to this node.
+        NOTE:
+        - only works if there are 2 and only 2 edges for this node. Otherwise it is not clear
+        how to reconnect the new nodes.
+        """
+
+        edges_to_remove = []
+
+        # Check that there are only 2 edges
+        list_edges = self.find_edges_connected_to_this_node(node)
+        if len(list_edges)<2:
+            assert False, "this node is a loop with no other nodes.."
+        if len(list_edges)>2:
+            assert False, "multiple adjacent nodes, not sure how to reconnect them"
+
+        # Delete these two edges
+        edges_to_remove.extend(list_edges)
+
+        # Make a new edge between the two adjacent edges
+        nodes_adjacent = self.find_adjacent_nodes(node)
+        pts = self.find_pts_between_these_nodes([nodes_adjacent[0], node, nodes_adjacent[1]], concat=True)
+        new_edge = (nodes_adjacent[0], nodes_adjacent[1], {"pts":pts})
+        # if False:
+        #     # Old, where I made mistake, assumed needed new ind...
+        #     list_inds = self.find_edgeindices_for_edges_between_these_nodes(nodes_adjacent[0],
+        #         nodes_adjacent[1])
+        #     new_ind = max(list_inds)+1
+        #     new_edge = (nodes_adjacent[0], nodes_adjacent[1], new_ind)
+
+        # DO MOD
+        self.modify_graph(nodes_to_remove=[node], edges_to_add=[new_edge], 
+            edges_to_remove=edges_to_remove)
+
+    def add_node(self, node_info, ver):
+        """ [GOOD] Flexible way to manually adda single node.
+        Takes care to (i) find where to add the node and (ii) reconnect edges
+        properly.
+        INPUT:
+        - ver, str, method to use
+        - node_info, list, depends on ver
+        """
+
+        if ver=="pt_edge":
+            """ give a pt (xy) and snaps it onto the nearest location in edge
+            - node_info, [pt, edge], where pt is [x,y] and edge is (n1, n2, idx)
+            """
+            # edge = (2,6,1)
+            # pt = [75, 5]
+            pt = node_info[0]
+            edge = node_info[1]
+
+            dist, ind_along_edge = self.min_dist_pt_to_edge(pt, edge)
+            self.split_edge(edge, ind_along_edge)
+            
+        elif ver=="pt_anyedge":
+            """ Given pt (xy) snaps it onto nearest location on nearest edge
+            """
+            assert False, "test this"
+            strokes = [np.array([pt, pt, pt])]
+            P.graphmod_add_nodes_strokes_endpoints(strokes)
+
+
     def graphmod_add_nodes_strokes_endpoints(self, strokes, thresh=10):
         """ add nodes for each endpoint for each stroke (or do nothing
         if it already exists)
         """
-        print(thresh)
         for strok in strokes:
             for ind in [0, -1]:
                 pt = strok[ind, :2]
@@ -1143,8 +1056,103 @@ class Parser(object):
                     print("**Splitting, adding strokes endpoints", ed, ind)
                     self.split_edge(ed, ind)
 
+    def merge_nodes(self, nodes):
+        """ Merges a pair of nodes intoa  new node, with position in between.
+        Takes care to update edges correctly
+        """
+
+        def _merge_nodes(nodes, G):
+            """ 
+            - nodes, set of nodes, e..g, {3,4}
+            - G
+            OUT:
+            - modifies G to have new node (ind is max + 1), and new edges replacing old edges.
+            """
+            assert isinstance(nodes, set)
+            list_nodes = list(nodes)
+            
+            o1 = self.get_node_dict(list_nodes[0])["o"]
+            o2 = self.get_node_dict(list_nodes[1])["o"]
+            radius = np.linalg.norm(o1-o2)
+            radius *= 2
+            print("--- RADIUS", radius)
+
+            # new center
+            onew = np.round(np.mean(np.stack([G.nodes[n]["o"] for n in nodes]), axis=0)).astype(np.int16)
+            nnew = max(list(G.nodes))+1
+
+            # remove all edges between these
+            elist = [e for e in G.edges if set(e[:2])==nodes]
+
+            # add new edges to replace any old edges
+            edges_to_add = []
+            edges_to_remove = []
+            edges_to_remove.extend(elist)
+            for ni in [0, 1]:
+                nthis = list_nodes[ni]
+                othis = G.nodes[nthis]["o"]
+
+                for e in G.edges:
+                    if nthis in e[:2]:
+                        edg = G.edges[e]
+
+                        # conver this edge to a new edge, using same pts
+                        nother = [n for n in e[:2] if n!=nthis]
+                        assert len(nother)==1, "ytou might have repeat node? a-->a"
+                        nother = nother[0]
+
+                        if set([nthis, nother])==nodes:
+                            # this is edge between the pair you are merging.
+                            # you have already added it.
+                            continue
+
+                        # construct a new edge
+        #                 weight = edg["weight"]
+        #                 visited = edg["visited"]
+                        pts = self.get_edge_pts(e, anchor_node=nthis)
+                        # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
+                        pts[0, :] = onew
+
+                        if False:
+                            pts = edg["pts"]
+
+                            # add the center to the end that is currently closest to the center
+                            d1 = np.linalg.norm(pts[0,:]-othis)
+                            d2 = np.linalg.norm(pts[-1,:]-othis)
+                            if d1<d2:
+                                pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
+                            else:
+                                pts = np.append(pts, onew.reshape(1,-1), axis=0)
+
+                        # smoothening out the new edge
+                        # - radius, based on distance between two nodes that you are merging
+                        from pythonlib.tools.stroketools import smooth_pts_within_circle_radius
+                        pts = smooth_pts_within_circle_radius(pts, radius)
+
+                        # Add this new edge
+                #         G.add_edge(nnew, nother, pts=pts, weight=weight)
+                        edges_to_add.append((nnew, nother, {"pts":pts}))
+        #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
+                        edges_to_remove.append((nthis, nother, e[2]))
+                            
+
+            nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
+            nodes_to_remove = list(nodes)
+            self.modify_graph(nodes_to_add=nodes_to_add, nodes_to_remove=nodes_to_remove, 
+                        edges_to_add=edges_to_add, edges_to_remove=edges_to_remove)
+            
+            return G
+
+        return _merge_nodes(nodes, self.Graph)
+
 
     def split_edge(self, edge, ind):
+        """
+        Split this edge into two new edges at location within edge defined by ind.
+        (i.e., add a node, and connect that node to the endpoints)
+        Takes care to update all edges etc.
+        """
+
         def _split_edge(edge, ind, G):
             """ split this edge at this index along its pts
             """
@@ -1199,96 +1207,18 @@ class Parser(object):
         return _split_edge(edge, ind, self.Graph)
         
 
-    def find_closest_edge_to_split(self, thresh):
-        """ find any pts that are close to an edge (that the pt is not on)
-        return that edge, and the location on that edge that is closest to the pt
-        """
-
-        G = self.Graph
-        edges = []
-        dists = []
-        inds = []
-        nodes = []
-        for n in G.nodes:
-            for e in G.edges:
-                if n not in e[:2]:
-                    d, ind = self.min_dist_node_to_edge(n, e)
-                    if d<thresh:
-                        edges.append(e)
-                        dists.append(d)
-                        inds.append(ind)
-                        nodes.append(n)
-        if len(edges)==0:
-            return None, None, None, None
-        else:
-            # get the edge that has the case of closest node.
-            tmp = [(e, d, i, n) for e, d, i, n in  zip(edges, dists, inds, nodes)]
-            tmp = sorted(tmp, key=lambda x:x[1])
-            return tmp[0]
-
-
-    def graphmod_split_edges_auto(self, thresh=25):
-        """ automatilcaly split edgfes that re close to a pt, at
-        the location on edge closest to the pt.
-        """
-
-        ct = 0
-        e, d, i, n = self.find_closest_edge_to_split(thresh)
-        didmod = False
-        while e is not None:
-            
-            if ct>20:
-                print(G.nodes)
-                print(G.edges)
-                assert False, "recursive problem."
-            print("**Splitting edge", e, "Merging with node:", n)
-            nnew = self.split_edge(e, i)
-            
-            # self.plot_graph() 
-            # Must then merge these two pts.
-            print("Merging: ", {n, nnew})
-            self.merge_nodes({n, nnew})
-
-            # self.plot_graph() 
-            # Merge any other nodes that are now too close.
-            self.graphmod_merge_nodes_auto(thresh=thresh)
-
-            e, d, i, n = self.find_closest_edge_to_split(thresh)
-
-            # self.plot_graph()
-            # assert False
-
-            didmod=True
-        return didmod
-
-
-    # GRAPHMOD - tools
-    def check_pts_orientation(self, pts, o, return_none_on_tie=False):
-        """ figures out how pts is oriented relative to 
-        pt1. returns True is pts[0] is closer, or False otherwise
-        - pt1, Nx2 array
-        - o, (2,) array
-        - return_none_on_tie, otherwise fails.
-        """
-        
-        # add the center to the end that is currently closest to the center
-        d1 = np.linalg.norm(pts[0,:]-o)
-        d2 = np.linalg.norm(pts[-1,:]-o)
-        if d1==d2:
-            if return_none_on_tie:
-                return None
-            else:
-                print(d1, d2)
-                print(o)
-                print(pts[0], pts[-1])
-                assert False
-        if d1<d2:
-            return True
-        else:
-            return False
-
+    ################### LOW-LEVEL CODE FOR MANIPULATING GRAPH
     def modify_graph(self, nodes_to_add=None, nodes_to_remove=None, edges_to_add=None, 
         edges_to_remove=None):
+        """ Low-level to add/remove nodes/edges. DO NOT use this unless you know what you doing,
+        becuase this doesnt' autoatmically prune and add edges so that graph is appropriately
+        connected.
+        INPUTS:
+        - nodes_to_add, list of nodes, where each is (nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
+        - nodes_to_remove, list of ints
+        - edges_to_add, list of edges, where edges[0] = (node0, node1, {pts:[...]})
+        - edges_to_remove, list of edges, where each is (node0, node1, index)
+        """ 
         
         G = self.Graph
         
@@ -1314,14 +1244,115 @@ class Parser(object):
             # Remove edges
             print("Adding edges", [[e for e in ed if not isinstance(e, dict)] for ed in edges_to_add])
         #     print(", which replace these removed edges", edges_to_remove)
+            for ed in edges_to_add:
+                assert isinstance(ed[2], dict), "ed[2] must be {pts:[...]}"
             G.add_edges_from(edges_to_add)
 
         print("- Done modifying, new nodes and edges")
         print(G.nodes)
         print(G.edges)
-        
 
-    ##########
+
+
+    ######################## GRAPHMOD - tools
+    def check_pts_orientation(self, pts, o, return_none_on_tie=False):
+        """ figures out how pts is oriented relative to 
+        pt1. returns True is pts[0] is closer, or False otherwise
+        - pt1, Nx2 array
+        - o, (2,) array
+        - return_none_on_tie, otherwise fails.
+        """
+        
+        # add the center to the end that is currently closest to the center
+        d1 = np.linalg.norm(pts[0,:]-o)
+        d2 = np.linalg.norm(pts[-1,:]-o)
+        if d1==d2:
+            if return_none_on_tie:
+                return None
+            else:
+                print(d1, d2)
+                print(o)
+                print(pts[0], pts[-1])
+                assert False
+        if d1<d2:
+            return True
+        else:
+            return False
+
+
+
+    ########## GRAPHMOD - helpers to find nodes and edges
+    def find_edges_connected_to_this_node(self, node):
+        """ return list of edges given a node (int)
+        OUT:
+        - list_edges, e.g, [(0,3,1), (..)...]
+        NOTE:
+        - if this node doesnt exist, returns empty list.
+        """
+        list_edges = [ed for ed in self.Graph.edges if node in ed[:2]]
+        return list_edges
+
+    def find_adjacent_nodes(self, node):
+        """ Return a list of nodes connected to this node.
+        """
+        return list(self.Graph.neighbors(node))
+
+    def find_edges_between_these_nodes(self, node1, node2):
+        """ Returns list of all edges between thse nodes
+        INPUT:
+        - node1, node2, ints. order doesnt matter.
+        OUT:
+        - list of edges
+        """
+        return [ed for ed in self.Graph.edges if set(ed[:2])==set([node1, node2])]
+
+    def find_edgeindices_for_edges_between_these_nodes(self, node1, node2):
+        """ Returns list of indices for all edges that exist between thse nodes
+        i.e,, if edge = (1,2,0) then 0 is the index.
+        """
+        list_edges = self.find_edges_between_these_nodes(node1, node2)
+        return [ed[2] for ed in list_edges]
+
+    def find_paths_between_these_nodes(self, list_nodes):
+        """ 
+        Find entire path (lsit of edges) in order between nodes in list_nodes.
+        Must have unambiguous edge between each adjacent pari of noides in 
+        list_nodes.
+        e..g, list_ni = [0,5,2]
+        --> [(0, 5, 0), (5, 2, 0)]
+        """
+        from pythonlib.tools.graphtools import path_through_list_nodes
+        return path_through_list_nodes(self.Graph, list_nodes)
+
+    def find_pts_between_these_nodes(self, list_nodes, concat=False):
+        """ Returns the unambiguous (fails otherwise) path between 
+        list of nodes in list_nodes. Must give enough info in list_nodes
+        so that there is one and only one path.
+        IN:
+        - list_nodes, e.g, [0,7,2]
+        OUT:
+        - pts, 
+        --- list of pts for each edge (if concat=False)
+        --- Nx2 array (if concat==True)
+        NOTE:
+        - will ensure that the order of pts is correct
+        """
+
+        # get list of edges between these nodes
+        list_edges = self.find_paths_between_these_nodes(list_nodes)
+
+        # Get list of edges
+        list_edges_pts = []
+        for ed, anchor_node in zip(list_edges, list_nodes[:-1]):
+            pts = self.get_edge_pts(ed, anchor_node=anchor_node)
+            list_edges_pts.append(pts)
+            
+        if concat==True:
+            return np.concatenate(list_edges_pts, axis=0)
+        else:
+            return list_edges_pts
+
+
     # for each node, check how close it is to every other path
     def min_dist_node_to_edge(self, node, edge):
         """ returns min distance from this node to any pt along
@@ -1333,16 +1364,14 @@ class Parser(object):
         where ind is index in pts (for edge) of min
         """
         assert node not in edge[:2], "must compare node to other edges"
-        G = self.Graph
-        o = G.nodes[node]["o"]
-        pts = G.edges[edge]["pts"]
-        
-        dists = np.linalg.norm(pts-o, axis=1)
-        ind = np.argmin(dists)
-        return dists[ind], ind
+        o = self.Graph.nodes[node]["o"]
+        return self.min_dist_pt_to_edge(o, edge)
 
     def min_dist_pt_to_edge(self, pt, edge):
         """
+        INPUT:
+        - pt, xy coord.
+        - edge, edge index.
         Retunrs
         - the distance
         - the ind along edge that has this distance.
@@ -1378,8 +1407,6 @@ class Parser(object):
 
         return edges, dists, inds
 
-
-
     def find_close_nodes_to_pt(self, pt, thresh=10, only_one=False, take_closest=False):
         """
         only_one, then fails if >1. ok if 0.
@@ -1406,10 +1433,215 @@ class Parser(object):
                 list_nodes = [tmp[0][0]]
         return list_nodes
 
+    ############# USE STROKES TO FIND/MANIPULATE NODES AND EDGES
+    def map_strokes_to_nodelists(self, strokes, thresh=5):
+        """ finds nodes aligned to strokes
+        OUT:
+        - list of paths, each path a list of nodes of len =2
+        NOTE:
+        - will fail iuf cannot find for some reason.
+        """
 
-    
+        list_of_paths = []
+        for strok in strokes:
+            path = []
+            for ind in [0, -1]:
+                pt = strok[ind,:2]
+                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
+
+                if len(list_nodes)==0:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "this pt not close to a node, need to add fifrst?"
+                elif len(list_nodes)>1:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "found > 1 node, must merge close nodes first"
+                else:
+                    node = list_nodes[0]
+
+                path.append(node)
+            list_of_paths.append(path)
+        return list_of_paths
+
+    def map_strokes_to_edgelist(self, strokes, thresh=5):
+        """ 
+        returns list of edges [(1,2,0), ...] that the input stroke is along a trajectory of.
+        makes sure that if a pair of nodes
+        have multiple possible edgse, takes teh edge that occurs more often (as you travel)
+        along the pts
+        """
+
+        def _traj_to_edgelist(traj):
+            """ traj is Nx2
+            """
+
+            last_visited_node = None
+            tracker = {}
+            list_of_edges = []
+            for i, pt in enumerate(traj[:,:2]):
+                nodes = self.find_close_nodes_to_pt(pt, only_one=True, thresh=thresh, take_closest=True)
+                
+                if len(nodes)==1:
+                    if last_visited_node is None:
+                        last_visited_node = nodes[0]
+
+                    elif last_visited_node is not None and nodes[0]!=last_visited_node:
+                        # then you have visisted a new node. 
+                        # if change last_visited_node, then pick the most visited edge, then reset.
+                        new_node = nodes[0]
+                        # print(i)
+                        # print(last_visited_node)
+                        # print(nodes)
+                        # print("HERE", tracker)
+                        # # pick out candidate edges that explain the just finished traj
+                        # edges_candidate = [ed for ed in tracker.keys() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                        # sort all candidate edges by how oten they visited
+                        edges_candidate = [(ed, nvisit) for ed, nvisit in tracker.items() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                        # sort and pick out most highly visited edge.
+                        edges_candidate = sorted(edges_candidate, key=lambda x: x[1]) # sort in ascending order.
+                        edge_just_done = edges_candidate[-1][0]
+
+                        if edge_just_done[0]==new_node:
+                            edge_just_done = (edge_just_done[1], edge_just_done[0], edge_just_done[2]) # mnake sure is in order.
+                        list_of_edges.append(edge_just_done)
+
+                        # reset everything
+                        last_visited_node = nodes[0]
+                        tracker = {}
+                    else:
+                        # do nothing, since nthing changed
+                        pass
+
+                if i==0 or i==traj.shape[0]:
+                    # print(i,pt)
+                    # print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert len(nodes)==1, "on and off should match a node..."
+
+                # find edges
+                edges, dists, inds = self.find_close_edge_to_pt(pt, thresh=thresh)
+
+                # only keep edges that involve the current node
+                edges = [ed for ed in edges if last_visited_node in ed[:2]]
+
+                # update tracker
+                for ed in edges:
+                    if ed in tracker.keys():
+                        tracker[ed] +=1
+                    else:
+                        tracker[ed] = 1
+            return list_of_edges
+
+        return [_traj_to_edgelist(traj) for traj in strokes]
 
 
+
+    def map_strokes_to_nodelists_entiretraj(self, strokes, thresh=5):
+        """ finds nodes aligned to strokes. includes all nodes, that are found along the 
+        trajectory. 
+        OUT:
+        - list of paths, each path a list of nodes of at lest len=2, but more if more are encountered.
+        - e.g,,: [[4, 2, 1], [3, 4, 5, 6], [8, 2, 0], [8, 5, 7]], means there are 4 strokes, each going
+        thru those nodes in those order.
+
+        NOTE:
+        - can guarantee that these nodes should be in order (modulo reversal)
+        - asserts that will find something for the first and last pts.
+        """
+
+        list_of_paths = []
+        for strok in strokes:
+            path = []
+            # start from first pt, and continue
+            for i in range(strok.shape[0]):
+                pt = strok[i,:2]
+                list_nodes = self.find_close_nodes_to_pt(pt, thresh)
+
+                if i==0 or i==strok.shape[0]:
+                    assert len(list_nodes)==1, "must find a node at start and end."
+
+                if len(list_nodes)==1:
+                    node = list_nodes[0]
+                    if node not in path:
+                        path.append(node)
+                
+                if len(list_nodes)>1:
+                    print(pt)
+                    print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                    assert False, "found > 1 node, must merge close nodes first"
+
+            list_of_paths.append(path)
+        return list_of_paths
+
+
+    ########## LOW-LEVEL HELPERS WITH EDGES AND NODES
+    def get_edge_helper(self, edge):
+        """ Help return correct index for edge, given vareity of 
+        ways of inputing edge here
+        INPUT:
+        - edge, e.g.,:
+        --- edge = (1,2), then looks for one edge that is (1,2,x) where
+        x is idx. 
+        --- edge = (2,1,0), which returns the correct ordering of 1 and 2.
+        OUT:
+        - (n1, n2, idx)
+        NOTE:
+        - in all cases, fails if doiesnt find one and only one edge.
+        """
+
+        list_edges = []
+        for ed in self.Graph.edges:
+            if set(edge[:2]) != set(ed[:2]):
+                continue
+
+            if len(edge)>2:
+                # also check the index
+                if edge[2]!=ed[2]:
+                    continue
+
+            # passes all tests. keep
+            list_edges.append(ed)
+
+        if len(list_edges)==0 or len(list_edges)>1:
+            print(list_edges)
+            assert False, "didnt find exactly one edge"
+
+        return list_edges[0]
+
+    def get_edge_dict(self, edge):
+        """ Return dict fo this edge
+        e..g, dict[pts] = [...
+        """
+        edge = self.get_edge_helper(edge)
+        return self.Graph.edges[edge]
+
+
+    def get_edge_pts(self, edge, anchor_node=None):
+        """ return pts, array (N,2)
+        INPUT:
+        - anchor_node, pts will be oriented (flipped) so that
+        pts[0,:] will be closer to anchor_node, than will be pts[-1]
+        --- if None, then returns in the saved order.
+        """
+
+        pts = self.get_edge_dict(edge)["pts"]
+        if anchor_node is None:
+            return pts
+        else:
+            anchor_pts = self.get_node_dict(anchor_node)["o"]
+            doflip = not self.check_pts_orientation(pts, anchor_pts)
+            if doflip:
+                pts = np.flipud(pts)
+            return pts
+
+    def get_node_dict(self, node):
+        """ Returns dict for this node.
+        fails if doesnt exist
+        """
+        return self.Graph.nodes[node]
+        
     ########## FILTER/CLEAN UP PARSES
     def filter_single_parse(self, ver, ind):
         """ returns True/False, where True means
@@ -1600,6 +1832,8 @@ class Parser(object):
             for i in nodes:
                 pt = nodes[i]["o"]
                 ax.text(pt[1], pt[0], i, color="r", size=15)
+            ax.set_xlabel("y")
+            ax.set_ylabel("x")
 
         if graph is None:
             graph = self.Graph

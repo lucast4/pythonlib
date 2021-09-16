@@ -1267,3 +1267,106 @@ def concatStrokes(strokes, reorder=False, thresh=10, sanity_check=False):
         return strokes_out
 
 
+def intersect_traj_by_circle(traj, circle_radius):
+    """ Finds index along traj that is interesected by circle whose origin is at
+    onset of the traj.
+    INPUT:
+    - traj, Nx2
+    - circle_radius, number
+    OUT:
+    - index into traj. if circle is too big, returns []
+    NOTE:
+    - if multiple intersections (e.g., traj turns back), then will return the latest position
+    on traj that is a threshold crossing from inside to outside circle.
+    - returns the index immediately before the crossing.
+    """
+
+    # out of all pts that intersect with circle of radius threshold, take the one that is furthest away
+    radius = circle_radius
+    # - find all pts that intersect this circle.
+    dists = np.linalg.norm(traj-traj[0], axis=1) # pts --> distances from traj onset.
+    inds_intersect = np.where(np.diff(dists-radius>0))[0]
+    if len(inds_intersect)>=1:
+        ind = inds_intersect.max() # get the last crossing
+    else:
+        ind = []
+    return ind
+
+
+
+
+def merge_pts(pts1, pts2, up_to_idx):
+    """
+    Given two identical shape pts, finds an in-between traj by
+    taking weighted avg of pts1 and pts2, with weight depending on 
+    location along trajectory.
+    INPUT:
+    - pts1, Nx2
+    - pts2, Nx2,
+    - up_to_idx, all indices before this will take weighted avg of pts1 and 2.
+    See below.
+    OUT:
+    - pts_new
+    --- will not modify inputs
+    NOTE:
+    - onset of traj will be weighted to be more like pts1
+    - offset of traj (up to up_to_idx) will be weighted more like pts2
+    - the weights will be linear from 1-->0
+    - inds after up_to_idx will be takend from pts2
+    """
+    
+    # pts must be same length
+    assert len(pts1)==len(pts2)
+    
+    # weight
+    weights = np.linspace(1, 0, up_to_idx)
+
+    # make new pts
+    pts_new = np.copy(pts2)
+    pts_new[:up_to_idx,:] = pts1[:up_to_idx,:]*weights[:, None] + pts2[:up_to_idx, :]*(1-weights[:, None])
+    
+    return pts_new
+
+def smooth_pts_within_circle_radius(pts, radius, ploton=False):
+    """ smooths pts within circle radius from pts onset, by taking weighted average
+    of two trajs, one is original pts, the other is with a straight line drawn from
+    onset to where pts intersects with circle of radius (centered at pts onset)
+    IN:
+    - pts, N x 2
+    - radius, of circle
+    OUT:
+    - pts_new.
+    --- Does not modify pts.
+    """
+    from pythonlib.tools.stroketools import merge_pts
+    from pythonlib.tools.stroketools import intersect_traj_by_circle
+
+    # find the cutoff index
+    idx = intersect_traj_by_circle(pts, radius)
+
+    # copy pts, but with straight line from start to the cutoff index.
+    pt0 = pts[0]
+    pt1 = pts[idx]
+    a = np.linspace(pt0[0], pt1[0], idx) # x
+    b = np.linspace(pt0[1], pt1[1], idx) # y
+    pts_shortcut = np.copy(pts)
+    pts_shortcut[:idx, :] = np.c_[a, b]
+
+    # merge them
+    pts_new = merge_pts(pts_shortcut, pts, idx)
+
+    if ploton:
+        plt.figure()
+        plt.plot(pts[:,0], pts[:,1], "--", label="long")
+        plt.plot(pts_shortcut[:,0], pts_shortcut[:,1], "--", label="shortcut")
+
+        # for nthis in list_nodes:
+        #     o = self.get_node_dict(nthis)["o"]
+        #     plt.plot(o[0], o[1], "kd", label="old_node_pos")
+        # plt.plot(onew[0], onew[1], "ks", label="new")
+    
+        plt.plot(pts_new[:,0], pts_new[:,1], '-xr', label="merged");
+
+        plt.legend()
+
+    return pts_new
