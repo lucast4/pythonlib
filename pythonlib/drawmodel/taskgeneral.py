@@ -20,7 +20,7 @@ class TaskClass(object):
         self.Parses = None
 
     def initialize(self, ver, params, coord_force_same_aspect_ratio=True,
-            convert_coords_to_abstract=True):
+            convert_coords_to_abstract=True, split_large_jumps=False):
         """ General purpose, to initialize with params for
         this task. Is flexible, takes in many formats, converts
         each into general abstract format
@@ -64,6 +64,10 @@ class TaskClass(object):
 
         # Check that nothing goes out of bounds
         self._check_out_of_bounds()
+
+        # Split into distinct strokes, wherever task pts make dramatic jump.
+        if split_large_jumps:
+            self._split_strokes_large_jump()
 
 
     def _initialize_ml2(self, taskobj):
@@ -168,15 +172,20 @@ class TaskClass(object):
         # print(self.Strokes)
         # assert False
 
-
-
-
     def _preprocess(self):
 
         # Convert strokes to abstract coordinates (to be more general)
         from .image import convertCoordGeneral  
         pass
 
+
+    def _split_strokes_large_jump(self):
+        from pythonlib.tools.stroketools import split_strokes_large_jumps
+        if self.Params["input_ver"]=="ml2":
+            thresh = 50
+        else:
+            assert False, "what is good threshold where if adajncet pts greater, then split storke here?"
+        self.Strokes = split_strokes_large_jumps(self.Strokes, thresh)
 
     def _convertCoords(self, pts, in_, out_):
         """ convert between coordinate systems.
@@ -264,6 +273,26 @@ class TaskClass(object):
             assert False
 
 
+    def get_number_hash(self, ndigs = 6, include_taskstrings=True, 
+        include_taskcat_only=False, compact = False):
+        """ Returns number, with digits ndigs, based on 
+        coordinates of task. shodl be unique id.
+        - include_taskstrings, False, then just number. True, then uses task 
+        category, and numberical id (which entered during task creation)
+        NOTE: confirmed that the strokes that go in here are identical to strokes in Dataset
+        """
+        # if include_taskcat_only:
+        #     assert include_taskstrings is False, "choose either entier string, or just the cat"
+        idnum = self.Params["input_params"].info_generate_unique_name(self.Strokes, 
+            nhash=ndigs, include_taskstrings=include_taskstrings, include_taskcat_only=include_taskcat_only)
+
+        if compact:
+            # remove long "random" in string
+            ind = idnum.find("random")
+            if ind>0:
+                idnum = idnum[:ind+1] + idnum[ind+6:]
+
+        return idnum
 
     #############################
     def program2shapes(self, program):

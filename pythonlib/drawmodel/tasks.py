@@ -202,7 +202,8 @@ class TaskClass(object):
         #     }
         return probe
     
-    def info_generate_unique_name(self, strokes=None, nhash = 6):
+    def info_generate_unique_name(self, strokes=None, nhash = 6, 
+        include_taskstrings=True, include_taskcat_only=False):
         """ This is simialr to in utils, but here is more confident that each task
         is unique. 
         INPUTS:
@@ -280,7 +281,14 @@ class TaskClass(object):
         # Compose the task name
         taskcat = self.info_name_this_task_category()
         tasknum = self.info_summarize_task()["tasknum"]
-        return f"{taskcat}_{tasknum}-{_hash}"
+        if include_taskstrings:
+            assert include_taskcat_only is False, "choose one or other"
+            return f"{taskcat}_{tasknum}-{_hash}"
+        elif include_taskcat_only:
+            return f"{taskcat}-{_hash}"
+        else:
+            return str(_hash)
+
 
     # SCRATCH - to compare tasks names before and after update hash code.
     # answers whether task that are diff (but only one name before) now succesflyll 
