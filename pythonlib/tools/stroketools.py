@@ -1267,12 +1267,13 @@ def concatStrokes(strokes, reorder=False, thresh=10, sanity_check=False):
         return strokes_out
 
 
-def intersect_traj_by_circle(traj, circle_radius):
+def intersect_traj_by_circle(traj, circle_radius, max_dist_along_pts=0.25):
     """ Finds index along traj that is interesected by circle whose origin is at
     onset of the traj.
     INPUT:
     - traj, Nx2
     - circle_radius, number
+    - max_dist_along_pts, see other code in this file
     OUT:
     - index into traj. if circle is too big, returns []
     NOTE:
@@ -1285,11 +1286,12 @@ def intersect_traj_by_circle(traj, circle_radius):
     radius = circle_radius
     # - find all pts that intersect this circle.
     dists = np.linalg.norm(traj-traj[0], axis=1) # pts --> distances from traj onset.
-    inds_intersect = np.where(np.diff(dists-radius>0))[0]
+    ind_max = min([len(traj)-2, int(np.ceil(max_dist_along_pts*traj.shape[0]))]) # -2, since diff below.
+    inds_intersect = np.where(np.diff(dists[:ind_max]-radius>0))[0]
     if len(inds_intersect)>=1:
         ind = inds_intersect.max() # get the last crossing
     else:
-        ind = []
+        ind = None
     return ind
 
 
@@ -1327,13 +1329,18 @@ def merge_pts(pts1, pts2, up_to_idx):
     
     return pts_new
 
-def smooth_pts_within_circle_radius(pts, radius, ploton=False):
+def smooth_pts_within_circle_radius(pts, radius, ploton=False, max_dist_along_pts=0.5,
+    must_work=False):
     """ smooths pts within circle radius from pts onset, by taking weighted average
     of two trajs, one is original pts, the other is with a straight line drawn from
-    onset to where pts intersects with circle of radius (centered at pts onset)
+    onset to where pts intersects with circle of radius (centered at pts onset), and then continuing.
     IN:
     - pts, N x 2
     - radius, of circle
+    - max_dist_along_pts, max travel along pts within wihchi to consider a candidate interseciotn
+    pt. This important for loops, otherwise will choose the one closer to the return pt, and leads to a
+    mess. in units of fraction of the entire traj.
+    - must_work, then throw error if fail to find an intersection (e..g, if radius is too big)
     OUT:
     - pts_new.
     --- Does not modify pts.
@@ -1344,7 +1351,18 @@ def smooth_pts_within_circle_radius(pts, radius, ploton=False):
     if len(pts)==0:
         return pts
     # find the cutoff index
-    idx = intersect_traj_by_circle(pts, radius)
+    idx = intersect_traj_by_circle(pts, radius, max_dist_along_pts=max_dist_along_pts)
+
+    if idx is None:
+        if must_work:
+            print(pts)
+            print(radius)
+            print(max_dist_along_pts)
+            idx = intersect_traj_by_circle(pts, radius, max_dist_along_pts=1)
+            print("ideal max_dist_along_pts:", idx, len(pts), idx/len(pts))
+            assert False, "didnt find..."
+        else:
+            return np.copy(pts)
 
     # copy pts, but with straight line from start to the cutoff index.
     pt0 = pts[0]
