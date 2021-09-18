@@ -504,7 +504,8 @@ class Dataset(object):
 
     ############### TASKS
     def load_tasks_helper(self, reinitialize_taskobjgeneral=True, 
-            redo_cleanup=True, convert_coords_to_abstract=False):
+            redo_cleanup=True, convert_coords_to_abstract=False, 
+            unique_names_post_Sep17=True):
         """ To load tasks in TaskGeneral class format.
         Must have already asved them beforehand
         - Uses default path
@@ -574,7 +575,51 @@ class Dataset(object):
         print("added new column self.Dat[Task]")  
 
         if redo_cleanup:
-            self._cleanup_using_tasks()
+            self._cleanup_using_tasks(unique_names_post_Sep17=unique_names_post_Sep17)
+
+    def _task_hash(self, Task, random_task, use_objects = False, 
+        original_ver_before_sep21=True):
+        if use_objects:
+            assert False, "not coded"
+
+        if original_ver_before_sep21:
+            # Original (actually 2nd to original) ver, before 9/17/21. Is good, but
+            # problem is random tasks have tasknum in name, which means might not compare
+            # well across tasknums that are actually same task. (since randomly generated
+            # tasknums can be arbitrary). Solution, increase hash length, and dont have 
+            # taskstrings
+            ndigs = 6
+            return Task.get_number_hash(ndigs=ndigs, include_taskstrings=True)
+        else:
+            if random_task:
+                return Task.get_number_hash(ndigs=10, include_taskstrings=False,
+                    include_taskcat_only=True, compact=True)
+
+            else:
+                # Thiese two lines are identical. This is idenitcal to before Sep 17
+                return Task.get_number_hash(ndigs=6, include_taskstrings=True)
+                # return self.Dat.iloc[ind]["unique_task_name"]
+
+
+    def task_hash(self, ind, use_objects = False, 
+        original_ver_before_sep21=True):
+        """ Return task hash, differeing depending in smart way on onctext
+        INPUT:
+        - either ind or Task
+        RETURNS: 
+        - hashable identifier that should apply across all datsaets.
+        --- if task is Fixed, then returns the unique_task_name
+        --- if task is random, then returns a 10-digit hash.
+        --- if use_objects, then overwrites others, and returns a FrozenSet with
+        the objects (and affine features). This only works after ML2 using objects, so like
+        July 2021 +. SO: only change is for random tasks. Fixed tasks have exact same name as 
+        before.
+        """
+
+        Task = self.Dat.iloc[ind]["Task"]
+        random_task = self.Dat.iloc[ind]["random_task"]
+        return self._task_hash(Task, random_task, use_objects = use_objects, 
+            original_ver_before_sep21=original_ver_before_sep21)
 
 
 
@@ -749,16 +794,26 @@ class Dataset(object):
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
-    def _cleanup_using_tasks(self):
+    def _cleanup_using_tasks(self, unique_names_post_Sep17=False):
         """ cleanups that require "Tasks" in columns,
         i.e,, extract presaved tasks
+        - unique_names_post_Sep17, imprioving naming for random tasks. see hash function./
         """
 
         assert "Task" in self.Dat.columns
 
         # Replace unique name with new one, if tasks have been loaded
-        def F(x):
-            return x["Task"].Params["input_params"].info_generate_unique_name()
+        if unique_names_post_Sep17:
+            def F(x):
+                return self._task_hash(Task=x["Task"], random_task=x["random_task"], 
+                    original_ver_before_sep21=False)
+        else:
+            def F(x):
+                return self._task_hash(Task=x["Task"], random_task=x["random_task"], 
+                    original_ver_before_sep21=True)
+            # Equivalent to line above.
+            # def F(x):
+            #     # return x["Task"].Params["input_params"].info_generate_unique_name()
         self.Dat = applyFunctionToAllRows(self.Dat, F, "unique_task_name")
 
         # task cartegories should include setnum
@@ -768,6 +823,15 @@ class Dataset(object):
 
         # rename charactesrs
         self._cleanup_rename_characters()
+
+        # replace strokes_task with strokes from Task.
+        def F(x):
+            if str(x["date"])==str(210828) and x["expt"]=="gridlinecircle":
+                # Then lollis were chunked into single strokes. but should
+                # really be multipel strokes. 
+                x["Task"]._split_strokes_large_jump()
+            return x["Task"].Strokes    
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_task")
 
 
     def _cleanup_rename_characters(self):
@@ -2448,7 +2512,8 @@ class Dataset(object):
 
     def parser_extract_parses_single(self, ind, ver,
             plot=False, quick=False,
-            nwalk_det = 10, max_nstroke=200, max_nwalk=50, N=1000,
+            # nwalk_det = 10, max_nstroke=200, max_nwalk=50, N=1000, skip_parsing = False
+            nwalk_det = 10, max_nstroke=350, max_nwalk=75, N=1200, skip_parsing = False
             ):
         """ extract Parser, along with parses, for this ind, using input params
         """
@@ -2457,20 +2522,31 @@ class Dataset(object):
         if ver=="graphmod":
             # then modify graph. but do not enter the ground truth parses, since now 
             # graph will not be match original strokes.
-            graph_mods = ["strokes_ends", "merge", "splitclose", "merge"]
+            graph_mods = ["strokes_ends", "merge", "splitclose", "merge", 
+                "merge_close_edges", "merge", 
+                "loops_floating", "loops_cleanup", "loops_add"]
             graph_mods_params = [
                 {"strokes":"StrokesInterp", "thresh":5},
                 {"thresh":40},
+                {"thresh":30}, # was 25 before 9/17/21
+                {"thresh":40}, 
                 {"thresh":25},
-                {"thresh":40}]
-            do_input_by_hand=False
+                {},
+                {},
+                {},
+                {"THRESH":40}]
+            do_input_by_hand=True
+            do_input_by_hand_list = ["strokes"]
         elif ver=="nographmod":
             # then add input by hand.
             # Still enter stroke ends as new nodes.
-            graph_mods = ["strokes_ends"]
+            graph_mods = ["strokes_ends", "loops_floating", "loops_cleanup"]
             graph_mods_params = [
-                {"strokes":"StrokesInterp", "thresh":5}]
-            do_input_by_hand=False
+                {"strokes":"StrokesInterp", "thresh":5},
+                {},
+                {}]
+            do_input_by_hand=True
+            do_input_by_hand_list = ["strokes"]
         else:
             assert False, "not coded"
 
@@ -2484,59 +2560,81 @@ class Dataset(object):
         # Make skeleton
         didmod_all = P.make_graph_pipeline(graph_mods=graph_mods, 
             graph_mods_params=graph_mods_params)
+        if skip_parsing and plot:
+            P.plot_graph()
 
-        if do_input_by_hand:
-            if didmod_all is False:
-                # Then still origianl pts in graph, can enter by hand.
-                
-                # First, add by hand all the base parses.
-                # Pass in parse based on strokes
-                strokes = P.StrokesInterp
-                P.plot_graph()
-                self.plotMultStrokes([P.StrokesInterp])
-                P.manually_input_parse_from_strokes(strokes, apply_transform=False)
+        if skip_parsing is False:
+            ############ PARSES
+            if do_input_by_hand:
+                # if didmod_all is False:
+                #     # Then still origianl pts in graph, can enter by hand.
+                    
+                for handver in do_input_by_hand_list:
+                    if handver=="strokes":
+                        # First, add by hand all the base parses.   
+                        # Pass in parse based on strokes
+                        strokes = P.StrokesInterp
+                        # P.plot_graph()
+                        # self.plotMultStrokes([P.StrokesInterp])
+                        if ver=="nographmod":
+                            # then looser
+                            P.manually_input_parse_from_strokes(strokes, apply_transform=False, note="strokes")
+                        elif ver=="graphmod":
+                            P.manually_input_parse_from_strokes(strokes, apply_transform=False, require_stroke_ends_on_nodes=False, note="strokes")
+                        else:
+                            assert False, "how to do?"
 
-                ### PASS IN PARSE BASED ON OBJECTS
-                if all([x[0] is not None for x in Task.Shapes]):
-                    # then you have shape info
-                    assert False, "extract shapes, not yet coded"
+                    elif handver=="shapes":
 
-                ### CHUNKS
-                Tml2 = self.Dat.iloc[ind]["Task"].Params["input_params"]
-                strokes_models = {}
-                chunk_models = Tml2.chunks_extract_models()
-                for mod, loc in chunk_models.items():
-                    assert Tml2.chunks_extract(mod)==loc
-                    los = Tml2.chunks_convert_to_strokes(loc, reorder=True)
-                    strokes_models[mod] = los
-                    for strokes in los:
-                        P.manually_input_parse_from_strokes(strokes)
-        # print(do_input_by_hand)
-        # print(didmod_all)
-        # P.summarize_parses()
-        # assert False
+                        ### PASS IN PARSE BASED ON OBJECTS
+                        if all([x[0] is not None for x in Task.Shapes]):
+                            # then you have shape info
+                            assert False, "extract shapes, not yet coded"
+                            P.manually_input_parse_from_strokes(strokes, note="objects")
+
+                    elif handver=="chunks":
+                        ### CHUNKS
+                        Tml2 = self.Dat.iloc[ind]["Task"].Params["input_params"]
+                        strokes_models = {}
+                        chunk_models = Tml2.chunks_extract_models()
+                        for mod, loc in chunk_models.items():
+                            assert Tml2.chunks_extract(mod)==loc
+                            los = Tml2.chunks_convert_to_strokes(loc, reorder=True)
+                            strokes_models[mod] = los
+                            for strokes in los:
+                                P.manually_input_parse_from_strokes(strokes, note="chunks")
+                    else:
+                        assert False
+                # print(do_input_by_hand)
+                # print(didmod_all)
+                # P.summarize_parses()
+                # assert False
 
 
-        ## Walker to get parses.
-        P.parse_pipeline(quick=quick, stroke_order_doesnt_matter=False, direction_within_stroke_doesnt_matter=True,
-                        nwalk_det = nwalk_det, max_nstroke=max_nstroke, max_nwalk=max_nwalk, N=N)
+            ## Walker to get parses.
+            P.parse_pipeline(quick=quick, stroke_order_doesnt_matter=False, direction_within_stroke_doesnt_matter=True,
+                            nwalk_det = nwalk_det, max_nstroke=max_nstroke, max_nwalk=max_nwalk, N=N)
 
-        ############# FILTER PARSES
+            ############# FILTER PARSES
 
-        # 1) Find parses where there are paths where repeat an edge (in the same path)
-        # could repeat in same or diff direction
-        P.filter_all_parses("any_path_has_redundant_edge")
-        P.filter_all_parses("any_two_paths_have_common_edge")
+            # 1) Find parses where there are paths where repeat an edge (in the same path)
+            # could repeat in same or diff direction
+            P.filter_all_parses("any_path_has_redundant_edge")
+            P.filter_all_parses("any_two_paths_have_common_edge")
 
-        if plot:
-            P.parses_fill_in_all_strokes()
-            P.summarize_parses()
+            if plot:
+                P.parses_fill_in_all_strokes()
+                P.summarize_parses()
 
         return P
 
 
-    def parser_extract_and_save_parses(self, ver, quick=False, saveon=True, savenote=""):
+    def parser_extract_and_save_parses(self, ver, quick=False, 
+        saveon=True, savenote="", SDIR=None, save_using_trialcode=True):
         """ 
+        INPUTS:
+        - SDIR, if pass, then uses that. otherwise saves in this datasets folder
+        - save_using_trialcode, if True, filename is trialcode. if false, filename is unqiue task id
         """
         # from pythonlib.tools.stroketools import getStrokePermutationsWrapper
         from pythonlib.tools.expttools import makeTimeStamp
@@ -2544,10 +2642,11 @@ class Dataset(object):
 
         assert len(self.Metadats)==1, "only run this if one dataset"
 
-        sdir = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}-ver_{ver}-quick_{quick}-{savenote}"
+        if SDIR is None:
+            SDIR = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}"
+        sdir = f"{SDIR}-ver_{ver}-quick_{quick}-{savenote}"
         os.makedirs(sdir, exist_ok=True)
         print("Saving parses to : ", sdir) 
-
         
         # 1) Quickly save dict mapping trialcode --> unique task name
         if saveon:
@@ -2557,23 +2656,47 @@ class Dataset(object):
                 taskname = self.Dat.iloc[i]["unique_task_name"]
                 dict_trialcode_taskname[trialcode]=taskname
             # save other things
-            path = f"{sdir}/dict_trialcode_taskname.pkl"
+            path = f"{sdir}/dict_trialcode_taskname-{self.identifier_string()}.pkl"
             with open(path, "wb") as f:
                 pickle.dump(dict_trialcode_taskname, f)
             from pythonlib.tools.expttools import writeDictToYaml
-            writeDictToYaml(dict_trialcode_taskname, f"{sdir}/dict_trialcode_taskname.yaml")
+            writeDictToYaml(dict_trialcode_taskname, 
+                f"{sdir}/dict_trialcode_taskname-{self.identifier_string()}.yaml")
 
         # 2) Get parses.
         taskname_list = []
         for i in range(len(self.Dat)):
             trialcode = self.Dat.iloc[i]["trialcode"]
             taskname = self.Dat.iloc[i]["unique_task_name"]
+
+            if save_using_trialcode:
+                path = f"{sdir}/trialcode_{trialcode}.pkl"
+            else:
+                path = f"{sdir}/{taskname}.pkl"
+
             if taskname in taskname_list:
+                print("** Skipping: ", self.identifier_string(), taskname, path, "[ALREADY DONE 1]")
                 continue
-            P = self.parser_extract_parses_single(i, ver,
-                plot=False, quick=quick
-                )
+            
             taskname_list.append(taskname)
+
+            if os.path.isfile(path):
+                print("** Skipping: ", self.identifier_string(), taskname, path, "[ALREADY DONE 2]")
+                continue
+
+            print("** Making graph and parsing: ", self.identifier_string(), taskname, path)
+
+            try:
+                P = self.parser_extract_parses_single(i, ver,
+                    plot=False, quick=quick)
+            except AssertionError as err:
+                print(self.identifier_string())
+                print(i)
+                print(self.Dat.iloc[i]["trialcode"])
+                print(taskname)
+                print(err)
+                print("[EXCEPTION] ")
+                raise err
         # for row in self.Dat.iterrows():
         #     trialcode = row[1]["trialcode"]
         #     strokes_task = row[1]["strokes_task"]
@@ -2584,10 +2707,20 @@ class Dataset(object):
 
             # save
             if saveon:
-                path = f"{sdir}/trialcode_{trialcode}.pkl"
-                # out = {"Planner":}
-                with open(path, "wb") as f:
-                    pickle.dump(P, f)
+                try:
+                    # out = {"Planner":}
+                    with open(path, "wb") as f:
+                        pickle.dump(P, f)
+                except:
+                    import time
+                    time.sleep(5) # sleep in case this error is becuase file accessed by other instance of phythong
+                    # out = {"Planner":}
+                    with open(path, "wb") as f:
+                        pickle.dump(P, f)
+        print("length of dataset", len(self.Dat))
+        print("GOT THESE TASKS:", taskname_list)
+        print("** DONE!! parser_extract_and_save_parses", self.identifier_string())
+
 
 
     def parser_load_presaved_parses(self, list_parseparams, list_suffixes=None,
@@ -3457,7 +3590,8 @@ class Dataset(object):
             # 
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
-        add_stroke_number=True, centerize=False, jitter_each_stroke=False, titles_on_y=False, SIZE=2.5):
+        add_stroke_number=True, centerize=False, jitter_each_stroke=False, 
+        titles_on_y=False, SIZE=2.5):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
