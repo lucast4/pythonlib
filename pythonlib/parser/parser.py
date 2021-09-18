@@ -884,8 +884,17 @@ class Parser(object):
             for n in G.nodes:
                 for nn in G.nodes:
                     if nn>n:
-                        p1 = G.nodes[n]["o"]
-                        p2 = G.nodes[nn]["o"]
+                        try:
+                            p1 = G.nodes[n]["o"]
+                            p2 = G.nodes[nn]["o"]
+                        except Exception as err:
+                            print(n, nn)
+                            print(G.nodes[n])
+                            print(G.nodes[nn])
+                            print(G.nodes)
+                            print(G.edges)
+                            self.plot_graph()
+                            raise err
                         d = np.linalg.norm(p1-p2)
                         if np.linalg.norm(p1-p2)<thresh:
                             pairs.append({n, nn})
@@ -957,20 +966,17 @@ class Parser(object):
     def graphmod_merge_close_edges_auto(self, thresh=25):
         """ auto merge edges that are close, even if they don't have any nodes in that vicinity.
         similar to graphmod_split_edges_auto, but there was edge close to node. here is edge
-        close to edge
+        close to edge. Merges into single node.
         """
         from itertools import product
         # Track state
-        no_more_edges = False # only turns true if can get thru all edge pairs without any triggering closeness.
+        found_an_edge_pair = True # only turns true if can get thru all edge pairs without any triggering closeness.
         niter = 0
         maxiter = 30
         didmod = False
-
-        # if len(self.Graph.edges)==1:
-        #     no_more_edges = True
-        while no_more_edges == False:
+        while found_an_edge_pair == True:
             # Find edges that are close to each other
-            found_an_edge_pair = False
+            
             for (ed1, ed2) in product(self.Graph.edges, self.Graph.edges):
                 if ed1==ed2:
                     # print("HERE")
@@ -1001,12 +1007,13 @@ class Parser(object):
                     found_an_edge_pair=True
                     # print("HERE3")
                     break
-                
-            # If can get to here, that means no edge pairs are usable
-            if found_an_edge_pair:
-                no_more_edges = False
-            else:
-                no_more_edges = True
+
+            found_an_edge_pair = False
+            # # If can get to here, that means no edge pairs are usable
+            # if found_an_edge_pair:
+            #     no_more_edges = False
+            # else:
+            #     no_more_edges = True
                 
             niter+=1
             if niter>maxiter:
@@ -1017,11 +1024,6 @@ class Parser(object):
         return didmod
 
             
-
-
-
-
-
     def graphmod_split_edges_auto(self, thresh=25):
         """ automatilcaly split edgfes that re close to a pt, at
         the location on edge closest to the pt.
@@ -1339,7 +1341,7 @@ class Parser(object):
             o2 = self.get_node_dict(list_nodes[1])["o"]
             radius = np.linalg.norm(o1-o2)
             radius *= 2
-            print("--- RADIUS", radius)
+            # print("--- RADIUS", radius)
 
             # new center
             onew = np.round(np.mean(np.stack([G.nodes[n]["o"] for n in nodes]), axis=0)).astype(np.int16)
@@ -1352,60 +1354,76 @@ class Parser(object):
             edges_to_add = []
             edges_to_remove = []
             edges_to_remove.extend(elist)
-            for ni in [0, 1]:
-                nthis = list_nodes[ni]
+            for nthis in list_nodes:
                 othis = G.nodes[nthis]["o"]
 
-                for e in G.edges:
-                    if nthis in e[:2]:
-                        # edg = G.edges[e]
+                list_edges = self.find_edges_connected_to_this_node(nthis)
+                for e in list_edges:
+                # for e in G.edges:
+                    # edg = G.edges[e]
 
+                    if True:
+                        nother = e[1]
+                    else:
                         # conver this edge to a new edge, using same pts
                         nother = [n for n in e[:2] if n!=nthis]
-                        assert len(nother)==1, "ytou might have repeat node? a-->a"
+                        if len(nother)==0:
+                            print("ytou might have repeat node? a-->a")
+                            print(e)
+                            print(nthis)
+                            self.plot_graph()
+                            assert False
+                        elif len(nother)>1:
+                            assert False, "huh"
                         nother = nother[0]
 
-                        if set([nthis, nother])==nodes:
-                            # this is edge between the pair you are merging.
-                            # you have already added it.
-                            continue
+                    if set([nthis, nother])==nodes:
+                        # this is edge between the pair you are merging.
+                        # you have already added it.
+                        continue
 
-                        # construct a new edge
-        #                 weight = edg["weight"]
-        #                 visited = edg["visited"]
-                        pts = self.get_edge_pts(e, anchor_node=nthis)
+                    # construct a new edge
+    #                 weight = edg["weight"]
+    #                 visited = edg["visited"]
+                    pts = self.get_edge_pts(e, anchor_node=nthis)
 
-                        if len(pts)==0:
-                            print(e, nthis)
-                            print(self.G.edges)
-                            assert False, "this edge no pts.."
-                        # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
-                        pts[0, :] = onew
+                    if len(pts)==0:
+                        print(e, nthis)
+                        print(self.G.edges)
+                        assert False, "this edge no pts.."
+                    # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
+                    pts[0, :] = onew
 
-                        if False:
-                            pts = edg["pts"]
+                    if False:
+                        pts = edg["pts"]
 
-                            # add the center to the end that is currently closest to the center
-                            d1 = np.linalg.norm(pts[0,:]-othis)
-                            d2 = np.linalg.norm(pts[-1,:]-othis)
-                            if d1<d2:
-                                pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
-                            else:
-                                pts = np.append(pts, onew.reshape(1,-1), axis=0)
+                        # add the center to the end that is currently closest to the center
+                        d1 = np.linalg.norm(pts[0,:]-othis)
+                        d2 = np.linalg.norm(pts[-1,:]-othis)
+                        if d1<d2:
+                            pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
+                        else:
+                            pts = np.append(pts, onew.reshape(1,-1), axis=0)
 
-                        # smoothening out the new edge
-                        # - radius, based on distance between two nodes that you are merging
-                        from pythonlib.tools.stroketools import smooth_pts_within_circle_radius
-                        pts = smooth_pts_within_circle_radius(pts, radius)
+                    # smoothening out the new edge
+                    # - radius, based on distance between two nodes that you are merging
+                    from pythonlib.tools.stroketools import smooth_pts_within_circle_radius
+                    pts = smooth_pts_within_circle_radius(pts, radius)
 
-                        # Add this new edge
-                #         G.add_edge(nnew, nother, pts=pts, weight=weight)
+                    # Add this new edge
+            #         G.add_edge(nnew, nother, pts=pts, weight=weight)
+                    if nthis==nother:
+                        # Then this is a loop. nnew must be connected to iself, since
+                        # it mus tbe coonnected to the node that replaces nother.
+                        edges_to_add.append((nnew, nnew, {"pts":pts}))
+                    else:
+                        # Then nother still exists, nthis is deleted and replaced with nnew
                         edges_to_add.append((nnew, nother, {"pts":pts}))
-        #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
-                        edges_to_remove.append((nthis, nother, e[2]))
+    #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
+                    edges_to_remove.append((nthis, nother, e[2]))
 
             if len(edges_to_add)==0:
-                # check that this is not an "unclosed" loop
+                # check that this is not an "unclosed" loop (i.e., 2 endpoints being merged)
                 list_neigh1 = list(G.neighbors(list_nodes[0]))
                 list_neigh2 = list(G.neighbors(list_nodes[1]))
                 if set(list_neigh1 + list_neigh2)==set(list_nodes):
@@ -1439,6 +1457,8 @@ class Parser(object):
         Split this edge into two new edges at location within edge defined by ind.
         (i.e., add a node, and connect that node to the endpoints)
         Takes care to update all edges etc.
+        NOTE:
+        - ind is using canonical order of pts, hard ocded for this edge.
         """
 
         def _split_edge(edge, ind, G):
@@ -1447,39 +1467,54 @@ class Parser(object):
 
             # First, make the new node
             # pt for the new node
-            print("split edge start")
-            print("this edge", edge)
-            print("at this ind", ind)
+            # print("split edge start")
+            print("split this edge", edge, "at this ind", ind)
             # print(self.Graph.edges)
             print("len of edge", self.Graph.edges[edge]["pts"].shape)
-            print("all edges", G.edges)
+            # print("all edges", G.edges)
             onew = G.edges[edge]["pts"][ind]   
             
             # figure out orientation of pts
             pts = G.edges[edge]["pts"]
-            n1 = edge[0]
-            n2 = edge[1]
-            o1 = G.nodes[n1]["o"]
-            o2 = G.nodes[n2]["o"]
-            if self.check_pts_orientation(pts, o1, return_none_on_tie=True) is None:
-                # then either way is fine
-                pass
+
+            # This old method can fail.
+            if False:
+                n1 = edge[0]
+                n2 = edge[1]
+                o1 = G.nodes[n1]["o"]
+                o2 = G.nodes[n2]["o"]
+
+                try:
+                    if self.check_pts_orientation(pts, o1, return_none_on_tie=True) is None:
+                        # then either way is fine
+                        pass
+                    else:
+                        if self.check_pts_orientation(pts, o1):
+                            # then pts goes from n1 to n2.
+                            assert self.check_pts_orientation(pts, o2)==False
+                        else:
+                            # n1 is always the one closest to pts[0]
+                            assert self.check_pts_orientation(pts, o2)==True
+                            n1 = edge[1]
+                            n2 = edge[0]
+                except Exception as err:
+                    print("____")
+                    print(edge)
+                    print(n1, n2)
+                    print(self.check_pts_orientation(pts,o1))
+                    print(self.check_pts_orientation(pts,o2))
+                    self.plot_graph()
+                    raise err
             else:
-                if self.check_pts_orientation(pts, o1):
-                    # then pts goes from n1 to n2.
-                    assert self.check_pts_orientation(pts, o2)==False
-                else:
-                    # n1 is always the one closest to pts[0]
-                    assert self.check_pts_orientation(pts, o2)==True
-                    n1 = edge[1]
-                    n2 = edge[0]
+                n1, n2 = self.find_nodes_this_edge_canonical_pts_order(edge)
 
             # New pts
             nnew = max(G.nodes)+1
             onew = pts[ind,:]
             # print("Added node: ", nnew)
             # G.add_node(nnew, o=onew, pts=onew.reshape(1,-1))
-            self.modify_graph(nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})])
+            # self.modify_graph(nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})])
+            self.modify_graph(nodes_to_add = [(nnew, {"o":onew})])
             
             # New edges
             edges_to_add = [
@@ -1504,45 +1539,92 @@ class Parser(object):
         connected.
         INPUTS:
         - nodes_to_add, list of nodes, where each is (nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
+        -- NODE: nnew can be None, in which case increments node for you
         - nodes_to_remove, list of ints
         - edges_to_add, list of edges, where edges[0] = (node0, node1, {pts:[...]})
         - edges_to_remove, list of edges, where each is (node0, node1, index)
         """ 
 
+
         assert self._GraphLocked==False, "already locked (probablyt because gotten parses)"
         
+        # Easier, since cant iterate over None, below.
+        if nodes_to_add is None: 
+            nodes_to_add = []
+        if nodes_to_remove is None:
+            nodes_to_remove = []
+        if edges_to_add is None:
+            edges_to_add = []
+        if edges_to_remove is None:
+            edges_to_remove = []
+
         if plot_pre_and_post:
             self.plot_graph()
 
         G = self.Graph
-        
+         
         print("Graph before modifiyong:")
         print(G.nodes)
         print(G.edges)
         outdict = {}
+
+        # Sanity checks
+        # 1) not adding edges for nodes that dont exist
+        for ed in edges_to_add:
+            for node in ed[:2]:
+                if node not in self.Graph.nodes and node not in [n[0] for n in nodes_to_add]:
+                    print(edges_to_add)
+                    print(self.Graph.nodes)
+                    print(nodes_to_add)
+                    assert False, "cant add edge for node that doesnt exist"
+            # 1b) Check that gave me pts
+            assert isinstance(ed[2], dict)
+            assert "pts" in ed[2].keys()
+
+    # 2) Adding, removing nodes
+        for n in nodes_to_add:
+            node = n[0]
+            if node is not None:
+                assert not isinstance(node, list), "hacky check, I might have entered node=[] at some pt."
+                # 2a) Not adding and removing node at same time
+                if node in nodes_to_remove:
+                    print(nodes_to_add)
+                    print(nodes_to_remove)
+                    assert False, "trying to add and remove a node at the saemt ime"
+                # 2b) adding a node that already exists:
+                if node in self.Graph.nodes:
+                    print(node)
+                    print(self.Graph.nodes)
+                    assert False, "node already excists"
+            else:
+                assert False, "not yet coded, get auto node"
+            # 2c) must give me pts
+            assert isinstance(n[1], dict)
+            assert "o" in n[1].keys()
+
+
+
         # Removing nodes
-        if nodes_to_add is not None:
+        if len(nodes_to_add)>0:
             print("Adding new nodes:", [[e for e in ed if not isinstance(e, dict)] for ed in nodes_to_add])
         #     G.add_node(nnew, o=onew, pts=onew.reshape(1,-1))
             G.add_nodes_from(nodes_to_add)
             outdict["nodes_added"] = [n[0] for n in nodes_to_add]
             
-        if nodes_to_remove is not None:
+        if len(nodes_to_remove)>0:
             print("Removing old nodes:", nodes_to_remove)
             G.remove_nodes_from(nodes_to_remove)
             outdict["nodes_removed"] = nodes_to_remove
 
-        if edges_to_remove is not None:
+        if len(edges_to_remove)>0:
             print("Removing edges:", edges_to_remove)
             G.remove_edges_from(edges_to_remove)
             outdict["edges_removed"] = edges_to_remove
 
-        if edges_to_add is not None:
+        if len(edges_to_add)>0:
             # Remove edges
             print("Adding edges", [[e for e in ed if not isinstance(e, dict)] for ed in edges_to_add])
         #     print(", which replace these removed edges", edges_to_remove)
-            for ed in edges_to_add:
-                assert isinstance(ed[2], dict), "ed[2] must be {pts:[...]}"
             keys = G.add_edges_from(edges_to_add)
             outdict["edges_added"] = [(ed[:2], key) for ed, key in zip(edges_to_add, keys)]
 
@@ -1629,6 +1711,34 @@ class Parser(object):
         """
         return [ed for ed in self.Graph.edges if set(ed[:2])==set([node1, node2])]
 
+    def find_nodes_this_edge_canonical_pts_order(self, edge):
+        """ return (node1, node2) such that pts goes from node1 to node2.
+        NOTE: if this is loop, then not well defined. But in this case doesnt usually
+        matter. will return in the order that they are present in edges.
+        """
+
+        pts = self.get_edge_pts(edge)
+        node1 = edge[0]
+        node2 = edge[1]
+        o1 = self.get_node_dict(node1)["o"]
+        o2 = self.get_node_dict(node2)["o"]
+
+        x1 = self.check_pts_orientation(pts, o1, return_true_on_tie=True)
+        x2 = self.check_pts_orientation(pts, o2, return_true_on_tie=True)
+        if x1 and not x2:
+            return node1, node2
+        elif x2 and not x1:
+            return node2, node1
+        elif x1 and x2:
+            # then they are both equally close to pts[0]
+            return node1, node2
+        else:
+            assert False, "unclear"
+
+
+
+
+
     def find_edgeindices_for_edges_between_these_nodes(self, node1, node2):
         """ Returns list of indices for all edges that exist between thse nodes
         i.e,, if edge = (1,2,0) then 0 is the index.
@@ -1653,9 +1763,9 @@ class Parser(object):
             return path_between_nodepair(self.Graph, list_nodes[:2], False)
         else:
             from pythonlib.tools.graphtools import path_through_list_nodes
-            print("PARSER - find_paths_)betwee..")
-            print(list_nodes)
-            self.plot_graph()
+            # print("PARSER - find_paths_)betwee..")
+            # print(list_nodes)
+            # self.plot_graph()
             return path_through_list_nodes(self.Graph, list_nodes)
 
     def find_pts_between_these_nodes(self, list_nodes, concat=False):
@@ -1773,6 +1883,9 @@ class Parser(object):
         Retunrs
         - the distance
         - the ind along edge that has this distance.
+        NOTE:
+        - ind is using the "canonical" orietntaion, whichi s the 
+        hard coded order of pts in edges.
         """
         G = self.Graph
         pts = G.edges[edge]["pts"]
@@ -1798,7 +1911,7 @@ class Parser(object):
         dists = []
         inds = []
 
-        for e in G.edges:
+        for e in G.edges: 
             d, ind = self.min_dist_pt_to_edge(pt, e)
             if d<thresh:
                 edges.append(e)
@@ -2408,9 +2521,6 @@ class Parser(object):
         _plot_graph(ax, "k")
 
         return fig
-
-
-
 
 
 
