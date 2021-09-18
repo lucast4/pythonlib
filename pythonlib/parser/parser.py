@@ -870,8 +870,12 @@ class Parser(object):
             self.modify_graph(edges_to_remove=edges_to_remove)
 
 
-    def find_closest_nodes_under_thresh(self, thresh): 
+    def find_closest_nodes_under_thresh(self, thresh, return_sorted_list=False): 
         """ Finds nodes which are close to each other
+        OUT:
+        - set of 2 nodes
+        --- unless return_sorted_list, in which case return list of pairs, sorted from
+        closest to fuerthers. i.e., list_pairs, dists
         """
         def _find_closest_nodes_under_thresh(thresh, G):
             """ find pairs of nodes that are closer than thresh
@@ -900,11 +904,16 @@ class Parser(object):
                             pairs.append({n, nn})
                             dists.append(d)
             if len(pairs)==0:
-                return None
+                if return_sorted_list:
+                    return [], []   
+                else:
+                    return None
             else:
                 # take the closest pair
                 li = [(a, b) for a,b in zip(pairs, dists)]
                 li = sorted(li, key = lambda x: x[1])
+                if return_sorted_list:
+                    return [x[0] for x in li], [x[1] for x in li]
                 pairthis = li[0][0] # take the closest pair
                 return pairthis
         
@@ -918,15 +927,40 @@ class Parser(object):
 
         did_mod = False
 
-        pairthis = self.find_closest_nodes_under_thresh(thresh=thresh)
-        print("Merging this pair of nodes: ", pairthis)         
+        def _get_node_pair():
+            if False:
+                # take the closest pair
+                pairthis = self.find_closest_nodes_under_thresh(thresh=thresh)
+            else:
+                # If any exist, first take pairs that dont make loop with themselves (ie.., endpoints of an unclosed loop)
+                # The reason: closing loops by merge only smooths one of the two ends. Better to leave these to end, so that
+                # all smoothing is done as much as possible.
+                list_pairthis, lsit_dists = self.find_closest_nodes_under_thresh(thresh=thresh, return_sorted_list=True)
+                if len(list_pairthis)==0:
+                    pairthis = None
+                else:
+                    list_pairthis_not_unclosed_loop = [pair for pair in list_pairthis if self.check_nodes_make_unclosed_loop(list(pair)[0], list(pair)[1])==False]
+                    if len(list_pairthis_not_unclosed_loop)>0:
+                        pairthis = list_pairthis_not_unclosed_loop[0]
+                    else:
+                        # take the closest
+                        pairthis = list_pairthis[0]
+            print('__________________ pairthis')
+            print(pairthis)
+            return pairthis
+
+        # run
+        pairthis = _get_node_pair()
         while pairthis is not None:
+            print("Merging this pair of nodes: ", pairthis)         
             # Merge each pair
             # Make sure that if a node is part of multiple pairs, should do them separately, unless
             # they are all close together.
             self.merge_nodes(pairthis)
 
-            pairthis = self.find_closest_nodes_under_thresh(thresh=thresh)
+            # pairthis = self.find_closest_nodes_under_thresh(thresh=thresh)
+            pairthis = _get_node_pair()
+
             if pairthis is None:
                 print("No more pairs to merge - done!")
             else:
@@ -1340,7 +1374,7 @@ class Parser(object):
             o1 = self.get_node_dict(list_nodes[0])["o"]
             o2 = self.get_node_dict(list_nodes[1])["o"]
             radius = np.linalg.norm(o1-o2)
-            radius *= 2
+            radius *= 1.75
             # print("--- RADIUS", radius)
 
             # new center
@@ -1380,6 +1414,8 @@ class Parser(object):
                     if set([nthis, nother])==nodes:
                         # this is edge between the pair you are merging.
                         # you have already added it.
+                        print(nodes)
+                        assert False
                         continue
 
                     # construct a new edge
@@ -1392,7 +1428,15 @@ class Parser(object):
                         print(self.G.edges)
                         assert False, "this edge no pts.."
                     # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
+
+                    # First pt always modifed to onew
                     pts[0, :] = onew
+                    # Last pt usually modified to nother, unless nother is gong to be deleted.
+                    if nthis==nother:
+                        # Then is a loop, modify both start and end to the same (onew)
+                        pts[-1,:] = onew
+                    else:
+                        pts[-1,:] = self.get_node_dict(nother)["o"]
 
                     if False:
                         pts = edg["pts"]
@@ -1408,7 +1452,7 @@ class Parser(object):
                     # smoothening out the new edge
                     # - radius, based on distance between two nodes that you are merging
                     from pythonlib.tools.stroketools import smooth_pts_within_circle_radius
-                    pts = smooth_pts_within_circle_radius(pts, radius)
+                    pts = smooth_pts_within_circle_radius(pts, radius, must_work=True)
 
                     # Add this new edge
             #         G.add_edge(nnew, nother, pts=pts, weight=weight)
@@ -1424,10 +1468,11 @@ class Parser(object):
 
             if len(edges_to_add)==0:
                 # check that this is not an "unclosed" loop (i.e., 2 endpoints being merged)
-                list_neigh1 = list(G.neighbors(list_nodes[0]))
-                list_neigh2 = list(G.neighbors(list_nodes[1]))
-                if set(list_neigh1 + list_neigh2)==set(list_nodes):
-                    # then is an unclosed loop, they are their only neighborfs, so cant delete this edge.
+                if self.check_nodes_make_unclosed_loop(list_nodes[0], list_nodes[1]):
+                # list_neigh1 = list(G.neighbors(list_nodes[0]))
+                # list_neigh2 = list(G.neighbors(list_nodes[1]))
+                # if set(list_neigh1 + list_neigh2)==set(list_nodes):
+                # then is an unclosed loop, they are their only neighborfs, so cant delete this edge.
                     pts = self.find_pts_between_these_nodes(list_nodes, concat=True)
                     pts[0, :] = onew
                     pts[-1, :] = onew
@@ -1442,6 +1487,8 @@ class Parser(object):
 
             nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
             nodes_to_remove = list(nodes)
+
+            assert len(edges_to_remove)==len(edges_to_add)
             self.modify_graph(nodes_to_add=nodes_to_add, nodes_to_remove=nodes_to_remove, 
                         edges_to_add=edges_to_add, edges_to_remove=edges_to_remove)
             
@@ -1859,6 +1906,21 @@ class Parser(object):
         for node in edge1[:2]:
             if node in edge2[:2]:
                 return True
+        return False
+
+    def check_nodes_make_unclosed_loop(self, node1, node2):
+        """ Unclosed loop is like a "C". i.e, each nodes neighbords
+        are only the othe rnode. also, nodes are not the same. Also, there must
+        only be one edge between
+        OUT:
+        - bool
+        """
+        list_edges = self.find_edges_between_these_nodes(node1, node2)
+        list_neigh1 = list(self.Graph.neighbors(node1))
+        list_neigh2 = list(self.Graph.neighbors(node2))
+
+        if len(list_edges)==1 and list_neigh1 == [node2] and list_neigh2==[node1]:
+            return True
         return False
 
     # for each node, check how close it is to every other path
