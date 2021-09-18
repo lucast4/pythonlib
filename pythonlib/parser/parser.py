@@ -17,6 +17,7 @@ class Parser(object):
         self.Params = {}
         self.Finalized=False # to ensure that after process strokes, dont try to do more stuff.
         self.Parses = []
+        self._GraphLocked = False # will not allow graphmods after locked (e.g., already done parsing)
 
     def input_data(self, data, kind="strokes"):
         """ 
@@ -64,6 +65,7 @@ class Parser(object):
         if graph_mods is not None:
             for mod, params in zip(graph_mods, graph_mods_params):
                 print("** APPLYING THIS GRAPHMOD: ", mod)
+                didmod = None
                 if mod=="merge":
                     didmod = self.graphmod_merge_nodes_auto(**params) 
                 elif mod=="splitclose":
@@ -75,10 +77,19 @@ class Parser(object):
                         params["strokes"] = getattr(self, params["strokes"])
                     self.graphmod_add_nodes_strokes_endpoints(**params)
                     didmod = False # This never modifies the pts.
+                elif mod == "merge_close_edges":
+                    didmod = self.graphmod_merge_close_edges_auto(**params)
+                elif mod=="loops_floating":
+                    didmod = self.graphmod_auto_loops_floating_only_one_node()
+                elif mod=="loops_cleanup":
+                    didmod = self.graphmod_auto_loops_cleanup_excess_nodes()
+                elif mod=="loops_add":
+                    didmod = self.graphmod_auto_loops_add_nodes(**params)
                 else:
                     print(mod)
                     assert False
                 print("** DONE: ")
+                assert didmod is not None
                 didmod_all = didmod_all or didmod
 
         #     self.plot_graph()
@@ -113,7 +124,7 @@ class Parser(object):
         # self.graph_construct()
         
         if quick:
-            N=500 # this is usually quick
+            N=500 # this is usually quick, but still reasonbale
             nwalk_det = 5
             max_nstroke=80
             max_nwalk=20
@@ -149,6 +160,8 @@ class Parser(object):
         if plot:
             self.summarize_parses()
 
+        # Lock the graph
+        self._GraphLocked = True
 
     def _translate(self, pts):
         """ apply saved transfomration to any pts,
@@ -356,7 +369,7 @@ class Parser(object):
             return False
 
     ############# MANUALLY ENTERING PARSES
-    def manually_input_parse(self, list_of_paths, use_all_edges=True):
+    def manually_input_parse(self, list_of_paths, use_all_edges=True, note=""):
         """
         Manually enter a new parse by providing list of paths, where
         each path is a list of directed edges.
@@ -371,9 +384,13 @@ class Parser(object):
         - will check that all edges are used up, unless override.
         """
 
+        # All paths need to be directed
+        for i, path in enumerate(list_of_paths):
+            list_of_paths[i] = self.convert_list_edges_to_directed(path)
+
         if use_all_edges:
             # get set of all edges
-            set_of_edges = set([edge for path in list_of_paths for edge in path])
+            set_of_edges = set([tuple(edge) for path in list_of_paths for edge in path])
             for ed in self.Graph.edges:
                 if not any([self._check_edges_identical(ed, ed1) for ed1 in set_of_edges]):
                     print("edges inputed", set_of_edges)
@@ -387,14 +404,16 @@ class Parser(object):
             "strokes":None,
             "list_ps":list_ps,
             "permutation_of":None,
-            "manual":True
+            "manual":True,
+            "note":note
         }
 
         self.Parses.append(newparse)
         print("Added new parse, ind:", len(self.Parses)-1)
 
 
-    def manually_input_parse_from_strokes(self, strokes, apply_transform=True):
+    def manually_input_parse_from_strokes(self, strokes, apply_transform=True,
+            require_stroke_ends_on_nodes=True, note=""):
         """ wrapper, to auto find list of nodes, and input, for this storkes.
         strokes must match the strokes coordinates that make up the graph.
         - will fail if doesnt find a complete set of edges.
@@ -428,10 +447,19 @@ class Parser(object):
         #     print(list_of_paths)
         #     assert FAlse
         else:
-            list_of_paths = self.map_strokes_to_edgelist(strokes)
+            if require_stroke_ends_on_nodes:
+                # Origianl, strict version. basucally rquires the graph to be matched up
+                # identicalyl to the strokes
+                list_of_paths = self.map_strokes_to_edgelist(strokes, 
+                    must_use_all_edges=True, no_multiple_uses_of_edge=True)
+            else:
+                # Looser version, e.g., if made graph mods, but still wabnt to add strokes parses.
+                list_of_paths = self.map_strokes_to_edgelist(strokes, thresh=20, 
+                    assert_endpoints_on_nodes=False, only_take_edges_for_active_node=False,
+                    must_use_all_edges=True, no_multiple_uses_of_edge=True)
 
         # Inset this as a new parse
-        self.manually_input_parse(list_of_paths)
+        self.manually_input_parse(list_of_paths, note=note)
 
 
     ################### DO THINGS WITH PARSES [INDIV]
@@ -926,6 +954,73 @@ class Parser(object):
             return tmp[0]
 
 
+    def graphmod_merge_close_edges_auto(self, thresh=25):
+        """ auto merge edges that are close, even if they don't have any nodes in that vicinity.
+        similar to graphmod_split_edges_auto, but there was edge close to node. here is edge
+        close to edge
+        """
+        from itertools import product
+        # Track state
+        no_more_edges = False # only turns true if can get thru all edge pairs without any triggering closeness.
+        niter = 0
+        maxiter = 30
+        didmod = False
+
+        # if len(self.Graph.edges)==1:
+        #     no_more_edges = True
+        while no_more_edges == False:
+            # Find edges that are close to each other
+            found_an_edge_pair = False
+            for (ed1, ed2) in product(self.Graph.edges, self.Graph.edges):
+                if ed1==ed2:
+                    # print("HERE")
+                    continue
+                if self.check_edges_share_node(ed1, ed2):
+                    # Or else all of these edges would be considered close.
+                    # print("HERE2")
+                    continue
+
+                dist, ind1, ind2 = self.find_closest_pt_twoedges(ed1, ed2)
+
+                if dist<thresh:
+                    didmod = True
+                    print("CONNECTING THESE EDGES, since are close:", ed1, ed2, dist, ind1, ind2)
+                    # then create new nodes here and merge them
+                    list_nodes = []
+                    for ed, ind in zip([ed1, ed2], [ind1, ind2]):
+                        pts = self.get_edge_pts(ed)
+                        node_new = self.add_node([pts[ind,:], ed], "pt_edge")
+                        list_nodes.append(node_new)
+                    # then merge
+                    if False:
+                        self.graphmod_merge_nodes_auto(thresh = thresh+1)
+                    else:
+                        self.merge_nodes(list_nodes)
+                    
+                    # break and restart (since edges are now changed)
+                    found_an_edge_pair=True
+                    # print("HERE3")
+                    break
+                
+            # If can get to here, that means no edge pairs are usable
+            if found_an_edge_pair:
+                no_more_edges = False
+            else:
+                no_more_edges = True
+                
+            niter+=1
+            if niter>maxiter:
+                self.plot_graph()
+                print(self.Graph.edges)
+                print(self.Graph.nodes)
+                assert False, "what loop?"
+        return didmod
+
+            
+
+
+
+
 
     def graphmod_split_edges_auto(self, thresh=25):
         """ automatilcaly split edgfes that re close to a pt, at
@@ -961,8 +1056,170 @@ class Parser(object):
             didmod=True
         return didmod
 
+
+    ################ AUTOMATICALLY MODIFYING PARSE GRAPH [CIRCLES, LOOPS]
+    def graphmod_auto_loops_floating_only_one_node(self, ploton=False):
+        """ Floating loops will only have one node. Arbitrarily keeds the first
+        node in the list of nodes.
+        """
+
+        list_cycles = self.find_cycles()
+        
+        # 1) first, floating loops should only have one node
+        nodes_to_remove = []
+        didmod=False
+        for cy in list_cycles:
+            if self.is_isolated(cy):
+                if len(cy)>1:
+                    # Then multiple edges. remove one node (arbitratiyl just keep the first)
+                    list_nodes = self.get_nodes_from_list_edges(cy)
+                    nodes_to_remove.extend(list_nodes[1:])
+                    didmod = True
+                    print("[Floating cycle has >1 node. removing excess nodes:]", list_nodes[1:])
+
+        for node in nodes_to_remove:
+            self.remove_node(node, ploton=ploton)
+
+        return didmod
+
+
+    def graphmod_auto_loops_cleanup_excess_nodes(self, ploton=False):
+        """ If not isoalted cycle, then removes all nodes that are degree 2 or less
+        i.e., if this circle has a branch, then no need to have other nodes on it.
+        """
+        list_cycles = self.find_cycles()
+        nodes_to_remove = []
+        didmod = False
+        for cy in list_cycles:
+            if not self.is_isolated(cy):
+                # go thru all nodes. 
+                list_nodes = self.get_nodes_from_list_edges(cy)
+                for node in list_nodes:
+                    degree = self.Graph.degree[node]
+                    if degree<3:
+                        # remove this node
+                        print("[Extra node on acycle that arleady has degree>3 nodes. Removing:]", node)
+                        nodes_to_remove.append(node)
+                        didmod=True
+        nodes_to_remove = list(set(nodes_to_remove))
+        for node in nodes_to_remove:
+            self.remove_node(node, ploton=ploton)
+        return didmod
+
+    def graphmod_auto_loops_add_nodes(self, list_angles_opposite = None, THRESH = 40, 
+            ploton=False):
+        """ Add nodes onto a loop in smart way. E.g., place a node opposite current node (that branches).
+        Finds current nodes on loop, and gets candidate new nodes that are a given angle away (e.g., opposite).
+        If every one of those candidates is NOT near a current node, then will pick the middle candidate (e.g.
+        directly opposite) and place a single new node there. 
+        - list_angles_opposite, list of angles, in radians, to check candidate pts, relative to each existing node.
+        See description. New node will be the middle one of these, if they all are not close to a current node.
+        - THRESH = 40, if any existing node is this close to oen of the candidates, then will not add any of them. 
+        """
+        from math import pi
+        from pythonlib.tools.stroketools import travel_on_loop
+        if list_angles_opposite is None:
+            list_angles_opposite = np.linspace(pi/2, 3*pi/2, 5)
+
+        # 3) Add new node across from currnet nodes in a cycle, if there are no nodes close by
+        list_cycles = self.find_cycles()
+        list_angles_opposite =  np.linspace(pi/2, 3*pi/2, 5)
+        
+        nodes_to_add = []
+        list_edges_split = []
+        list_inds_split = []
+        didmod = False
+        for cy in list_cycles:
+            # print("")
+            # print(cy)
+            # self.plot_graph()
+
+            list_nodes = self.get_nodes_from_list_edges(cy, in_order=True)
+
+            for node in set(list_nodes):
+
+                # Only consider nodes that are branching off of this loop.
+                if self.Graph.degree[node]>2:
+                    # check that opposite this node there is node close by
+
+                    # 1) Generate pts
+                    pts = self.find_pts_this_path_edges(cy)
+                    # print(pts)
+                    # assert False
+                    # pts = self.find_pts_between_these_nodes(list_nodes, concat=True)
+                    o = self.get_node_dict(node)["o"]
+
+                    # Given loop, and pt, find opposite pt
+                    list_pts = [travel_on_loop(pts, o, a) for a in list_angles_opposite]
+                    
+                    # for each pt, check if it is close to a node. if not, then add it.
+                    pts_to_add = []
+                    for pt in list_pts:
+                        closenodes = self.find_close_nodes_to_pt(pt, THRESH)
+                        if len(closenodes)==0:
+                            # add this pt
+                            pts_to_add.append(pt)
+
+                    if len(pts_to_add)<len(list_pts):
+                        # then at least one pt was close to a node. abort entirely
+                        continue
+
+                    else:
+                        # only keep one of the pts (the middle one)
+                        if len(pts_to_add)>1:
+                            pt = pts_to_add[int(np.round(len(pts_to_add)/2))]
+                        elif len(pts_to_add)==1:
+                            pt = pts_to_add[0]
+                        else:
+                            assert False
+
+                        # snap pt to nearest edge
+                        edges, dists, inds = self.find_close_edge_to_pt(pt, dosort=True, thresh=30)
+                        
+                        # find the edge that is on the path and is the closest
+                        eligible_edges = cy
+                        # eligible_edges = self.find_paths_between_these_nodes(list_nodes)
+                        found=False
+                        for ed, d, i in zip(edges, dists, inds):
+                            if self.edge_is_in(eligible_edges, ed):
+                                if ed not in list_edges_split:
+                                    print("[Adding a new node oppposite an old node, on (edge, ind):]", ed, i)
+                                    list_edges_split.append(ed)
+                                    list_inds_split.append(i)
+                                found=True
+                                didmod = True
+                                break
+                        if found==False:
+                            print(edges, dists, inds)
+                            print(eligible_edges)
+                            # print(list_nodes_tmp)
+                            assert False
+
+
+                    if ploton:
+                        plt.figure()
+                        plt.plot(pts[:,0], pts[:,1])
+                        plt.plot(o[0], o[1], "ro", label="node")
+                        for pt_new in list_pts:
+                            plt.plot(pt_new[0], pt_new[1], "ok", label="opposite")
+
+        if ploton:
+            self.plot_graph()
+
+        for ed, i in zip(list_edges_split, list_inds_split):
+            if ed not in self.Graph.edges:
+                print(ed)
+                print(self.Graph.edges)
+                assert False
+            self.split_edge(ed, i)
+        if ploton:
+            self.plot_graph()
+
+        return didmod
+                            
+
     ############## TOOLS FOR MODIFYING NODES MANUALLY
-    def remove_node(self, node):
+    def remove_node(self, node, ploton=False):
         """ Carefully removes a node. Connects up other nodes that were previously
         connected to this node.
         NOTE:
@@ -984,8 +1241,13 @@ class Parser(object):
 
         # Make a new edge between the two adjacent edges
         nodes_adjacent = self.find_adjacent_nodes(node)
-        pts = self.find_pts_between_these_nodes([nodes_adjacent[0], node, nodes_adjacent[1]], concat=True)
-        new_edge = (nodes_adjacent[0], nodes_adjacent[1], {"pts":pts})
+        if len(nodes_adjacent)==1:
+            # then two edges, to same node...
+            listn = [nodes_adjacent[0], node, nodes_adjacent[0]]
+        else:
+            listn = [nodes_adjacent[0], node, nodes_adjacent[1]]
+        pts = self.find_pts_between_these_nodes(listn, concat=True)
+        new_edge = (listn[0], listn[2], {"pts":pts})
         # if False:
         #     # Old, where I made mistake, assumed needed new ind...
         #     list_inds = self.find_edgeindices_for_edges_between_these_nodes(nodes_adjacent[0],
@@ -995,7 +1257,7 @@ class Parser(object):
 
         # DO MOD
         self.modify_graph(nodes_to_remove=[node], edges_to_add=[new_edge], 
-            edges_to_remove=edges_to_remove)
+            edges_to_remove=edges_to_remove, plot_pre_and_post=ploton)
 
     def add_node(self, node_info, ver):
         """ [GOOD] Flexible way to manually adda single node.
@@ -1016,14 +1278,16 @@ class Parser(object):
             edge = node_info[1]
 
             dist, ind_along_edge = self.min_dist_pt_to_edge(pt, edge)
-            self.split_edge(edge, ind_along_edge)
+            node_new = self.split_edge(edge, ind_along_edge)
             
         elif ver=="pt_anyedge":
             """ Given pt (xy) snaps it onto nearest location on nearest edge
             """
-            assert False, "test this"
+            assert False, "test this. and return nodenew"
             strokes = [np.array([pt, pt, pt])]
             P.graphmod_add_nodes_strokes_endpoints(strokes)
+
+        return node_new
 
 
     def graphmod_add_nodes_strokes_endpoints(self, strokes, thresh=10):
@@ -1070,7 +1334,7 @@ class Parser(object):
             """
             assert isinstance(nodes, set)
             list_nodes = list(nodes)
-            
+
             o1 = self.get_node_dict(list_nodes[0])["o"]
             o2 = self.get_node_dict(list_nodes[1])["o"]
             radius = np.linalg.norm(o1-o2)
@@ -1094,7 +1358,7 @@ class Parser(object):
 
                 for e in G.edges:
                     if nthis in e[:2]:
-                        edg = G.edges[e]
+                        # edg = G.edges[e]
 
                         # conver this edge to a new edge, using same pts
                         nother = [n for n in e[:2] if n!=nthis]
@@ -1110,6 +1374,11 @@ class Parser(object):
         #                 weight = edg["weight"]
         #                 visited = edg["visited"]
                         pts = self.get_edge_pts(e, anchor_node=nthis)
+
+                        if len(pts)==0:
+                            print(e, nthis)
+                            print(self.G.edges)
+                            assert False, "this edge no pts.."
                         # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
                         pts[0, :] = onew
 
@@ -1134,7 +1403,24 @@ class Parser(object):
                         edges_to_add.append((nnew, nother, {"pts":pts}))
         #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
                         edges_to_remove.append((nthis, nother, e[2]))
-                            
+
+            if len(edges_to_add)==0:
+                # check that this is not an "unclosed" loop
+                list_neigh1 = list(G.neighbors(list_nodes[0]))
+                list_neigh2 = list(G.neighbors(list_nodes[1]))
+                if set(list_neigh1 + list_neigh2)==set(list_nodes):
+                    # then is an unclosed loop, they are their only neighborfs, so cant delete this edge.
+                    pts = self.find_pts_between_these_nodes(list_nodes, concat=True)
+                    pts[0, :] = onew
+                    pts[-1, :] = onew
+                    edgenew = (nnew, nnew, {"pts":pts})
+                    edges_to_add.append(edgenew)
+                else:
+                    print(nodes)
+                    print(G.nodes)
+                    print(G.edges)
+                    print(edges_to_remove)
+                    assert False, "removing edge and not replacing with anything.." 
 
             nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
             nodes_to_remove = list(nodes)
@@ -1143,6 +1429,8 @@ class Parser(object):
             
             return G
 
+        if isinstance(nodes, list):
+            nodes = set(nodes)
         return _merge_nodes(nodes, self.Graph)
 
 
@@ -1162,6 +1450,7 @@ class Parser(object):
             print("split edge start")
             print("this edge", edge)
             print("at this ind", ind)
+            # print(self.Graph.edges)
             print("len of edge", self.Graph.edges[edge]["pts"].shape)
             print("all edges", G.edges)
             onew = G.edges[edge]["pts"][ind]   
@@ -1209,7 +1498,7 @@ class Parser(object):
 
     ################### LOW-LEVEL CODE FOR MANIPULATING GRAPH
     def modify_graph(self, nodes_to_add=None, nodes_to_remove=None, edges_to_add=None, 
-        edges_to_remove=None):
+        edges_to_remove=None, plot_pre_and_post=False):
         """ Low-level to add/remove nodes/edges. DO NOT use this unless you know what you doing,
         becuase this doesnt' autoatmically prune and add edges so that graph is appropriately
         connected.
@@ -1219,26 +1508,34 @@ class Parser(object):
         - edges_to_add, list of edges, where edges[0] = (node0, node1, {pts:[...]})
         - edges_to_remove, list of edges, where each is (node0, node1, index)
         """ 
+
+        assert self._GraphLocked==False, "already locked (probablyt because gotten parses)"
         
+        if plot_pre_and_post:
+            self.plot_graph()
+
         G = self.Graph
         
         print("Graph before modifiyong:")
         print(G.nodes)
         print(G.edges)
-        
+        outdict = {}
         # Removing nodes
         if nodes_to_add is not None:
             print("Adding new nodes:", [[e for e in ed if not isinstance(e, dict)] for ed in nodes_to_add])
         #     G.add_node(nnew, o=onew, pts=onew.reshape(1,-1))
             G.add_nodes_from(nodes_to_add)
+            outdict["nodes_added"] = [n[0] for n in nodes_to_add]
             
         if nodes_to_remove is not None:
             print("Removing old nodes:", nodes_to_remove)
             G.remove_nodes_from(nodes_to_remove)
-            
+            outdict["nodes_removed"] = nodes_to_remove
+
         if edges_to_remove is not None:
             print("Removing edges:", edges_to_remove)
             G.remove_edges_from(edges_to_remove)
+            outdict["edges_removed"] = edges_to_remove
 
         if edges_to_add is not None:
             # Remove edges
@@ -1246,29 +1543,37 @@ class Parser(object):
         #     print(", which replace these removed edges", edges_to_remove)
             for ed in edges_to_add:
                 assert isinstance(ed[2], dict), "ed[2] must be {pts:[...]}"
-            G.add_edges_from(edges_to_add)
+            keys = G.add_edges_from(edges_to_add)
+            outdict["edges_added"] = [(ed[:2], key) for ed, key in zip(edges_to_add, keys)]
 
         print("- Done modifying, new nodes and edges")
         print(G.nodes)
         print(G.edges)
 
+        if plot_pre_and_post:
+            self.plot_graph()
+
+        return outdict
 
 
     ######################## GRAPHMOD - tools
-    def check_pts_orientation(self, pts, o, return_none_on_tie=False):
+    def check_pts_orientation(self, pts, o, return_none_on_tie=False, return_true_on_tie=False):
         """ figures out how pts is oriented relative to 
         pt1. returns True is pts[0] is closer, or False otherwise
         - pt1, Nx2 array
         - o, (2,) array
         - return_none_on_tie, otherwise fails.
+        - return_true_on_tie, overwrite return_none_on_tie, is useful if have a loop.
         """
         
         # add the center to the end that is currently closest to the center
         d1 = np.linalg.norm(pts[0,:]-o)
         d2 = np.linalg.norm(pts[-1,:]-o)
         if d1==d2:
-            if return_none_on_tie:
+            if return_none_on_tie and return_true_on_tie==False:
                 return None
+            elif return_true_on_tie==True:
+                return True
             else:
                 print(d1, d2)
                 print(o)
@@ -1282,15 +1587,33 @@ class Parser(object):
 
 
     ########## GRAPHMOD - helpers to find nodes and edges
+    def find_closest_pt_twoedges(self, ed1, ed2):
+        """ 
+        """
+        from pythonlib.tools.distfunctools import closest_pt_twotrajs
+        pts1 = self.get_edge_pts(ed1)
+        pts2 = self.get_edge_pts(ed2)
+        dist, ind1, ind2 = closest_pt_twotrajs(pts1, pts2)
+        return dist, ind1, ind2
+
+
+
     def find_edges_connected_to_this_node(self, node):
         """ return list of edges given a node (int)
+        - input node will always be the first node in each edge.
         OUT:
         - list_edges, e.g, [(0,3,1), (..)...]
         NOTE:
         - if this node doesnt exist, returns empty list.
         """
-        list_edges = [ed for ed in self.Graph.edges if node in ed[:2]]
-        return list_edges
+        if node not in self.Graph.nodes:
+            print(node)
+            print(self.Graph.edges)
+            print(self.Graph.nodes)
+            assert False
+        return list(self.Graph.edges(node, keys=True))
+        # list_edges = [ed for ed in self.Graph.edges if node in ed[:2]]
+        # return list_edges
 
     def find_adjacent_nodes(self, node):
         """ Return a list of nodes connected to this node.
@@ -1320,9 +1643,20 @@ class Parser(object):
         list_nodes.
         e..g, list_ni = [0,5,2]
         --> [(0, 5, 0), (5, 2, 0)]
+        NOTE:
+        - if want a cycle e..g, 1-->2-->1, with the two edges being different, then
+        will resolve ambiguity by taking the edge with lower key first.
         """
-        from pythonlib.tools.graphtools import path_through_list_nodes
-        return path_through_list_nodes(self.Graph, list_nodes)
+        if len(list_nodes)==3 and list_nodes[0]==list_nodes[2]:
+            # then you have a cycle.
+            from pythonlib.tools.graphtools import path_between_nodepair
+            return path_between_nodepair(self.Graph, list_nodes[:2], False)
+        else:
+            from pythonlib.tools.graphtools import path_through_list_nodes
+            print("PARSER - find_paths_)betwee..")
+            print(list_nodes)
+            self.plot_graph()
+            return path_through_list_nodes(self.Graph, list_nodes)
 
     def find_pts_between_these_nodes(self, list_nodes, concat=False):
         """ Returns the unambiguous (fails otherwise) path between 
@@ -1352,6 +1686,70 @@ class Parser(object):
         else:
             return list_edges_pts
 
+    def find_pts_this_path_edges(self, list_edges):
+        """ 
+        Unambiguous path
+        """
+
+        path = self.convert_list_edges_to_directed(list_edges)
+        list_pts = [self.get_edge_pts(ed, anchor_node =ed[0]) for ed in path]
+        pts = np.concatenate(list_pts, axis=0)
+        return pts
+
+
+    def convert_list_edges_to_directed(self, list_edges):
+        """ makes sure that something like (1, 2, 0), (2, 5, 0), ...
+        where node1 for ed[0] is same as node0 for ed[1], ..
+        and so on.
+        NOTE:
+        - checks that is already directed. if so, then doestnt do anything
+        """
+
+        if self.check_list_edges_directed(list_edges):
+            return list_edges
+        else:
+            def _run(anchor_node):
+                list_edges_directed = []
+                failed=False
+                for ed in list_edges:
+                    if ed[0]==anchor_node:
+                        list_edges_directed.append(ed)
+                        anchor_node = ed[1]
+                    elif ed[1]==anchor_node:
+                        list_edges_directed.append((ed[1], ed[0], ed[2]))
+                        anchor_node = ed[0]
+                    else:
+                        failed = True
+                        break
+                return list_edges_directed, failed
+
+            anchor_node = list_edges[0][0]
+            list_edges_directed, failed = _run(anchor_node)
+            if failed:
+                # try seeding in other direction
+                anchor_node = list_edges[0][1]
+                list_edges_directed, failed = _run(anchor_node)
+                if failed:
+                    print(list_edges)
+                    assert False
+            return list_edges_directed
+
+    def check_list_edges_directed(self, list_edges):
+        """ Return True if list edges directed, i.e.,, end n odes are 
+        same as start node for next edge.
+        """
+        for ed1, ed2 in zip(list_edges[:-1], list_edges[1:]):
+            if ed1[1]!=ed2[0]:
+                return False
+        return True
+
+    def check_edges_share_node(self, edge1, edge2):
+        """ Returns True iff edges share at least one node
+        """
+        for node in edge1[:2]:
+            if node in edge2[:2]:
+                return True
+        return False
 
     # for each node, check how close it is to every other path
     def min_dist_node_to_edge(self, node, edge):
@@ -1384,7 +1782,7 @@ class Parser(object):
         return dists[ind], ind
 
 
-    def find_close_edge_to_pt(self, pt, thresh=10):
+    def find_close_edge_to_pt(self, pt, thresh=10, dosort=False):
         """ Find list of edges which are close to pt.
         Also return the ind along the edge.
         RETURNS:
@@ -1392,6 +1790,8 @@ class Parser(object):
         - dists, 
         - inds, 
         (All lists)
+        NOTE:
+        - sorted, then returns sorted from closest to furthers
         """
         G = self.Graph
         edges = []
@@ -1404,6 +1804,13 @@ class Parser(object):
                 edges.append(e)
                 dists.append(d)
                 inds.append(ind)
+
+        if dosort:
+            x = [(e,d,i) for e,d,i in zip(edges, dists, inds)]
+            x = sorted(x, key=lambda x: x[1])
+            edges = [xx[0] for xx in x]
+            dists = [xx[1] for xx in x]
+            inds = [xx[2] for xx in x]
 
         return edges, dists, inds
 
@@ -1432,6 +1839,54 @@ class Parser(object):
                 tmp = sorted(tmp, key=lambda x:x[1])
                 list_nodes = [tmp[0][0]]
         return list_nodes
+
+
+    def find_cycles(self):
+        """ Find all cycles, including self-loops, 2-nde cycles, etc.
+        OUT:
+        - list of cycles, each cycle as list of edges, each edge a 3-tuple
+        """
+        from networkx.algorithms import cycles
+        from networkx.classes.function import selfloop_edges
+        # from pythonlib.tools.graphtools import find_all_cycles
+        from pythonlib.tools.graphtools import find_all_cycles_edges
+        from pythonlib.tools.graphtools import path_between_nodepair
+
+        list_cycles_edges = []
+
+        # Find all cycles (1 node)
+        edges = selfloop_edges(self.Graph, keys=True)
+        for ed in edges:
+            list_cycles_edges.append([ed])
+        # print("1", list_cycles_edges)
+
+        # Find all cycles (2+ nodes)
+        # self.plot_graph()
+        # list_cycles = find_all_cycles(self.Graph)
+        list_cycles = find_all_cycles_edges(self.Graph)
+
+        # # - convert to list of eddges
+        # for cy in list_cycles:
+        #     if len(cy)==1:
+        #         # skip, this already gotten as self-loops
+        #         continue
+        #     if len(cy)==2:
+        #         list_edge = path_between_nodepair(self.Graph, cy, False)
+        #     else:
+        #         list_edge = self.find_paths_between_these_nodes(cy + [cy[0]])
+
+        #     list_cycles_edges.append(list_edge)
+        #     print("2", list_cycles_edges)            
+
+        # - convert to list of eddges
+        for cy in list_cycles:
+            if len(cy)==1:
+                # skip, this already gotten as self-loops
+                continue
+            list_cycles_edges.append(cy)
+            # print("2", list_cycles_edges)            
+        return list_cycles_edges
+                
 
     ############# USE STROKES TO FIND/MANIPULATE NODES AND EDGES
     def map_strokes_to_nodelists(self, strokes, thresh=5):
@@ -1464,13 +1919,26 @@ class Parser(object):
             list_of_paths.append(path)
         return list_of_paths
 
-    def map_strokes_to_edgelist(self, strokes, thresh=5):
+
+
+    def map_strokes_to_edgelist(self, strokes, thresh=5, 
+        assert_endpoints_on_nodes=True, only_take_edges_for_active_node=True, 
+        must_use_all_edges=False, no_multiple_uses_of_edge=False):
         """ 
+        [GOOD]
         returns list of edges [(1,2,0), ...] that the input stroke is along a trajectory of.
         makes sure that if a pair of nodes
         have multiple possible edgse, takes teh edge that occurs more often (as you travel)
         along the pts
+        INPUT:
+        - assert_endpoints_on_nodes, then fails if the endpoints of strokes are not close to a node.
+        - only_take_edges_for_active_node, then state maintains active node, and only keep edges that
+        contain this node. Generally have assert_endpoints_on_nodes True, since then makes sure that at all times
+        an active node will exist.
+        - must_use_all_edges, then fails if each edge is not used.
+        - no_multiple_uses_of_edge, then fails if an edge is used twice, over all strokes.
         """
+
 
         def _traj_to_edgelist(traj):
             """ traj is Nx2
@@ -1480,65 +1948,96 @@ class Parser(object):
             tracker = {}
             list_of_edges = []
             for i, pt in enumerate(traj[:,:2]):
+
                 nodes = self.find_close_nodes_to_pt(pt, only_one=True, thresh=thresh, take_closest=True)
-                
-                if len(nodes)==1:
-                    if last_visited_node is None:
-                        last_visited_node = nodes[0]
-
-                    elif last_visited_node is not None and nodes[0]!=last_visited_node:
-                        # then you have visisted a new node. 
-                        # if change last_visited_node, then pick the most visited edge, then reset.
-                        new_node = nodes[0]
-                        # print(i)
-                        # print(last_visited_node)
-                        # print(nodes)
-                        # print("HERE", tracker)
-                        # # pick out candidate edges that explain the just finished traj
-                        # edges_candidate = [ed for ed in tracker.keys() if set(ed[:2])==set([last_visited_node, new_node])]
-
-                        # sort all candidate edges by how oten they visited
-                        edges_candidate = [(ed, nvisit) for ed, nvisit in tracker.items() if set(ed[:2])==set([last_visited_node, new_node])]
-
-                        # sort and pick out most highly visited edge.
-                        edges_candidate = sorted(edges_candidate, key=lambda x: x[1]) # sort in ascending order.
-                        edge_just_done = edges_candidate[-1][0]
-
-                        if edge_just_done[0]==new_node:
-                            edge_just_done = (edge_just_done[1], edge_just_done[0], edge_just_done[2]) # mnake sure is in order.
-                        list_of_edges.append(edge_just_done)
-
-                        # reset everything
-                        last_visited_node = nodes[0]
-                        tracker = {}
-                    else:
-                        # do nothing, since nthing changed
-                        pass
-
-                if i==0 or i==traj.shape[0]:
-                    # print(i,pt)
-                    # print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
-                    assert len(nodes)==1, "on and off should match a node..."
-
-                # find edges
                 edges, dists, inds = self.find_close_edge_to_pt(pt, thresh=thresh)
 
-                # only keep edges that involve the current node
-                edges = [ed for ed in edges if last_visited_node in ed[:2]]
+                if only_take_edges_for_active_node:
+                    if len(nodes)==1:
+                        if last_visited_node is None:
+                            last_visited_node = nodes[0]
 
-                # update tracker
-                for ed in edges:
-                    if ed in tracker.keys():
-                        tracker[ed] +=1
-                    else:
-                        tracker[ed] = 1
+                        elif last_visited_node is not None and nodes[0]!=last_visited_node:
+                            # then you have visisted a new node. 
+                            # if change last_visited_node, then pick the most visited edge, then reset.
+                            new_node = nodes[0]
+                            # print(i)
+                            # print(last_visited_node)
+                            # print(nodes)
+                            # print("HERE", tracker)
+                            # # pick out candidate edges that explain the just finished traj
+                            # edges_candidate = [ed for ed in tracker.keys() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                            # sort all candidate edges by how oten they visited
+                            edges_candidate = [(ed, nvisit) for ed, nvisit in 
+                                tracker.items() if set(ed[:2])==set([last_visited_node, new_node])]
+
+                            # sort and pick out most highly visited edge.
+                            edges_candidate = sorted(edges_candidate, key=lambda x: x[1]) # sort in ascending order.
+                            edge_just_done = edges_candidate[-1][0]
+
+                            if edge_just_done[0]==new_node:
+                                edge_just_done = (edge_just_done[1], edge_just_done[0], edge_just_done[2]) # mnake sure is in order.
+                            list_of_edges.append(edge_just_done)
+
+                            # reset everything
+                            last_visited_node = nodes[0]
+                            tracker = {}
+                        else:
+                            # do nothing, since nthing changed
+                            pass
+
+                    # only keep edges that involve the current node
+                    edges = [ed for ed in edges if last_visited_node in ed[:2]]
+    
+                    # update tracker
+                    for ed in edges:
+                        if ed in tracker.keys():
+                            tracker[ed] +=1
+                        else:
+                            tracker[ed] = 1
+                else:
+                    for ed in edges:
+                        if ed not in list_of_edges:
+                            list_of_edges.append(ed)
+
+                if assert_endpoints_on_nodes:
+                    if i==0 or i==traj.shape[0]:
+                        # print(i,pt)
+                        # print([self.Graph.nodes[n]["o"] for n in self.Graph.nodes])
+                        assert len(nodes)==1, "on and off should match a node..."
+
+
+            # Only keep edges that are "fully" within the traj
+            # i.e., traj can be multiple edge, but cant be vice versa.
+            from pythonlib.tools.distfunctools import furthest_pt_twotrajs
+            tmp = []
+            for ed in list_of_edges:
+                pts = self.get_edge_pts(ed)
+                dist = furthest_pt_twotrajs(pts, traj[:, :2], assymetry=1)[0]
+                if dist<thresh:
+                    tmp.append(ed)
+            list_of_edges = tmp
+
             return list_of_edges
 
-        return [_traj_to_edgelist(traj) for traj in strokes]
+        list_paths = [_traj_to_edgelist(traj) for traj in strokes]
+
+        # check that all edges are used up
+        if must_use_all_edges:
+            list_edges_all = [edge for list_edge in list_paths for edge in list_edge]
+            for ed in self.Graph.edges:
+                assert self.edge_is_in(list_edges_all, ed)
+
+        if no_multiple_uses_of_edge:
+            # check that all edges are unique
+            list_edges_all = [edge for list_edge in list_paths for edge in list_edge]
+            assert len(list(set(list_edges_all)))==len(list_edges_all)
+
+        return list_paths
 
 
-
-    def map_strokes_to_nodelists_entiretraj(self, strokes, thresh=5):
+    def map_strokes_to_nodelists_entiretraj(self, strokes, thresh=5, assert_endpoints_on_nodes=True):
         """ finds nodes aligned to strokes. includes all nodes, that are found along the 
         trajectory. 
         OUT:
@@ -1559,8 +2058,9 @@ class Parser(object):
                 pt = strok[i,:2]
                 list_nodes = self.find_close_nodes_to_pt(pt, thresh)
 
-                if i==0 or i==strok.shape[0]:
-                    assert len(list_nodes)==1, "must find a node at start and end."
+                if assert_endpoints_on_nodes:
+                    if i==0 or i==strok.shape[0]:
+                        assert len(list_nodes)==1, "must find a node at start and end."
 
                 if len(list_nodes)==1:
                     node = list_nodes[0]
@@ -1606,14 +2106,29 @@ class Parser(object):
 
         if len(list_edges)==0 or len(list_edges)>1:
             print(list_edges)
+            print(edge)
+            print(self.Graph.edges)
             assert False, "didnt find exactly one edge"
 
         return list_edges[0]
+
+    def edge_is_in(self, list_edges, edge):
+        """ smart checking of ehtehr edge is in list_edges
+        Solves problem of first 2 nodes can be in any order
+        OUT:
+        - True if edge is in list_edges, False otherwise
+        """
+        for ed in list_edges:
+            if self.get_edge_helper(ed)==self.get_edge_helper(edge):
+                return True
+        return False
+
 
     def get_edge_dict(self, edge):
         """ Return dict fo this edge
         e..g, dict[pts] = [...
         """
+        assert isinstance(edge, tuple)
         edge = self.get_edge_helper(edge)
         return self.Graph.edges[edge]
 
@@ -1631,7 +2146,7 @@ class Parser(object):
             return pts
         else:
             anchor_pts = self.get_node_dict(anchor_node)["o"]
-            doflip = not self.check_pts_orientation(pts, anchor_pts)
+            doflip = not self.check_pts_orientation(pts, anchor_pts, return_true_on_tie=True)
             if doflip:
                 pts = np.flipud(pts)
             return pts
@@ -1641,6 +2156,47 @@ class Parser(object):
         fails if doesnt exist
         """
         return self.Graph.nodes[node]
+
+    def get_nodes_from_list_edges(self, list_edges, in_order=False):
+        """ return list of unique nodes, in sorted order,
+        INPUT:
+        - in_order, then keeps the exact order. requires entering edges that are 
+        "directed", in that end nodes are identical to onset nodes. if is not liek this,
+        tries to correct, if can't then fails. NOTE: will not all be unique. e.g, if pass in
+        (ed1, ed2), then will output (ed1[0], ed1[1], ed2[1])
+        """
+        if len(list_edges)==0:
+            return []
+        if in_order:
+            list_edges = self.convert_list_edges_to_directed(list_edges)
+            list_nodes = [list_edges[0][0]]
+            for ed in list_edges:
+                list_nodes.append(ed[1])
+            return list_nodes
+        else:
+            list_nodes = []
+            for ed in list_edges:
+                list_nodes.extend(ed[:2])
+            return sorted(set(list_nodes))
+
+    ######### CYCLES
+    def is_isolated(self, list_edges):
+        """ returns True if list_edges forms an isolated
+        cycle. False if there are branches coming off.
+        Tests by asking if every edge coming out
+        of every node is in list_edges. if so, then this must be isoalted
+        """
+        all_edges = []
+        for ed in list_edges:
+            for node in ed[:2]:
+                edges_connected = self.find_edges_connected_to_this_node(node)
+                for ed in edges_connected:
+                    if self.edge_is_in(list_edges, ed) is False:
+                        # then this edge is not in the original lsit of edges.
+                        return False
+        # Then passed all tests. 
+        return True
+
         
     ########## FILTER/CLEAN UP PARSES
     def filter_single_parse(self, ver, ind):
@@ -1850,6 +2406,10 @@ class Parser(object):
         ax = axes[1]
         # ax.imshow(self.Skeleton, cmap='gray')
         _plot_graph(ax, "k")
+
+        return fig
+
+
 
 
 
