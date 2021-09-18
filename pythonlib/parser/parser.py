@@ -945,8 +945,6 @@ class Parser(object):
                     else:
                         # take the closest
                         pairthis = list_pairthis[0]
-            print('__________________ pairthis')
-            print(pairthis)
             return pairthis
 
         # run
@@ -1218,7 +1216,7 @@ class Parser(object):
                         found=False
                         for ed, d, i in zip(edges, dists, inds):
                             if self.edge_is_in(eligible_edges, ed):
-                                if ed not in list_edges_split:
+                                if not self.edge_is_in(list_edges_split, ed)
                                     print("[Adding a new node oppposite an old node, on (edge, ind):]", ed, i)
                                     list_edges_split.append(ed)
                                     list_inds_split.append(i)
@@ -1356,9 +1354,19 @@ class Parser(object):
                     print("**Splitting, adding strokes endpoints", ed, ind)
                     self.split_edge(ed, ind)
 
-    def merge_nodes(self, nodes):
+    def merge_nodes(self, nodes, THRESHMULT=2.):
         """ Merges a pair of nodes intoa  new node, with position in between.
         Takes care to update edges correctly
+        IMPUT: 
+        - THRESHMULT, any edges shorter than THRESHMULT*(distance between pts)
+        will be removed. others will be kept.
+        NOTE:
+        - procedure: every edge for these nodes will be removed. new edges will be 
+        added to replace them, except if they are shorted than THRESHMULT*distance between noides
+        In addition, the endpoints will be shifted; first pt always to the new node, 
+        last pt usually stable, unless the other node will be deleted (eitehr if it is aloop,
+        or if it is the one being merged). Fiunally, will smooth the path towards the new
+        node location.
         """
 
         def _merge_nodes(nodes, G):
@@ -1381,13 +1389,14 @@ class Parser(object):
             onew = np.round(np.mean(np.stack([G.nodes[n]["o"] for n in nodes]), axis=0)).astype(np.int16)
             nnew = max(list(G.nodes))+1
 
-            # remove all edges between these
-            elist = [e for e in G.edges if set(e[:2])==nodes]
-
             # add new edges to replace any old edges
             edges_to_add = []
             edges_to_remove = []
-            edges_to_remove.extend(elist)
+            if False:
+                # stoped this, since below is decindeing to only remove if it is a short edge
+                elist = [e for e in G.edges if set(e[:2])==nodes]
+                edges_to_remove.extend(elist)
+
             for nthis in list_nodes:
                 othis = G.nodes[nthis]["o"]
 
@@ -1396,6 +1405,14 @@ class Parser(object):
                 # for e in G.edges:
                     # edg = G.edges[e]
 
+                    if self.edge_is_in(edges_to_remove, e):
+                        # you've already considered whether to keep it
+                        continue
+
+                    ###### ALWAYS REMOVE
+                    edges_to_remove.append(e)
+
+                    ##### ADD A NEW EDGE TO REPLACE THIS?
                     if True:
                         nother = e[1]
                     else:
@@ -1412,30 +1429,33 @@ class Parser(object):
                         nother = nother[0]
 
                     if set([nthis, nother])==nodes:
-                        # this is edge between the pair you are merging.
-                        # you have already added it.
-                        print(nodes)
-                        assert False
-                        continue
+                        # If this edge is shorter than the distance threshold between nodes
+                        # then remove it
+                        thresh = THRESHMULT*np.linalg.norm(o2-o1)
+                        if self.get_edge_length(e)<thresh:
+                            continue
+                        else:
+                            pass
+                            # Keep this edge
 
-                    # construct a new edge
+                    ################# construct a new edge
     #                 weight = edg["weight"]
     #                 visited = edg["visited"]
                     pts = self.get_edge_pts(e, anchor_node=nthis)
 
-                    if len(pts)==0:
-                        print(e, nthis)
-                        print(self.G.edges)
-                        assert False, "this edge no pts.."
-                    # pts = np.insert(pts, 0, onew.reshape(1,-1), axis=0)
-
-                    # First pt always modifed to onew
+                    ################ REPLACE ENDPOINTS First pt always modifed to onew
                     pts[0, :] = onew
+
                     # Last pt usually modified to nother, unless nother is gong to be deleted.
                     if nthis==nother:
                         # Then is a loop, modify both start and end to the same (onew)
                         pts[-1,:] = onew
+                    elif set([nthis, nother])==nodes:
+                        # then these nodes will be merged. the new endpoints should be the lcation
+                        # of merge pt.
+                        pts[-1, :] = onew
                     else:
+                        # the nother will not be deleted. keep its position
                         pts[-1,:] = self.get_node_dict(nother)["o"]
 
                     if False:
@@ -1449,22 +1469,26 @@ class Parser(object):
                         else:
                             pts = np.append(pts, onew.reshape(1,-1), axis=0)
 
-                    # smoothening out the new edge
+                    ################# smoothening out the new edge
+                    # only the starting end for now...
                     # - radius, based on distance between two nodes that you are merging
                     from pythonlib.tools.stroketools import smooth_pts_within_circle_radius
                     pts = smooth_pts_within_circle_radius(pts, radius, must_work=True)
 
-                    # Add this new edge
+                    #################### Add this new edge
             #         G.add_edge(nnew, nother, pts=pts, weight=weight)
                     if nthis==nother:
                         # Then this is a loop. nnew must be connected to iself, since
                         # it mus tbe coonnected to the node that replaces nother.
                         edges_to_add.append((nnew, nnew, {"pts":pts}))
+                    elif set([nthis, nother])==nodes:
+                        # Then these nodes will be merged
+                        edges_to_add.append((nnew, nnew, {"pts":pts}))
                     else:
                         # Then nother still exists, nthis is deleted and replaced with nnew
                         edges_to_add.append((nnew, nother, {"pts":pts}))
     #                 edges_to_add.append((nnew, nother, {"pts":pts, "weight":weight}))
-                    edges_to_remove.append((nthis, nother, e[2]))
+                    # edges_to_remove.append((nthis, nother, e[2]))
 
             if len(edges_to_add)==0:
                 # check that this is not an "unclosed" loop (i.e., 2 endpoints being merged)
@@ -1485,10 +1509,10 @@ class Parser(object):
                     print(edges_to_remove)
                     assert False, "removing edge and not replacing with anything.." 
 
+            ################# NODES
             nodes_to_add = [(nnew, {"o":onew, "pts":onew.reshape(1,-1)})]
             nodes_to_remove = list(nodes)
 
-            assert len(edges_to_remove)==len(edges_to_add)
             self.modify_graph(nodes_to_add=nodes_to_add, nodes_to_remove=nodes_to_remove, 
                         edges_to_add=edges_to_add, edges_to_remove=edges_to_remove)
             
@@ -1781,8 +1805,6 @@ class Parser(object):
             return node1, node2
         else:
             assert False, "unclear"
-
-
 
 
 
@@ -2317,6 +2339,11 @@ class Parser(object):
         """
 
         pts = self.get_edge_dict(edge)["pts"]
+        if len(pts)==0:
+            print(edge, anchor_node)
+            print(self.G.edges)
+            assert False, "this edge no pts.."
+
         if anchor_node is None:
             return pts
         else:
@@ -2325,6 +2352,13 @@ class Parser(object):
             if doflip:
                 pts = np.flipud(pts)
             return pts
+
+    def get_edge_length(self, edge):
+        """ get lenght of edge
+        """
+        from pythonlib.drawmodel.features import strokeDistances
+        pts = self.get_edge_pts(edge)
+        return strokeDistances([pts])
 
     def get_node_dict(self, node):
         """ Returns dict for this node.
