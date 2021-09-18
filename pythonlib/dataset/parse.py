@@ -82,10 +82,10 @@ if __name__=="__main__":
     else:
         # rule_list = ["baseline", "circletoline", "linetocircle", "lolli"]
         rule_list = ["baseline", "circletoline", "linetocircle", "lolli"]
-        a = "Pancho"
-        e = "gridlinecircle"
-        v = "graphmod"
-        for r in rule_list:
-            run(a,e,r,v, FIXED)
+        for a in ["Pancho", "Diego"]:
+            e = "gridlinecircle"
+            v = "graphmod"
+            for r in rule_list:
+                run(a,e,r,v, FIXED)
 
 
