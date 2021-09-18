@@ -3,6 +3,57 @@ represetning strokes, behavior, etc. """
 
 import numpy as np
 
+def closest_pt_twotrajs(traj1, traj2):
+    """ returns closest pt between these
+    INPUT:
+    - traj1, traj2, N/M x 2
+    OUTPUT:
+    - dist, scalar
+    - ind1, 
+    - ind2, indexing into traj1 and 2 for those pts
+    """
+    from scipy.spatial.distance import cdist
+    D = cdist(traj1, traj2)
+    
+    ind1, ind2 = np.unravel_index(np.argmin(D), D.shape)
+    dist = D[ind1, ind2]
+
+    return dist, ind1, ind2
+
+
+def furthest_pt_twotrajs(traj1, traj2, assymetry=None):
+    """
+    see  
+    closest_pt_twotrajs
+    INPUT:
+    - assymetry,
+    --- None, considers entire trajs
+    --- 1. <int>, traj1 is contained in 2
+    --- 2, vice versa
+    """
+    from scipy.spatial.distance import cdist
+    D = cdist(traj1, traj2)
+
+    if assymetry is None:
+        # consider all pts
+        ind1, ind2 = np.unravel_index(np.argmax(D), D.shape)
+        dist = D[ind1, ind2]
+    elif assymetry==1:
+        # is OK if traj2 has many points out
+        x = np.min(D, axis=1)
+        dist = np.max(x)
+        ind1, ind2 = None, None
+    elif assymetry==2:
+        x = np.min(D, axis=2)
+        dist = np.max(x)
+        ind1, ind2 = None, None
+    else:
+        assert False
+
+    return dist, ind1, ind2
+
+
+
 def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver=None,
              debug=False, auto_interpolate_if_needed=False, n_interp = 50):
     """ general purpose, distance between two strok
