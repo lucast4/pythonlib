@@ -25,6 +25,13 @@ from pythonlib.tools.distfunctools import modHausdorffDistance
 #     x,y = _convert_to_rel_units(x,y)
     # return x,y
 
+def get_vector_from_angle(angle):
+    """ Returns unit vector given angle in rads, where
+    0rad is (1,0) and goes CCw from there. modulo 2pi
+    """
+    from math import cos, sin, pi
+    return unit_vector((cos(angle), sin(angle)))
+
 
 def get_vector_between_points(A,B):
     # vector from A --> B
