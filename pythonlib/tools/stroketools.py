@@ -1341,6 +1341,8 @@ def smooth_pts_within_circle_radius(pts, radius, ploton=False):
     from pythonlib.tools.stroketools import merge_pts
     from pythonlib.tools.stroketools import intersect_traj_by_circle
 
+    if len(pts)==0:
+        return pts
     # find the cutoff index
     idx = intersect_traj_by_circle(pts, radius)
 
@@ -1370,3 +1372,90 @@ def smooth_pts_within_circle_radius(pts, radius, ploton=False):
         plt.legend()
 
     return pts_new
+
+
+def travel_on_loop(pts_loop, pt_start, angle):
+    """ given a loop and starting pt, traverse along it by angle (rad)
+    then return the pt end
+    INPUT:
+    - pts_loop, Nx2, makes a loop. start location arbitray
+    - pt_start, 1x2, assumes you enter something reasonable.
+    - angle, radians, how much to go CCW, from the starting pt.
+    OUT:
+    - pt_new, does not have to snap to loop, but is distance from center
+    depending on average radius from center.
+    """
+    from math import pi
+    from pythonlib.tools.vectools import get_vector_from_angle, get_angle
+    
+    maxes = pts_loop.max(0)
+    mins = pts_loop.min(0)
+    center = np.c_[mins, maxes].mean(axis=1)
+
+    # starting vector
+    vec_start = pt_start - center
+    angle_start = get_angle(vec_start)
+    
+    # add angle
+    angle_end = angle_start + angle
+    angle_end = angle_end%(2*pi)
+    
+    # convert new angle to a vector
+    radius = np.mean(np.linalg.norm(pts_loop - center, axis=1))
+    u = get_vector_from_angle(angle_end) * radius
+    pt_new = center + u
+    if False:
+        print("vector_start", "angle1", "angle end", "radius", "center", "u", "pt_start", "pt_new")
+        print(vec_start, angle_start, angle_end, radius, center, u, pt_start, pt_new)
+    return pt_new
+
+
+def split_strokes_large_jumps(strokes, thresh=50):
+    """ Split strokes wherever there are large jumps between adjacnet pts
+    IN:
+    - storkes, ..
+    - thresh, scalar distance, any jump  larger than this will be split into strokes.
+    50 is good for task pts (after 2nd half of 2021)
+    NOTE:
+    - currently only works if there is at most one jump per stroke.
+    - confirms that the flattened pts will not change. just how they are in strokes
+    """
+
+    # splits = []
+    splitsdict = {} # e.g, splitsdict[i]=j means stroke i has jump between ind j and j+1
+    for i, s in enumerate(strokes):
+        ct = 0
+        for j, (pt1, pt2) in enumerate(zip(s[:-1, :2], s[1:, :2])):
+            if np.linalg.norm(pt2-pt1)>thresh:
+                # splits.append((i, j))
+                splitsdict[i] = j
+                ct+=1
+        assert ct<=1, "Only split each stroke once. otherwise need to rerun above (iterate)"
+
+    # Make the splits
+    strokes_new =[]
+    for i, s in enumerate(strokes):
+        if i not in splitsdict.keys():
+            strokes_new.append(s)
+        else:
+            loc = splitsdict[i]
+            strokes_new.append(s[:loc+1, :])
+            strokes_new.append(s[loc+1:, :])
+
+    # Sanity check, flattened strokes are not changed
+    strokes_flat_in = np.concatenate(strokes, axis=0)
+    strokes_flat_out = np.concatenate(strokes_new, axis=0)
+    assert all(np.isclose(strokes_flat_in, strokes_flat_out).flatten())
+
+    if False:
+        plt.figure()
+        for s in P.Strokes:
+            plt.plot(s[:,0], s[:,1], 'x')
+        plt.figure()
+        for s in P.StrokesInterp:
+            plt.plot(s[:,0], s[:,1], 'x')   
+        plt.figure()
+        for s in strokes_new:
+            plt.plot(s[:,0], s[:,1], 'x')       
+
+    return strokes_new
