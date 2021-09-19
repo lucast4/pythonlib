@@ -1,5 +1,6 @@
 """ verious functions useful for running experiemnts/analysis"""
 
+import os
 
 def makeTimeStamp(exptID="", datefirst=True):
     """useful for saving things, 
@@ -283,13 +284,50 @@ def get_common_path(pathlist):
     return path_shared
 
 
-def load_yaml_config(path):
+def load_yaml_config(path, make_if_no_exist=False):
     """ 
     Load a file.yaml into an output dict
     NOTE:
     - path should have .yaml extension.
     """
     import yaml
+
+    if make_if_no_exist:
+        if not os.path.isfile(path):
+            # 1) start this file
+            print("initialized file: ", path)
+            writeDictToYaml({}, path)
+
     with open(path) as file:
         outdict = yaml.load(file, Loader=yaml.FullLoader)
     return outdict
+
+def update_yaml_dict(path, key, val, allow_duplicates=True):
+    """ loads and updates this file and appends val to this key,
+    if key doesnt existt, then starts it, etc.
+    never delets anything.
+    INPUT:
+    - allow_duplicates, if False, then doesnt add this val to key if it alreayd tehre
+    """
+    
+    if not os.path.isfile(path):
+        # 1) start this file
+        print("initialized file: ", path)
+        writeDictToYaml({key:val}, path)
+    else:
+        x = load_yaml_config(path)
+        if key in x.keys():
+            if allow_duplicates is False and val in x[key]:
+                print("Skipping, since already there.", path, " with: ", key, val)
+                # Already there - skip
+                pass
+            else:
+                print("updating ", path, " with: ", key, val)
+                x[key].append(val)
+        else:
+            print("updating ", path, " with new key:val: ", key, val)
+            x[key] = [val]
+        writeDictToYaml(x, path)
+
+
+

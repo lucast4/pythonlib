@@ -52,6 +52,9 @@ class Dataset(object):
         "bpl":np.array([[0, -104], [104, 0]])
         }
 
+        # Initialize things
+        self._ParserPathBase = None
+        
     def initialize_dataset(self, ver, params):
         """ main wrapper for loading datasets of all kinds, including
         monkey, model, etc.
@@ -975,10 +978,14 @@ class Dataset(object):
 
 
     ####################
-    def animals(self):
+    def animals(self, force_single=False):
         """ returns list of animals in this datsaet.
+        - force_single, checks that only one animal.
         """
-        return sorted(list(set(self.Dat["animal"])))
+        x = sorted(list(set(self.Dat["animal"])))
+        if force_single:
+            assert len(x)==1, " multipel aniaml"
+        return x
 
     def expts(self):
         """ returns list of expts
@@ -2505,10 +2512,21 @@ class Dataset(object):
 
 
     ################ PARSES GOOD [PARSER]
-    def _get_parser_sdir(self):
-        assert len(self.Metadats)==1, "only run this if one dataset"
-        return f"{self.Metadats[0]['path']}/parser_good"
+    def _get_parser_sdir(self, parse_params, pathbase=None, assume_only_one_parseset=True):
+        """ Return cached pathbase (or caches, if this is run for first time)"""
+        if self._ParserPathBase is None:
+            if pathbase is None:
+                assert len(self.Metadats)==1, "only run this if one dataset"
+                self._ParserPathBase = f"{self.Metadats[0]['path']}/parser_good"
+            else:
+                # save
+                self._ParserPathBase = pathbase
 
+        pathlist = findPath(self._ParserPathBase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
+        if assume_only_one_parseset and len(pathlist)>1:
+            assert False, "found >1 set, need to mnaually prune"
+        pathdir = pathlist[0]
+        return pathdir
 
     def parser_extract_parses_single(self, ind, ver,
             plot=False, quick=False,
@@ -2578,9 +2596,12 @@ class Dataset(object):
                         # self.plotMultStrokes([P.StrokesInterp])
                         if ver=="nographmod":
                             # then looser
-                            P.manually_input_parse_from_strokes(strokes, apply_transform=False, note="strokes")
+                            P.wrapper_input_parse(strokes, "strokes", 
+                                apply_transform=False, note="strokes")
                         elif ver=="graphmod":
-                            P.manually_input_parse_from_strokes(strokes, apply_transform=False, require_stroke_ends_on_nodes=False, note="strokes")
+                            P.wrapper_input_parse(strokes, "strokes", 
+                                apply_transform=False, note="strokes",
+                                require_stroke_ends_on_nodes=False)
                         else:
                             assert False, "how to do?"
 
@@ -2590,7 +2611,8 @@ class Dataset(object):
                         if all([x[0] is not None for x in Task.Shapes]):
                             # then you have shape info
                             assert False, "extract shapes, not yet coded"
-                            P.manually_input_parse_from_strokes(strokes, note="objects")
+                            # P.manually_input_parse_from_strokes(strokes, note="objects")
+                            P.wrapper_input_parse(strokes, "strokes", note="objects")
 
                     elif handver=="chunks":
                         ### CHUNKS
@@ -2602,7 +2624,9 @@ class Dataset(object):
                             los = Tml2.chunks_convert_to_strokes(loc, reorder=True)
                             strokes_models[mod] = los
                             for strokes in los:
-                                P.manually_input_parse_from_strokes(strokes, note="chunks")
+                                # P.manually_input_parse_from_strokes(strokes, note="chunks")
+                                P.wrapper_input_parse(strokes, "strokes", note="chunks")
+
                     else:
                         assert False
                 # print(do_input_by_hand)
@@ -2612,8 +2636,9 @@ class Dataset(object):
 
 
             ## Walker to get parses.
-            P.parse_pipeline(quick=quick, stroke_order_doesnt_matter=False, direction_within_stroke_doesnt_matter=True,
-                            nwalk_det = nwalk_det, max_nstroke=max_nstroke, max_nwalk=max_nwalk, N=N)
+            P.parse_pipeline(quick=quick, stroke_order_doesnt_matter=False, 
+                direction_within_stroke_doesnt_matter=True,
+                nwalk_det = nwalk_det, max_nstroke=max_nstroke, max_nwalk=max_nwalk, N=N)
 
             ############# FILTER PARSES
 
@@ -2627,6 +2652,114 @@ class Dataset(object):
                 P.summarize_parses()
 
         return P
+
+    def parser_extract_bestperms_wrapper(self, saveon = True):
+        """ RUN THIS wrapper. for each parser, for each base parse, extract the best-fitting permutation to beh.
+        Is smart about checking if already done, and not overwriting old stuff. will
+        not waste time urrnning if already done. 
+        - goes thru all trials and runs all, along with appropriate logging, etc.
+        REQUIRES:
+        - extracted and loaded all parses into this dataset.
+        """
+        from pythonlib.tools.expttools import update_yaml_dict, load_yaml_config
+        
+        list_parse_params = self._Parser_list_parseparams # get this from loading.
+
+        for parse_params in list_parse_params:
+            graphmod = parse_params["ver"]
+
+            # the actual cached save dir
+            sdir = self._get_parser_sdir(parse_params)
+            pathdict = f"{sdir}/dict_beh_aligned_permutations_log.yaml" # for logging
+            
+            for indtrial in range(len(self.Dat)):
+                # Behavioral details for this trial.
+                trialcode = self.Dat.iloc[indtrial]["trialcode"]
+                behid = (self.identifier_string(), self.animals(force_single=True)[0], trialcode)
+                taskname=self.Dat.iloc[indtrial]["unique_task_name"]
+
+                # First check whether this already done
+                x = load_yaml_config(pathdict, make_if_no_exist=True)
+                if taskname in x.keys():
+                    if behid in x[taskname]:
+                        print("Skipping, since alreayd done", parse_params, indtrial, taskname)
+                        continue
+
+                # Run, get one best permutation for each base parse.
+                self._parser_extract_bestperms(indtrial, graphmod)
+
+                if saveon:
+                    print("Saving parse with added beh-aligned perms", parse_params, indtrial, taskname)
+
+                    # parser to save
+                    P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])
+
+                    ## resave these parses...
+                    fname = f"{sdir}/{taskname}-behalignedperms.pkl"
+                    with open(fname, "wb") as f:
+                        pickle.dump(P, f)
+
+                    ## log 
+                    update_yaml_dict(pathdict, taskname, behid, allow_duplicates=False)
+
+
+    def _parser_extract_bestperms(self, indtrial, ver, note_suffix=None):
+        """
+        For each baseparse, find the top permtuation that matches behavior on 
+        this trial.
+        INPUT
+        - ind_trial, 0, 1, ...
+        - ver, {'graphmod', 'nographmod'}
+        - note_suffix, useful if want to tag this permutation as best based on a specific trial beh.
+        NOTE:
+        - can run this
+        """
+        from pythonlib.tools.stroketools import assignStrokenumFromTask
+
+        # Get parser
+        list_P = self.parser_list_of_parsers(indtrial, parser_names=[f"parser_{ver}"])
+        assert len(list_P)==1
+        P = list_P[0]
+
+        assert P.Finalized==True, "easy fix if not - just finalize each parse one by one.."
+
+        # Get all base parses
+        inds_parses = P.findparses_bycommand("base_parses")
+        
+        # Get actual behavior    
+        strokes_beh = self.Dat.iloc[indtrial]["strokes_beh"]
+        trialcode = self.Dat.iloc[indtrial]["trialcode"]
+        note_suffix = f"{self.animals(force_single=True)[0]}-{trialcode}" # uniquely id this beh
+
+        for ind_par in inds_parses:
+
+            # get parse in strokes
+            strokes_baseparse = P.extract_parses_wrapper(ind_par, "strokes")
+            list_p = P.extract_parses_wrapper(ind_par, "parser_stroke_class")
+
+            if False:
+                self.plotMultStrokes([strokes_beh, strokes_baseparse]);
+                assert False, "confirm they overlap"
+
+            # get task stroke inds in assigned order
+            inds_baseparse_assigned = assignStrokenumFromTask(strokes_beh, 
+                strokes_baseparse, ver="stroke_stroke_lsa_usealltask")
+
+            # Get the permutation, to store as a new parse
+            list_p_this = [list_p[i] for i in inds_baseparse_assigned]
+
+            parsenew = {
+                "strokes":None,
+                "list_ps": list_p_this,
+                "permutation_of": ind_par,
+                "note":"bestperm" if note_suffix is None else f"bestperm-{note_suffix}"
+            }
+
+            P.wrapper_input_parse(parsenew, ver="dict")
+            print('Added new best-fitting parse, for baseparse: ', ind_par)
+
+        P.parses_remove_redundant(stroke_order_doesnt_matter=False,
+            direction_within_stroke_doesnt_matter=True)
 
 
     def parser_extract_and_save_parses(self, ver, quick=False, 
@@ -2644,7 +2777,7 @@ class Dataset(object):
 
         if SDIR is None:
             SDIR = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}"
-        sdir = f"{SDIR}-ver_{ver}-quick_{quick}-{savenote}"
+        sdir = f"{SDIR}/ver_{ver}-quick_{quick}-{savenote}"
         os.makedirs(sdir, exist_ok=True)
         print("Saving parses to : ", sdir) 
         
@@ -2724,25 +2857,41 @@ class Dataset(object):
 
 
     def parser_load_presaved_parses(self, list_parseparams, list_suffixes=None,
-        finalize=True):
+        finalize=True, pathbase=None, name_ver = "unique_task_name", 
+        ensure_extracted_beh_aligned_parses=False):
         """ warpper to load multiple parses, each into a diffefenrt coilumn in self.Dat, with names based on 
         list_suffixes.
-        e.g.,:
-        list_parse_params = [
-            {"quick":True, "ver":"graphmod", "savenote":"fixed_True"},
-            {"quick":True, "ver":"nographmod", "savenote":"fixed_True"}]
-        list_suffixes = ["graphmod", "nographmod"]
+        INPUT:
+        -list_parseparams, list of dicts, one for each set of parses to load, into individula Parser
+        objects
+            e.g.,:
+            list_parse_params = [
+                {"quick":True, "ver":"graphmod", "savenote":"fixed_True"},
+                {"quick":True, "ver":"nographmod", "savenote":"fixed_True"}]
+        - list_suffixes, names= ["graphmod", "nographmod"], expected in the name of the directory holding parses
+        - pathbase, useful if there is common dir across expts, since they share tasks.
+        - name_ver, convention that was used for naming the parses
+        - ensure_extracted_beh_aligned_parses, check that all trials and parsers have already
+        extracted the permutations aligned to behavior. if have not, then will do that extraction
+        [NOTE: this might take time the first time!]
         """
 
         if list_suffixes is not None:
             assert len(list_suffixes)==len(list_parseparams)
 
         for parse_params, suffix in zip(list_parseparams, list_suffixes):
-            self._parser_load_presaved_parses(parse_params, suffix=suffix, finalize=finalize)
+            self._parser_load_presaved_parses(parse_params, suffix=suffix, finalize=finalize, 
+                pathbase=pathbase, name_ver = name_ver)
+
+        self._Parser_list_parseparams = list_parseparams
+
+        if ensure_extracted_beh_aligned_parses:
+            self.parser_extract_bestperms_wrapper()
 
 
     def _parser_load_presaved_parses(self, parse_params = None, 
-        assume_only_one_parseset=True, suffix=None, finalize=True):
+        assume_only_one_parseset=True, suffix=None, finalize=True, pathbase=None,
+        name_ver = "unique_task_name"):
         """ helper, to load a single set of parses, which are defined by their parse_params, which 
         indexes into a saved set of ata.
         - Fails if any tiral is faield to nbe found
@@ -2753,14 +2902,17 @@ class Dataset(object):
         if parse_params is None:
             parse_params = {"quick":False, "ver":"graphmod", "savenote":""}
 
-        pathbase = f"{self._get_parser_sdir()}/parses"
-        pathlist = findPath(pathbase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
-        if assume_only_one_parseset and len(pathlist)>1:
-            assert False, "found >1 set, need to mnaually prune"
-        pathdir = pathlist[0]
+        pathdir = self._get_parser_sdir(parse_params, pathbase=pathbase)
+        # pathbase = self._get_parser_sdir(pathbase)
+
+        # pathlist = findPath(pathbase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
+        # if assume_only_one_parseset and len(pathlist)>1:
+        #     assert False, "found >1 set, need to mnaually prune"
+        # pathdir = pathlist[0]
 
         def _findrow(x):
-            P = self.load_trial_data_wrapper(pathdir, x['trialcode'], x['unique_task_name'])
+            P = self.load_trial_data_wrapper(pathdir, x['trialcode'], x['unique_task_name'],
+                name_ver=name_ver)
             if finalize:
                 P.finalize()
             return P
@@ -2866,12 +3018,25 @@ class Dataset(object):
         return [col for col in self.Dat.columns if "parser_"==col[:7]]
 
     ############### GENERAL PURPOSE, FOR LOADING
-    def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, return_none_if_nopkl=False):
+    def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, 
+        return_none_if_nopkl=False, name_ver="trialcode"):
         """ looks for file. if not find, then looks in dict to find other trial that has 
         same taskname
+        INPUT:
+        - name_ver, str, which version to use, 
+        --- {"trialcode", "unique_task_name"}
         - Assumes that saved datapoint is shared across trials that have same task
+        NOTE:
+        - Assumes that if find file iwth this trialcode/unique_task_name, then is correct
         """
-        paththis = f"{pathdir}/trialcode_{trialcode}.pkl"
+        if name_ver=="trialcode":
+            paththis = f"{pathdir}/trialcode_{trialcode}.pkl"
+        elif name_ver=="unique_task_name":
+            paththis = f"{pathdir}/{unique_task_name}.pkl"
+        else:
+            print(name_ver)
+            assert False
+
         import os
         if os.path.isfile(paththis):
             # then load it

@@ -960,7 +960,46 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
             # just for debugging
             distances_all.append(sorted(distances))
 
-        assert False, "not finished coding"
+        return stroke_assignments, distances_all
+    elif ver=="stroke_stroke_lsa":
+        """ Use linear sum assignment to find optimal alignment.
+        Note, will only use num strokes equal to the min num strokes.
+        """
+        from pythonlib.drawmodel.strokedists import distMatrixStrok
+        from scipy.optimize import linear_sum_assignment as lsa
+        dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
+        inds1, inds2 = lsa(dmat)
+        stroke_assignments = inds2.tolist()
+        return stroke_assignments
+
+    elif ver=="stroke_stroke_lsa_usealltask":
+        """ Like stroke_stroke_lsa, but if is strokes_task is longer than strokes_beh,
+        then figures out how to use the "excess" strokes in strokes_task. Does this in
+        greedy fashion. for each excess stroke, tries all possible insertion locations. 
+        Takes the location that allows max similarity to strokes_beh. Does this until
+        uses up all excess strokes. Note, if not all beh strokes are used up, then doesnt 
+        do this - so is assymetric """
+
+        inds_assigned = assignStrokenumFromTask(strokes_beh, strokes_task, 
+            "stroke_stroke_lsa")
+        strokes_assigned = [strokes_task[i] for i in inds_assigned]
+
+        # any unassigned task strokes, find minimum over all ways of sticking it into the sequence
+        nstrokes_task = len(strokes_task)
+        inds_unassigned = [i for i in range(nstrokes_task) if i not in inds_assigned]
+        for i in inds_unassigned:
+            # find where this extra strok should go
+            # print("this unassigned ind:", i)
+            strok_extra = strokes_task[i]
+            slot = insert_strok_into_strokes_to_maximize_alignment(strokes_beh, 
+                strokes_assigned, strok_extra)
+
+            # update
+            inds_assigned.insert(slot, i)
+            strokes_assigned.insert(slot, strok_extra)
+        return inds_assigned
+
+
     elif ver=="pt_pt":
         # 2) Each pt (beh) assigned a stroke(task)
         from scipy.spatial.distance import cdist
@@ -988,9 +1027,9 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         # return to strokes format
         closest_task_stroknum_unflat = convertFlatToStrokes(strokes_beh, closest_task_stroknum)
 
-
-        
         return closest_task_stroknum_unflat
+    else:
+        assert False
 
 def getMinMaxVals(strokes):
     """ get min and max pts across all pts in storkes
@@ -1477,3 +1516,32 @@ def split_strokes_large_jumps(strokes, thresh=50):
             plt.plot(s[:,0], s[:,1], 'x')       
 
     return strokes_new
+
+
+def insert_strok_into_strokes_to_maximize_alignment(strokes_template, strokes_mod, traj, 
+    do_insertion=False):
+    """ Finds the optimal location to insert traj into strokes_mod, in order to maximize
+    similarity between strokes_mod and strokes_template.
+    INPUT:
+    - strokes_template, list of traj arrays. This will stay unchaged.
+    - strokes_mod, list of traj, this is what will have a new traj inserted into
+    - traj, (n,2) array
+    OUT:
+    - slot, location to insert. i.e., strokes_mod.insert(slot, traj).
+    - strokes_mod modified, if do_insertion==True
+    """
+    from pythonlib.drawmodel.strokedists import distscalarStrokes
+    # try sticking it in all possible locations
+    list_d = []
+    possible_slots = range(len(strokes_mod)+1) 
+    for slot in possible_slots:
+        strokes_tmp = [np.copy(s) for s in strokes_mod]
+        strokes_tmp.insert(slot, traj)
+        # compute distance
+        d = distscalarStrokes(strokes_template, strokes_tmp, ver="dtw_segments")
+        list_d.append(d)
+    slot = list_d.index(min(list_d))
+
+    if do_insertion:
+        strokes_mod.insert(slot, traj)
+    return slot

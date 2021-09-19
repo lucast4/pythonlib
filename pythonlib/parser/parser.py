@@ -369,10 +369,46 @@ class Parser(object):
             return False
 
     ############# MANUALLY ENTERING PARSES
-    def manually_input_parse(self, list_of_paths, use_all_edges=True, note=""):
+    def wrapper_input_parse(self, parse, ver, note="", apply_transform=True,
+        require_stroke_ends_on_nodes=True):
         """
-        Manually enter a new parse by providing list of paths, where
-        each path is a list of directed edges.
+        [GOOD USE THIS] Manually enter a new parse in where input format/type is flexible.
+        INPUT:
+        - list_of_paths,
+        --- list of list of edges (each path is a list of directed edges.)
+        e.g., 
+        - list_of_paths = [
+        [(0,1,0), (1,2,0)],
+        [(2,3,0)]
+        ]
+        gives two paths (strokes).
+        --- dict, holding list_ps.
+        --- strokes, list of Nx2 arrays
+        """
+
+        if ver=="list_of_paths":
+            self._manually_input_parse(parse, use_all_edges=True, note=note)
+        elif ver=="dict":
+            self.Parses.append(parse)
+            print("Added new parse, ind:", len(self.Parses)-1)
+        elif ver=="strokes":
+            # assume these are untransformed affine.
+            self._manually_input_parse_from_strokes(parse, apply_transform=apply_transform,
+                require_stroke_ends_on_nodes=require_stroke_ends_on_nodes, note=note)
+        else:
+            assert False
+
+        # if already finalized, then need to finalize this last parse
+        if self.Finalized:
+            indthis = len(self.Parses)-1
+            self.finalize(force_just_this_ind=indthis)
+
+
+    def _manually_input_parse(self, list_of_paths, use_all_edges=True, note=""):
+        """
+        INPUT:
+        - list_of_paths,
+        --- list of list of edges (each path is a list of directed edges.)
         e.g., 
         - list_of_paths = [
         [(0,1,0), (1,2,0)],
@@ -382,7 +418,7 @@ class Parser(object):
         NOTE:
         - will check for correctness of each path
         - will check that all edges are used up, unless override.
-        """
+        """ 
 
         # All paths need to be directed
         for i, path in enumerate(list_of_paths):
@@ -412,7 +448,7 @@ class Parser(object):
         print("Added new parse, ind:", len(self.Parses)-1)
 
 
-    def manually_input_parse_from_strokes(self, strokes, apply_transform=True,
+    def _manually_input_parse_from_strokes(self, strokes, apply_transform=True,
             require_stroke_ends_on_nodes=True, note=""):
         """ wrapper, to auto find list of nodes, and input, for this storkes.
         strokes must match the strokes coordinates that make up the graph.
@@ -459,7 +495,7 @@ class Parser(object):
                     must_use_all_edges=True, no_multiple_uses_of_edge=True)
 
         # Inset this as a new parse
-        self.manually_input_parse(list_of_paths, note=note)
+        self._manually_input_parse(list_of_paths, note=note)
 
 
     ################### DO THINGS WITH PARSES [INDIV]
@@ -522,6 +558,8 @@ class Parser(object):
         (2) within stroke direction and (3) for circle, circle permutation
         OUTPUT:
         - modifies self.Parses
+        NOTE:
+        - removes the parse with the later ind, always.
         """
 
         # Find matches, return as dict[ind1] = [list of inds idential]
@@ -664,6 +702,9 @@ class Parser(object):
             return [p.extract_list_of_directed_edges() for p in parses]
         if kind == "parser_stroke_class":
             key = "list_ps"
+        elif kind=="strokes_orig_coords":
+            # translates back into behavior coord system.
+            assert False, "nto coded. see finalize"
         elif kind=="strokes":
             key = "strokes"
             # return [p["strokes"] for p in self.Parses[ind]]
@@ -1216,7 +1257,7 @@ class Parser(object):
                         found=False
                         for ed, d, i in zip(edges, dists, inds):
                             if self.edge_is_in(eligible_edges, ed):
-                                if not self.edge_is_in(list_edges_split, ed)
+                                if not self.edge_is_in(list_edges_split, ed):
                                     print("[Adding a new node oppposite an old node, on (edge, ind):]", ed, i)
                                     list_edges_split.append(ed)
                                     list_inds_split.append(i)
@@ -2407,6 +2448,21 @@ class Parser(object):
         return True
 
         
+    ######### FIND PARSES
+    def findparses_filter(self, filtdict, return_inds=False):
+        """ filter parses. each parse is  adict. filters by keywords.
+        see code within
+        RETURNS:
+        - list of parses that pass filters
+        """
+
+        from pythonlib.tools.dicttools import filterDict
+        list_parses = filterDict(self.Parses, filtdict)
+        if return_inds:
+            return [P["index"] for P in list_parses]
+        else:
+            return list_parses
+
     ########## FILTER/CLEAN UP PARSES
     def filter_single_parse(self, ver, ind):
         """ returns True/False, where True means
@@ -2467,27 +2523,19 @@ class Parser(object):
 
     ########## POST PROCESSING
     def finalize(self, convert_to_splines_and_deinterp=True,
-        dist_int=10., fail_if_finalized=False):
+        dist_int=10., fail_if_finalized=False, force_just_this_ind=None):
         """ converts all parses into format for analysis, coordiantes, etc.
         INPUT:
         - fail_if_finalized, True, then fails otherwise, skips all steps. assumes your
         previous finalizing is what you wanted to do.
+        - force_just_this_ind, then forces to reprocess this ind. doesnt matter whether
+        other stuff already finalized, since redoces this ind from stracth
         NOTES:
         - Puts all finalized things into:
         - only modifies self.Parses[ind]["strokes"]
         - 
         """
         from pythonlib.drawmodel.splines import strokes2splines
-
-        if hasattr(self, "Finalized"):
-            if self.Finalized:
-                if fail_if_finalized:
-                    assert False, "already finaled.."
-                else:
-                    # skip
-                    return
-
-        self.parses_fill_in_all_strokes()
 
         def _process(strokes):
             # Translate coords back
@@ -2497,13 +2545,56 @@ class Parser(object):
                 strokes = strokes2splines(strokes, dist_int=dist_int)
             return strokes
 
-        # parses
-        for i in range(len(self.Parses)):
-            strokes = _process(self.Parses[i]["strokes"])
-            assert strokes is not None
-            self.Parses[i]["strokes"] = strokes 
+        if force_just_this_ind is not None:
+            ind = force_just_this_ind
+            
+            self.Parses[ind]["strokes"] = self.parses_to_strokes(ind)
 
-        self.Finalized=True
+            strokes = _process(self.Parses[ind]["strokes"])
+            assert strokes is not None
+            self.Parses[ind]["strokes"] = strokes 
+
+            self._parses_fill_in_missing_keys()
+            self._parses_give_index()
+
+        else:
+            if hasattr(self, "Finalized"):
+                if self.Finalized:
+                    if fail_if_finalized:
+                        assert False, "already finaled.."
+                    else:
+                        # skip
+                        return
+
+            self.parses_fill_in_all_strokes()
+
+
+            # parses
+            for i in range(len(self.Parses)):
+                strokes = _process(self.Parses[i]["strokes"])
+                assert strokes is not None
+                self.Parses[i]["strokes"] = strokes 
+
+            self._parses_fill_in_missing_keys()
+            self._parses_give_index()
+
+            self.Finalized=True
+
+    def _parses_fill_in_missing_keys(self):
+        """ 
+        """
+        default_keys = {
+            "manual":False,
+            "note": ""
+        } 
+        for P in self.Parses:
+            for k, v in default_keys.items():
+                if k not in P.keys():
+                    P[k] = v
+
+    def _parses_give_index(self):
+        for i, P in enumerate(self.Parses):
+            P["index"] = i
 
 
     def strokes_translate_back_batch(self, convert_to_splines_and_deinterp=True,
@@ -2618,19 +2709,63 @@ class Parser(object):
 
         return fig
 
-
-
-
+    def findparses_bycommand(self, inds):
+        """ inds is gneral purpose command
+        INPUT:
+        - inds,
+        --- list of ints
+        --- int, then pltos this many random ones
+        --- None, then all
+        --- str, other commands, see below.
+        """
+        import random
+        if inds==None:
+            # then plot all
+            inds = range(len(self.Parses))
+        elif isinstance(inds, int):
+            inds = sorted(random.sample(range(len(self.Parses)), inds))
+        elif isinstance(inds, str):
+            if inds=="manual":
+                # then only manually entered parses
+                inds = self.findparses_filter({"manual":[True]}, True)
+            elif inds=="manual_and_perms":
+                # Then all manual and their permutations. in overall sorted order.
+                inds = self.findparses_bycommand("manual")
+                if len(inds)>0:
+                    inds_perm = self.findparses_filter({"permutation_of":inds}, True)
+                    inds = sorted(inds + inds_perm)
+            elif inds=="base_parses":
+                # ie anything that is not a permutation., will have None for permutation_of
+                inds = [i for i, p in enumerate(self.Parses) if p["permutation_of"] is None]
+                # saniyt check, confirme that all referneces to bases have been accounted for
+                for i, p in enumerate(self.Parses):
+                    if p["permutation_of"] is None:
+                        assert i in inds, "this parse refers to something that I did not extract as a base parse/.//"
+            else:
+                assert False
+        else:
+            assert isinstance(inds, list)
+            # you already gave me inds, just s[pit back out]
+        
+        return inds
 
     def plot_parses(self, inds=None, Nmax=50):
         """ new, quick, to just plot parses, not in cluding summary states, etc
+        INPUT:
+        - inds,
+        --- list of ints
+        --- int, then pltos this many random ones
+        --- None, then all
+        --- str, other commands, see below.
+        NOTE:
+        - returns None if no inds.
         """
         from pythonlib.dataset.dataset import Dataset
         import random
         D = Dataset([])
-        if inds==None:
-            # then plot all
-            inds = range(len(self.Parses))
+        inds = self.findparses_bycommand(inds)
+        if len(inds)==0:
+            return None
         if len(inds)>Nmax:
             inds = random.sample(inds, Nmax)
         parses_list = self.extract_all_parses_as_list()
@@ -2638,7 +2773,8 @@ class Parser(object):
         titles = inds
         titles = [str(i) for i in inds]
         # print(len(parses_list))
-        D.plotMultStrokes(parses_list,titles=titles, jitter_each_stroke=True)
+        fig = D.plotMultStrokes(parses_list,titles=titles, jitter_each_stroke=True)
+        return fig
 
     def plot_single_parse(self, ind):
         from pythonlib.drawmodel.parsing import plotParses
@@ -2648,9 +2784,13 @@ class Parser(object):
 
     def summarize_parses(self, nmax = 50, inds=None):
         from pythonlib.drawmodel.parsing import summarizeParses
+        from pythonlib.tools.dicttools import printOverviewKeyValues
         import random
         if len(self.Parses)==0:
             return
+
+        printOverviewKeyValues(self.Parses)
+
         parses = self.extract_all_parses_as_list()
         self.plot_skeleton()
         self.plot_graph()
