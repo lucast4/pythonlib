@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 DEBUG = False
 
 class BehModelHandler(object):
-
+    """ Combine single dataset D (beh) with multiple models (BM). Can share likeli computations
+    """
 
     def __init__(self):
         """
@@ -20,13 +21,20 @@ class BehModelHandler(object):
 
         self.ParsesVer = "parses_behmod" # where to look to extract list_parses
 
-    def input_data_helper(self, dataset, modelclass, list_mrules):
+    def input_data_helper(self, dataset, modelclass, list_mrules, auto_get_list_parsers=True):
         """
         Useful for reinstating a model after saving and loading
-
+        IN:
+        - auto_get_list_parsers, then uses column names in Datast to figure out list. e..g, ["parser_graphmod"]
+        Otherwise uses hard coded in quick_getter_with_params
         """
         from .behmodel_getter import quick_getter_with_params
         list_mod, list_modnames, kwargs = quick_getter_with_params(modelclass, list_mrules)
+
+        if auto_get_list_parsers:
+            kwargs["parsers_to_flatten"] = [col for col in dataset.Dat.columns if "parser_" in col]
+            assert len(kwargs["parsers_to_flatten"])>0
+
         self.input_data(dataset, list_mod, list_modnames, **kwargs) 
 
         # Save
@@ -392,7 +400,13 @@ class BehModelHandler(object):
 
 
     def compute_all(self, mode="train"):
-        """ scoring data """
+        """ scoring data 
+        INPUT:
+        - mode, str, {'train', 'test'}, 
+        --- if test, then also gets priors in probs (not just log),
+        and reruns everything (forces)
+
+        """
         if mode=="train":
             self.compute_store_priorprobs_vectorized(force_run=True)
             self.compute_store_likelis(force_run=False)
@@ -423,13 +437,18 @@ class BehModelHandler(object):
     ##### GETTERS
     def _get_list_probs(self, modname, indtrial, log=None):
         """ get prior, in formate needed for computing posterior
-        log, if None, then uses whatever prescribed by the model
+        INPUT:
+        - log, if None, then uses whatever prescribed by the model
         otherwise True/False forces to use that.
         """
 
         if log==True:
             this = self.PriorLogProbs
         elif log==False:
+            this = self.PriorProbs
+            if len(this)==0:
+                # then extract
+                self.convert_prior_logprobs_to_probs()
             this = self.PriorProbs
         elif log==None:
             if self.DictModels[modname]._poster_use_log_prior:
@@ -438,6 +457,8 @@ class BehModelHandler(object):
                 this = self.PriorProbs
         else:
             assert False
+        if len(this)==0:
+            assert False, "did nto extract prior..."
         return this[modname][indtrial]
 
     def _get_list_likelis(self, modname, indtrial, log=None):

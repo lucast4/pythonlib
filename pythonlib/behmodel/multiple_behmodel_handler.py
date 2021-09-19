@@ -30,10 +30,11 @@ class MultBehModelHandler(object):
         but can be multiple rules.
         - Useful if want models that dont beed to be trained - e.g., random
         or positive controls
-        - Dlist can be len >1 if you would like to somehow update each model's params
-        based on Dlist.
+        - Dlist can be len >1 if you would like to somehow update each model's params (i.e, fit)
+        based on Dlist. But usually set it to len 1
         """
-        ListBMH, list_dsets, ListH= cross_dataset_model_wrapper_params(Dlist, model_class, list_rules)
+        ListBMH, list_dsets, ListH= cross_dataset_model_wrapper_params(Dlist, 
+            model_class, list_rules)
 
         # Convert ListBMH to DictBMH
         for L in ListBMH:
@@ -104,6 +105,21 @@ class MultBehModelHandler(object):
         print("rules:", self.DictMrule)
         print("extracted trained models: ", self.DictTrainedH)
 
+
+    def compute_scores_all_old_dataset(self, mode="test"):
+        """ compute scores for all inputed models and datsets so far
+        Useful if want to debug models, etc
+        NOTE:
+        - applies only to datasets either loaded as untrained data, or loading
+        from presaved data. doesnt apply to new test dataset from 
+        apply_models_to_mult_new_dataset
+        """
+        # Plot summary for each model (for scores)
+        for name, H in self.DictTrainedH.items():
+            for mname in H.ListModelsIDs:
+                print(name, mname)
+                H.compute_all(mode=mode)
+                
 
     def apply_models_to_single_new_dataset(self, D):
         """ applies pretrained models to new dataset D.
@@ -193,7 +209,7 @@ class MultBehModelHandler(object):
         self.dataset_assign_all()
 
     def dataset_assign_all(self):
-        # Assign scores to Dat
+        # Assign scores back to Dat
         for key, DH in self.DictTestDH.items():
             mclass = key[1]
             DH["H"].results_to_dataset(mclass)

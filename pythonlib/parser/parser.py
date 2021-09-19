@@ -369,6 +369,75 @@ class Parser(object):
             return False
 
     ############# MANUALLY ENTERING PARSES
+    def check_if_parse_exists(self, parse, stroke_order_doesnt_matter=True,
+        direction_within_stroke_doesnt_matter=True):
+        """ Check if this parse already exists in self.Parses,
+        IN:
+        - parse, a dict holding all parse info. like self.Parses[0]
+        OUT:
+        exists, bool.
+        ind, int if exists. otherwise None 
+        NOTE:
+        - will stop at first encounter of a same. assumes that you dont have
+        redundant parses. 
+        """
+        
+        # get input parse in correct format
+        list_p = parse["list_ps"]
+        assert len(list_p)>0
+
+        for i in range(len(self.Parses)):
+            list_p_this = self.extract_parses_wrapper(i)
+            if self._check_parses_is_identical(list_p, list_p_this, 
+                stroke_order_doesnt_matter, 
+                direction_within_stroke_doesnt_matter):
+                # Exists.
+                return True, i  
+        # Doesnt exist
+        return False, None
+
+    def update_parse_with_input_parse(self, parse, keyvals_update={},
+            stroke_order_doesnt_matter=True,
+            direction_within_stroke_doesnt_matter=True,
+            append_keyvals=False
+            ):
+        """ Looks whether there exists parse already, identical to input. if so,
+        then updates the existing parse with key:val in keyvals_update
+        IN:
+        - parse, dict
+        - keyvals_update, dict, all will overwrite existing parse, if find.
+        - append_keyvals, then does not overwrite existing key, but appends to value.
+        the current value MUST Be a list (input value should nto be list). if key doesnt exist, then starts a new list.
+        --- False, then overwrites it with whatever is input val (doesnt hve to be ;list)
+        OUT:
+        - success, bool, indiicating if found
+        - ind, 
+        --- int, location of parse, if found
+        --- None, if did not find.
+        """
+
+        # check if parse exists
+        exists, ind = self.check_if_parse_exists(parse, stroke_order_doesnt_matter,
+            direction_within_stroke_doesnt_matter)
+
+        if exists:
+            # Then update
+            parsedict = self.extract_parses_wrapper(ind, "dict")
+            for k, v in keyvals_update.items():
+                if append_keyvals:
+                    if k in parsedict.keys():
+                        parsedict[k].append(v)
+                    else:
+                        parsedict[k] = [v]
+                else:
+                    # Replace
+                    parsedict[k] = v
+
+            return True, ind
+        else:
+            return False, None
+
+
     def wrapper_input_parse(self, parse, ver, note="", apply_transform=True,
         require_stroke_ends_on_nodes=True):
         """
@@ -718,7 +787,8 @@ class Parser(object):
             for e,w,t in zip(list_of_edges, list_of_walkers, list_of_trajs):
                 out.append({"edgesdir":e, "walker":w, "traj":t})
             return out
-
+        elif kind=="dict":
+            return self.Parses[ind]
         else:
             assert False, "not coded"
         return [p for p in self.Parses[ind][key]]
@@ -738,6 +808,24 @@ class Parser(object):
         else:
             return [self.extract_parses_wrapper(i, kind) for i in range(len(self.Parses))]
 
+    def _check_parses_is_identical(self, list_p_1, list_p_2, stroke_order_doesnt_matter=True,
+        direction_within_stroke_doesnt_matter=True):
+        """ Return True if parses identical, False otherwise.
+        See check_parses_is_identical...
+        INPUT:
+        - list_p_1, list_p_2, each is outcome of self.extract_parses_wrapper(ind)
+        """
+        # for each stroke, find its hash
+        list1 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list_p_1]
+        list2 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list_p_2]
+
+        # since dont care about direction, sort each list (of tuples of ints)
+        if stroke_order_doesnt_matter:
+            list1 = sorted(list1)
+            list2 = sorted(list2)
+        
+        # check if they are identical
+        return list1==list2
 
     def check_parses_is_identical(self, ind1, ind2, stroke_order_doesnt_matter=True,
         direction_within_stroke_doesnt_matter=True):
@@ -773,19 +861,9 @@ class Parser(object):
 
         list1 = self.extract_parses_wrapper(ind1)
         list2 = self.extract_parses_wrapper(ind2)
-
-        # for each stroke, find its hash
-        list1 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list1]
-        list2 = [p.unique_path_id(invariant=direction_within_stroke_doesnt_matter) for p in list2]
-
-
-        # since dont care about direction, sort each list (of tuples of ints)
-        if stroke_order_doesnt_matter:
-            list1 = sorted(list1)
-            list2 = sorted(list2)
-        
-        # check if they are identical
-        return list1==list2
+        return self._check_parses_is_identical(list1, list2, 
+            stroke_order_doesnt_matter=stroke_order_doesnt_matter,
+            direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
 
     def _OLD_parses_is_identical_ignoredir_OLD(self, ind1, ind2):
@@ -2709,7 +2787,7 @@ class Parser(object):
 
         return fig
 
-    def findparses_bycommand(self, inds):
+    def findparses_bycommand(self, inds, params={}):
         """ inds is gneral purpose command
         INPUT:
         - inds,
@@ -2717,6 +2795,7 @@ class Parser(object):
         --- int, then pltos this many random ones
         --- None, then all
         --- str, other commands, see below.
+        - params, dict, flexiblty hold params
         """
         import random
         if inds==None:
@@ -2742,6 +2821,54 @@ class Parser(object):
                 for i, p in enumerate(self.Parses):
                     if p["permutation_of"] is None:
                         assert i in inds, "this parse refers to something that I did not extract as a base parse/.//"
+            elif inds=="permutation_of":
+                # permutation of params["of"]
+                assert isinstance(params["of"], int)
+                inds = [i for i, p in enumerate(self.Parses) if p["permutation_of"]==params["of"]]
+            elif inds=="is_best_perm":
+                # all that are called "best_perm"
+                assert False, "this ver failed if tried to enter new parse that already existsed... use best_perm_of"
+                inds = [i for i, p in enumerate(self.Parses) if "bestperm" in p["note"]]
+            elif inds=="best_perm_of":
+                # GOOD - returns the single (or multiple) parses that is the best perm for the input:
+                # if you tell me the beh trial you want, then will be single.
+                # otherwise could be multiple.
+                # always returns a list
+                ind_base_parse = params[0] # ind of the base parse.
+                trial_tuple = params[1] # ('Pancho', 'gridlinecircle', 'linetocircle', '210823-1-587')
+                # meaning (animal, expt, rule, trialcode)
+                # Note: can leave any item in there as None if want to ignore,e .g, (Pancho, None, None, None)
+                # will get all trials by Pancho
+
+                list_par = []
+                list_par_beh = []
+                for i in range(len(self.Parses)):
+                    p = self.extract_parses_wrapper(i, "dict")
+                    if "bestperm_of_list" in p.keys():
+                        if ind_base_parse in p["bestperm_of_list"]:
+
+                            # get the trial tuple
+                            indtmp = p["bestperm_of_list"].index(ind_base_parse)
+                            tp = p["bestperm_beh_list"][indtmp]
+
+                            # filter by trialtuple (fail if any items dont match)
+                            skip=False
+                            for x, y in zip(tp, trial_tuple):
+                                if y is None:
+                                    continue
+                                if not x == y:
+                                    skip=True
+                            if not skip:
+                                list_par.append(i)
+                                list_par_beh.append(tp) # matching trialtuples
+                inds = list_par
+                if False:
+                    # print the tuples that were found
+                    print("this parse is the best-perm for baseparse: ", ind_base_parse)
+                    print(list_par)
+                    for x in list_par_beh:
+                        print(x)
+
             else:
                 assert False
         else:
@@ -2765,7 +2892,7 @@ class Parser(object):
         import random
         D = Dataset([])
         inds = self.findparses_bycommand(inds)
-        
+
         if len(inds)==0:
             return None
 

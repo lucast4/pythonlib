@@ -260,15 +260,17 @@ def get_single_model(ver, params_input=None):
 
 
 def quick_getter_with_params(modelclass, list_mrules):
-    """ For this modelclass (string) returns
+    """ 
+    [GOOD] 
+    For this modelclass (string) returns
     list of beh models (BMs).
-    Sort of hard coded currently, just for testing)
     NOTE:
     - with_params, means params for prior are exposed, to allow fitting.
     """
     list_mod = []
     list_modnames = []
 
+    # This not important, by default is overwritten by auto detection.
     parsers_to_flatten = ['parser_graphmod', 'parser_nographmod']
 
     if modelclass=="lines5":

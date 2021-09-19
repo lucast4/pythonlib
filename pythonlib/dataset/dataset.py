@@ -988,14 +988,19 @@ class Dataset(object):
             assert len(x)==1, " multipel aniaml"
         return x
 
-    def expts(self):
+    def expts(self, force_single=False):
         """ returns list of expts
         """
-        return sorted(list(set(self.Dat["expt"])))
+        x =sorted(list(set(self.Dat["expt"])))
+        if force_single:
+            assert len(x)==1, " multipel expt"
+        return x
 
-    def rules(self):
-
-        return sorted(list(set([M["rule"] for M in self.Metadats.values()])))
+    def rules(self, force_single=False):
+        x = sorted(list(set([M["rule"] for M in self.Metadats.values()])))
+        if force_single:
+            assert len(x)==1, " multipel rules"
+        return x
 
     def identifier_string(self):
         """ string, useful for saving
@@ -2656,7 +2661,7 @@ class Dataset(object):
 
         return P
 
-    def parser_extract_bestperms_wrapper(self, saveon = True):
+    def parser_extract_bestperms_wrapper(self, saveon = True, force_redo=False):
         """ RUN THIS wrapper. for each parser, for each base parse, extract the best-fitting permutation to beh.
         Is smart about checking if already done, and not overwriting old stuff. will
         not waste time urrnning if already done. 
@@ -2682,11 +2687,12 @@ class Dataset(object):
                 taskname=self.Dat.iloc[indtrial]["unique_task_name"]
 
                 # First check whether this already done
-                x = load_yaml_config(pathdict, make_if_no_exist=True)
-                if taskname in x.keys():
-                    if behid in x[taskname]:
-                        print("Skipping, since alreayd done", parse_params, indtrial, taskname)
-                        continue
+                if force_redo is False:
+                    x = load_yaml_config(pathdict, make_if_no_exist=True)
+                    if taskname in x.keys():
+                        if behid in x[taskname]:
+                            print("Skipping, since alreayd done", parse_params, indtrial, taskname)
+                            continue
 
                 # Run, get one best permutation for each base parse.
                 self._parser_extract_bestperms(indtrial, graphmod)
@@ -2733,7 +2739,12 @@ class Dataset(object):
         strokes_beh = self.Dat.iloc[indtrial]["strokes_beh"]
         trialcode = self.Dat.iloc[indtrial]["trialcode"]
         note_suffix = f"{self.animals(force_single=True)[0]}-{trialcode}" # uniquely id this beh
-
+        note_suffix_tuple = (
+            self.animals(force_single=True)[0],
+            self.expts(force_single=True)[0],
+            self.rules(force_single=True)[0],
+            trialcode
+            )
         for ind_par in inds_parses:
 
             # get parse in strokes
@@ -2755,12 +2766,27 @@ class Dataset(object):
                 "strokes":None,
                 "list_ps": list_p_this,
                 "permutation_of": ind_par,
-                "note":"bestperm" if note_suffix is None else f"bestperm-{note_suffix}"
+                "note":"bestperm" if note_suffix is None else f"bestperm-{note_suffix}",
+                "bestperm_beh_list":[note_suffix_tuple],
+                "bestperm_of_list":[ind_par]
             }
 
-            P.wrapper_input_parse(parsenew, ver="dict")
-            print('Added new best-fitting parse, for baseparse: ', ind_par)
-
+            # First, see if already exists
+            keyvals_update = {
+                "bestperm_beh_list":note_suffix_tuple,
+                "bestperm_of_list":ind_par
+            }
+            success, ind = P.update_parse_with_input_parse(parsenew, keyvals_update, 
+                stroke_order_doesnt_matter=False,
+                direction_within_stroke_doesnt_matter=True,
+                append_keyvals=True
+                )
+            if success:
+                print('Updated at ind', ind, ' with new best-fitting parse, for baseparse: ', ind_par)
+            if not success:
+                # Then add it to parses
+                P.wrapper_input_parse(parsenew, ver="dict")
+                print('Added new best-fitting parse, for baseparse: ', ind_par)
         P.parses_remove_redundant(stroke_order_doesnt_matter=False,
             direction_within_stroke_doesnt_matter=True)
 
