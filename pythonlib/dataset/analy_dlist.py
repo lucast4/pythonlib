@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
+def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS, remove_bad_trial=True):
     """
     populate new column with list of strokes for all other trials
     IN:
     - Dlist, list of D, where each D is a single dataset holding a single epoch (i.e)
     i.e., grouping level. doesnt' have to be, but that is how I did.
+    - remove_bad_trial, False: useful for dry run, shows inds that would remove from dset (becuase they are
+    rows that dont have paired strokes from all levels). if satisfied, can then rerun with True.
     NOTES:
     - each D in Dlist will have one new columns per grouping level, which will be all strokes
     across all D in Dlist which are from that grouping_level (escept your own trial's stroke)
@@ -69,7 +71,13 @@ def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
             else:
                 return False
         inds_remove = [i for i in range(len(D.Dat)) if remove(D, i)]
-        D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
+        if remove_bad_trial:
+            D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
+        else:
+            print("for this dset:", D.identifier_string())
+            print("would remove these inds:")
+            print(inds_remove)
+            print("out of ntrials", len(D.Dat))
         
 
 
@@ -180,3 +188,33 @@ def matchTwoDatasets(D1, D2):
 
     print("new length")
     print(len(D2.Dat))
+
+
+def find_common_tasks(Dlist, verbose=True):
+    """
+    Find task that are present across all datasets
+    Includes fixed and random tasks. (all)
+    OUT:
+    - list of str, unique tasknames, sorted
+    """
+
+    # start with lsit from first dset
+    list_tasks_all = Dlist[0].Dat["unique_task_name"].unique().tolist()
+
+    # Iterate over all dsets and tasks.
+    list_tasks_keep = []
+    for task in list_tasks_all:
+        # check that every D has it
+        keep_task = True
+        for D in Dlist:
+            if sum(D.Dat["unique_task_name"]==task)==0:
+                keep_task = False
+                break
+        if keep_task:
+            list_tasks_keep.append(task)
+
+    if verbose:
+        print("Starting tasks", list_tasks_all)
+        print("Ending tasks", list_tasks_keep)
+
+    return sorted(list_tasks_keep)
