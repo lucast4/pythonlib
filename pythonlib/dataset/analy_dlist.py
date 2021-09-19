@@ -1,0 +1,182 @@
+""" To work with Dlist, or list of Datasets.
+This is distinct from a concatenated dset, in the here can
+do seprate operations on each dset before concat.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
+    """
+    populate new column with list of strokes for all other trials
+    IN:
+    - Dlist, list of D, where each D is a single dataset holding a single epoch (i.e)
+    i.e., grouping level. doesnt' have to be, but that is how I did.
+    NOTES:
+    - each D in Dlist will have one new columns per grouping level, which will be all strokes
+    across all D in Dlist which are from that grouping_level (escept your own trial's stroke)
+    """
+    from .dataset import concatDatasets
+
+    # 1) Concat all datasets of interest, so can get all cross-parses
+    Dall = concatDatasets(Dlist) # holds pool of strokes
+    for D in Dlist:
+        for group in GROUPING_LEVELS:
+#             group = "straight" # which group's strokes to keep
+#             Dthis = D # which one to modify
+            
+            def _get_strokes(D, task, group):
+                """ returns all strokes for this task and this group, given a dataset D
+                """
+                dfthis = D.Dat[(D.Dat["unique_task_name"]==task) & (D.Dat[GROUPING]==group)]
+                inds = dfthis.index.to_list()
+                trialcodes = dfthis["trialcode"]
+                strokes = dfthis["strokes_beh"]
+                return trialcodes, strokes
+
+            list_list_strokes = []
+            for i in range(len(D.Dat)):
+                task = D.Dat.iloc[i]["unique_task_name"]
+                tcthis = D.Dat.iloc[i]["trialcode"]
+
+                trialcodes, strokes = _get_strokes(Dall, task, group)
+
+                # only keep strokes that are not from the current trial
+                list_strokes = []
+                for tc, s in zip(trialcodes, strokes):
+                    if tcthis!=tc:
+                        list_strokes.append(s)
+
+                list_list_strokes.append(list_strokes)
+
+            parsesname = f"strokes_beh_group_{group}"
+            D.Dat[parsesname] = list_list_strokes
+    
+    # to confirm concat didnt modify
+    for D in Dlist:
+        D._check_consistency()
+        
+    # Only keep rows which have strokes across all models
+    list_col_names = [f"strokes_beh_group_{group}" for group in GROUPING_LEVELS]
+    for D in Dlist:
+        def remove(D, i):
+            # True if any of cols are empty
+            x = [len(D.Dat.iloc[i][col])==0 for col in list_col_names]
+            if any(x):
+                return True
+            else:
+                return False
+        inds_remove = [i for i in range(len(D.Dat)) if remove(D, i)]
+        D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
+        
+
+
+def concatDatasets(Dlist):
+    """ concatenates datasets in Dlist into a single dataset.
+    Main goal is to concatenate D.Dat. WIll attempt to keep track of 
+    Metadats, but have not confirmed that this is reliable yet.
+    NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
+    """
+
+    Dnew = Dataset([])
+
+    if True:
+        # New, updates metadat.
+        ct = 0
+        dflist = []
+        metadatlist = []
+        for D in Dlist:
+            
+            if len(D.Metadats)>1:
+                print("check that this is working.. only confied for if len is 1")
+                assert False
+
+            # add to metadat index
+            df = D.Dat.copy()
+            df["which_metadat_idx"] = df["which_metadat_idx"]+ct
+            dflist.append(df)
+
+            # Combine metadats
+            metadatlist.extend([m for m in D.Metadats.values()])
+
+            ct = ct+len(D.Metadats)
+        Dnew.Dat = pd.concat(dflist)
+        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+        Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
+        print("Done!, new len of dataset", len(Dnew.Dat))
+    else:
+        # OLD: did not update metadat.
+        dflist = [D.Dat for D in Dlist]
+        Dnew.Dat = pd.concat(dflist)
+
+        del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+
+        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+
+        print("Done!, new len of dataset", len(Dnew.Dat))
+        # Dnew.Metadats = copy.deepcopy(self.Metadats)
+
+    # Check consisitency
+    Dnew._check_consistency()
+    return Dnew
+
+
+
+def mergeTwoDatasets(D1, D2, on_="rowid"):
+    """ merge D2 into D1. indices for
+    D1 will not change. merges on 
+    unique rowid (animal-trialcode).
+    RETURNS:
+    D1.Dat will be updated with new columns
+    from D2.
+    NOTE:
+    will only use cols from D2 that are not in D1. will
+    not check to make sure that any shared columns are indeed
+    idnetical (thats up to you).
+    """
+    
+    df1 = D1.Dat
+    df2 = D2.Dat
+
+    # only uses columns in D2 that dont exist in D1
+    cols = df2.columns.difference(df1.columns)
+    cols = cols.append(pd.Index([on_]))
+    df = pd.merge(df1, df2[cols], how="outer", on=on_, validate="one_to_one")
+    
+
+    return df
+
+
+
+
+
+def matchTwoDatasets(D1, D2):
+    """ Given two Datasets, slices D2.Dat,
+    second dataset, so that it only inclues trials
+    prsent in D1. size D2 will be <= size D1. Uses
+    animal-trialcode, which is unique identifier for 
+    rows. 
+    RETURNS
+    - D2 will be modified. Nothings return
+    """
+    from pythonlib.tools.pandastools import filterPandas
+
+    # rows are uniquely defined by animal and trialcode (put into new column)
+    def F(x):
+        return (x["animal"], x["trialcode"])
+    if "rowid" not in D1.Dat.columns:
+        D1.Dat = applyFunctionToAllRows(D1.Dat, F, "rowid")
+    if "rowid" not in D2.Dat.columns:
+        D2.Dat = applyFunctionToAllRows(D2.Dat, F, "rowid")
+
+    print("original length")
+    print(len(D2.Dat))
+
+    F = {"rowid":list(set(D1.Dat["rowid"].values))}
+#     inds = filterPandas(D2.Dat, F, return_indices=True)
+    D2.filterPandas(F, return_ver="modify")
+
+    print("new length")
+    print(len(D2.Dat))

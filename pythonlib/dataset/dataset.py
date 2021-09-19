@@ -7,6 +7,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 import torch
 import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
+from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
@@ -2522,7 +2523,9 @@ class Dataset(object):
                 # save
                 self._ParserPathBase = pathbase
 
-        pathlist = findPath(self._ParserPathBase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
+        pathlist = findPath(self._ParserPathBase, 
+            [[f"ver_{parse_params['ver']}", f"quick_{parse_params['quick']}", f"{parse_params['savenote']}"]], 
+            return_without_fname=True)
         if assume_only_one_parseset and len(pathlist)>1:
             assert False, "found >1 set, need to mnaually prune"
         pathdir = pathlist[0]
@@ -2692,7 +2695,7 @@ class Dataset(object):
                     print("Saving parse with added beh-aligned perms", parse_params, indtrial, taskname)
 
                     # parser to save
-                    P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])
+                    P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])[0]
 
                     ## resave these parses...
                     fname = f"{sdir}/{taskname}-behalignedperms.pkl"
@@ -2777,7 +2780,10 @@ class Dataset(object):
 
         if SDIR is None:
             SDIR = f"{self._get_parser_sdir()}/parses/{makeTimeStamp()}"
-        sdir = f"{SDIR}/ver_{ver}-quick_{quick}-{savenote}"
+        sdir = f"{SDIR}/ver_{ver}-quick_{quick}"
+        if len(savenote)>0:
+            sdir += savenote
+
         os.makedirs(sdir, exist_ok=True)
         print("Saving parses to : ", sdir) 
         
@@ -2903,7 +2909,6 @@ class Dataset(object):
             parse_params = {"quick":False, "ver":"graphmod", "savenote":""}
 
         pathdir = self._get_parser_sdir(parse_params, pathbase=pathbase)
-        # pathbase = self._get_parser_sdir(pathbase)
 
         # pathlist = findPath(pathbase, [[f"ver_{parse_params['ver']}-quick_{parse_params['quick']}-{parse_params['savenote']}"]], return_without_fname=True)
         # if assume_only_one_parseset and len(pathlist)>1:
@@ -2911,8 +2916,13 @@ class Dataset(object):
         # pathdir = pathlist[0]
 
         def _findrow(x):
-            P = self.load_trial_data_wrapper(pathdir, x['trialcode'], x['unique_task_name'],
-                name_ver=name_ver)
+            # first, try to find beh-aligned perms
+            P = self.load_trial_data_wrapper(pathdir, x['trialcode'], 
+                x['unique_task_name'],name_ver=name_ver, suffix="behalignedperms", return_none_if_nofile=True)
+            if P is None:
+                # if cant find, then load origianl parses
+                P = self.load_trial_data_wrapper(pathdir, x['trialcode'], 
+                    x['unique_task_name'],name_ver=name_ver)
             if finalize:
                 P.finalize()
             return P
@@ -3019,31 +3029,46 @@ class Dataset(object):
 
     ############### GENERAL PURPOSE, FOR LOADING
     def load_trial_data_wrapper(self, pathdir, trialcode, unique_task_name, 
-        return_none_if_nopkl=False, name_ver="trialcode"):
+        return_none_if_nopkl=False, name_ver="trialcode", suffix="",
+        return_none_if_nofile=False):
         """ looks for file. if not find, then looks in dict to find other trial that has 
         same taskname
         INPUT:
         - name_ver, str, which version to use, 
         --- {"trialcode", "unique_task_name"}
-        - Assumes that saved datapoint is shared across trials that have same task
+        - return_none_if_nofile, if True, then returns None if this file doesnt eixst. useful for 
+        searching for files.
         NOTE:
+        - Assumes that saved datapoint is shared across trials that have same task
         - Assumes that if find file iwth this trialcode/unique_task_name, then is correct
         """
+        import os
+
         if name_ver=="trialcode":
-            paththis = f"{pathdir}/trialcode_{trialcode}.pkl"
+            paththis = f"{pathdir}/trialcode_{trialcode}"
         elif name_ver=="unique_task_name":
-            paththis = f"{pathdir}/{unique_task_name}.pkl"
+            paththis = f"{pathdir}/{unique_task_name}"
         else:
             print(name_ver)
             assert False
 
-        import os
+        if len(suffix)>0:
+            paththis += f"-{suffix}"
+
+        paththis+=".pkl"
+
         if os.path.isfile(paththis):
             # then load it
             with open(paththis, "rb") as f:
                 tmp = pickle.load(f)
             return tmp
         else:
+            # Failed - return none?
+            if return_none_if_nofile:
+                return None
+
+            # Not allowed to fail..
+            print("Cant find " , paththis)
             if return_none_if_nopkl:
                 # if cant find file, then just return None
                 return None
@@ -4420,111 +4445,4 @@ class Dataset(object):
 
 
 
-
-
-
-
-def matchTwoDatasets(D1, D2):
-    """ Given two Datasets, slices D2.Dat,
-    second dataset, so that it only inclues trials
-    prsent in D1. size D2 will be <= size D1. Uses
-    animal-trialcode, which is unique identifier for 
-    rows. 
-    RETURNS
-    - D2 will be modified. Nothings return
-    """
-    from pythonlib.tools.pandastools import filterPandas
-
-    # rows are uniquely defined by animal and trialcode (put into new column)
-    def F(x):
-        return (x["animal"], x["trialcode"])
-    if "rowid" not in D1.Dat.columns:
-        D1.Dat = applyFunctionToAllRows(D1.Dat, F, "rowid")
-    if "rowid" not in D2.Dat.columns:
-        D2.Dat = applyFunctionToAllRows(D2.Dat, F, "rowid")
-
-    print("original length")
-    print(len(D2.Dat))
-
-    F = {"rowid":list(set(D1.Dat["rowid"].values))}
-#     inds = filterPandas(D2.Dat, F, return_indices=True)
-    D2.filterPandas(F, return_ver="modify")
-
-    print("new length")
-    print(len(D2.Dat))
-
-
-def mergeTwoDatasets(D1, D2, on_="rowid"):
-    """ merge D2 into D1. indices for
-    D1 will not change. merges on 
-    unique rowid (animal-trialcode).
-    RETURNS:
-    D1.Dat will be updated with new columns
-    from D2.
-    NOTE:
-    will only use cols from D2 that are not in D1. will
-    not check to make sure that any shared columns are indeed
-    idnetical (thats up to you).
-    """
-    
-    df1 = D1.Dat
-    df2 = D2.Dat
-
-    # only uses columns in D2 that dont exist in D1
-    cols = df2.columns.difference(df1.columns)
-    cols = cols.append(pd.Index([on_]))
-    df = pd.merge(df1, df2[cols], how="outer", on=on_, validate="one_to_one")
-    
-
-    return df
-
-
-def concatDatasets(Dlist):
-    """ concatenates datasets in Dlist into a single dataset.
-    Main goal is to concatenate D.Dat. WIll attempt to keep track of 
-    Metadats, but have not confirmed that this is reliable yet.
-    NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
-    """
-
-    Dnew = Dataset([])
-
-    if True:
-        # New, updates metadat.
-        ct = 0
-        dflist = []
-        metadatlist = []
-        for D in Dlist:
-            
-            if len(D.Metadats)>1:
-                print("check that this is working.. only confied for if len is 1")
-                assert False
-
-            # add to metadat index
-            df = D.Dat.copy()
-            df["which_metadat_idx"] = df["which_metadat_idx"]+ct
-            dflist.append(df)
-
-            # Combine metadats
-            metadatlist.extend([m for m in D.Metadats.values()])
-
-            ct = ct+len(D.Metadats)
-        Dnew.Dat = pd.concat(dflist)
-        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
-        Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
-        print("Done!, new len of dataset", len(Dnew.Dat))
-    else:
-        # OLD: did not update metadat.
-        dflist = [D.Dat for D in Dlist]
-        Dnew.Dat = pd.concat(dflist)
-
-        del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
-
-        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
-
-        print("Done!, new len of dataset", len(Dnew.Dat))
-        # Dnew.Metadats = copy.deepcopy(self.Metadats)
-
-    # Check consisitency
-    Dnew._check_consistency()
-    return Dnew
 

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from ..drawmodel.strokePlots import plotDatStrokes
 from pythonlib.tools.pandastools import applyFunctionToAllRows
-
+from .analy_dlist import extract_strokes_monkey_vs_self
 
 def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
@@ -297,6 +297,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if remove_outliers:
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
+    ### Rename things as monkey train test depenidng on expt
+
+
+
     # () Note that preprocess done
     D._analy_preprocess_done=True
 
@@ -305,6 +309,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("GROUPING_LEVELS", GROUPING_LEVELS)
     print("FEATURE_NAMES", FEATURE_NAMES)
     print("SCORE_COL_NAMES", SCORE_COL_NAMES)
+
+
+
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
@@ -775,66 +782,3 @@ def taskmodel_assign_score(D, expt="lines5"):
 
 
 
-def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS):
-    """
-    populate new column with list of strokes for all other trials
-    IN:
-    - Dlist, list of D, where each D is a single dataset holding a single epoch (i.e)
-    i.e., grouping level. doesnt' have to be, but that is how I did.
-    NOTES:
-    - each D in Dlist will have one new columns per grouping level, which will be all strokes
-    across all D in Dlist which are from that grouping_level (escept your own trial's stroke)
-    """
-    from .dataset import concatDatasets
-
-    # 1) Concat all datasets of interest, so can get all cross-parses
-    Dall = concatDatasets(Dlist) # holds pool of strokes
-    for D in Dlist:
-        for group in GROUPING_LEVELS:
-#             group = "straight" # which group's strokes to keep
-#             Dthis = D # which one to modify
-            
-            def _get_strokes(D, task, group):
-                """ returns all strokes for this task and this group, given a dataset D
-                """
-                dfthis = D.Dat[(D.Dat["unique_task_name"]==task) & (D.Dat[GROUPING]==group)]
-                inds = dfthis.index.to_list()
-                trialcodes = dfthis["trialcode"]
-                strokes = dfthis["strokes_beh"]
-                return trialcodes, strokes
-
-            list_list_strokes = []
-            for i in range(len(D.Dat)):
-                task = D.Dat.iloc[i]["unique_task_name"]
-                tcthis = D.Dat.iloc[i]["trialcode"]
-
-                trialcodes, strokes = _get_strokes(Dall, task, group)
-
-                # only keep strokes that are not from the current trial
-                list_strokes = []
-                for tc, s in zip(trialcodes, strokes):
-                    if tcthis!=tc:
-                        list_strokes.append(s)
-
-                list_list_strokes.append(list_strokes)
-
-            parsesname = f"strokes_beh_group_{group}"
-            D.Dat[parsesname] = list_list_strokes
-    
-    # to confirm concat didnt modify
-    for D in Dlist:
-        D._check_consistency()
-        
-    # Only keep rows which have strokes across all models
-    list_col_names = [f"strokes_beh_group_{group}" for group in GROUPING_LEVELS]
-    for D in Dlist:
-        def remove(D, i):
-            # True if any of cols are empty
-            x = [len(D.Dat.iloc[i][col])==0 for col in list_col_names]
-            if any(x):
-                return True
-            else:
-                return False
-        inds_remove = [i for i in range(len(D.Dat)) if remove(D, i)]
-        D.Dat = D.Dat.drop(inds_remove).reset_index(drop=True)
-        

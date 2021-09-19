@@ -2723,6 +2723,7 @@ class Parser(object):
             # then plot all
             inds = range(len(self.Parses))
         elif isinstance(inds, int):
+            inds = min([inds, len(self.Parses)])
             inds = sorted(random.sample(range(len(self.Parses)), inds))
         elif isinstance(inds, str):
             if inds=="manual":
@@ -2764,8 +2765,10 @@ class Parser(object):
         import random
         D = Dataset([])
         inds = self.findparses_bycommand(inds)
+        
         if len(inds)==0:
             return None
+
         if len(inds)>Nmax:
             inds = random.sample(inds, Nmax)
         parses_list = self.extract_all_parses_as_list()

@@ -3,7 +3,7 @@ This runs and saves thru Dataset code.
 """
 from pythonlib.dataset.dataset import Dataset
 
-QUICK = True # quick means fast parsing.
+QUICK = False # quick means fast parsing.
 INITIAL_EXTRACTION = False
 BEH_ALIGNED_EXTRACTION = True
 
@@ -15,8 +15,6 @@ def get_dataset(a,e,r, FIXED):
     # Keep only the fixed tasks?
     if FIXED:
         D = D.filterPandas({"random_task":[False]}, "dataset")
-    else:
-        D = D.filterPandas({"random_task":[True]}, "dataset")
     return D
 
 def run(a,e,r,v, FIXED):
@@ -24,12 +22,14 @@ def run(a,e,r,v, FIXED):
     D = get_dataset(a,e,r, FIXED)
 
     if INITIAL_EXTRACTION:
-        D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote=f"fixed_{FIXED}",     
+        # D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote=f"fixed_{FIXED}",     
+        #     SDIR=SDIR, save_using_trialcode=False)
+        D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote="",     
             SDIR=SDIR, save_using_trialcode=False)
 
     if BEH_ALIGNED_EXTRACTION:
         # extract all all the beh-aligned parses too
-        list_parse_params = [{"quick":QUICK, "ver":v, "savenote":f"fixed_{FIXED}"}]
+        list_parse_params = [{"quick":QUICK, "ver":v, "savenote":""}]
         list_suffixes = [x["ver"] for x in list_parse_params]
         pathbase = SDIR
         name_ver = "unique_task_name"
