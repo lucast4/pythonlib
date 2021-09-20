@@ -1065,6 +1065,8 @@ def check_strokes_identical(strokes1, strokes2):
 
 def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):
     """ wrapper, different moethods for permuting strokes.
+    OUT:
+    - list of things of same type as storkes
     """
     if ver=="circular_and_reversed":
         # Then get circular for both strokes, and 
@@ -1121,7 +1123,9 @@ def getAllStrokeOrders(strokes, num_max=1000):
     from math import factorial
     
     nstrokes = len(strokes)
-    if nstrokes==1:
+    if nstrokes==0:
+        return []
+    elif nstrokes==1:
         return [[strokes[0]]], [[0]] 
     else:
         if num_max:
@@ -1179,6 +1183,7 @@ def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_p
             ax = plt.subplot(3,3,i+2)
             # plotDatStrokes(strokes, ax)
             plotDatStrokes(S, ax, plotver="strokes_order")
+
 
 def concatStrokes(strokes, reorder=False, thresh=10, sanity_check=False):
     """ combines strokes (list of np array) into strokes of 

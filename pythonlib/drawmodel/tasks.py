@@ -3,6 +3,7 @@ specifically for tasks in monkeylogic
 """
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
+from .chunks import chunk_strokes, chunks2parses
 
 class TaskClass(object):
     """ Holds a single task object.
@@ -1122,36 +1123,19 @@ def convertTask2Strokes(task, concat_timesteps=False, interp=None, fake_timestep
 #     return parses
 
 
-def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False):
-    """ for this chunks (list of chunks) and model, extract
-    each way to chunking strokes. e.g.
-    [[0,1], 2] leads to chuning of strokes 0 and 1
-    Returns one strokes object for each way of chunking. 
-    (note, can do:
-    chunklist = getTrialsTaskChunks(...))
-    - NOTE: 3rd dim (time) might not make sense).
-    - parses_list is len of num chunks, each element a strokes.
-    --- eachstroke, then will treat each stroke as chunk,
-    INPUT:
-    - chunks, 
-    --- e.g,, chunks = [
-        [[0, 1], 2], 
-        [[0, 2], 1]]
-    OUT:
-    - strokes, same structure as chunks, but instead of ints, have np arrays (Nx2)
+def flatten_hier(hier):
+    """ returns [x,y , ..., ..
+    Where x, y, .. are in hierarchy of same shape as chunks (see
+    chunk_strokes)
     """
-    from pythonlib.tools.stroketools import concatStrokes
-    parses_list = []
-    for c in chunks:
-        # strokesnew = [np.concatenate([strokes[i] for i in s], axis=0) for s in c]
-        strokesnew = [concatStrokes([strokes[i] for i in s], 
-            reorder=reorder, thresh=thresh, sanity_check=sanity_check)[0] for s in c]
-        parses_list.append(strokesnew)
+    out = []
+    for x in hier:
+        if isinstance(x, list):
+            out.extend(x)
+        else:
+            out.append(x)
+    return out
 
-    # === remove temporal inforamtion from parses (since innacuarte)
-    parses_list = [[strok[:,[0,1]] for strok in strokes] for strokes in parses_list]
-
-    return parses_list
 
 def chunklist2chunks(chunklist, strokes, model, default="eachstroke"):
     """ for this chunklist and model, extract

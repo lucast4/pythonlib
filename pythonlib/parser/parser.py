@@ -17,6 +17,7 @@ class Parser(object):
         self.Params = {}
         self.Finalized=False # to ensure that after process strokes, dont try to do more stuff.
         self.Parses = []
+        self.ParsesBase = []
         self._GraphLocked = False # will not allow graphmods after locked (e.g., already done parsing)
 
     def input_data(self, data, kind="strokes"):
@@ -146,7 +147,7 @@ class Parser(object):
 
         ### get all permutations
         # self.parses_get_all_permutations(n_each = 2)
-        self.parses_get_all_permutations(n_each = neach)
+        self.parses_get_all_permutations(n_each = neach, direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
         ### Remove redundant permutations
         self.parses_remove_redundant(stroke_order_doesnt_matter=stroke_order_doesnt_matter, 
@@ -370,7 +371,7 @@ class Parser(object):
 
     ############# MANUALLY ENTERING PARSES
     def check_if_parse_exists(self, parse, stroke_order_doesnt_matter=True,
-        direction_within_stroke_doesnt_matter=True):
+        direction_within_stroke_doesnt_matter=True, is_base_parse=False):
         """ Check if this parse already exists in self.Parses,
         IN:
         - parse, a dict holding all parse info. like self.Parses[0]
@@ -386,8 +387,13 @@ class Parser(object):
         list_p = parse["list_ps"]
         assert len(list_p)>0
 
-        for i in range(len(self.Parses)):
-            list_p_this = self.extract_parses_wrapper(i)
+        if is_base_parse:
+            ParsesList = self.ParsesBase
+        else:
+            ParsesList = self.Parses
+
+        for i in range(len(ParsesList)):
+            list_p_this = self.extract_parses_wrapper(i, is_base_parse=is_base_parse)
             if self._check_parses_is_identical(list_p, list_p_this, 
                 stroke_order_doesnt_matter, 
                 direction_within_stroke_doesnt_matter):
@@ -399,7 +405,7 @@ class Parser(object):
     def update_parse_with_input_parse(self, parse, keyvals_update={},
             stroke_order_doesnt_matter=True,
             direction_within_stroke_doesnt_matter=True,
-            append_keyvals=False
+            append_keyvals=False, is_base_parse=False
             ):
         """ Looks whether there exists parse already, identical to input. if so,
         then updates the existing parse with key:val in keyvals_update
@@ -418,28 +424,56 @@ class Parser(object):
 
         # check if parse exists
         exists, ind = self.check_if_parse_exists(parse, stroke_order_doesnt_matter,
-            direction_within_stroke_doesnt_matter)
+            direction_within_stroke_doesnt_matter, is_base_parse=is_base_parse)
 
         if exists:
-            # Then update
-            parsedict = self.extract_parses_wrapper(ind, "dict")
-            for k, v in keyvals_update.items():
-                if append_keyvals:
-                    if k in parsedict.keys():
-                        parsedict[k].append(v)
-                    else:
-                        parsedict[k] = [v]
-                else:
-                    # Replace
-                    parsedict[k] = v
-
+            self.update_existing_parse(ind, keyvals_update, append_keyvals, is_base_parse)
+            # # Then update
+            # parsedict = self.extract_parses_wrapper(ind, "dict")
+            # for k, v in keyvals_update.items():
+            #     if append_keyvals:
+            #         if k in parsedict.keys():
+            #             parsedict[k].append(v)
+            #         else:
+            #             parsedict[k] = [v]
+            #     else:
+            #         # Replace
+            #         parsedict[k] = v
             return True, ind
         else:
             return False, None
 
+    def update_existing_parse(self, ind, keyvals_update={}, append_keyvals=False,
+            is_base_parse=False):
+        """
+        Helper to update an existing parse in smart way
+        IN:
+        - keyvals_update, dict which will enter into parsedict. will overwrite if exists.
+        unless use append_keyvals
+        --- {k:v} 
+        - append_keyvals, then will assume values are lists, and iwll append the input item if exists
+        or start a list if doesnts.
+        --- enter v the item, not [v]
+        OUT:
+        - parsedict, updated
+        """
+        # Then update
+        parsedict = self.extract_parses_wrapper(ind, "dict", is_base_parse=is_base_parse)
+        for k, v in keyvals_update.items():
+            if append_keyvals:
+                if k in parsedict.keys():
+                    parsedict[k].append(v)
+                else:
+                    parsedict[k] = [v]
+            else:
+                # Replace
+                parsedict[k] = v
+        return parsedict
+
+
 
     def wrapper_input_parse(self, parse, ver, note="", apply_transform=True,
-        require_stroke_ends_on_nodes=True):
+        require_stroke_ends_on_nodes=True, params={}, is_base_parse=False):
         """
         [GOOD USE THIS] Manually enter a new parse in where input format/type is flexible.
         INPUT:
@@ -456,24 +490,71 @@ class Parser(object):
         """
 
         if ver=="list_of_paths":
-            self._manually_input_parse(parse, use_all_edges=True, note=note)
+            self._manually_input_parse(parse, use_all_edges=True, note=note,
+                is_base_parse=is_base_parse)
         elif ver=="dict":
-            self.Parses.append(parse)
-            print("Added new parse, ind:", len(self.Parses)-1)
+            if is_base_parse:
+                self.ParsesBase.append(parse)
+                print("Added new BASE parse, ind:", len(self.ParsesBase)-1)
+            else:
+                self.Parses.append(parse)
+                print("Added new parse, ind:", len(self.Parses)-1)
         elif ver=="strokes":
             # assume these are untransformed affine.
             self._manually_input_parse_from_strokes(parse, apply_transform=apply_transform,
-                require_stroke_ends_on_nodes=require_stroke_ends_on_nodes, note=note)
+                require_stroke_ends_on_nodes=require_stroke_ends_on_nodes, note=note,
+                is_base_parse=is_base_parse)
+        elif ver=="strokes_plus_chunkinfo":
+            # enter each segment in strokes, but also enter how to chunk.
+            # will automaitlcaly chunk into a parse.
+            from pythonlib.drawmodel.tasks import chunks2parses, chunk_strokes, flatten_hier
+
+            strokes = parse
+            chunks = params["chunks"] # refers to strokes input. will chunk strokes before inseting
+            hier = params["hier"] # refers to strokes AFTER chunkign
+            fixed_order = params["fixed_order"] # dict[0] = [True]; dict[1] = [True, False], means whether allowed to 
+            # shuffle on first level (0) and second (1)
+
+            # if not self._hier_is_flat(chunks):
+            #     assert False, "not sure if always succeeds in finding paths for each new chunk"
+
+            assert sorted(flatten_hier(hier))==list(range(len(chunks))), "hierarchy must account for all strokes AFTER chunking"
+            assert len(fixed_order[1])==len(hier), "need to do this"
+
+            # chunk strokes if needed
+
+            strokes_chunked = chunk_strokes(strokes, chunks, reorder=False)
+
+            # Input parse
+            parse_dict = self._manually_input_parse_from_strokes(strokes_chunked, 
+                apply_transform=apply_transform, require_stroke_ends_on_nodes=False, note=note,
+                return_parse_dict=True, is_base_parse=is_base_parse)
+
+            # add metadat
+            list_keys = ["chunks", "hier", "fixed_order", "objects_before_chunking", "rule"]
+            for k in list_keys:
+                assert k not in parse_dict
+                parse_dict[k] = params[k]
+
+            # print(parse)
+            # print(strokes_chunked)
+            # for k, v in parse_dict.items():
+            #     print(k, v)
+
+            # assert False, "chcek"
+
         else:
             assert False
 
         # if already finalized, then need to finalize this last parse
-        if self.Finalized:
-            indthis = len(self.Parses)-1
-            self.finalize(force_just_this_ind=indthis)
+        if is_base_parse is False:
+            if self.Finalized:
+                indthis = len(self.Parses)-1
+                self.finalize(force_just_this_ind=indthis)
 
 
-    def _manually_input_parse(self, list_of_paths, use_all_edges=True, note=""):
+    def _manually_input_parse(self, list_of_paths, use_all_edges=True, note="",
+        is_base_parse=False):
         """
         INPUT:
         - list_of_paths,
@@ -513,12 +594,19 @@ class Parser(object):
             "note":note
         }
 
-        self.Parses.append(newparse)
-        print("Added new parse, ind:", len(self.Parses)-1)
+        if is_base_parse:
+            self.ParsesBase.append(newparse)
+            print("Added new BASE parse, ind:", len(self.ParsesBase)-1)
+        else:
+            self.Parses.append(newparse)
+            print("Added new parse, ind:", len(self.Parses)-1)
+
+        return newparse
 
 
     def _manually_input_parse_from_strokes(self, strokes, apply_transform=True,
-            require_stroke_ends_on_nodes=True, note=""):
+            require_stroke_ends_on_nodes=True, note="",
+            is_base_parse=False, return_parse_dict=False):
         """ wrapper, to auto find list of nodes, and input, for this storkes.
         strokes must match the strokes coordinates that make up the graph.
         - will fail if doesnt find a complete set of edges.
@@ -564,7 +652,11 @@ class Parser(object):
                     must_use_all_edges=True, no_multiple_uses_of_edge=True)
 
         # Inset this as a new parse
-        self._manually_input_parse(list_of_paths, note=note)
+        #self.plot_graph()
+        newparse = self._manually_input_parse(list_of_paths, note=note, is_base_parse=is_base_parse)
+
+        if return_parse_dict:
+            return newparse
 
 
     ################### DO THINGS WITH PARSES [INDIV]
@@ -590,7 +682,6 @@ class Parser(object):
             # good.
             R.list_ws = [w for w in self.Parses[ind]["list_ps"]]
         return R
-
 
 
     ################### DO THINGS WITH PARSES [BATCH]
@@ -631,11 +722,28 @@ class Parser(object):
         - removes the parse with the later ind, always.
         """
 
+        def _ind_already_will_remove(ind, matches):
+            """ returns True if this ind is already s part of a value for
+            any key in matches. this means it will be removed.
+            """
+            for k, v in matches.items():
+                if ind in v:
+                    return True
+            return False
+
+
+
         # Find matches, return as dict[ind1] = [list of inds idential]
         # ind1 is not present unless list is len >0
         matches = {}
         nparses = len(self.Parses)
         for i in range(nparses):
+            # if i is already scheduled to be removed, then just skip
+
+            if _ind_already_will_remove(i, matches):
+                print("SKIPPING, since will already remove", i)
+                continue
+
             for ii in range(i+1, nparses):
 
                 # compare parses
@@ -669,7 +777,7 @@ class Parser(object):
         self.Parses = [p for i, p in enumerate(self.Parses) if i not in inds_to_remove]
         print("ending len of parses", len(self.Parses))
 
-    def parses_get_all_permutations(self, n_each = 5):
+    def parses_get_all_permutations(self, n_each = 5, direction_within_stroke_doesnt_matter=True):
         """ gets all permutations for each parse. 
         Then appends them to the parses list.
         OUTPUT:
@@ -678,7 +786,7 @@ class Parser(object):
         for i in range(len(self.Parses)):
             if i%5==0:
                 print(i)
-            parses_list = self.get_all_permutations(i, n=n_each)
+            parses_list = self.get_all_permutations(i, n=n_each, direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
             # add these to ends of self.Parses
             for p in parses_list:
@@ -691,7 +799,203 @@ class Parser(object):
 
         
     ########## GETTING PERMUTATIONS
-    def get_all_permutations(self, ind, n=100, ver="parser"):
+    def _hier_is_flat(self, hier):
+        """ hier is 2-level
+        e..g, [[1,2], 3]
+        RETURNS:
+        - True if hierarchy is flat. evem this [[1], 2, [0]] woudl be True
+        """
+        for h in hier:
+            if isinstance(h, list):
+                if len(h)>1:
+                    return False
+        return True
+
+
+    def get_hier_permutations(self, indparse, is_base_parse=True, 
+        nconfigs=1000, update_not_append=True, direction_within_stroke_doesnt_matter=True):
+        """ 
+        uses self.ParsesBase[indparse]["hier"] to determing all the allowable ways
+        of permuting edges
+        IN:
+        - is_base_parse, controls which input parse to use. DOESNT affect output
+        - update_not_append, then searched if parse is already exist, if so updates, instaed of appending.
+        OUT:
+        - output parses to self.Parses (not self.ParsesBase), regardless of whether input parse is base parse.
+        TODO:
+        - fixed_order controls both ordering and flipping. Instead, should separately
+        control them (add another input, fixed_flipping)
+        """
+        # from .search import search_parse
+        from pythonlib.drawmodel.tasks import chunk_strokes
+        from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+
+        assert direction_within_stroke_doesnt_matter==True, "havent tested that this works if allow diff directions."
+
+        list_p = self.extract_parses_wrapper(indparse, is_base_parse=is_base_parse)
+        parse_dict = self.extract_parses_wrapper(indparse, "dict", is_base_parse=is_base_parse)
+        hier = parse_dict["hier"]
+        fixed_order = parse_dict["fixed_order"]
+
+        # combine hier and fixed order, so not broken apart after permutation
+        hier_fo = [(h,f) for h, f in zip(hier, fixed_order[1])]
+
+        # is hierarchy flat?
+        if self._hier_is_flat(hier):
+            # Then no hierarchy exists:
+            list_parses_all_flat = self.search_parse(list_p, nconfigs, 
+                direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
+
+            # if direction_within_stroke_doesnt_matter:
+            #     # Use this method, doesnt even try to flip
+            #     list_parses_all_flat = getStrokePermutationsWrapper(list_p, "all_orders", num_max=nconfigs)
+            # else:
+            #     # flips and reorders
+            #     list_parses_all_flat = self.get_all_permutations(indparse, n=nconfigs, is_base_parse=is_base_parse)
+        else:
+            # First, collect all the ways of chunking (without concating) list_p
+            list_waystochunk_p = []
+            if fixed_order[0] == True:
+                # Then fixed. dont touch.
+                list_waystochunk_p = [hier_fo]
+            else:
+                # get all permutations of the top level
+                list_waystochunk_p = self.search_parse(hier_fo, 1000, 
+                    direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
+
+                # list_waystochunk_p = getStrokePermutationsWrapper(hier_fo, "all_orders", num_max=1000)
+
+            # for x in list_waystochunk_p:
+            #     print(x)
+            # assert False
+            # Second, for each way of hcunking...
+            # -- each high-level permutation
+            list_parses_all = []
+            for hierthis in list_waystochunk_p:
+
+                # run search within each chunk
+                list_perms_each_chunk = [] # each item is list of all perms for that chunk
+                for chunk, fixed_order in hierthis:
+                    if len(chunk)==0:
+                        # This can happen. e.g. if line-->circle rule, but no circles in this task...
+                        print("SKIPPING CHUNK since empty")
+                        continue
+
+                    # convert chunk to list of p
+                    list_p_thischunk = chunk_strokes(list_p, [chunk], False, generic_list=True)[0]
+                    if len(list_p_thischunk)==0:
+                        print(parse_dict)
+                        print(hier_fo)
+                        print(list_p)
+                        print(chunk)
+                        print(hier)
+                        print(fixed_order)
+                        assert False
+                    if fixed_order==True:
+                        # then dont get any perms
+                        list_perms_each_chunk.append([list_p_thischunk]) # a list of list_p
+                    else:
+
+                        perms = self.search_parse(list_p_thischunk, 1000, 
+                            direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
+                        # if direction_within_stroke_doesnt_matter:
+                        #     # quicker
+                        #     perms = getStrokePermutationsWrapper(list_p_thischunk, "all_orders", num_max=1000)
+                        # else:
+                        #     perms, _ = search_parse(list_p_thischunk, 
+                        #         configs_per=nconfigs, trials_per=800, max_configs=1e6)
+                        list_perms_each_chunk.append(perms)
+
+                # Take cross product of lists, each for one chunk in the hierarchy
+                from itertools import product
+                # for x in list_perms_each_chunk:
+                #     print(x)
+                #     print(len(x))
+                #     print(x[0])
+                #     print("-")
+                # assert False
+                # print(list_perms_each_chunk[0])
+
+                list_parses_all.extend(product(*list_perms_each_chunk))
+
+            # Flatten all
+            list_parses_all_flat = []
+            for x in list_parses_all:
+                list_p_this = []
+                for xx in x:
+                    if isinstance(xx, list):
+                        list_p_this.extend(xx)
+                    else:
+                        list_p_this.append(xx)
+                list_parses_all_flat.append(list_p_this)
+
+        # Add these to self.Parses
+        for list_p in list_parses_all_flat:
+
+            # First, try to update a parse if it exists
+            parsenew = {
+                "strokes":None,
+                "list_ps": list_p,
+                "perm_of_list":[("base", indparse)] if is_base_parse else ("notbase", indparse)
+            }
+
+            if update_not_append:
+                # First, see if already exists
+                keyvals_update = {
+                    "perm_of_list":("base", indparse) if is_base_parse else ("notbase", indparse)
+                    }
+
+                #TODO: a self.Parses item can end up twith mutlipel identical entries if perm_of_list, because stroke order issues. is OK"
+                #TODO: update_not_append=True should be identical to False, then running remove redundant. Somehow it is slightly different...
+                # I thjink I know why - permutations is not exhaustive..
+                success, ind = self.update_parse_with_input_parse(parsenew, keyvals_update, 
+                    stroke_order_doesnt_matter=False,
+                    direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter,
+                    append_keyvals=True
+                    )
+
+                if success:
+                    print('Updated self.Parses at ind', ind, ' with new perm of : ', ("base", indparse) if is_base_parse else ("notbase", indparse))
+                if not success:
+                    # Then add it to parses
+                    self.wrapper_input_parse(parsenew, ver="dict")
+                    print('Added self.Parses, perm of : ', ("base", indparse) if is_base_parse else ("notbase", indparse))
+            else:
+                # always append
+                self.wrapper_input_parse(parsenew, ver="dict")
+                print('Added self.Parses, perm of : ', ("base", indparse) if is_base_parse else ("notbase", indparse))
+
+            # parse_dict = {
+            #     "strokes":None,
+            #     "list_ps": list_p,
+            #     "permutation_of": ("base", indparse)
+            #     }
+            # self.wrapper_input_parse(parse_dict, "dict", is_base_parse=False)
+
+        return list_parses_all_flat
+
+
+    def search_parse(self, parse, configs_per, trials_per=800, max_configs=1e6,
+            direction_within_stroke_doesnt_matter=True):
+        """ wrapper, so that can decide whether to flip (takes much longer)
+        INPOUT:
+        - parse, list of p
+        """
+        from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+        if direction_within_stroke_doesnt_matter:
+            # then just reorder. much quicker.
+            list_parse = getStrokePermutationsWrapper(parse, 
+                "all_orders", num_max=configs_per)
+        else:
+            from .search import search_parse as sp
+            list_parse, _ = sp(parse, 
+                configs_per=configs_per, trials_per=trials_per, 
+                max_configs=max_configs)
+        return list_parse
+
+
+    def get_all_permutations(self, ind, n=500, ver="parser", is_base_parse=False,
+        direction_within_stroke_doesnt_matter=True):
         """ get all permutations for this parse (ind)
         By default, get reordering, flipping.
         TODO: circular permtuation for any loops.
@@ -707,7 +1011,7 @@ class Parser(object):
         # import sys
         # sys.path.append("/data1/code/python/GNS-Modeling/")
         # from gns.inference.parsing.top_k import search_parse
-        from .search import search_parse
+        # from .search import search_parse
 
         if ver=="walker":
             assert False, "old - now converting WalkerStrokes to ParserStrokes"
@@ -717,7 +1021,8 @@ class Parser(object):
             assert False, "make a new class, just like walker class."
         elif ver=="parser":
             # each stroke is a ParserStroke
-            parse = self.Parses[ind]["list_ps"]
+            parse = self.extract_parses_wrapper(ind, is_base_parse=is_base_parse)
+            # parse = self.Parses[ind]["list_ps"]
         else:
             assert False, "need to fix below, cannot use nodelists, since doesnt keep track of the edge"
             # Instead, use edgelists. then convert from edge to nodes.
@@ -731,7 +1036,9 @@ class Parser(object):
             # parses_out, _ = search_parse(parse, lambda parses: torch.rand(len(parses)))
             # parses_out = [[p.numpy() for p in parse] for parse in parses_out]
 
-        parses_list, _ = search_parse(parse, configs_per=n, trials_per=800, max_configs=1e6)
+        # parses_list, _ = search_parse(parse, configs_per=n, trials_per=800, max_configs=1e6)
+        parses_list = self.search_parse(parse, configs_per=n, trials_per=800, max_configs=1e6,
+            direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
         return parses_list
 
@@ -759,15 +1066,21 @@ class Parser(object):
         return [p.list_ei for p in self.Parses[ind]["list_walkers"]]
         
 
-    def extract_parses_wrapper(self, ind, kind="parser_stroke_class"):
-        """ helper to extract list of strokes, represented in flexible waus
+    def extract_parses_wrapper(self, ind, kind="parser_stroke_class", is_base_parse=False):
+        """ helper to extract list of paths for this parse, represented in flexible waus
         OUT:
-        - list of strokes.
+        - see within code.
         """
+
+        if is_base_parse:
+            ParsesThis = self.ParsesBase
+        else:
+            ParsesThis = self.Parses
 
         if kind=="list_of_paths":
             # path is a list of directed edges.
-            parses = self.extract_parses_wrapper(ind, "parser_stroke_class")
+            parses = self.extract_parses_wrapper(ind, "parser_stroke_class", 
+                is_base_parse=is_base_parse)
             return [p.extract_list_of_directed_edges() for p in parses]
         if kind == "parser_stroke_class":
             key = "list_ps"
@@ -776,22 +1089,25 @@ class Parser(object):
             assert False, "nto coded. see finalize"
         elif kind=="strokes":
             key = "strokes"
-            # return [p["strokes"] for p in self.Parses[ind]]
         elif kind=="summary":
             # returns list of dicts, where each item has keys: "edges", "walker", "traj"
             # i.e. combines all of the others.
-            list_of_edges = self.extract_parses_wrapper(ind, "list_of_paths")
-            list_of_walkers = self.extract_parses_wrapper(ind)
-            list_of_trajs = self.extract_parses_wrapper(ind, "strokes")
+            list_of_edges = self.extract_parses_wrapper(ind, "list_of_paths", 
+                is_base_parse=is_base_parse)
+            list_of_walkers = self.extract_parses_wrapper(ind, 
+                is_base_parse=is_base_parse)
+            list_of_trajs = self.extract_parses_wrapper(ind, "strokes", 
+                is_base_parse=is_base_parse)
             out = []
             for e,w,t in zip(list_of_edges, list_of_walkers, list_of_trajs):
                 out.append({"edgesdir":e, "walker":w, "traj":t})
             return out
         elif kind=="dict":
-            return self.Parses[ind]
+            return ParsesThis[ind]
         else:
             assert False, "not coded"
-        return [p for p in self.Parses[ind][key]]
+
+        return ParsesThis[ind][key]
 
 
     def extract_all_parses_as_list(self, kind="strokes"):
@@ -1996,7 +2312,7 @@ class Parser(object):
 
 
     def convert_list_edges_to_directed(self, list_edges):
-        """ makes sure that something like (1, 2, 0), (2, 5, 0), ...
+        """ outputs something like (1, 2, 0), (2, 5, 0), ...
         where node1 for ed[0] is same as node0 for ed[1], ..
         and so on.
         NOTE:
@@ -2006,7 +2322,7 @@ class Parser(object):
         if self.check_list_edges_directed(list_edges):
             return list_edges
         else:
-            def _run(anchor_node):
+            def _run(list_edges, anchor_node):
                 list_edges_directed = []
                 failed=False
                 for ed in list_edges:
@@ -2021,16 +2337,40 @@ class Parser(object):
                         break
                 return list_edges_directed, failed
 
-            anchor_node = list_edges[0][0]
-            list_edges_directed, failed = _run(anchor_node)
-            if failed:
-                # try seeding in other direction
-                anchor_node = list_edges[0][1]
-                list_edges_directed, failed = _run(anchor_node)
-                if failed:
-                    print(list_edges)
-                    assert False
-            return list_edges_directed
+            # Try combo of (1) permutations (ordering)
+            # and two possible anchor nodes to initialize
+            for anchor_node_ind in [0, 1]:
+                anchor_node = list_edges[0][anchor_node_ind]
+                list_edges_directed, failed = _run(list_edges, anchor_node)
+                if not failed:
+                    return list_edges_directed
+
+            # If got to here, then try permutations
+            from pythonlib.tools.listtools import permuteRand
+            perm_list_edges = permuteRand(list_edges, N=1000, not_enough_ok=True)
+            for this_list_edges in perm_list_edges:
+                for anchor_node_ind in [0, 1]:
+                    anchor_node = this_list_edges[0][anchor_node_ind]
+                    list_edges_directed, failed = _run(this_list_edges, anchor_node)
+                    if not failed:
+                        return list_edges_directed
+
+            # got to here, must have failed
+            print(list_edges)
+            self.plot_graph()
+            assert False
+
+            # anchor_node = list_edges[0][0]
+            # list_edges_directed, failed = _run(list_edges, anchor_node)
+            # if failed:
+            #     # try seeding in other direction
+            #     anchor_node = list_edges[0][1]
+            #     list_edges_directed, failed = _run(list_edges, anchor_node)
+            #     if failed:
+            #         print(list_edges)
+            #         self.plot_graph()
+            #         assert False
+            # return list_edges_directed
 
     def check_list_edges_directed(self, list_edges):
         """ Return True if list edges directed, i.e.,, end n odes are 
@@ -2527,7 +2867,7 @@ class Parser(object):
 
         
     ######### FIND PARSES
-    def findparses_filter(self, filtdict, return_inds=False):
+    def findparses_filter(self, filtdict, return_inds=False, is_base_parse=False):
         """ filter parses. each parse is  adict. filters by keywords.
         see code within
         RETURNS:
@@ -2535,7 +2875,11 @@ class Parser(object):
         """
 
         from pythonlib.tools.dicttools import filterDict
-        list_parses = filterDict(self.Parses, filtdict)
+        if is_base_parse:
+            ParsesList = self.ParsesBase
+        else:
+            ParsesList = self.Parses
+        list_parses = filterDict(ParsesList, filtdict)
         if return_inds:
             return [P["index"] for P in list_parses]
         else:
@@ -2663,12 +3007,21 @@ class Parser(object):
         """
         default_keys = {
             "manual":False,
-            "note": ""
+            "note": "",
+            "perm_of_list": [],
+            "rule": None,
+            "bestperm_beh_list":[],
+            "bestperm_of_list":[]
         } 
         for P in self.Parses:
             for k, v in default_keys.items():
                 if k not in P.keys():
                     P[k] = v
+        for P in self.ParsesBase:
+            for k, v in default_keys.items():
+                if k not in P.keys():
+                    P[k] = v
+
 
     def _parses_give_index(self):
         for i, P in enumerate(self.Parses):
@@ -2787,7 +3140,7 @@ class Parser(object):
 
         return fig
 
-    def findparses_bycommand(self, inds, params={}):
+    def findparses_bycommand(self, inds, params={}, is_base_parse=False):
         """ inds is gneral purpose command
         INPUT:
         - inds,
@@ -2796,39 +3149,47 @@ class Parser(object):
         --- None, then all
         --- str, other commands, see below.
         - params, dict, flexiblty hold params
+        - is_base_parse, which set of parses to search
         """
         import random
+        
+        if is_base_parse==True:
+            ParsesList = self.ParsesBase
+        else:
+            ParsesList = self.Parses
+
         if inds==None:
             # then plot all
-            inds = range(len(self.Parses))
+            inds = range(len(ParsesList))
         elif isinstance(inds, int):
-            inds = min([inds, len(self.Parses)])
-            inds = sorted(random.sample(range(len(self.Parses)), inds))
+            inds = min([inds, len(ParsesList)])
+            inds = sorted(random.sample(range(len(ParsesList)), inds))
         elif isinstance(inds, str):
             if inds=="manual":
                 # then only manually entered parses
-                inds = self.findparses_filter({"manual":[True]}, True)
+                inds = self.findparses_filter({"manual":[True]}, True, is_base_parse=is_base_parse)
             elif inds=="manual_and_perms":
                 # Then all manual and their permutations. in overall sorted order.
-                inds = self.findparses_bycommand("manual")
+                inds = self.findparses_bycommand("manual", is_base_parse=is_base_parse)
                 if len(inds)>0:
-                    inds_perm = self.findparses_filter({"permutation_of":inds}, True)
+                    inds_perm = self.findparses_filter({"permutation_of":inds}, True, is_base_parse=is_base_parse)
                     inds = sorted(inds + inds_perm)
             elif inds=="base_parses":
                 # ie anything that is not a permutation., will have None for permutation_of
-                inds = [i for i, p in enumerate(self.Parses) if p["permutation_of"] is None]
+                inds = [i for i, p in enumerate(ParsesList) if p["permutation_of"] is None]
                 # saniyt check, confirme that all referneces to bases have been accounted for
-                for i, p in enumerate(self.Parses):
+                for i, p in enumerate(ParsesList):
                     if p["permutation_of"] is None:
                         assert i in inds, "this parse refers to something that I did not extract as a base parse/.//"
             elif inds=="permutation_of":
                 # permutation of params["of"]
+                # perms are ints.
                 assert isinstance(params["of"], int)
-                inds = [i for i, p in enumerate(self.Parses) if p["permutation_of"]==params["of"]]
+                inds = [i for i, p in enumerate(ParsesList) if p["permutation_of"]==params["of"]]
             elif inds=="is_best_perm":
                 # all that are called "best_perm"
                 assert False, "this ver failed if tried to enter new parse that already existsed... use best_perm_of"
-                inds = [i for i, p in enumerate(self.Parses) if "bestperm" in p["note"]]
+                inds = [i for i, p in enumerate(ParsesList) if "bestperm" in p["note"]]
             elif inds=="best_perm_of":
                 # GOOD - returns the single (or multiple) parses that is the best perm for the input:
                 # if you tell me the beh trial you want, then will be single.
@@ -2839,11 +3200,11 @@ class Parser(object):
                 # meaning (animal, expt, rule, trialcode)
                 # Note: can leave any item in there as None if want to ignore,e .g, (Pancho, None, None, None)
                 # will get all trials by Pancho
-
+                assert len(trial_tuple)==4
                 list_par = []
                 list_par_beh = []
-                for i in range(len(self.Parses)):
-                    p = self.extract_parses_wrapper(i, "dict")
+                for i in range(len(ParsesList)):
+                    p = self.extract_parses_wrapper(i, "dict", is_base_parse=is_base_parse)
                     if "bestperm_of_list" in p.keys():
                         if ind_base_parse in p["bestperm_of_list"]:
 
@@ -2868,8 +3229,21 @@ class Parser(object):
                     print(list_par)
                     for x in list_par_beh:
                         print(x)
-
+            elif inds=="permutation_of_v2":
+                # Better than permutation_of
+                # perms are tuples, e.g, ("base", 1) or ("notbase", 2)
+                baseind = (params["parsekind"], params["ind"])
+                inds = [i for i, p in enumerate(ParsesList) if baseind in p["perm_of_list"]]
+            elif inds=="rule":
+                list_rule = params["list_rule"]
+                inds = []
+                for i, p in enumerate(ParsesList):
+                    if "rule" not in p.keys():
+                        continue
+                    if p["rule"] in list_rule:
+                        inds.append(i)
             else:
+
                 assert False
         else:
             assert isinstance(inds, list)
