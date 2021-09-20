@@ -1002,6 +1002,19 @@ class Dataset(object):
             assert len(x)==1, " multipel rules"
         return x
 
+    def trial_tuple(self, indtrial):        
+        """ identifier unique over all data (a, e, r, trialcode)
+        trialcode = self.Dat.iloc[indtrial]["trialcode"]
+
+        tp = (
+            self.animals(force_single=True)[0],
+            self.expts(force_single=True)[0],
+            self.rules(force_single=True)[0],
+            trialcode
+            )
+
+        return tp
+        
     def identifier_string(self):
         """ string, useful for saving
         """
@@ -2711,6 +2724,160 @@ class Dataset(object):
                     ## log 
                     update_yaml_dict(pathdict, taskname, behid, allow_duplicates=False)
 
+    def parser_get_parser_helper(self, indtrial, parse_params):
+        """ [GOOD] flexible getting of a single Parser instance
+        OUT:
+        - P
+        NOTE:
+        - fails if doesnt find only one.
+        """
+        graphmod = parse_params["ver"]
+        list_P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])
+        assert len(list_P)==1
+        return list_P[0]
+
+
+
+    def _parser_extract_chunkparses(self, indtrial, parse_params, saveon=True):
+        """
+        # Get chunked parses baed on rules, and get all permtuations, and get best-fitting 
+        permutation to this trial's data.
+        [MANYT HINGS, wrapper]. Must have already extracted parses, but otherwise dont have to have
+extracted the best-fit parses using the other code. Will not delete any previous parses. new parses
+        are entered by updating old parses, not by appending. 
+        - saveon, then overwrites file.
+        #TODO: split stuff operating on Tasks vs on Beh trial (top vs. bottom, see comments)
+        """
+        ################# MODIFY THESE
+        list_rule = ["baseline", "linetocircle", "circletoline", "lolli"] # should not be ony the one for this expt
+        # since want to score this beh across all models.
+        expt = "gridlinecircle"
+
+        ############################## STUFF THAT DOESNT DEPENDS ON THE BEHAVIOR
+        # 1) Extract things for this trial
+        Task = self.Dat.iloc[indtrial]["Task"]
+        objects = Task.Shapes
+        P = self.parser_get_parser_helper(indtrial, parse_params)
+
+        strokes_task = self.Dat.iloc[indtrial]["strokes_task"] # original, ignore chunking
+
+        # 2) enter base parses for each rule into P.ParsesBase
+        from pythonlib.drawmodel.chunks import find_chunks_wrapper
+        is_base_parse = True
+        
+        for rule in list_rule:
+            tmp = P.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
+            if len(tmp)>0:
+                print("SKIPPING finding base parse, since already exists: ", rule)
+                continue
+
+            # Get chunk info for this rule
+            list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, expt, 
+                rule, strokes_task)
+            
+            # Enter each one as a new base parse
+            for chunks, hier, fixed_order in zip(list_chunks, list_hier, list_fixed_order):
+                print("ENTERING NEW BASE PARSE:, ", chunks, hier, fixed_order, rule)
+                params = {
+                    "chunks":chunks,
+                    "hier":hier,
+                    "fixed_order":fixed_order,
+                    "objects_before_chunking":objects,
+                    "rule":rule
+                }
+
+                P.wrapper_input_parse(strokes_task, "strokes_plus_chunkinfo", params=params, is_base_parse=True)
+
+        # 3) Get all permutations for each baseparse. overlap them by appending to a list keeping track of link between perm and baseparse
+        list_indparse = range(len(P.ParsesBase))
+        for indparse in list_indparse:
+            # Permutations already gotten?
+            parsedict = P.extract_parses_wrapper(indparse, "dict", is_base_parse=True)
+            if "done_permutations" in parsedict.keys():
+                if parsedict["done_permutations"]==True:
+                    print("Skipping permutation extraction for base parse: ", indparse)
+                    continue    
+            if False:
+                # dont do this, doesnt inset, but appends. need to remove reduntant, then will lsoe some maybe
+                list_list_p = P.get_all_permutations(indparse, is_base_parse=True, direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
+                print(len(list_list_p))
+                # dont need, since did updating method, not appending
+                P.parses_remove_redundant(stroke_order_doesnt_matter=False, direction_within_stroke_doesnt_matter=True)
+            else:
+                P.get_hier_permutations(indparse, update_not_append=True)
+            parsedict["done_permutations"]=True
+
+
+        ############################## THIS DEPENDS ON THE BEHAVIOR
+        # 4) Out of all perms, get the best-fitting to behvaior, and not that down
+        from pythonlib.drawmodel.strokedists import distscalarStrokes
+
+        def _dist(strokes1, strokes2):
+            #TODO: this distnace should be identical to the one used in likelihood. 
+            #TODO: Deal with issue of repeated strokes.
+            return distscalarStrokes(strokes1, strokes2, "dtw_segments")
+
+        strokes_beh = self.Dat.iloc[indtrial]["strokes_beh"]
+        # 3) for each, find best per`m
+        # Method: search thru all perms
+        # Cant use the lsa method since it assumes one to one map between strokes beh and task, but here there is 
+        # complex hierarchy
+        for rule in list_rule:
+            list_indparse = P.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
+            for indparse in list_indparse:
+                # find all perms that are of this 
+                inds = P.findparses_bycommand("permutation_of_v2", {"parsekind": "base", "ind":indparse}, is_base_parse=False)
+                if len(inds)==0:
+                    print("need to first get perms for baseparsr", (rule, indparse))
+                # across these inds, find the one that best fits the behavior.
+                list_strokes_parse = [P.extract_parses_wrapper(i, "strokes", is_base_parse=False) for i in inds]
+                list_d = [_dist(strokes_beh, strokes_p) for strokes_p in list_strokes_parse]
+                
+        #         D.plotMultStrokes([strokes_beh, list_strokes_parse[0]])
+        #         assert False, "check units"
+                
+                if len(list_d)==0:
+                    print(inds)
+                    print(indparse)
+                    assert False
+                ind_parse_best = inds[list_d.index(min(list_d))]
+                
+        #         print(ind_parse_best, inds, list_d)
+        #         D.plotMultStrokes([strokes_beh])
+        #         P.plot_parses([ind_parse_best])
+                
+        #         assert False
+                
+                # save note into this parse
+                trialcode = self.Dat.iloc[indtrial]["trialcode"]
+                note_suffix_tuple = (
+                    self.animals(force_single=True)[0],
+                    self.expts(force_single=True)[0],
+                    self.rules(force_single=True)[0],
+                    trialcode
+                    )
+                ind_par = ("base", indparse)
+                keyvals_update = {
+                    "bestperm_beh_list":note_suffix_tuple,
+                    "bestperm_of_list":ind_par
+                }
+                pardict = P.update_existing_parse(ind_parse_best, keyvals_update, append_keyvals=True,
+                                        is_base_parse=False)
+
+        if saveon:
+            taskname = self.Dat.iloc[indtrial]["unique_task_name"]
+
+            # parser to save
+            # P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])[0]
+            sdir = self._get_parser_sdir(parse_params)
+
+            ## resave these parses...
+            fname = f"{sdir}/{taskname}-behalignedperms.pkl"
+            print("** SAVING chunked parses", parse_params, indtrial, taskname, "to", fname)
+            with open(fname, "wb") as f:
+                pickle.dump(P, f)
+
+
 
     def _parser_extract_bestperms(self, indtrial, ver, note_suffix=None):
         """
@@ -2951,6 +3118,11 @@ class Dataset(object):
                     x['unique_task_name'],name_ver=name_ver)
             if finalize:
                 P.finalize()
+
+            if not hasattr(P, "ParsesBase"):
+                # recent coded
+                P.ParsesBase = []
+
             return P
             # paththis = f"{pathdir}/trialcode_{x['trialcode']}.pkl"
             # with open(paththis, "rb") as f:

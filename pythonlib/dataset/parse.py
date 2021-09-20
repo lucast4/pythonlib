@@ -3,9 +3,10 @@ This runs and saves thru Dataset code.
 """
 from pythonlib.dataset.dataset import Dataset
 
-QUICK = False # quick means fast parsing.
+QUICK = True # quick means fast parsing.
 INITIAL_EXTRACTION = False
-BEH_ALIGNED_EXTRACTION = True
+BEH_ALIGNED_EXTRACTION = False
+CHUNK_EXTRACTION = True
 
 def get_dataset(a,e,r, FIXED):
     D = Dataset([])
@@ -20,6 +21,8 @@ def get_dataset(a,e,r, FIXED):
 def run(a,e,r,v, FIXED):
     SDIR = f"/data2/analyses/database/PARSES_GENERAL/{e}"
     D = get_dataset(a,e,r, FIXED)
+    
+    parse_params = {"quick":QUICK, "ver":v, "savenote":""}
 
     if INITIAL_EXTRACTION:
         # D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote=f"fixed_{FIXED}",     
@@ -37,7 +40,18 @@ def run(a,e,r,v, FIXED):
         D.parser_load_presaved_parses(list_parse_params, 
             list_suffixes, pathbase=pathbase, name_ver=name_ver,
             ensure_extracted_beh_aligned_parses=EXTRACT_BEH_ALIGNED_PARSES)
-
+    
+    if CHUNK_EXTRACTION:
+        list_parse_params = [{"quick":QUICK, "ver":v, "savenote":""}]
+        list_suffixes = [x["ver"] for x in list_parse_params]
+        pathbase = SDIR
+        name_ver = "unique_task_name"
+        EXTRACT_BEH_ALIGNED_PARSES = False # will still load them, but will not try to etract
+        D.parser_load_presaved_parses(list_parse_params, 
+            list_suffixes, pathbase=pathbase, name_ver=name_ver,
+            ensure_extracted_beh_aligned_parses=EXTRACT_BEH_ALIGNED_PARSES)
+        for indtrial in range(len(D.Dat)):
+            D._parser_extract_chunkparses(indtrial, parse_params, saveon=True)
 
 # animal_list = ["Red", "Pancho"]
 # expt_list = ["lines5"]

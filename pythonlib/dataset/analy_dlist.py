@@ -20,7 +20,6 @@ def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS, remove_bad_
     - each D in Dlist will have one new columns per grouping level, which will be all strokes
     across all D in Dlist which are from that grouping_level (escept your own trial's stroke)
     """
-    from .dataset import concatDatasets
 
     # 1) Concat all datasets of interest, so can get all cross-parses
     Dall = concatDatasets(Dlist) # holds pool of strokes
@@ -87,6 +86,8 @@ def concatDatasets(Dlist):
     Metadats, but have not confirmed that this is reliable yet.
     NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
     """
+    from .dataset import Dataset
+    # from pythonlib.dataset.dataset import Dataset
 
     Dnew = Dataset([])
 
