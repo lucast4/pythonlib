@@ -563,8 +563,8 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         cols = [t[2] for t in tmp]
 
     
-    nr = max(rows)+1
-    nc = max(cols)+1
+    nr = int(max(rows)+1)
+    nc = int(max(cols)+1)
     
     if origin=="lower_left":
         rows = max(rows)-rows
@@ -601,20 +601,39 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                     ax.set_ylabel(f"{titles[i]:.2f}")
                 else:
                     ax.set_title(f"{titles[i]:.2f}")
-        else:
-            if col_labels:
-                if row==0:
-                    ax.set_title(col_labels[col])
-            if row_labels:
-                if col==0:
-                    ax.set_ylabel(row_labels[row])
-        if naked_axes:
-            ax.set_yticklabels([])
-            ax.set_xticklabels([])
-            ax.tick_params(axis='both', which='both',length=0)
+        # else:
+        #     if col_labels:
+        #         if row==0:
+        #             ax.set_title(col_labels[col])
+        #     if row_labels:
+        #         if col==0:
+        #             ax.set_ylabel(row_labels[row])
+        # if naked_axes:
+        #     ax.set_yticklabels([])
+        #     ax.set_xticklabels([])
+        #     ax.tick_params(axis='both', which='both',length=0)
 
     if tight:
         fig.subplots_adjust(wspace=0, hspace=0)
+
+    # Set the labels
+    for col in range(max(cols)+1):
+        for row in range(max(rows)+1):
+
+            ax = axes[row][col]
+            if titles is None:
+                # then labels and columns titles, not panel specific.
+                if col_labels:
+                    if row==0:
+                        ax.set_title(col_labels[col])
+                if row_labels:
+                    if col==0:
+                        ax.set_ylabel(row_labels[row])
+            if naked_axes:
+                ax.set_yticklabels([])
+                ax.set_xticklabels([])
+                ax.tick_params(axis='both', which='both',length=0)
+
 
     # x and y lim should contain all data
     return fig

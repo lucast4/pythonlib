@@ -19,6 +19,7 @@ def overlayStrokeTimes(ax, strokes, yfrac=0.9, color="k"):
 def getStrokeColorsGradient(strokes, cmap="winter"):
     """ get evently spaced colors, based on stroke orders
     """
+    # cmap = "cool"
     from pythonlib.tools.plottools import makeColors
     color_order = makeColors(len(strokes), alpha=1, cmap=cmap)
     if cmap=="cool":
