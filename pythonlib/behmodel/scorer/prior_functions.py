@@ -441,6 +441,48 @@ def prior_function_database(ver, params=None):
         }
         Pr._do_score_with_params=False
 
+    elif ver=="chunks":
+        # (hacky) assuming that have extracted the best-fit already, whihc is a single
+        # item in P.Parses[ind], and indicated within the P.Parses[ind] dict. Not fully tested
+        # as there were bugs in the extraction of best-fit.
+        # that SINGLE parse is all prior peaked on
+        # TODO: new method, where the best-fit parses and determined not in preceding step, but instead
+        # here as part of behmodel.
+
+        def func(D, ind, modelname):
+            """ 
+            modelname, name of "rule" for which this is the best parse
+            """
+            # GRAPHMOD = "parser_graphmod"
+            # exrtract the parser
+            P = D.parser_get_parser_helper(ind) # assumes only one parser per trial.
+
+            # find the parse that maximizes the fit between this beh trial 
+            trial_tuple = D.trial_tuple(ind)
+
+            inds = P.findparses_bycommand("best_fit_helper", 
+                {"rule":modelname, "trial_tuple":trial_tuple}
+                )
+
+            # get each parse as strokes, get their likelis
+            list_parses_as_strokes = [P.extract_parses_wrapper(i, "strokes") for i in inds]
+
+
+            # strokes for this beh trial
+            strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
+            # print(list_parses_as_strokes[0])
+            # D.plotMultStrokes([strokes_beh] + list_parses_as_strokes)
+            # assert False, "check units"
+
+            # return delta function over these parses
+            nparses = len(P.Parses)
+            prior = np.zeros(nparses)
+            prior[inds] = 1
+            return prior
+
+        Pr = prior_base()
+        Pr.input_score_function(func)
+
     else:
         print(ver)
         assert False

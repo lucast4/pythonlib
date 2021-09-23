@@ -236,6 +236,43 @@ def get_single_model(ver, params_input=None):
             "norm":(50.,)
         }
 
+    elif ver=="chunks":
+        # You must have (1) extracted all parses for each task amnd
+        # then (2) run D._parser_extract_chunkparses for each beh trial, which saves infor
+        # for wich perms are assigned to each baeparse, with each baseparse assigned to a rule for
+        # chunking. And then says which perm is the best ranked, in comaprison to beh
+        # #TODO: instead of precompting match between perms aned beh shoudl just extract all perms,
+        # then this modeling code extract likelis. the best fit is then  likelis. prior is just based 
+        # on label given to the perms (whether aligned to the model)
+
+        # expt = params_input["expt"] # e..g, gridlinecircle
+        # rule = params_input["rule"] # e..g, lolli
+
+        # (hacky) assuming that have extracted the best-fit already, whihc is a single
+        # item in P.Parses[ind], and indicated within the P.Parses[ind] dict. Not fully tested
+        # as there were bugs in the extraction of best-fit.
+        # that SINGLE parse is all prior peaked on
+        # TODO: new method, where the best-fit parses and determined not in preceding step, but instead
+        # here as part of behmodel.
+        
+
+        Pr = prior_function_database(ver)
+        Li = likeli_function_database(ver)
+        Po = poster_dataset(ver="logsumexp")
+        BM = BehModel()
+        BM.input_model_components(Pr, Li, Po,
+            list_input_args_likeli = ("dat", "trial"),
+            list_input_args_prior = ("dat", "trial", "modelname"),
+            poster_use_log_likeli = True,
+            poster_use_log_prior = True)
+        BM.Prior.Params = {
+            "norm":(1.,)
+        }
+        BM.Likeli.Params = {
+            "norm":(50.,)
+        }
+
+
     elif ver=="mkvsmk":
         Pr = prior_function_database("monkey_vs_monkey")
         Li = likeli_function_database("monkey_vs_monkey")
@@ -280,8 +317,7 @@ def quick_getter_with_params(modelclass, list_mrules):
             list_mod.append(BM)
             list_modnames.append(rule_model)
         allow_separate_likelis = False
-    elif modelclass in ["mkvsmk", "bd", "bdn", "random"]:
-        # list_mrules = ["straight", "bent"]
+    elif modelclass in ["mkvsmk", "bd", "bdn", "random", "chunks"]:
         for i, grp in enumerate(list_mrules):
             BM = get_single_model(modelclass)
             list_mod.append(BM)

@@ -85,6 +85,16 @@ def likeli_scorer_quick(ver):
             list_of_parsestrokes = D.parserflat_extract_strokes(ind) # list of strokes
             scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_of_parsestrokes])
             return 1/scores
+    elif ver=="base_graphmodonly":
+        # For gridlinecircle+, only one parser per troal. not super important, but here makes sure doesnt
+        # mistake the index by flattening the parses.
+        def F(D, ind):
+            strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
+            P = D.parser_get_parser_helper(ind)
+            list_parses_strokes = P.extract_parses_wrapper("all", "strokes")
+            # list_of_parsestrokes = D.parserflat_extract_strokes(ind) # list of strokes
+            scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_parses_strokes])
+            return 1/scores
     else:
         print(ver)
         assert False, "not coded"
@@ -127,6 +137,9 @@ def likeli_function_database(ver, params=None):
         Li.input_score_function(func)
     elif ver in ["lines5", "default"]:
         Li = likeli_scorer_quick(ver="base")
+    elif ver in ["chunks"]:
+        # like base, but assuming only a single parser.
+        Li = likeli_scorer_quick(ver="base_graphmodonly")
     else:
         print(ver)
         assert False
