@@ -1068,46 +1068,62 @@ class Parser(object):
 
     def extract_parses_wrapper(self, ind, kind="parser_stroke_class", is_base_parse=False):
         """ helper to extract list of paths for this parse, represented in flexible waus
+        IN:
+        - ind, either
+        --- int, get a single parse
+        --- list of int, get multipel parse
+        --- "all", get all parses
         OUT:
         - see within code.
         """
 
-        if is_base_parse:
-            ParsesThis = self.ParsesBase
+        if isinstance(ind, list):
+            return [self.extract_parses_wrapper(i, kind, is_base_parse) for i in ind]
+        elif isinstance(ind, str):
+            if ind=="all":
+                n = len(self.Parses) if is_base_parse==False else len(self.ParsesBase)
+                return [self.extract_parses_wrapper(i, kind, is_base_parse) for i in range(n)]
+            else:
+                assert False
         else:
-            ParsesThis = self.Parses
+            assert isinstance(ind, int)
 
-        if kind=="list_of_paths":
-            # path is a list of directed edges.
-            parses = self.extract_parses_wrapper(ind, "parser_stroke_class", 
-                is_base_parse=is_base_parse)
-            return [p.extract_list_of_directed_edges() for p in parses]
-        if kind == "parser_stroke_class":
-            key = "list_ps"
-        elif kind=="strokes_orig_coords":
-            # translates back into behavior coord system.
-            assert False, "nto coded. see finalize"
-        elif kind=="strokes":
-            key = "strokes"
-        elif kind=="summary":
-            # returns list of dicts, where each item has keys: "edges", "walker", "traj"
-            # i.e. combines all of the others.
-            list_of_edges = self.extract_parses_wrapper(ind, "list_of_paths", 
-                is_base_parse=is_base_parse)
-            list_of_walkers = self.extract_parses_wrapper(ind, 
-                is_base_parse=is_base_parse)
-            list_of_trajs = self.extract_parses_wrapper(ind, "strokes", 
-                is_base_parse=is_base_parse)
-            out = []
-            for e,w,t in zip(list_of_edges, list_of_walkers, list_of_trajs):
-                out.append({"edgesdir":e, "walker":w, "traj":t})
-            return out
-        elif kind=="dict":
-            return ParsesThis[ind]
-        else:
-            assert False, "not coded"
+            if is_base_parse:
+                ParsesThis = self.ParsesBase
+            else:
+                ParsesThis = self.Parses
 
-        return ParsesThis[ind][key]
+            if kind=="list_of_paths":
+                # path is a list of directed edges.
+                parses = self.extract_parses_wrapper(ind, "parser_stroke_class", 
+                    is_base_parse=is_base_parse)
+                return [p.extract_list_of_directed_edges() for p in parses]
+            if kind == "parser_stroke_class":
+                key = "list_ps"
+            elif kind=="strokes_orig_coords":
+                # translates back into behavior coord system.
+                assert False, "nto coded. see finalize"
+            elif kind=="strokes":
+                key = "strokes"
+            elif kind=="summary":
+                # returns list of dicts, where each item has keys: "edges", "walker", "traj"
+                # i.e. combines all of the others.
+                list_of_edges = self.extract_parses_wrapper(ind, "list_of_paths", 
+                    is_base_parse=is_base_parse)
+                list_of_walkers = self.extract_parses_wrapper(ind, 
+                    is_base_parse=is_base_parse)
+                list_of_trajs = self.extract_parses_wrapper(ind, "strokes", 
+                    is_base_parse=is_base_parse)
+                out = []
+                for e,w,t in zip(list_of_edges, list_of_walkers, list_of_trajs):
+                    out.append({"edgesdir":e, "walker":w, "traj":t})
+                return out
+            elif kind=="dict":
+                return ParsesThis[ind]
+            else:
+                assert False, "not coded"
+
+            return ParsesThis[ind][key]
 
 
     def extract_all_parses_as_list(self, kind="strokes"):
@@ -1116,13 +1132,16 @@ class Parser(object):
         "strokes"
         {"parser_stroke_class"}
         """
-        if kind=="strokes":
-            self.parses_fill_in_all_strokes()
-            return [p["strokes"] for p in self.Parses]
-        elif kind=="summary":
-            return [self.extract_parses_wrapper(i, kind="summary") for i in range(len(self.Parses))]
-        else:
-            return [self.extract_parses_wrapper(i, kind) for i in range(len(self.Parses))]
+        # assert False, "use extract_parses_wrapper"
+
+        return self.extract_parses_wrapper("all", 
+            kind=kind, is_base_parse=False)
+
+        # if kind=="strokes":
+        #     self.parses_fill_in_all_strokes()
+        #     return [p["strokes"] for p in self.Parses]
+        # else:
+        #     return [self.extract_parses_wrapper(i, kind) for i in range(len(self.Parses))]
 
     def _check_parses_is_identical(self, list_p_1, list_p_2, stroke_order_doesnt_matter=True,
         direction_within_stroke_doesnt_matter=True):
@@ -3190,51 +3209,89 @@ class Parser(object):
                 # all that are called "best_perm"
                 assert False, "this ver failed if tried to enter new parse that already existsed... use best_perm_of"
                 inds = [i for i, p in enumerate(ParsesList) if "bestperm" in p["note"]]
+            
             elif inds=="best_perm_of":
                 # GOOD - returns the single (or multiple) parses that is the best perm for the input:
                 # if you tell me the beh trial you want, then will be single.
                 # otherwise could be multiple.
                 # always returns a list
-                ind_base_parse = params[0] # ind of the base parse.
+                ind_base_parse = params[0] # ind of the base parse. ("base", 0) [new] or 0 [old]
                 trial_tuple = params[1] # ('Pancho', 'gridlinecircle', 'linetocircle', '210823-1-587')
                 # meaning (animal, expt, rule, trialcode)
                 # Note: can leave any item in there as None if want to ignore,e .g, (Pancho, None, None, None)
                 # will get all trials by Pancho
                 assert len(trial_tuple)==4
+
                 list_par = []
                 list_par_beh = []
-                for i in range(len(ParsesList)):
-                    p = self.extract_parses_wrapper(i, "dict", is_base_parse=is_base_parse)
+
+                def _matches_trialtuple(tp, trial_tuple):
+                    # filter by trialtuple (fail if any items dont match)
+                    # ignore trialtuple item if it is None
+                    for x, y in zip(tp, trial_tuple):
+                        if y is None:
+                            continue
+                        if not x == y:
+                            return False
+                    return True
+
+                inds = []
+                for i, p in enumerate(ParsesList):
                     if "bestperm_of_list" in p.keys():
-                        if ind_base_parse in p["bestperm_of_list"]:
+                        assert len(p["bestperm_of_list"])==len(p["bestperm_beh_list"])
+                        # bestperm_of_list = [("base, 0"), ...]
+                        # bestperm_beh_list = [trialtuple1, tuple2, ..]
+                        
+                        # see if any tuple match as a combo
+                        for _of, _beh in zip(p["bestperm_of_list"], p["bestperm_beh_list"]):
+                            if _of==ind_base_parse and _matches_trialtuple(_beh, trial_tuple):
+                                # take this parse
+                                # print(_of, ind_base_parse)
+                                # print(_beh, trial_tuple)
+                                inds.append(i)
+                                break
 
-                            # get the trial tuple
-                            indtmp = p["bestperm_of_list"].index(ind_base_parse)
-                            tp = p["bestperm_beh_list"][indtmp]
+                #             indtmp = p["bestperm_of_list"].index(ind_base_parse)
+                #             tp = p["bestperm_beh_list"][indtmp]
 
-                            # filter by trialtuple (fail if any items dont match)
-                            skip=False
-                            for x, y in zip(tp, trial_tuple):
-                                if y is None:
-                                    continue
-                                if not x == y:
-                                    skip=True
-                            if not skip:
-                                list_par.append(i)
-                                list_par_beh.append(tp) # matching trialtuples
-                inds = list_par
+                #             if i==100:
+                #                 print("here")
+                #                 print(indtmp)
+                #                 print(tp)
+                #                 print(ind_base_parse)
+                #                 print(p["bestperm_of_list"])
+                #                 print(p["bestperm_beh_list"])
+                #                 asdsa
+                #             # filter by trialtuple (fail if any items dont match)
+                #             skip=False
+                #             for x, y in zip(tp, trial_tuple):
+                #                 if y is None:
+                #                     continue
+                #                 if not x == y:
+                #                     skip=True
+                #             if not skip:
+                #                 list_par.append(i)
+                #                 list_par_beh.append(tp) # matching trialtuples
+                #             if skip:
+                #                 print(tp, " -- ", trial_tuple)
+                # inds = list_par
+                inds = sorted(set(inds))
+
                 if False:
                     # print the tuples that were found
                     print("this parse is the best-perm for baseparse: ", ind_base_parse)
                     print(list_par)
                     for x in list_par_beh:
                         print(x)
+
+
             elif inds=="permutation_of_v2":
                 # Better than permutation_of
                 # perms are tuples, e.g, ("base", 1) or ("notbase", 2)
                 baseind = (params["parsekind"], params["ind"])
                 inds = [i for i, p in enumerate(ParsesList) if baseind in p["perm_of_list"]]
             elif inds=="rule":
+                """ get inds that follow this rule"""
                 list_rule = params["list_rule"]
                 inds = []
                 for i, p in enumerate(ParsesList):
@@ -3242,8 +3299,80 @@ class Parser(object):
                         continue
                     if p["rule"] in list_rule:
                         inds.append(i)
-            else:
+            elif inds=="find_perms_for_a_rule":
+                """ rule parses should be in self.ParsesBase
+                """
+                rule = params["rule"]
 
+                # find inds for the base parses for this rule
+                list_indparse = self.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
+                if len(list_indparse)==0:
+                    print("didnt find any base parses for this rule", rule)
+                    return []
+
+                # print("base parses for this rule ", rule, "are: ", list_indparse)
+
+                # Find all perms across these 
+                inds = []
+                for indparse in list_indparse:
+                    # find all perms that are of this 
+                    x = self.findparses_bycommand("permutation_of_v2", {"parsekind": "base", "ind":indparse}, 
+                        is_base_parse=False)
+
+                    # print("perms of ", indparse, ": ", x)
+                    
+                    # print("names of best fit trials for these inds:")
+                    # print([p["bestperm_beh_list"] for i, p in enumerate(self.Parses) if i in x])
+                    inds.extend(x)
+                inds = sorted(set(inds))
+
+
+            elif inds=="best_fit_helper":
+                # helper to find the best-fit parse for this combination of beh (trial_tuple) and rule (base parse)
+                # trial_tuple
+                # rule = "lolli"
+                trial_tuple = params["trial_tuple"]
+                rule = params["rule"] # 
+
+                # 1) Find all perms for this rule
+                inds_perms = self.findparses_bycommand("find_perms_for_a_rule", {"rule":rule})
+
+                # 2) of those perms, find those that have best fit trial be this trial tupel
+                list_indparse = self.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
+                if len(list_indparse)==0:
+                    print("didnt find any base parses for this rule", rule)
+                    assert False
+                    # return []
+
+                # print("base parses for this rule ", rule, "are: ", list_indparse)
+
+                inds = []
+                for indparse in list_indparse:
+                    # find_best_perm_this_beh_and_baseparse
+                    x = self.findparses_bycommand("best_perm_of", [("base", indparse), trial_tuple])
+                    inds.extend(x)
+                # # find inds for the base parses for this rule
+                # list_indparse = self.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
+                # if len(list_indparse)==0:
+                #     print("didnt find any base parses for this rule", rule)
+                #     return []
+
+                # print("base parses for this rule ", rule, "are: ", list_indparse)
+
+                # inds = []
+                # for indparse in list_indparse:
+                #     # find all perms which are best of this indparse
+                #     ind_best = self.findparses_bycommand("best_perm_of", [("base", indparse), trial_tuple])
+                #     if len(ind_best) !=1:
+                #         print(ind_best)
+                #         assert False, "there should only be one base fitting parse"
+                #     inds.append(ind_best[0])
+                # print(inds)
+                # assert False
+
+    
+            else:
+                print(inds)
                 assert False
         else:
             assert isinstance(inds, list)
