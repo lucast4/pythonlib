@@ -1005,7 +1005,8 @@ class Dataset(object):
     def trial_tuple(self, indtrial):        
         """ identifier unique over all data (a, e, r, trialcode)
         trialcode = self.Dat.iloc[indtrial]["trialcode"]
-
+        """
+        trialcode = self.Dat.iloc[indtrial]["trialcode"]
         tp = (
             self.animals(force_single=True)[0],
             self.expts(force_single=True)[0],
@@ -2724,15 +2725,24 @@ class Dataset(object):
                     ## log 
                     update_yaml_dict(pathdict, taskname, behid, allow_duplicates=False)
 
-    def parser_get_parser_helper(self, indtrial, parse_params):
+    def parser_get_parser_helper(self, indtrial, parse_params=None):
         """ [GOOD] flexible getting of a single Parser instance
+        IN:
+        - parse_params
+        --- if None, then there must only be one parser. otherwise fails
         OUT:
-        - P
+        - 
         NOTE:
         - fails if doesnt find only one.
         """
-        graphmod = parse_params["ver"]
-        list_P = self.parser_list_of_parsers(indtrial, [f"parser_{graphmod}"])
+        if parse_params is None:
+            parse_cols = [col for col in self.Dat.columns if "parser_" in col]
+            assert len(parse_cols)==1
+            col = parse_cols[0]
+        else:
+            graphmod = parse_params["ver"]
+            col = f"parser_{graphmod}"
+        list_P = self.parser_list_of_parsers(indtrial, [col])
         assert len(list_P)==1
         return list_P[0]
 
@@ -2743,7 +2753,7 @@ class Dataset(object):
         # Get chunked parses baed on rules, and get all permtuations, and get best-fitting 
         permutation to this trial's data.
         [MANYT HINGS, wrapper]. Must have already extracted parses, but otherwise dont have to have
-extracted the best-fit parses using the other code. Will not delete any previous parses. new parses
+        extracted the best-fit parses using the other code. Will not delete any previous parses. new parses
         are entered by updating old parses, not by appending. 
         - saveon, then overwrites file.
         #TODO: split stuff operating on Tasks vs on Beh trial (top vs. bottom, see comments)
@@ -2752,6 +2762,8 @@ extracted the best-fit parses using the other code. Will not delete any previous
         list_rule = ["baseline", "linetocircle", "circletoline", "lolli"] # should not be ony the one for this expt
         # since want to score this beh across all models.
         expt = "gridlinecircle"
+        # list_rule = self.rules(force_single=True) # otherwise does all rules multipel times...
+
 
         ############################## STUFF THAT DOESNT DEPENDS ON THE BEHAVIOR
         # 1) Extract things for this trial
@@ -2825,6 +2837,7 @@ extracted the best-fit parses using the other code. Will not delete any previous
         for rule in list_rule:
             list_indparse = P.findparses_bycommand("rule", {"list_rule":[rule]}, is_base_parse=True)
             for indparse in list_indparse:
+                print("finding best parse for rule ", rule , "ind parse", indparse)
                 # find all perms that are of this 
                 inds = P.findparses_bycommand("permutation_of_v2", {"parsekind": "base", "ind":indparse}, is_base_parse=False)
                 if len(inds)==0:
@@ -2849,18 +2862,21 @@ extracted the best-fit parses using the other code. Will not delete any previous
         #         assert False
                 
                 # save note into this parse
-                trialcode = self.Dat.iloc[indtrial]["trialcode"]
-                note_suffix_tuple = (
-                    self.animals(force_single=True)[0],
-                    self.expts(force_single=True)[0],
-                    self.rules(force_single=True)[0],
-                    trialcode
-                    )
+                trial_tuple = self.trial_tuple(indtrial)
+                # trialcode = self.Dat.iloc[indtrial]["trialcode"]
+                # note_suffix_tuple = (
+                #     self.animals(force_single=True)[0],
+                #     self.expts(force_single=True)[0],
+                #     self.rules(force_single=True)[0],
+                #     trialcode
+                #     )
                 ind_par = ("base", indparse)
                 keyvals_update = {
-                    "bestperm_beh_list":note_suffix_tuple,
-                    "bestperm_of_list":ind_par
+                    "bestperm_beh_list":trial_tuple,
+                    "bestperm_of_list":ind_par,
+                    "bestperm_rule_list":rule
                 }
+                print("Found best parse at perm: ", ind_parse_best, " trial_tuple: ", trial_tuple)
                 pardict = P.update_existing_parse(ind_parse_best, keyvals_update, append_keyvals=True,
                                         is_base_parse=False)
 
@@ -3150,6 +3166,8 @@ extracted the best-fit parses using the other code. Will not delete any previous
         for name in parser_names:
             P = self.Dat.iloc[indtrial][name]
             plist = P.extract_all_parses_as_list(kind=kind)
+            # print(plist[0])
+            # assert False
             if kind=="summary":
                 for i, p in enumerate(plist):
                     for pp in p:

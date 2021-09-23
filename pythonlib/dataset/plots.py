@@ -62,7 +62,6 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
     return figbeh, figtask
 
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
-
 def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
     plotkwargs={}):
@@ -76,10 +75,12 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
     ----- "trial_shuffled" shuffles within level. useful if too many trials.
     - row_levels, col_levels, list of levels, where if None, then will auto get all levels. 
     """
+    from pythonlib.tools.pandastools import filterPandas
 
     dfthis = D.Dat
 
     def _assign_row_col_inds(dfthis, group, levels, new_col_name, other_group=None):
+        # If give levels, and if not covers all trials, then will give uncovered trials -1.
         if group in ["trial", "trial_shuffled"]:
             # then should be trialnum, based on the other group
             assert other_group is not None
@@ -90,10 +91,20 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
         else:
             if levels is None:
                 levels = sorted(dfthis[group].unique().tolist())
+            # only keep dataset that is in these levels
+            dfthis = filterPandas(dfthis, {group:levels}) # make a copy, otherwise some rows will not have anything
             map_ = {lev:i for i, lev in enumerate(levels)}
+            max_i = len(levels)
             def mapper(x):
-                """ x is a df row --> index which row to plot"""
-                return map_[x[group]]
+                """ x is a df row --> index which row to plot
+                # If this trial is in map_, then give index. otherwise 
+                give it a -1
+                """
+                if x[group] in map_.keys():
+                    return map_[x[group]]
+                else:
+                    assert False, "since made copy, all rows should have mapping."
+
             dfthis = applyFunctionToAllRows(dfthis, mapper, new_col_name)
             labels = levels
         return dfthis, labels
@@ -102,7 +113,6 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
     dfthis, col_labels = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
 
     # if labels too long, prune
-
     col_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in col_labels]
     row_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in row_labels]
 
