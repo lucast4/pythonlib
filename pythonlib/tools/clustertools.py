@@ -2,6 +2,11 @@ import numpy as np
 
 def clusterSimMatrix(similarity_matrix, PCAdim = 5, gmm_n_mixtures = list(range(8, 30)), 
         perplist = [15, 25, 35, 45, 55, 65]):
+    """
+    Given precomputed sim matrix, do various kinds of clustering, and 
+    return dict with results
+    - Not plotting...
+    """
     from sklearn.decomposition import PCA 
     from sklearn.manifold import TSNE
     from sklearn.model_selection import train_test_split
