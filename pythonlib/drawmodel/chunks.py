@@ -66,6 +66,11 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
                 "ver":"lolli"
             }
             list_lollis, left_over = find_object_groups(Task, paramsthis)
+
+            # if len(list_lollis)==0:
+            #     # then no lollis. then just skip this, since is same as baseline
+
+
             list_hier = sample_all_possible_chunks(list_lollis, list(range(len(strokes))))
             list_chunks = [chunks for _ in range(len(list_hier))]
 
@@ -79,6 +84,19 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
 
         else:
             assert False
+
+        # Make sure no redundant ones
+        list_chunks_good = [list_chunks[0]]
+        list_hier_good = [list_hier[0]]
+        for ch, hi in zip(list_chunks[1:], list_hier[1:]):
+            # check if is in
+            if any([chunks_are_identical(ch, x) for x in list_chunks_good]):
+                continue
+            else:
+                list_chunks_good.append(ch)
+                list_hier_good.append(hi)
+        list_chunks = list_chunks_good
+        list_hier = list_hier_good
 
         ##### Fixed order
         def _fixed_order_for_this_hier(hier):
@@ -101,12 +119,32 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
         print(params)
         assert False
     
+    # Remove anything that is just same as baseline
+    if not rule=="baseline":
+        list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline = find_chunks_wrapper(Task, 
+            expt, "baseline", strokes, params)
+        
+        list_chunks_good = []
+        list_hier_good = []
+        list_fixed_order_good = []
+
+        for ch, hi, fi in zip(list_chunks, list_hier, list_fixed_order):
+            for chB, hiB, fiB in zip(list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline):
+                if chunks_are_identical_full(ch, hi, fi, chB, hiB, fiB):
+                    continue
+                else:
+                    list_chunks_good.append(ch)
+                    list_hier_good.append(hi)
+                    list_fixed_order_good.append(fi)
+        list_chunks = list_chunks_good
+        list_hier = list_hier_good
+        list_fixed_order = list_fixed_order_good
+
     # Return as a list of possible chunkings.
     assert len(list_chunks)==len(list_hier)
     assert len(list_hier)==len(list_fixed_order)
     return list_chunks, list_hier, list_fixed_order
     
-
 def find_object_groups(Task, params):
     """ return list of groups (list of obj) passing constraints.
     General-purpse, takes in objects (Task.Shapes).
@@ -294,6 +332,28 @@ def sample_all_possible_chunks(list_groups, list_possible_inds, nfailstoabort=10
 
 
 ################### LOW-LEVEL TOOLS WITH CHUNKS (WORKING WITH STROKES, USUALLY)
+def chunks_are_identical(chunks1, chunks2):
+    """ 
+    Return True if chunks are identical. Deals with hierarhical issues, liek the following
+    [[1], 2] identical to [1,2]
+    NOTE:
+    - Assuems that two chunks with diff order are actually different
+    """
+
+    # convert to list of lists
+    a = [c if isinstance(c, list) else [c] for c in chunks1]
+    b = [c if isinstance(c, list) else [c] for c in chunks2]
+    return a==b
+
+def chunks_are_identical_full(ch1, hi1, fi1, ch2, hi2, fi2):
+    """ Entire features, chunks, hierarchy, and fixed order, are they identical
+    over two items?
+    NOTE: if order diff, then will call it diff..
+    """
+    return chunks_are_identical(ch1, ch2) and chunks_are_identical(hi1, hi2) and fi1==fi2
+    
+
+
 def sort_chunk(chunk):
     """ converts to list of tuples, sorts, then converts back
     NOTE:
@@ -394,3 +454,4 @@ def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False,
     # parses_list = [[strok[:,[0,1]] for strok in strokes] for strokes in parses_list]
 
     return parses_list
+
