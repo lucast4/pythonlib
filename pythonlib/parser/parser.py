@@ -295,18 +295,20 @@ class Parser(object):
         return PS
 
 
-    def _strokes_convert_to_parsestrokes(self):
+    def _strokes_convert_to_parsestrokes(self, is_base_parse):
         """ for each parse, represent strokes each as a ParserStroke object,
         instead of WalkerStroke (bpl) which is default.
         - Usually run this right after extract parses)
         """
 
-        for i in range(len(self.Parses)):
-            if "list_walkers" in self.Parses[i].keys():
-                list_ws = self.Parses[i]["list_walkers"]
+        ParsesList = self.ParsesBase if is_base_parse else self.Parses
+
+        for i in range(len(ParsesList)):
+            if "list_walkers" in ParsesList[i].keys():
+                list_ws = ParsesList[i]["list_walkers"]
                 list_ps = [self._walkerstroke_to_parserstroke(w) for w in list_ws]
-                self.Parses[i]["list_ps"] = list_ps
-                del self.Parses[i]["list_walkers"]
+                ParsesList[i]["list_ps"] = list_ps
+                del ParsesList[i]["list_walkers"]
 
 
     ########## WALKING ON GRAPH (GET PARSES)
@@ -398,6 +400,9 @@ class Parser(object):
                 stroke_order_doesnt_matter, 
                 direction_within_stroke_doesnt_matter):
                 # Exists.
+                # print(list_p)
+                # print(list_p_this)
+                # print(is_base_parse, stroke_order_doesnt_matter, direction_within_stroke_doesnt_matter)
                 return True, i  
         # Doesnt exist
         return False, None
@@ -422,11 +427,15 @@ class Parser(object):
         --- None, if did not find.
         """
 
-        # check if parse exists
+        # check if parse exists 
+
+
         exists, ind = self.check_if_parse_exists(parse, stroke_order_doesnt_matter,
             direction_within_stroke_doesnt_matter, is_base_parse=is_base_parse)
+        
 
-        if exists:
+
+        if exists: 
             self.update_existing_parse(ind, keyvals_update, append_keyvals, is_base_parse)
             # # Then update
             # parsedict = self.extract_parses_wrapper(ind, "dict")
@@ -458,7 +467,18 @@ class Parser(object):
         - parsedict, updated
         """
         # Then update
+        # if len(self.Parses[64]["perm_of_list"])>0:
+        #     print(ind, parsedict)
+        #     print(self.Parses[64])
+        #     assert False
+
         parsedict = self.extract_parses_wrapper(ind, "dict", is_base_parse=is_base_parse)
+        # if len(self.Parses[64]["perm_of_list"])>0:
+        #     print(ind, parsedict)
+        #     print(self.Parses[64])
+        #     assert False
+        # for i,p in enumerate(self.Parses):
+        #     print(i, len(p["perm_of_list"]))
         for k, v in keyvals_update.items():
             if append_keyvals:
                 if k in parsedict.keys():
@@ -468,6 +488,12 @@ class Parser(object):
             else:
                 # Replace
                 parsedict[k] = v
+        # for i,p in enumerate(self.Parses):
+        #     print(i, len(p["perm_of_list"]))
+        # if len(self.Parses[64]["perm_of_list"])>0:
+        #     print(ind, parsedict)
+        #     print(self.Parses[64])
+        #     assert False
         return parsedict
 
 
@@ -522,13 +548,13 @@ class Parser(object):
             assert len(fixed_order[1])==len(hier), "need to do this"
 
             # chunk strokes if needed
-
             strokes_chunked = chunk_strokes(strokes, chunks, reorder=False)
 
             # Input parse
             parse_dict = self._manually_input_parse_from_strokes(strokes_chunked, 
                 apply_transform=apply_transform, require_stroke_ends_on_nodes=False, note=note,
                 return_parse_dict=True, is_base_parse=is_base_parse)
+
 
             # add metadat
             list_keys = ["chunks", "hier", "fixed_order", "objects_before_chunking", "rule"]
@@ -660,27 +686,32 @@ class Parser(object):
 
 
     ################### DO THINGS WITH PARSES [INDIV]
-    def parses_to_strokes(self, ind):
+    def parses_to_strokes(self, ind, is_base_parse=False):
         """ extract strokes for this parse
         NOTE: automaticlaly check consistency, since this uses
         list_ni and list_ei, but other things here usual;yl use edges dir
         """
-        return self._parses_to_walker(ind).S
+        return self._parses_to_walker(ind, is_base_parse=is_base_parse).S
 
 
-    def _parses_to_walker(self, ind):
+    def _parses_to_walker(self, ind, is_base_parse=False):
         """ returns RandomWalker object for this parse (ind)
         """
         from pybpl.bottomup.initialize.random_walker import RandomWalker
         R = RandomWalker(self.Graph, self.Skeleton)
 
+        if is_base_parse:
+            ParsesList = self.ParsesBase
+        else:
+            ParsesList = self.Parses
+
         if False:
             R.list_ws = self.Parses[ind]["list_walkers"]
         else:
             # check consistnetcy
-            [w._check_lists_match() for w in self.Parses[ind]["list_ps"]]
+            [w._check_lists_match() for w in ParsesList[ind]["list_ps"]]
             # good.
-            R.list_ws = [w for w in self.Parses[ind]["list_ps"]]
+            R.list_ws = [w for w in ParsesList[ind]["list_ps"]]
         return R
 
 
@@ -709,6 +740,10 @@ class Parser(object):
         for i in range(len(self.Parses)):
             if self.Parses[i]["strokes"] is None:
                 self.Parses[i]["strokes"] = self.parses_to_strokes(i)
+        if hasattr(self, "ParsesBase"):
+            for i in range(len(self.ParsesBase)):
+                if self.ParsesBase[i]["strokes"] is None:
+                    self.ParsesBase[i]["strokes"] = self.parses_to_strokes(i, is_base_parse=True)
 
 
     def parses_remove_redundant(self, stroke_order_doesnt_matter=True,
@@ -813,7 +848,7 @@ class Parser(object):
 
 
     def get_hier_permutations(self, indparse, is_base_parse=True, 
-        nconfigs=1000, update_not_append=True, direction_within_stroke_doesnt_matter=True):
+        nconfigs=750, update_not_append=True, direction_within_stroke_doesnt_matter=True):
         """ 
         uses self.ParsesBase[indparse]["hier"] to determing all the allowable ways
         of permuting edges
@@ -953,6 +988,7 @@ class Parser(object):
                     direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter,
                     append_keyvals=True
                     )
+
 
                 if success:
                     print('Updated self.Parses at ind', ind, ' with new perm of : ', ("base", indparse) if is_base_parse else ("notbase", indparse))
@@ -2954,6 +2990,7 @@ class Parser(object):
         remove. 
         if do_remove, then does remove from self.Parses
         """
+
         badlist = [self.filter_single_parse(ver, i) for i in range(len(self.Parses))]
         self.Parses = [self.Parses[i] for i, x in enumerate(badlist) if not x]
         print(f"Removed {[i for i, x in enumerate(badlist) if x]}")
@@ -3021,25 +3058,52 @@ class Parser(object):
 
             self.Finalized=True
 
-    def _parses_fill_in_missing_keys(self):
+    def _parses_reset_perm_of_list(self):
+        """ Hack, since some cases saved so that same list across all parses,
+        so when apend to list, affects all parses. fixed on 9/25/21, but some
+        still saved on disk, so run this.
+        """
+
+        for ParsesList in [self.Parses, self.ParsesBase]:
+            for P in self.Parses:
+                for k in  ["perm_of_list", "bestperm_beh_list", "bestperm_of_list"]:
+                    P[k] = list(P[k]) # make copy
+
+    def _parses_fill_in_missing_keys(self, force=False):
         """ 
         """
+
         default_keys = {
             "manual":False,
             "note": "",
-            "perm_of_list": [],
             "rule": None,
-            "bestperm_beh_list":[],
+            "perm_of_list":[],
+            "bestperm_beh_list": [],
             "bestperm_of_list":[]
         } 
+
+        def _default(key):
+            if key in ["manual", "note", "rule"]:
+                return default_keys[key]
+            elif key in ["perm_of_list", "bestperm_beh_list", "bestperm_of_list"]:
+                return []
+
         for P in self.Parses:
             for k, v in default_keys.items():
-                if k not in P.keys():
-                    P[k] = v
-        for P in self.ParsesBase:
-            for k, v in default_keys.items():
-                if k not in P.keys():
-                    P[k] = v
+                if force:
+                    P[k] = _default(k)
+                else:
+                    if k not in P.keys():
+                        P[k] = _default(k)
+
+        if hasattr(self, "ParsesBase"):
+            for P in self.ParsesBase:
+                for k, v in default_keys.items():
+                    if force:
+                        P[k] = _default(k)
+                    else:
+                        if k not in P.keys():
+                            P[k] = _default(k)
 
 
     def _parses_give_index(self):
@@ -3194,7 +3258,7 @@ class Parser(object):
                     inds_perm = self.findparses_filter({"permutation_of":inds}, True, is_base_parse=is_base_parse)
                     inds = sorted(inds + inds_perm)
             elif inds=="base_parses":
-                # ie anything that is not a permutation., will have None for permutation_of
+                # NOTE: old version, looks in self.Parses for anything that is not a permutation., will have None for permutation_of
                 inds = [i for i, p in enumerate(ParsesList) if p["permutation_of"] is None]
                 # saniyt check, confirme that all referneces to bases have been accounted for
                 for i, p in enumerate(ParsesList):
@@ -3299,8 +3363,10 @@ class Parser(object):
                         continue
                     if p["rule"] in list_rule:
                         inds.append(i)
+
             elif inds=="find_perms_for_a_rule":
                 """ rule parses should be in self.ParsesBase
+                finds perms that are stored in self.Parse
                 """
                 rule = params["rule"]
 

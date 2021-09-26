@@ -219,3 +219,36 @@ def find_common_tasks(Dlist, verbose=True):
         print("Ending tasks", list_tasks_keep)
 
     return sorted(list_tasks_keep)
+
+
+
+def subsampleTrialsByFixedTask(self, Dlist, Ntasks=10):
+    """ Return subset of Dataset, useful for debugging stuff, 
+    Hierarchical sampling, first gets randoms tasks, but for each 
+    task keeps all their trials. Makes sure these tasks are present
+    across all datasets in Dlist.
+    IN:
+    - Ntasks = 10 # take random N tasks.
+    OUT:
+    - Dlist, pruned. (also modifies in place)
+    """
+    import random
+
+    # Prune to subset of tasks, using common tasks
+    list_tasks = find_common_tasks(Dlist, False)
+    for t in list_tasks:
+        print(t)
+        
+    list_tasks_keep = random.sample(list_tasks, Ntasks)
+
+    # prune datasets
+    for i, D in enumerate(Dlist):
+        Dnew = D.filterPandas({"unique_task_name":list_tasks_keep}, "dataset")
+        if len(Dnew.Dat)==0:
+            assert False
+        else:
+            Dlist[i] = Dnew
+
+    return Dlist
+
+

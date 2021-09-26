@@ -299,8 +299,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     ### Rename things as monkey train test depenidng on expt
 
-
-
     # () Note that preprocess done
     D._analy_preprocess_done=True
 
@@ -309,9 +307,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("GROUPING_LEVELS", GROUPING_LEVELS)
     print("FEATURE_NAMES", FEATURE_NAMES)
     print("SCORE_COL_NAMES", SCORE_COL_NAMES)
-
-
-
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 

@@ -236,6 +236,14 @@ def get_single_model(ver, params_input=None):
             "norm":(50.,)
         }
 
+    elif ver=="chunks_redo_extract":
+        """ Like chunks, but only chunk-specific preprocessing needed is 
+        entering of the chunks into parses,
+        and getting of random parses (like non-chunk stuff). the best-parse for each chunk 
+        will be gotten here
+        """
+
+
     elif ver=="chunks":
         # You must have (1) extracted all parses for each task amnd
         # then (2) run D._parser_extract_chunkparses for each beh trial, which saves infor
