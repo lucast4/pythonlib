@@ -96,30 +96,6 @@ def run(a,e,r,v, FIXED):
             #         print(t)
 
 
-# animal_list = ["Red", "Pancho"]
-# expt_list = ["lines5"]
-# rule_list = ["straight", "bent"]
-# ver_list = ["graphmod", "nographmod"]
-# for a in animal_list:
-#     for e in expt_list:
-#         for r in rule_list:
-#             D = get_dataset(a,e,r,fixed_only=FIXED)
-#             for v in ver_list:
-#                 D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote=f"fixed_{FIXED}")
-
-
-
-# animal_list = ["Diego", "Pancho"]
-# expt_list = ["linecircle"]
-# rule_list = ["null"]
-# ver_list = ["graphmod", "nographmod"]
-# for a in animal_list:
-#     for e in expt_list:
-#         for r in rule_list:
-#             D = get_dataset(a,e,r,fixed_only=FIXED)
-#             for v in ver_list:
-#                 D.parser_extract_and_save_parses(ver=v, quick=QUICK, savenote=f"fixed_{FIXED}")
-
 
 if __name__=="__main__":
     MULTI= False
