@@ -135,8 +135,15 @@ def posterior_score(likelis, priors, ver):
         else:
             from scipy.special import logsumexp
         return logsumexp(likelis + priors)
-
+    elif ver=="maxlikeli_for_permissible_traj":
+        # Consider only parses whose priors are above 0 (probs). Take max likeli over thise
+        # useful for chunks, etc, where prior assigns 0 or 1 to perms.
+        # Returns the max likeli. priors must be in probs
+        MINPROB = 0.01
+        inds = priors>MINPROB
+        return likelis[inds].max()
     else:
+        print(ver)
         assert False, "not coded"
     return post
 
