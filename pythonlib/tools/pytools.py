@@ -22,6 +22,9 @@ def get_size(obj, seen=None):
     elif hasattr(obj, '__dict__'):
         size += get_size(obj.__dict__, seen)
     elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum([get_size(i, seen) for i in obj])
+        try:
+            size += sum([get_size(i, seen) for i in obj])
+        except Exception as err:
+            print("SKIPPING, since len=0")
 
     return size

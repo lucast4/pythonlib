@@ -59,7 +59,7 @@ def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=
 
     # g = sns.FacetGrid(data, row=row, sharex=True, sharey=True, height=3, aspect=3,
     #                  legend_out=True)
-    g = sns.FacetGrid(data, row=row, hue=hue, sharex=True, sharey=True, height=height, aspect=aspect,
+    g = sns.FacetGrid(data, row=row, hue=hue, col=col, sharex=True, sharey=True, height=height, aspect=aspect,
                      legend_out=True)
 
     catlist = set(data[hue])

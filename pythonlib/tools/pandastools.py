@@ -584,16 +584,48 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     return dftmp
 
 
+
 def summarize_feature(df, GROUPING, FEATURE_NAMES,
                           INDEX= ["character", "animal", "expt"], 
-                          func = lambda x: np.nanmean(x)):
-    """ aggregating and summarizing features
+                          func = lambda x: np.nanmean(x), newcol_variable=None, newcol_value=None):
+    """ [USEFUL] wide-form --> long form
+    aggregating and summarizing features
     See summarize_featurediff for variables.
+    NOTE:
+    - if have N rows, and 8 columsn with scores under 8 different models, and want to flatten to long-form
+    so that there is a single "score" column with Nx8 rows (useful for plotting). Can do following:
+    summarize_feature(D.Dat, "epoch", model_score_name_list, ["character", "trialcode"]), where
+    model_score_name_list is list of 8 column names. The outcome is, where "value" is the "score" column.
+
+    dfthisflat =
+         epoch   character   trialcode   variable    value
+    0   baseline    mixture2-ss-2_1-111763  210821-1-205    behmodpost_baseline_chunks  0.074286
+    1   baseline    mixture2-ss-2_1-111763  210821-1-273    behmodpost_baseline_chunks  0.020258
+    2   baseline    mixture2-ss-2_1-111763  210821-1-364    behmodpost_baseline_chunks  0.053116
+    3   baseline    mixture2-ss-2_1-111763  210821-1-438    behmodpost_baseline_chunks  0.020556
+    4   baseline    mixture2-ss-2_1-111763  210821-1-478    behmodpost_baseline_chunks  0.063520
+    ...     ...     ...     ...     ...     ...
+    307     lolli   mixture2-ss-2_1-111763  210902-1-116    behmodpost_lolli_mkvsmk     0.017931
+    308     lolli   mixture2-ss-2_1-111763  210902-1-213    behmodpost_lolli_mkvsmk     0.008365
+    309     lolli   mixture2-ss-6_1-854929  210901-1-399    behmodpost_lolli_mkvsmk     0.013021
+    310     lolli   mixture2-ss-6_1-854929  210901-1-598    behmodpost_lolli_mkvsmk     0.007421
+    311     lolli   mixture2-ss-6_1-854929  210902-1-176    behmodpost_lolli_mkvsmk     0.010960
+
+    (If want to aggregate over all trials, then use ["character"] instead. )
+
+    dfthis is basically looks like the input shape, but pruned to the relevant columns.
     """
     if not isinstance(GROUPING, list):
         GROUPING = [GROUPING]
     dfagg = aggregGeneral(df, GROUPING + INDEX, FEATURE_NAMES, aggmethod=[func])
     dfaggflat = pd.melt(dfagg, id_vars = GROUPING + INDEX)
+
+    # change name
+    if newcol_variable is not None:
+        dfaggflat = dfaggflat.rename(columns ={"variable":newcol_variable})
+    if newcol_value is not None:
+        dfaggflat = dfaggflat.rename(columns ={"value":newcol_value})
+
     return dfagg, dfaggflat
 
 
