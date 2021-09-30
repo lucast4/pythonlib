@@ -191,6 +191,7 @@ class BehModelHandler(object):
         else:
             for name in self.DictModels.keys():
                 if len(self.Likelis[name])==0 or force_run==True:
+                    print("behmodel_handler - getting likelis for ", name)
                     self.Likelis[name] = _get_list_likelis(name)
                 else:
                     print("skipping compute likelis since done, mod= ", name)
@@ -382,12 +383,20 @@ class BehModelHandler(object):
                 else:
                     assert False
 
-                if mode=="train":
+                if mode=="train": 
                     post = Mod.Poster.score(likelis, probs)
-                else:
-                    # take weighted sum of likelis.
-                    from pythonlib.behmodel.scorer.utils import posterior_score
-                    post = posterior_score(likelis, probs, ver="weighted")
+                elif mode=="test":
+                    post = None
+                    if hasattr(Mod, "PosterTest"):
+                        if Mod.PosterTest is not None:
+                            # added for chunks, want to take max likeli over permissible parses.
+                            post = Mod.PosterTest.score(likelis, probs)
+                    if post is None:
+                        # take weighted sum of likelis.
+                        from pythonlib.behmodel.scorer.utils import posterior_score
+                        post = posterior_score(likelis, probs, ver="weighted")
+                else: 
+                    assert False
 
                 # print(likelis)
                 # print(probs)
@@ -816,12 +825,13 @@ class BehModelHandler(object):
 
             return f"pri:{pri:.2f}, li{likeli:.2f}"
         
+        list_fig = []
         if plot_beh_task:
             ## -- Plot the actual behavior on this trial
             # self.D.plotMultTrials([indtrial], which_strokes="strokes_beh")
             # self.D.plotMultTrials([indtrial], which_strokes="strokes_task")
             fig = self.D.plotSingleTrial(indtrial)
-            
+            list_fig.append(fig)
             # add posetiro scores
             tmp = ""
             for name in self.ListModelsIDs:
@@ -847,7 +857,9 @@ class BehModelHandler(object):
         ## -- Plot trials, sorted by their scores
         liststrokes = [list_of_parsestrokes[i] for i in list_indparses]
         fig = self.plotMultStrokes(liststrokes, titles=titles, titles_on_y=not abbrev)
-        return fig
+        list_fig.append(fig)
+
+        return list_fig
 
     ####### OVERVIEW PLOTS
     def plot_prior_likeli_sorted(self, modelname, indtrial, sort_by, title=None):
@@ -946,11 +958,13 @@ class BehModelHandler(object):
                 self.plot_parses_ordered(indtrial, modelname)
 
         #3) Plot parses, given list of inds
+        list_figs = []
         # pri
         pbh = plot_beh_task
         for this in plots:
             inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=this)[2]
             fig = self.plot_parses_trial(indtrial, inds_parses[::-1][:Nplot], modelname=modelname, plot_beh_task=pbh)
+            list_figs.append(fig)
             if title is not None:
                 fig.suptitle(f"{title}-{this}")
             pbh = False
@@ -961,6 +975,7 @@ class BehModelHandler(object):
         # sort_by = "poster"
         # inds_parses = self.extract_priors_likelis(modelname, indtrial, sort_by=sort_by)[2]
         # self.plot_parses_trial(indtrial, inds_parses[::-1][:Nplot])
+        return list_figs
 
     def print_overview_params(self):
         """ Print params for all models

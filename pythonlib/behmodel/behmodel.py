@@ -32,7 +32,8 @@ class BehModel(object):
 
     def input_model_components(self, prior_scorer, likeli_scorer, posterior_scorer,
         list_input_args_likeli, list_input_args_prior, 
-        poster_use_log_likeli, poster_use_log_prior):
+        poster_use_log_likeli, poster_use_log_prior,
+        poster_scorer_test=None):
         """ 
         IN:
         - all scorers are instances of the Scorer class.
@@ -48,6 +49,12 @@ class BehModel(object):
         self.Prior = prior_scorer
         self.Likeli = likeli_scorer
         self.Poster = posterior_scorer
+
+        if poster_scorer_test is not None:
+            # Useful if want something other that weighted sum.
+            self.PosterTest = poster_scorer_test
+        else:
+            self.PosterTest = None
 
         # self._list_input_args_likeli = ("dat", "trial")
         # self._list_input_args_prior = ("parsesflat", "trialcode")

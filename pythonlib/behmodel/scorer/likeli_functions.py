@@ -91,10 +91,24 @@ def likeli_scorer_quick(ver):
         def F(D, ind):
             strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
             P = D.parser_get_parser_helper(ind)
-            list_parses_strokes = P.extract_parses_wrapper("all", "strokes")
+            scores = []
+            # print("[likeli_functions] getting scores")
+            for i in range(len(P.Parses)):
+                strokes_parse = P.extract_parses_wrapper(i, "strokes")
+                scores.append(distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments"))
+            scores = np.array(scores)
+
+                # scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_parses_strokes])
+
+            # list_parses_strokes = P.extract_parses_wrapper("all", "strokes")
             # list_of_parsestrokes = D.parserflat_extract_strokes(ind) # list of strokes
-            scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_parses_strokes])
+            # scores = np.array([distscalarStrokes(strokes_beh, strokes_parse, "dtw_segments") for strokes_parse in list_parses_strokes])
+
             return 1/scores
+    elif ver=="base_graphmodonly_bestperm":
+        """ Only bother computing for the bestperm 
+        """
+        
     else:
         print(ver)
         assert False, "not coded"

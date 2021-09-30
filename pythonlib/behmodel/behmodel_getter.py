@@ -267,14 +267,21 @@ def get_single_model(ver, params_input=None):
         Pr = prior_function_database(ver)
         Li = likeli_function_database(ver)
         Po = poster_dataset(ver="logsumexp")
+        # Useful for anything with multiple base parses, take the max likeli after 
+        # pooling across them.
+        PoTest = poster_dataset(ver="maxlikeli_for_permissible_traj") 
         BM = BehModel()
         BM.input_model_components(Pr, Li, Po,
             list_input_args_likeli = ("dat", "trial"),
             list_input_args_prior = ("dat", "trial", "modelname"),
             poster_use_log_likeli = True,
-            poster_use_log_prior = True)
+            poster_use_log_prior = True,
+            poster_scorer_test = PoTest)
+        # BM.Prior.Params = {
+        #     "norm":(1.,)
+        # }
         BM.Prior.Params = {
-            "norm":(1.,)
+            "norm":(500.,)
         }
         BM.Likeli.Params = {
             "norm":(50.,)
