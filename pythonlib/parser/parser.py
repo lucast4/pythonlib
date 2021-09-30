@@ -434,7 +434,6 @@ class Parser(object):
             direction_within_stroke_doesnt_matter, is_base_parse=is_base_parse)
         
 
-
         if exists: 
             self.update_existing_parse(ind, keyvals_update, append_keyvals, is_base_parse)
             # # Then update
@@ -812,6 +811,35 @@ class Parser(object):
         self.Parses = [p for i, p in enumerate(self.Parses) if i not in inds_to_remove]
         print("ending len of parses", len(self.Parses))
 
+
+    def parses_remove_all_except_bestfit_perms(self, rule_list, reset_index=True):
+        """ Only keeps parses (self.Parse) which are best-fit perm
+        for at least one of self.ParsesBase. 
+        Useful for pruning dataset before chunks task model analysis,
+        IN:
+        - rule_list, list of str, only keeps perms that are perms of baseparse for one 
+        of these rules.
+        OUT:
+        - self.Parses will be pruned. NOTE: will update the "index" value, so is in order 0, 1, ..
+        """
+
+        # Just get the best-fit perms 
+        list_perm_indexes = []
+        for p in self.ParsesBase:
+            if p["rule"] in rule_list:
+                for perm in p["best_fit_perms"].values():
+                    list_perm_indexes.append(perm["index"])
+        list_perm_indexes = sorted(set(list_perm_indexes))
+        # print(list_perm_indexes)
+        # print(len(list_perm_indexes))
+
+        # Keep only the best perms
+        self.Parses = [p for p in self.Parses if p["index"] in list_perm_indexes]
+
+        if reset_index:
+            self._parses_give_index()
+
+
     def parses_get_all_permutations(self, n_each = 5, direction_within_stroke_doesnt_matter=True):
         """ gets all permutations for each parse. 
         Then appends them to the parses list.
@@ -866,6 +894,8 @@ class Parser(object):
         from pythonlib.tools.stroketools import getStrokePermutationsWrapper
 
         assert direction_within_stroke_doesnt_matter==True, "havent tested that this works if allow diff directions."
+
+        self._parses_reset_perm_of_list()
 
         list_p = self.extract_parses_wrapper(indparse, is_base_parse=is_base_parse)
         parse_dict = self.extract_parses_wrapper(indparse, "dict", is_base_parse=is_base_parse)
@@ -1048,6 +1078,7 @@ class Parser(object):
         # sys.path.append("/data1/code/python/GNS-Modeling/")
         # from gns.inference.parsing.top_k import search_parse
         # from .search import search_parse
+
 
         if ver=="walker":
             assert False, "old - now converting WalkerStrokes to ParserStrokes"

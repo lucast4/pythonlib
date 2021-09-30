@@ -5,7 +5,7 @@ mods to apply to toher momdels (e.g., bpl)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pythonlib.tools.pandastools import applyFunctionToAllRows, filterPandas, aggregGeneral
+from pythonlib.tools.pandastools import applyFunctionToAllRows, filterPandas, aggregGeneral, summarize_feature
 import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 import seaborn as sns
@@ -78,9 +78,71 @@ class ColNames(object):
         return out
         
 
-def compute_model_score_differences(DatThisTest):
+def plots_cross_prior_and_model_anynum(MBH, monkey_prior_col_name="epoch", monkey_prior_list=None,
+    list_classes=None, model_score_name_list =None):
     """
+    Summary plot of test dataset against models (scores), when num models is >2, this still works.
+
+    INPUT:
+    - monkey_prior_col_name
+    --- e..g, "epoch"
+    - GROUPING_LEVELS [aka monkey_prior_list]
+
     """
+
+    from pythonlib.tools.pandastools import pivot_table
+    from pythonlib.tools.plottools import plotScatter45
+    ALPHA = 0.2
+
+    ### ALIGNMENT - rank, compute all
+    MBH.analy_compute_alignment_wrapper()
+    colthis = "alignment_rank_chunks"
+
+    # Get Single dataset
+    D, DatWide, DatFlat, DatThisAgg, DatFlatAgg = MBH.extract_concatenated_aggregated_dataset(
+        monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)
+
+    # 1) Plot score fr all combo of dataset and model
+    fig = sns.catplot(data=DatFlat, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+
+    # 2) same, agg over trials
+    fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+
+    # For each trial, alignment, as rank out of all model scores.
+    sns.catplot(data=D.Dat, x="epoch", y=colthis)
+    sns.catplot(data=D.Dat, x="epoch", y=colthis, kind="boxen")
+    sns.catplot(data=D.Dat, x="epoch", y=colthis, kind="swarm")
+
+    return DatWide, DatFlat, DatThisAgg, DatFlatAgg
+    # Plot alignment, but aggregated
+
+
+    # assert False
+    # fig = sns.catplot(data=Dat, x=monkey_prior_col_name, y=model_score_name_list, aspect=3)
+    # plt.axhline(0, color="k", alpha=0.5)
+    # # if savedir:
+    # #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
+
+
+    # fig = sns.catplot(data=DatThisAgg, x=monkey_prior_col_name, y=model_score_name_list, aspect=3)
+    # plt.axhline(0, color="k", alpha=0.5)
+    # # if savedir:
+    # #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
+
+    # assert False
+
+    # fig = sns.catplot(data=DatThisTest, x=monkey_prior_col_name, y="mod2_minus_mod1", aspect=3)
+    # plt.axhline(0, color="k", alpha=0.5)
+    # if savedir:
+    #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
+
+
+    # # Pivot
+    # DatThisAggPaired = pivot_table(DatThisAgg, index=["character"], columns = [monkey_prior_col_name], 
+    #                                values=[model_score_name_list[0], model_score_name_list[1], "mod2_minus_mod1"])
+    # # cleanup remove any rows with nans
+    # DatThisAggPaired = DatThisAggPaired.dropna().reset_index(drop=True)
+
 
 
 def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior_list, 

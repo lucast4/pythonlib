@@ -66,11 +66,12 @@ def plot_baseparses_all(D, indtrial):
         list_hier.append(p["hier"])
         list_fixed.append(p["fixed_order"])
         list_chunks.append(p["chunks"])
-            
+                
+    list_figs = []
     # 2) Plot parses for each base parse
 #     P.extract_parses_wrapper(list(range(len(P.ParsesBase))), "strokes", is_base_parse=True)
-    D.plotMultStrokes(list_strokes, titles=[f"{i}_{r}" for i, r in enumerate(list_rule)]);
-    
+    fig = D.plotMultStrokes(list_strokes, titles=[f"{i}_{r}" for i, r in enumerate(list_rule)]);
+    list_figs.append(fig)
 #     P.ParsesBase[0]["list_ps"]
 #     print(P.extract_parses_wrapper("all", "list_of_paths", True))
     
@@ -79,7 +80,10 @@ def plot_baseparses_all(D, indtrial):
         print(i, '--', rule, '--hier:', hier, '--', fixed, "--chunks:", chunks)
     
     # 4) plot graph
-    P.plot_graph()
+    fig = P.plot_graph()
+    list_fig.append(fig)
+
+    return figs
 
 
 def print_summary_bestparses_alltrials(D, list_rules = ["baseline", "linetocircle", "circletoline", "lolli"]):
