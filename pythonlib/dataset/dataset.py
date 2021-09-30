@@ -2545,7 +2545,7 @@ class Dataset(object):
             [[f"ver_{parse_params['ver']}", f"quick_{parse_params['quick']}", f"{parse_params['savenote']}"]], 
             return_without_fname=True)
         if assume_only_one_parseset and len(pathlist)>1:
-            prinnt()
+            
             assert False, "found >1 set, need to mnaually prune"
         pathdir = pathlist[0]
         return pathdir
@@ -2734,7 +2734,7 @@ class Dataset(object):
                     ## log 
                     update_yaml_dict(pathdict, taskname, behid, allow_duplicates=False)
 
-    def parser_get_parser_helper(self, indtrial, parse_params=None):
+    def parser_get_parser_helper(self, indtrial, parse_params=None, load_from_disk=False):
         """ [GOOD] flexible getting of a single Parser instance
         IN:
         - parse_params
@@ -2744,6 +2744,7 @@ class Dataset(object):
         NOTE:
         - fails if doesnt find only one.
         """
+        
         if parse_params is None:
             parse_cols = [col for col in self.Dat.columns if "parser_" in col]
             assert len(parse_cols)==1
@@ -2755,6 +2756,36 @@ class Dataset(object):
         assert len(list_P)==1
         return list_P[0]
 
+    def parser_prunedataset_bychunkrules(self, list_rule):
+        """ Removes trials that dont have at least one self.ParsesBase that 
+        for each rule in list_rule. Useful for model comparison, if a trial
+        just is not parsable by a given model (e.g.,lolli model, but no possible
+        lollis)
+        INPUT:
+        - list_rule, list of str, each trial must have all of these rules
+        e.g.,         list_rule = ["lolli", "linetocircle", "circletoline"]
+        RETURN:
+        - D, a copy of self. Does not modify self.
+        """
+
+        # Get list of good trials
+        list_inds_good = []
+        for i in range(len(self.Dat)):
+            P = self.parser_get_parser_helper(i)
+            list_baseparse_rules = [p["rule"] for p in P.ParsesBase]
+            x = [r in list_baseparse_rules for r in list_rule]
+            
+            if all(x):
+                list_inds_good.append(i)
+
+        # Return pruned dataset
+        print("original length:", print(len(self.Dat)))
+        Dcopy = self.subsetDataset(list_inds_good)
+        print("new lenghth:", print(len(Dcopy.Dat)))
+        return Dcopy
+                    
+            
+    
 
 
     def parser_extract_chunkparses(self, indtrial, parse_params, saveon=True, 
