@@ -687,6 +687,8 @@ def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list, s
     - score is assumed to be more positive --> better score.
     """
 
+    assert False, "note that should use instead model_behmodel_handler.analy_compute_alignment_wrapper. Comment this out to continue."
+    
     for prior, score in zip(monkey_prior_levels, score_name_list):
         print(f"{prior} - aligned with - {score}")
         assert prior in score, "are they not aligned?"
@@ -704,6 +706,9 @@ def score_alignment(D, monkey_prior_col, monkey_prior_levels, score_name_list, s
         elif x[monkey_prior_col]==monkey_prior_levels[1]:
             return x[colname_m2_m1]
         else:
+            print("FAILED)")
+            print(monkey_prior_col, monkey_prior_levels)
+            print(x[monkey_prior_col])
             print(x)
             assert False
 

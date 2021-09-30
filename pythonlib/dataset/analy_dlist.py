@@ -222,7 +222,7 @@ def find_common_tasks(Dlist, verbose=True):
 
 
 
-def subsampleTrialsByFixedTask(self, Dlist, Ntasks=10):
+def subsampleTrialsByFixedTask(Dlist, Ntasks=10):
     """ Return subset of Dataset, useful for debugging stuff, 
     Hierarchical sampling, first gets randoms tasks, but for each 
     task keeps all their trials. Makes sure these tasks are present

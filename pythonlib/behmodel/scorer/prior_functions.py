@@ -460,16 +460,23 @@ def prior_function_database(ver, params=None):
             # find the parse that maximizes the fit between this beh trial 
             trial_tuple = D.trial_tuple(ind)
 
-            inds = P.findparses_bycommand("best_fit_helper", 
-                {"rule":modelname, "trial_tuple":trial_tuple}
-                )
-
+            if False:
+                # This is v2 (saved in P.Parses, link to whether it is best-fit to something in P.ParseBase)
+                # Don't use this, too convoluted
+                inds = P.findparses_bycommand("best_fit_helper", 
+                    {"rule":modelname, "trial_tuple":trial_tuple}
+                    )
+            else:
+                # New version, where saves directly in P.ParseBase which is its best parse
+                # inds1 = P.findparses_bycommand("best_fit_helper", 
+                #     {"rule":modelname, "trial_tuple":trial_tuple}
+                #     )
+                inds = [P["best_fit_perms"][trial_tuple]["index"] for P in P.ParsesBase if P["rule"]==modelname]
             # get each parse as strokes, get their likelis
-            list_parses_as_strokes = [P.extract_parses_wrapper(i, "strokes") for i in inds]
-
+            # list_parses_as_strokes = [P.extract_parses_wrapper(i, "strokes") for i in inds]
 
             # strokes for this beh trial
-            strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
+            # strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
             # print(list_parses_as_strokes[0])
             # D.plotMultStrokes([strokes_beh] + list_parses_as_strokes)
             # assert False, "check units"
