@@ -41,6 +41,9 @@ class MultBehModelHandler(object):
         NOTE:
         - idea is that each item is a single (model, rule) and the training data for it. If
         you want all combos of dsets and models,  
+        NOTE:
+        - if you just want to test out model using untrained params, DONT use this. Instead, use
+        apply_models_to_mult_new_dataset
         """
 
         assert len(list_rules)==1, "in doing chunks, realized best to have each key (class, rule) link to a single model. otherwise "
@@ -209,7 +212,8 @@ class MultBehModelHandler(object):
                     # print(H.ListModelsIDs)
                     # assert False
                     H.params_prior_set(mrule, state_trained["prior_params"][mrule])
-                if hack_chunks if False:
+
+                if hack_chunks is False:
                     for mrule in list_mrule:
                         # 3) Evaluate
                         H.compute_all(mode="test")
