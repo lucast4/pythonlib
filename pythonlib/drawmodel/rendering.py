@@ -103,3 +103,32 @@ def seqadd(D, lind_x, lind_y, inkval):
     D = D.view(imsize)
 
     return D
+
+def prepPoints(previous_points, new_points, resid_disp, mx, place_ink):
+    p0 = previous_points
+    # p0[p0[:,0] < 0, 0] = 0
+    # p0[p0[:,0] > mx, 0] = mx
+    # p0[p0[:,1] < 0, 1] = 0
+    # p0[p0[:,1] > mx, 1] = mx
+
+    tmp = new_points + resid_disp
+    p1 = torch.floor(tmp)
+    resid_disp = tmp - p1
+
+    start_ob = torch.logical_or(torch.logical_or(p0[:,0] < 0, p0[:,0] > mx), torch.logical_or(p0[:,1] < 0, p0[:,1] > mx))
+    end_ob = torch.logical_or(torch.logical_or(p1[:,0] < 0, p1[:,0] > mx), torch.logical_or(p1[:,1] < 0, p1[:,1] > mx))
+    ob = torch.logical_and(start_ob, end_ob)
+    place_ink[ob] = False
+
+    # resid_disp[p1[:,0] < 0,:] = 0
+    # resid_disp[p1[:,0] > mx,:] = 0
+    # resid_disp[p1[:,1] < 0,:] = 0
+    # resid_disp[p1[:,1] > mx,:] = 0
+    #
+    # p1[p1[:,0] < 0, 0] = 0
+    # p1[p1[:,0] > mx, 0] = mx
+    # p1[p1[:,1] < 0, 1] = 0
+    # p1[p1[:,1] > mx, 1] = mx
+
+    return p0, p1, resid_disp, place_ink
+

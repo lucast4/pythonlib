@@ -5,6 +5,7 @@ import sys
 import math
 import numpy as np
 import matplotlib
+import torch
 from scipy.ndimage import gaussian_filter as gf
 import cairo
 from math import tan
@@ -512,6 +513,206 @@ def __loss(p1, p2, plotPxl=False, smoothing=2):
         img2 = __fig2pixel(p2, plotPxl=plotPxl, smoothing=smoothing)
 
         return np.linalg.norm(img2-img1)
+
+def drawLine(p0, p1, img, pytorch = False):
+        """Generate line pixels.
+        Parameters
+        ----------
+        p0, p1 : uint8
+             batchsize x 2
+        img    : uint8
+             batchsize x WH x WH
+        Returns
+        -------
+        img    : uint8
+             batchsize x WH x WH
+        """
+
+        p = p0
+        dp = np.int8(p1 - p0)
+        sp = np.int8(dp > 0)
+        dp = np.abs(dp)
+
+        steep = dp[:, 0] > dp[:, 1]
+        nsteep = np.logical_not(steep)
+        p[steep, :] = np.flip(p[steep, :], axis=1)
+        dp[steep, :] = np.flip(dp[steep, :], axis=1)
+        sp[steep, :] = np.flip(sp[steep, :], axis=1)
+
+        d = np.int8((2 * dp[:, 0]) - dp[:, 1])
+        n = d.copy()
+
+        for i in range(np.max(dp[:, 1])):
+                curr = np.logical_and((i < dp[:, 1]), steep)
+                ncurr = np.logical_and((i < dp[:, 1]), nsteep)
+                img[np.squeeze(np.argwhere(curr)), p[curr,1], p[curr,0]] = 1
+                img[np.squeeze(np.argwhere(ncurr)), p[ncurr,0], p[ncurr,1]] = 1
+
+
+                n[:] = 0
+                cond1 = dp[:,1]>0
+                cond2 = np.logical_and(cond1, d > 0)
+                n[cond2] = np.int8(np.ceil(np.float32(d[cond2])/(2.0*np.float32(dp[cond2,1]))))
+                p[:,0] = p[:,0] + n*(2*sp[:,0]-1)
+                d = d - 2*n*dp[:,1]
+
+                n[:] = 0
+                cond3 = np.logical_and(cond1, d == 0)
+                n[cond3] = 1
+                p[:,0] = p[:,0] + n*(2*sp[:,0]-1)
+                d = d - 2*n*dp[:,1]
+
+                p[:,1] = p[:,1] + (2*sp[:,1]-1)
+
+                d = d + 2*dp[:,0]
+
+        img[np.arange(img.shape[0]), p1[:,0], p1[:,1]] = 1
+
+        return img
+
+
+def drawLine_torch(p0, p1, img, mx, inkval):
+        """Generate line pixels.
+        Parameters
+        ----------
+        p0, p1 : uint8
+             batchsize x 2
+        img    : uint8
+             batchsize x WH x WH
+        Returns
+        -------
+        img    : uint8
+             batchsize x WH x WH
+        """
+        p = p0
+        dp = (p1 - p0)
+        sp = (dp > 0)
+        dp = torch.abs(dp)
+
+        steep = dp[:, 0] > dp[:, 1]
+        nsteep = torch.logical_not(steep)
+        p[steep, :] = torch.flip(p[steep, :], [1])
+        dp[steep, :] = torch.flip(dp[steep, :], [1])
+        sp[steep, :] = torch.flip(sp[steep, :], [1])
+
+        d = ((2 * dp[:, 0]) - dp[:, 1])
+        n = d.detach().clone()
+
+        for i in range(torch.max(dp[:, 1])):
+                nob = torch.logical_and(torch.logical_and(p[:, 0] >= 0, p[:, 0] <= mx), torch.logical_and(p[:, 1] >= 0, p[:, 1] <= mx))
+
+                curr = torch.logical_and(torch.logical_and((i < dp[:, 1]), steep), nob)
+                ncurr = torch.logical_and(torch.logical_and((i < dp[:, 1]), nsteep), nob)
+                # img[torch.nonzero(curr), p[curr, 1], p[curr, 0]] = inkval
+                ind = torch.nonzero(curr)
+                if ind.nelement() > 0:
+                        xx = p[curr, 1]
+                        yy = p[curr, 0]
+                        ind = torch.squeeze(ind,1).to(torch.long)
+                        img[ind, xx, yy] = inkval
+                # img[torch.nonzero(ncurr), p[ncurr, 0], p[ncurr, 1]] = inkval
+                ind = torch.nonzero(ncurr)
+                if ind.nelement() > 0:
+                        xx = p[ncurr, 0]
+                        yy = p[ncurr, 1]
+                        ind = torch.squeeze(ind,1).to(torch.long)
+                        img[ind, xx, yy] = inkval
+
+                n[:] = 0
+                cond1 = dp[:, 1] > 0
+                cond2 = torch.logical_and(cond1, d > 0)
+                n[cond2] = (torch.ceil((d[cond2]).to(torch.float32) / (2.0 * (dp[cond2, 1]).to(torch.float32)))).to(torch.long)
+                p[:, 0] = p[:, 0] + n * (2 * sp[:, 0] - 1)
+                d = d - 2 * n * dp[:, 1]
+
+                n[:] = 0
+                cond3 = torch.logical_and(cond1, d == 0)
+                n[cond3] = 1
+                p[:, 0] = p[:, 0] + n * (2 * sp[:, 0] - 1)
+                d = d - 2 * n * dp[:, 1]
+
+
+                p[:, 1] = p[:, 1] + (2 * sp[:, 1] - 1)
+
+                d = d + 2 * dp[:, 0]
+
+        nob = torch.logical_and(torch.logical_and(p1[:, 0] >= 0, p1[:, 0] <= mx),
+                                torch.logical_and(p1[:, 1] >= 0, p1[:, 1] <= mx))
+        ind = torch.nonzero(nob)
+        if ind.nelement() > 0:
+                xx = p1[nob, 0]
+                yy = p1[nob, 1]
+                ind = torch.squeeze(ind, 1).to(torch.long)
+                img[ind, xx, yy] = inkval
+
+        return img
+
+def prog2pxl_vectorized(allStrokes, WHdraw = 2*XYLIM, WH=128, smoothing=0):
+        """ takes an np array and outputs one pixel image per batch element
+                - WHdraw, the size of drawing canvas (e.g. 6, if is xlim -3 to 3),
+                for now assumes the canvas is a square.
+                - WH, WH x WH for output image.
+                - smoothing, gaussian filter, this is sigma in pix. set to 0 to skip.
+                RETURN:
+                I, pixel images. where 0 is no ink, and max ink is 1.
+                NOTE: shape is such that I[10,:,0] will be the 11th row from the top of the
+                image, while I[:, 10,0] will be 11th column from the left.
+                """
+
+        # 1) create canvas
+        # WH = 128
+
+        # assert WH%4==0, "empirically if not mod 4 then looks weird.."
+        if WH % 4 != 0:
+                # then drop to next lowest multiple of 4. afterwards will add 0s to ends
+                # get back to 4.
+                rows_to_add = WH % 4
+                cols_to_add = rows_to_add
+                WH = WH - rows_to_add
+                # print(WH)
+                # print(rows_to_add)
+        else:
+                rows_to_add = None
+
+        scale = (WH-1) / WHdraw
+        # data = np.zeros((WH, WH, allStrokes.shape[3]), dtype=np.uint8)
+        data = np.zeros((allStrokes.shape[3], WH, WH), dtype=np.uint8)
+
+        for i in range(allStrokes.shape[2]):
+                for j in range(allStrokes.shape[0]-1):
+                        p0 = allStrokes[j,:,i,:]
+                        p1 = allStrokes[j+1,:,i,:]
+                        inds =  ~np.isnan(p1[0,:])
+                        p0 = np.uint8(np.round((p0[:, inds] + WHdraw / 2) * scale))
+                        p1 = np.uint8(np.round((p1[:, inds] + WHdraw / 2) * scale))
+                        # data[:,:,inds] = drawLine(p0, p1, data[:,:,inds])
+                        data[inds, :,:] = drawLine(p0.T, p1.T, data[inds, :,:])
+
+        data = np.moveaxis(data, 0, -1)
+
+        if smoothing > 0:
+                # data = gf(np.flip(data, 0), smoothing, truncate=5)
+                data = gf(data, [smoothing, smoothing, 0], truncate=5)
+        # else:
+        #         data = np.flip(data, 0)
+
+        # Append columns or rows to data to get back to the desired size.
+        # append r and c columns of 0s, in order to match a size
+
+        if rows_to_add is not None:
+                # rows
+                rup = int(np.ceil(rows_to_add / 2))
+                rlow = int(np.floor(rows_to_add / 2))
+                h, w, b = data.shape
+                data = np.concatenate((np.zeros((rup, w, b)), data, np.zeros((rlow, w, b))), axis = 0)
+
+                # columns
+                cleft = int(np.ceil(cols_to_add / 2))
+                cright = int(np.floor(cols_to_add / 2))
+                h, w, b = data.shape
+                data = np.concatenate((np.zeros((h, cleft, b)), data, np.zeros((h, cright, b))), axis = 1)
+
+        return data
 
 
 def prog2pxl(p, WHdraw = 2*XYLIM, WH=128, smoothing=0):
