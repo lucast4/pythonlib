@@ -148,7 +148,8 @@ def _groupingParams(D, expt):
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
-    score_all_pairwise_within_task=False, extract_features = False, only_keep_trials_across_groupings=False):
+    score_all_pairwise_within_task=False, extract_features = False, 
+    only_keep_trials_across_groupings=False):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:

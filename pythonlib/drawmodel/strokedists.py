@@ -104,7 +104,7 @@ def distmatStrokes(strokes1, strokes2, ver="mindist"):
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
                    normalize_cols_range01=False, distStrok_kwargs={}, 
-                   rescale_strokes_ver=None):
+                   rescale_strokes_ver=None, doprint=False):
     """ 
     [use this over distmatStrokes]
     Given list of stroks, gets distance/similarity matrix, between all pariwise strokes.
@@ -158,8 +158,9 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     D = np.empty((n1, n2))
 
     for i_dat, strokdat in enumerate(stroklist1):
-        if i_dat%250==0:
-            print(i_dat)
+        if doprint:
+            if i_dat%250==0:
+                print(i_dat)
         for i_bas, strokbas in enumerate(stroklist2):
             # print(strokdat)
             # print(strokbas)

@@ -87,6 +87,14 @@ def strokeDistances(strokes):
         return sum(d)
     return [D(s) for s in strokes]
 
+def gapDistances(strokes):
+    """ list of distances between gaps. assumes straight line
+    """
+    list_gapdists = []
+    for s1, s2 in zip(strokes[:-1], strokes[1:]):
+        list_gapdists.append(np.linalg.norm(s2[0,:2] - s1[-1,:2]))
+    return list_gapdists
+
 def strokeDisplacements(strokes):
     """displacement from strok onset to offset"""
     return [np.linalg.norm(s[-1,:2] - s[0,:2]) for s in strokes]

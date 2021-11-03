@@ -1043,6 +1043,13 @@ class Dataset(object):
             out[k]=v
         for k, v in self.Dat.iloc[ind]["motortiming"].items():
             out[k]=v
+
+        # get stroke and gap lengths for each one
+        from pythonlib.drawmodel.features import strokeDistances, gapDistances
+        strokes_beh = self.Dat.iloc[ind]["strokes_beh"]
+        out["dists_stroke"] = strokeDistances(strokes_beh)
+        out["dists_gap"] = gapDistances(strokes_beh)
+
         return out
 
 
@@ -2682,6 +2689,9 @@ class Dataset(object):
         - goes thru all trials and runs all, along with appropriate logging, etc.
         REQUIRES:
         - extracted and loaded all parses into this dataset.
+        NOTE: 
+        This finsds the single best perm, works for
+        parses that don't use chunks.
         """
 
         from pythonlib.tools.expttools import update_yaml_dict, load_yaml_config
@@ -4508,9 +4518,7 @@ class Dataset(object):
         group level 2.
         - df, if None, then uses self.Dat. otherwises uses df.
         RETURNS:
-        - tasklist, which is sorted.
-        NOTE:
-        - sorts so that first item is that with greatest psoitive difference (level 2 minus level 1)
+        - tasklist, which is sorted. first item is that with greatest psoitive difference (level 2 minus level 1)
         """
         from pythonlib.tools.pandastools import pivot_table
 
