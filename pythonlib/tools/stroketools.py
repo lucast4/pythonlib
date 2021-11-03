@@ -929,7 +929,8 @@ def convertFlatToStrokes(strokes, flatvec):
         tmp.append(np.array(flatvec[on1:on2]))
     return tmp
 
-def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknum=False):
+def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknum=False, 
+    doprint = False):
     """ different ways of assigning a stroke_task id to each strokes_beh.
     Different motehods. None are model based. all simple
     ver:
@@ -938,6 +939,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
     sort_stroknum, then the strok num is arbitrary, so will sort so that the earliest touched 
     is 0, and so on.
     """
+    from pythonlib.drawmodel.strokedists import distMatrixStrok
     
     if len(strokes_beh)==0:
         return []
@@ -963,9 +965,8 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         return stroke_assignments, distances_all
     elif ver=="stroke_stroke_lsa":
         """ Use linear sum assignment to find optimal alignment.
-        Note, will only use num strokes equal to the min num strokes.
+        Note, will only use num strokes equal to the min num strokes across strokes beh and task.
         """
-        from pythonlib.drawmodel.strokedists import distMatrixStrok
         from scipy.optimize import linear_sum_assignment as lsa
         dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
         inds1, inds2 = lsa(dmat)
@@ -978,7 +979,12 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         greedy fashion. for each excess stroke, tries all possible insertion locations. 
         Takes the location that allows max similarity to strokes_beh. Does this until
         uses up all excess strokes. Note, if not all beh strokes are used up, then doesnt 
-        do this - so is assymetric """
+        do this - so is assymetric
+        RETURNS:
+        - inds, same legnth as task strokes, telling where each task stroke should go.
+        Note, if more beh strokes than task strokes, this is not that informative.
+        Note, if more task storkes, than beh storkes, also not that informative.
+         """
 
         inds_assigned = assignStrokenumFromTask(strokes_beh, strokes_task, 
             "stroke_stroke_lsa")
@@ -998,6 +1004,80 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
             inds_assigned.insert(slot, i)
             strokes_assigned.insert(slot, strok_extra)
         return inds_assigned
+
+
+
+    elif ver=="each_beh_stroke_assign_one_task":
+        """ simple, good. for each beh stroke, find its closest task stroke. assign that task stroke to
+        that beh stroke. 
+
+        RETURNS:
+        - inds, list of list, same length as beh strokes, item being index in task strokes. each inner list
+        are the stroke inds that are assigned to this beh stroke. e.g, [[0], [1,2], [3]]...
+        NOTE:
+        - not guaranteed to use up all task strokes. but is useful since works no matter how many beh 
+        strokes exist.
+        """
+
+        THRESH_FORCE_SINGLE = 0.5 # if ratio of dist of best match to 2nd best match is less than this
+        # then will force that beh is assigned only the best match (i.e., no change of getting 2 matches)
+
+        # 2) Check if any beh stroke is better matched to 2 task strokes.
+        if len(strokes_task)>1:
+
+            list_indstask_mindist = [] # holding final output.
+            for i, strok in enumerate(strokes_beh):
+                strok = strokes_beh[i]
+
+                # 1) dist from this beh strok to all task strokes
+                dmat1 = distMatrixStrok([strok], strokes_task, convert_to_similarity=False) # (1, ntask)
+                inds_mindist = np.argsort(dmat1).squeeze()[:2] # [3,4] means task strokinds 3, then 4, are closest to this beh stroke.
+
+                # 2) ratio of min to 2nd min
+                # i..e, if this beh stroke is already a really good match to one task stroke. then dont bother.
+                ratiothis = dmat1[0, inds_mindist[0]]/dmat1[0, inds_mindist[1]]
+                if ratiothis<THRESH_FORCE_SINGLE:
+                    list_indstask_mindist.append(list(np.argmin(dmat1, axis=1)))
+                    if doprint:
+                        print(i, "-----------")
+                        print("Skipping, since ratio: ", ratiothis)
+                    # continue, since the min has clearly won out.
+                    continue
+
+                # 3) Split this beh stroke. if both of the 2 mindist task strokes now are closer to eitehr of the new split storkes, then 
+                # infer that this beh stroke is spanning those 2 task strokes.
+                list_stroksplit = splitTraj(strok)
+                dmat2 = distMatrixStrok(list_stroksplit, strokes_task, convert_to_similarity=False)
+                dmat2_mins = np.min(dmat2, axis=0) # TODO: ideally use both beh strokes...
+                inds = dmat2_mins<dmat1.squeeze()
+                inds = inds.squeeze() # [True, False, ...]
+                if np.all(inds[inds_mindist]):
+                    # then the two taskstrokes that were closest to this beh stroke both got even closer after
+                    # splitting this beh stroke. Therefore assign both these taskstrokes to this beh stroke.
+                    inds_task = list(inds_mindist)
+                else:
+                    inds_task = list(np.argmin(dmat1, axis=1))
+
+                list_indstask_mindist.append(inds_task)
+                if doprint:
+                    print(i, "-----------")
+                    print(dmat1)
+                    print(np.argsort(dmat1))
+                    print(dmat2)
+                    print(inds_mindist, inds)
+                    print(list_indstask_mindist)
+        else:
+            # 1) Simple, for each beh stroke get min dist task stroke.
+            dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
+            inds_task_mindist = np.argmin(dmat, axis=1)
+            list_indstask_mindist = [[i] for i in inds_task_mindist]
+
+        return list_indstask_mindist
+
+    # elif ver=="each_beh_stroke_assign_one_task_wrapper":
+    #     """ Decides which version to use based on match in num strokes between task and bhge.
+    #     if same: uses stroke_stroke_lsa, so that guaranteed is all beh and tasks are used up.
+    #     if nbeh > ntask: uses 
 
 
     elif ver=="pt_pt":
