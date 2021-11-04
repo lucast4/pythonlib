@@ -173,3 +173,18 @@ def rankinarray1_of_minofarray2(array1, array2, look_for_max=False):
 
     return array1_ranks[idx], array1[idx], array2[idx], idx
 
+def random_inds_uniformly_distributed(vals, ntoget):
+    """ sorts vals incresaing, then returns unofmrly sampled values.
+    PARAMS:
+    - vals, array of numbers
+    RETURNS:
+    - list of indices into original vals.
+    """
+    assert ntoget<=len(vals)
+    inds = np.argsort(vals)
+    idxs = np.linspace(0, len(inds)-1, ntoget)
+    idxs = np.floor(idxs)
+    idxs = np.array(idxs, dtype=int)
+    return inds[idxs]
+
+

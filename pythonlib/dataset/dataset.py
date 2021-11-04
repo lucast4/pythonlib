@@ -4340,26 +4340,70 @@ class Dataset(object):
         # return idxs
 
 
-    def plotMultTrialsTimecourse(self, idxs, plotver="speed", which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None, naked_axes=False, nrand=None, align_to="go_cue"):
-        """ Plot a grid of trials timecourses.
-        """ 
+    def plotMultStrokesTimecourse(self, strokes_list, idxs=None, plotver="speed",
+        return_idxs=False, ncols = 5, titles=None, naked_axes=False, aspect=0.8,
+        align_to=None, overlay_stroke_periods=False):
+        """ Helper to plot timecourse
+        PARAMS:
+        - plotver, str, {'speed', 'raw'}
+        """
         from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse, plotDatStrokesVelSpeed
         from ..drawmodel.strokePlots import plotDatStrokes
         from pythonlib.tools.plottools import plotGridWrapper
 
+        # get sampling rate
+        if idxs is not None:
+            list_fs = [self.get_sample_rate(i) for i in idxs]
+            assert len(np.unique(list_fs))==1, "why have diff sample rate? easy fix, make plotfunc take in fs in data tuple"
+            fs = list_fs[0]
+        else:
+            # just pick the first trial
+            fs = self.get_sample_rate(0)
+
+        if align_to=="first_touch":
+            # make the first touch 0
+            strokes_list = [[s.copy() for s in strokes] for strokes in strokes_list] 
+            for strokes in strokes_list:
+                t0 = strokes[0][0,2]
+                for s in strokes:
+                    s[:,2] -= t0
+        else:
+            assert align_to is None
+        # whether to modify the time column for strokes
+        # by default, is aligned to first touch in strokes.
+
+        # elif align_to=="first_stroke_onset":
+        #     # do nothing - this is default.
+        #     pass
+        # else:
+        #     print(align_to)
+        #     assert False, "not coded"
+
+        # Which plotting function?
+        plotfunc = lambda strokes, ax: plotDatStrokesVelSpeed(strokes, ax, fs, plotver,
+            overlay_stroke_periods=overlay_stroke_periods)
+
+        # Plot
+        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, 
+            titles=titles,naked_axes=naked_axes, origin="top_left", aspect=aspect)
+
+        if return_idxs:
+            return fig, idxs
+        else:
+            return fig
+
+
+    def plotMultTrialsTimecourse(self, idxs, plotver="speed", which_strokes="strokes_beh", return_idxs=False, 
+        ncols = 5, titles=None, naked_axes=False, nrand=None, align_to="go_cue"):
+        """ Plot a grid of trials timecourses.
+        """ 
+ 
         strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
             nrand=nrand, titles=titles)
         if len(idxs)==0:
             return
 
-        # get sampling rate
-        list_fs = [self.get_sample_rate(i) for i in idxs]
-        assert len(np.unique(list_fs))==1, "why have diff sample rate? easy fix, make plotfunc take in fs in data tuple"
-        fs = list_fs[0]
 
-        # whether to modify the time column for strokes
-        # by default, is aligned to first touch in strokes.
         for strokes in strokes_list:
             try:
                 assert strokes[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
@@ -4367,7 +4411,6 @@ class Dataset(object):
             except Exception as err:
                 print(strokes)
                 raise err
-
 
         if align_to=="go_cue":
             # copy strokes.
@@ -4399,27 +4442,9 @@ class Dataset(object):
 
                 # assert a==b, "I forgot what my entries mean"
 
-        elif align_to=="first_stroke_onset":
-            # do nothing - this is default.
-            pass
-        else:
-            print(align_to)
-            assert False, "not coded"
-
-        # Which plotting function?
-        plotfunc = lambda strokes, ax: plotDatStrokesVelSpeed(strokes, ax, fs, plotver)
-
-        # Plot
-        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
-
-        if return_idxs:
-            return fig, idxs
-        else:
-            return fig
-        # return idxs
-
-
-
+        self.plotMultStrokesTimecourse(strokes_list, idxs, plotver, 
+            return_idxs=return_idxs, ncols=ncols, 
+            titles=titles, naked_axes=naked_axes)
 
 
 

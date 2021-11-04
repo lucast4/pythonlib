@@ -1014,6 +1014,9 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         RETURNS:
         - inds, list of list, same length as beh strokes, item being index in task strokes. each inner list
         are the stroke inds that are assigned to this beh stroke. e.g, [[0], [1,2], [3]]...
+        - list_distances, distnace for the match. if match to >1 strok, then concats task before
+        computing distance.
+        
         NOTE:
         - not guaranteed to use up all task strokes. but is useful since works no matter how many beh 
         strokes exist.
@@ -1026,6 +1029,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         if len(strokes_task)>1:
 
             list_indstask_mindist = [] # holding final output.
+            list_distances = [] # the distances. if match >1 stroke, then is distance after concat the strokes.
             for i, strok in enumerate(strokes_beh):
                 strok = strokes_beh[i]
 
@@ -1038,6 +1042,8 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
                 ratiothis = dmat1[0, inds_mindist[0]]/dmat1[0, inds_mindist[1]]
                 if ratiothis<THRESH_FORCE_SINGLE:
                     list_indstask_mindist.append(list(np.argmin(dmat1, axis=1)))
+                    list_distances.append(np.min(dmat1, axis=1))
+
                     if doprint:
                         print(i, "-----------")
                         print("Skipping, since ratio: ", ratiothis)
@@ -1055,8 +1061,16 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
                     # then the two taskstrokes that were closest to this beh stroke both got even closer after
                     # splitting this beh stroke. Therefore assign both these taskstrokes to this beh stroke.
                     inds_task = list(inds_mindist)
+
+                    tmp = [strokes_task[i] for i in inds_task]
+                    tmp = [np.concatenate(tmp)]
+                    dthis = distMatrixStrok([strok], tmp, convert_to_similarity=False)
+                    list_distances.append(dthis[0])
+
                 else:
                     inds_task = list(np.argmin(dmat1, axis=1))
+                    list_distances.append(np.min(dmat1, axis=1))
+
 
                 list_indstask_mindist.append(inds_task)
                 if doprint:
@@ -1071,8 +1085,9 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
             dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
             inds_task_mindist = np.argmin(dmat, axis=1)
             list_indstask_mindist = [[i] for i in inds_task_mindist]
+            list_distances = np.min(dmat, axis=1)
 
-        return list_indstask_mindist
+        return list_indstask_mindist, np.array(list_distances)
 
     # elif ver=="each_beh_stroke_assign_one_task_wrapper":
     #     """ Decides which version to use based on match in num strokes between task and bhge.

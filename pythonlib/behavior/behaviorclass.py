@@ -59,7 +59,7 @@ class BehaviorClass(object):
                 D.plotMultStrokes([strokes_beh, strokes_task, strokes_task_aligned]);
 
             # Try abnother version
-            inds_task = assignStrokenumFromTask(strokes_beh, strokes_task, 
+            inds_task, list_distances = assignStrokenumFromTask(strokes_beh, strokes_task, 
                 ver="each_beh_stroke_assign_one_task")
 
             # 6) For each beh stroke, give it a label
@@ -108,11 +108,26 @@ class BehaviorClass(object):
                 print(maskinds_single)
                 print(type(maskinds_single))
 
+            # mask based on distance to match. if worse then threshold, then mask this off
+            if False:
+                shape_dist_thresholds = params["shape_dist_thresholds"]
+                mask_shapedist = []
+                for sh, dist in zip(labels, list_distances):
+                    if dist>shape_dist_thresholds[sh]:
+                        mask_shapedist.append(False)
+                    else:
+                        mask_shapedist.append(True)
+                mask_shapedist = np.array(mask_shapedist)
+            else:
+                mask_shapedist = None
+
+
             self.Dat = {
                 "strokes_task":strokes_task,
                 "shapes_task":list_shapes,
                 "strokes_beh":strokes_beh,
                 "taskstrokeinds_beh":inds_task, # list of list
+                "taskstrokeinds_dists":list_distances.squeeze(), # nparray
                 "taskstrokeinds_beh_singleonly":inds_task_single, # np array, either single task ind, or nan
                 "shapes_beh":labels,
                 "gap_durations":gap_durations,
@@ -120,6 +135,7 @@ class BehaviorClass(object):
                 # "maskinds_repeated_beh": np.array(inds_task_mask, dtype=int)
                 "maskinds_repeated_beh": np.array(inds_task_mask), # true if this beh mathces taskind that has not been gotetn yuet
                 "maskinds_singlematch_beh": maskinds_single, # True if this beh matches only one task. 
+                "maskinds_shapedist_beh": mask_shapedist, #
                 "stroke_dists": np.array(motordat["dists_stroke"]),
                 "gap_dists": np.array(motordat["dists_gap"]),
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
@@ -129,6 +145,35 @@ class BehaviorClass(object):
             self.IndDataset = ind
         else:
             assert False, "not coded"
+
+    ##################### SHAPES, LABELS, etc
+    def shapes_nprims(self, ver="task", must_include_these_shapes=["circle", "line"]):
+        """ count how oftne each shape occurs in the beh or task.
+        PARAMS:
+        - ver, whether to use "beh" or "task" shapes.
+        - must_include_these_shapes, can be 0.
+        RETURNS:
+        - dict, num times each shape occured. e.g., {"circle":5, ...}
+        """
+
+        out = {}
+        for sh in must_include_these_shapes:
+            out[sh] = 0
+
+        if ver=="task":
+            list_shapes = self.Dat["shapes_task"]
+        elif ver=="beh":
+            list_shapes = self.Dat["shapes_beh"]
+        else:
+            assert False
+
+        for sh in list_shapes:
+            if sh in out.keys():
+                out[sh]+=1
+            else:
+                out[sh]= 1
+        return out
+
 
     ##################### MOTOR STATS
     def motor_extract_durations(self, list_inds, ver="stroke"):
@@ -158,6 +203,59 @@ class BehaviorClass(object):
         elif ver=="gap":
             assert(np.all(np.diff(list_inds)==1.)), "need to be monotinoc increasing"
             return self.Dat["gap_dists"][list_inds[:-1]]
+
+
+    ##################### HELPERS TO EXTRACT
+    def extract_strokes(self, ver="beh", list_inds=None):
+        """ Extract strokes for this trial.
+        PARAMS:
+        - ver, str, from {'beh', 'task'}
+        - list_inds, 
+        --- None, then returns entire strokes
+        --- list of ints, then returns just those trajectories in strokes. in the order
+        provided
+        RETURNS:
+        - strokes, list of np arrays
+        """
+
+        if ver=="beh":
+            strokes = self.Dat["strokes_beh"]
+        elif ver=="task":
+            strokes = self.Dat["strokes_task"]
+        else:
+            assert False
+
+        if list_inds is None:
+            return strokes
+        else:
+            return [strokes[i] for i in list_inds]
+
+    def extract_taskstrokes_aligned_to_this_beh(self, ind, concat_task_strokes=False):
+        """
+        PARAMS:
+        - ind, int, index into beh strokes
+        - concat_task_strokes, then returns a single traj (concatted). might not be in a
+        a good order...
+        RETURNS:
+        - inds_task, list of ints, the task inds matching this beh stroke
+        - strokes_task, the strokes matching inds_task
+        - dist, distance for this match (higher the worse)
+        """
+
+        taskinds = self.Dat["taskstrokeinds_beh"]
+        taskinds_this = taskinds[ind]
+
+        strokes_task = self.Dat["strokes_task"]
+        strokes_task = [strokes_task[i] for i in taskinds_this]
+
+        distances = self.Dat["taskstrokeinds_dists"]
+        distances = distances[ind]
+
+        if concat_task_strokes:
+            strokes_task = [np.concatenate(strokes_task, axis=0)]
+
+
+        return taskinds_this, strokes_task, distances
 
 
 
@@ -238,4 +336,3 @@ class BehaviorClass(object):
         return list_matches
 
     ##################################### PLOTS
-    

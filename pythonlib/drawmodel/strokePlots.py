@@ -78,10 +78,6 @@ def getStrokeColors(strokes, CMAP="jet"):
         # assert False
     return color_order, color_order_by_pt
 
-
-def plotMultDatStrokes(strokes_list):
-    """ wrapper to plot mulitple trials
-    """
     
 def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma",
     markersize=6, alpha=0.55, mark_stroke_onset=True, add_stroke_number=True, 
@@ -487,7 +483,9 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
         if overlay_stroke_periods:
             for s in strokes:
                 if len(s)>0:
-                    ax.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
+                    # ax.plot([s[0,tdim], s[-1,tdim]], [YLIM[1], YLIM[1]], '-m')
+                    ax.plot([s[0,tdim], s[-1,tdim]], [0,0], '-m', linewidth=4)
+
         if not nolegend:
             ax.legend() 
             ax.set_title(plotver)
