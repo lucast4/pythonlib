@@ -78,10 +78,22 @@ def getStrokeColors(strokes, CMAP="jet"):
         # assert False
     return color_order, color_order_by_pt
 
+def formatDatStrokesPlot(ax, naked_axes=False):
+    """ Applies formatting to plots of strokes, use this usulaly with either
+    plotDatStrokesMapColor or plotDatStrokes  
+    """
+    ax.set_facecolor((0.9, 0.9, 0.9))
+    ax.set_aspect('equal')
+    if naked_axes:
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.set_title(None)
+        ax.tick_params(axis='both', which='both',length=0)
+
     
-def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma",
-    markersize=6, alpha=0.55, mark_stroke_onset=True, add_stroke_number=True, 
-    naked=False):
+def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None, 
+    cmap="plasma", markersize=6, alpha=0.55, mark_stroke_onset=True, 
+    add_stroke_number=True, naked_axes=False):
     """ plot strokes, similar to plotDatStrokes, but the color is proportional
     to value in strokes_values, where first remapped to range (vmin, vmax), and
     uses color gradient based on that range
@@ -93,9 +105,24 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma
 
     from pythonlib.tools.plottools import colorGradient
 
-    assert not np.any(np.isnan(strokes_values))
-    
-    ax.set_facecolor((0.9, 0.9, 0.9))
+    # What format was passed in for strokes_values?
+    if isinstance(strokes_values[0], np.ndarray) and (strokes_values[0].shape[0]>1 or strokes_values[0].shape[1]>1):
+        # Then is list of arrays
+        val_ver = "list_of_arrays"
+        for vals in strokes_values:
+            assert not np.any(np.isnan(vals))
+    else:
+        val_ver = "list_of_vals"
+        assert not np.any(np.isnan(strokes_values))
+
+    if vmin is None:
+        # Use 2th percentile
+        pts = np.concatenate(strokes_values)
+        vmin = np.percentile(pts, [2])[0]
+    if vmax is None:
+        # Use 98th percentile
+        pts = np.concatenate(strokes_values)
+        vmax = np.percentile(pts, [98])[0]
 
     # First get colors for each stroke
     color_list = []
@@ -133,13 +160,9 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin, vmax, cmap="plasma
                 marker="o", alpha= 0.75)
             if add_stroke_number:
                 ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
-    ax.set_aspect('equal')
-    if naked:
-        ax.set_yticklabels([])
-        ax.set_xticklabels([])
-        ax.set_title(None)
-        ax.tick_params(axis='both', which='both',length=0)
 
+    formatDatStrokesPlot(ax, naked_axes=naked_axes)
+    
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
@@ -221,7 +244,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     CMAP = "jet"
     # CMAP = "plasma"
     # CMAP = "winter"
-    ax.set_facecolor((0.9, 0.9, 0.9))
+
     if isinstance(plotver, list) and len(plotver)==3:
         pcol = np.array(plotver).reshape(1,3)
     elif isinstance(plotver, np.ndarray):
@@ -270,7 +293,6 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if fraction_of_stroke:
         each_stroke_separate = False
 
-    # print(pcol)
     if each_stroke_separate:
         # markersize = (3/5)*markersize
         # color scheme must be different for each stroke.
@@ -375,20 +397,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     if not isinstance(fraction_of_stroke, list):
         return (timeon, timeoff)
 
-    ax.set_aspect('equal')
-    if naked:
-        ax.set_yticklabels([])
-        ax.set_xticklabels([])
-        ax.set_title(None)
-        ax.tick_params(axis='both', which='both',length=0)
+    formatDatStrokesPlot(ax, naked_axes=naked)
 
-
-# def plotDatStrokesVelSpeed(strokes, ax, plotver="speed"):
-#     """  pass in strokes and will autoamtically differnetiate to 
-#     get speed/vecopiotu. 
-#     """
-#     from ..tools.stroketools import 
-#     strokes_vel, strokes_speed = 
 
 
 def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=5,

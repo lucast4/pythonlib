@@ -513,7 +513,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                    origin="lower_left", max_n_per_grid=None, 
                    col_labels = None, row_labels=None, tight=True,
                    aspect=0.8, ncols=6, titles=None, naked_axes=False, 
-                   titles_on_y=False):
+                   titles_on_y=False, return_axes =False, fig_axes=None):
     """ wrapper to plot each datapoint at a given
     col and row.
     INPUT:
@@ -530,6 +530,8 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     - titles, same length as data. If present, will overwrite row_labels and col_labels.
     - aspect, w/h
     - clean_axes, then no x or y labels.
+    - fig_axes, can pass in axes, but must be in exact shape expected given the other input params.
+    (fig, axes)
     RETURNS:
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
@@ -571,8 +573,11 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     else:
         assert origin=="top_left", "not coded"
 
-    fig, axes = plt.subplots(nr, nc, sharex=True, sharey=True, 
-                             figsize=(nc*SIZE*aspect, nr*SIZE), squeeze=False)
+    if fig_axes is None:
+        fig, axes = plt.subplots(nr, nc, sharex=True, sharey=True, 
+                                 figsize=(nc*SIZE*aspect, nr*SIZE), squeeze=False)
+    else:
+        fig, axes = fig_axes[:]
 
     done = {}
     minrow = min(rows)
@@ -636,7 +641,10 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
 
 
     # x and y lim should contain all data
-    return fig
+    if return_axes:
+        return fig, axes
+    else:
+        return fig
 
 
 def get_ylim(vals, pertile=[1.5, 98.5]):
