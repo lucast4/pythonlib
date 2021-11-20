@@ -4112,13 +4112,34 @@ class Dataset(object):
             ax.set_title(thing)
         return fig
 
+    def plotMultStrokesColorMap(self, strokes_list, strokes_vals_list, 
+        ncols = 5, titles=None, naked_axes=False, mark_stroke_onset=False,
+        add_stroke_number=True, titles_on_y=False, SIZE=2.5):
+        """ helper to plot multiplie trials when already have strokes extracted)
+        Assumes want to plot this like behavior.
+        """
+        from ..drawmodel.strokePlots import plotDatStrokesMapColor
+        import random
+        from pythonlib.tools.plottools import plotGridWrapper
 
+        plotfunc = lambda strokes_strokesvals, ax: plotDatStrokesMapColor(
+            strokes_strokesvals[0], ax, strokes_strokesvals[1],
+            naked_axes=False, mark_stroke_onset=False, 
+            add_stroke_number=add_stroke_number)
 
-            # 
+        list_data = [(strokes, strokes_vals) for strokes, strokes_vals in 
+            zip(strokes_list, strokes_vals_list)]
+        
+        fig, axes= plotGridWrapper(list_data, plotfunc, ncols=ncols, titles=titles,
+            naked_axes=naked_axes, origin="top_left", titles_on_y=titles_on_y, 
+            SIZE=SIZE, return_axes=True)
+
+        return fig, axes
+
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
         add_stroke_number=True, centerize=False, jitter_each_stroke=False, 
-        titles_on_y=False, SIZE=2.5):
+        titles_on_y=False, SIZE=2.5, is_task=False):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
@@ -4126,12 +4147,16 @@ class Dataset(object):
         import random
         from pythonlib.tools.plottools import plotGridWrapper
 
-        plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
-            add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
-        fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
-            titles_on_y=titles_on_y, SIZE=SIZE)
+        if is_task:
+            plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, 
+                add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
+        else:
+            plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
+                add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
+        fig, axes= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
+            titles_on_y=titles_on_y, SIZE=SIZE, return_axes=True)
 
-        return fig
+        return fig, axes
 
     def extractStrokeVels(self, list_inds):
         """ extract stroke as instantaneous velocities
