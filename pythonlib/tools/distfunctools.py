@@ -191,6 +191,11 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
     if skip_spatial:
         dist_spatial = 0.
     else:
+        assert False, ":instead, do this:"
+        # d = 0
+        # for p1, p2 in zip(pts_ml2, pts_cam):
+        #     d+=np.linalg.norm(p1-p2)
+
         dist_spatial = np.linalg.norm(strok_beh[:,[0,1]] - strok_mod[:,[0,1]])
 
     # 2) velocity distance - also use mean squared error of velocity timecourses

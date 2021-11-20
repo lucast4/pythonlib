@@ -254,7 +254,6 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
                 strokf[:,dims] = signal.sosfiltfilt(sos, strokf[:,dims], axis = 0)
                 strokf += strokfmean
             else:
-                strokfmean = np.mean(strokf, axis=0)
                 strokf[:,dims] = signal.sosfiltfilt(sos, strokf[:,dims], axis = 0)
         
         strokesfilt.append(strokf)

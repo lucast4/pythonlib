@@ -64,7 +64,7 @@ def writeDictToYaml(dictdat, path):
 def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
     pull out arc2 if give me sep="_" and pos = "2"
-    - pos is 0,1, ...
+    - pos is 0,1, ..., or -1 to get end
     - if return_entire_filename, then overwrites sep and pos, and instead returns 
     201030_164324_arc2_Pancho_3
     """
@@ -83,14 +83,20 @@ def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     idxs = [m.start() for m in re.finditer(sep, path)]
     idxs.append(len(path)) # to allow getting of last substr
     idxs.insert(0, -1) # to allow getting of first
-    
+    if pos==-1:
+        # shift it back one, isnce appended -1 to end
+        pos = -2
     # 2) get substring
 #     print(idxs)
-    if len(idxs)<pos+2:
+    if pos==-2 or len(idxs)>=pos+2:
+        # print(path)
+        # print(idxs)
+        # print(pos)
+        # assert False
+        return path[idxs[pos]+1:idxs[pos+1]]
+    else:
         print("this pos otu of bounds (returning None)")
         return None
-    else:
-        return path[idxs[pos]+1:idxs[pos+1]]
 
 def checkIfDirExistsAndHasFiles(dirname):
     """ returns (exists?, hasfiles?), 
