@@ -44,12 +44,13 @@ class TaskClass(object):
             # New version of drawnn
             program = params["program"]
             shapes = params["shapes"]
-            self._initialize_drawnn(program, shapes)
+            chunks = params["chunks"]
+            self._initialize_drawnn(program, shapes, chunks)
 
         elif ver=="ml2":
             # Monkeylogic tasks
             taskobj = params
-            self._initialize_ml2(taskobj)
+            self._initialize_ml2(taskobj) 
         else:
             print(ver)
             assert False, "not coded"
@@ -93,22 +94,23 @@ class TaskClass(object):
         """
 
         # Extract data
-        self.Strokes = taskobj.Strokes
+        self.StrokesOldCoords = taskobj.Strokes
 
-        taskobj.program_extract()
-        self.Program = taskobj.Program
+        taskobj.program_extract() 
+        self.ProgramOldCoords = taskobj.Program
 
         taskobj.objects_extract()
-        self.Shapes = taskobj.Objects
-        self.Shapes = [[S["obj"], S["tform"]] for S in self.Shapes] # conver to general format
-        for i in range(len(self.Shapes)):
-            if self.Shapes[i][1] is not None:
-                self.Shapes[i][1]["theta"] = self.Shapes[i][1]["th"]
-                del self.Shapes[i][1]["th"]
+        self.ShapesOldCoords = taskobj.Objects
+        self.ShapesOldCoords = [[S["obj"], S["tform"]] for S in self.ShapesOldCoords] # conver to general format
+        for i in range(len(self.ShapesOldCoords)):
+            if self.ShapesOldCoords[i][1] is not None:
+                self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
+                del self.ShapesOldCoords[i][1]["th"]
 
-    def _initialize_drawnn(self, program=None, shapes=None):
+    def _initialize_drawnn(self, program=None, shapes=None, chunks=None):
         """
         To initialize a new task for drawnn training.
+        PARAMS:
         - program is list of subprograms, each suprogram is list of 
         lines, where each line evaluates and takes in the accumulation of
         previous lines within the subprogram. e..g,:
@@ -134,7 +136,11 @@ class TaskClass(object):
         --- can pass in shapes, in which case program will be None. I did this since 
         havent figured out best way to evaluate program.
         - strokes, is like shapes, but in numbers. This is computed automatically.
+        - chunks, list of higher level chunking, where each chunk is [chunkname<str>, [shapes in this chunk]]
+        e.g., chunks = [["lolli", [0, 1]], ["lolli", [4,3]]]. I added this so can use for 
+        hierarhcical RNN.
         """
+
 
         a = program is not None
         b = shapes is not None
@@ -146,12 +152,25 @@ class TaskClass(object):
             self.ShapesOldCoords = self.program2shapes(self.ProgramOldCoords)
         else:
             self.ShapesOldCoords = shapes
-        
-        self.Strokes = self.shapes2strokes(self.Shapes)
+            
+        self.StrokesOldCoords = self.shapes2strokes(self.ShapesOldCoords)
 
-        # NOT YET DONE - general coords
+        # NOT YET DONE - general coords, make these empty. following code will generate these
+        # by converting coords.
         self.Program = None
         self.Shapes = None
+        self.Strokes = None
+
+        # Chunks
+        if chunks is not None:
+            self.Chunks = chunks
+
+            # sanity checks
+            for c in self.Chunks:
+                inds = c[1]
+                for i in inds:
+                    assert i<len(self.ShapesOldCoords), "chunks are referencing shapes that dont exist"
+
 
 
     def _initialize_convcoords(self, out_="abstract"):
@@ -167,7 +186,7 @@ class TaskClass(object):
         # print(in_, out_)
         # print(self.Strokes)
 
-        self.Strokes = [self._convertCoords(s, in_, out_) for s in self.Strokes]
+        self.Strokes = [self._convertCoords(s, in_, out_) for s in self.StrokesOldCoords]
 
         # print(self.Strokes)
         # assert False
@@ -222,8 +241,6 @@ class TaskClass(object):
 
             if self.Params["input_ver"] == "ml2":
                 self._Sketchpads["ml2"] = edges_in = self.Params["input_params"].Task["sketchpad"].T
-            else:
-                self._Sketchpads["ml2"] = None 
 
                 # print("Generated self._Sketchpads to:")
             if self.Params["coord_force_same_aspect_ratio"]:
@@ -232,12 +249,19 @@ class TaskClass(object):
                 edgesgood = self._Sketchpads["abstract"]
 
                 # then makes sure each sketchpad is same aspect ratio as abstracat
-                for k, edges in list(self._Sketchpads.items()):
+                sketchpad_new = {}
+                for k, edges in self._Sketchpads.items():
+
                     if k != "abstract":
                         edgesnew = coordsMatchAspectRatio(edgesgood, edges)
-                        self._Sketchpads[f"{k}_orig"] = edges
-                        self._Sketchpads[k] = edgesnew
+                        sketchpad_new[k] = edgesnew
+                        sketchpad_new[f"{k}_orig"] = edges
+                    else:
+                        sketchpad_new[k] = edges
 
+                        # self._Sketchpads[f"{k}_orig"] = edges
+                        # self._Sketchpads[k] = edgesnew
+                self._Sketchpads = sketchpad_new
 
 
     def _check_out_of_bounds(self):
