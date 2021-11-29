@@ -528,6 +528,8 @@ def drawLine(p0, p1, img, pytorch = False):
              batchsize x WH x WH
         """
 
+        if len(p0)==0 or len(p1)==0:
+                return img
         p = p0
         dp = np.int8(p1 - p0)
         sp = np.int8(dp > 0)
@@ -686,7 +688,7 @@ def prog2pxl_vectorized(allStrokes, WHdraw = 2*XYLIM, WH=128, smoothing=0):
                         p0 = np.uint8(np.round((p0[:, inds] + WHdraw / 2) * scale))
                         p1 = np.uint8(np.round((p1[:, inds] + WHdraw / 2) * scale))
                         # data[:,:,inds] = drawLine(p0, p1, data[:,:,inds])
-                        data[inds, :,:] = drawLine(p0.T, p1.T, data[inds, :,:])
+                        data[inds, :,:] = drawLine(p0.T, p1.T, data[inds, :,:]) 
 
         data = np.moveaxis(data, 0, -1)
 
