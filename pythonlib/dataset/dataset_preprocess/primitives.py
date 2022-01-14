@@ -3,13 +3,13 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-def preprocess(D, animal, expt):
+def preprocess(D, animal, expt, recenter=True):
     """ for preparaing for prim anslsyus.
     Extracts spatial coordinates and shapes, etc.
     """
 
     #### First preprocess dataset so that strokes are all centerized
-    list_sb, list_st, D = D.extractStrokeLists(recenter=True)
+    list_sb, list_st, D = D.extractStrokeLists(recenter=recenter)
     D.Dat["strokes_beh"] = list_sb
 
     # Expose each tasks params
@@ -21,11 +21,6 @@ def preprocess(D, animal, expt):
             # circles are symmetric circluar.
             return 0.
         else:
-        #     sx = T.Shapes[0][1]["sx"]
-        #     sy = T.Shapes[0][1]["sy"]
-        #     xpos = T.Shapes[0][1]["x"]
-        #     ypos = T.Shapes[0][1]["y"]
-        #     th = T.Shapes[0][1]["theta"]
             return T.ShapesOldCoords[0][1][ver] 
         
     for ver in ["sx", "sy", "x", "y", "theta"]:
