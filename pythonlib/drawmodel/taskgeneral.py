@@ -47,6 +47,8 @@ class TaskClass(object):
             chunks = params["chunks"]
             self._initialize_drawnn(program, shapes, chunks)
 
+        # Create things like self.StrokesOldCoords
+        # Do not create self.Strokes here. This done next block.
         elif ver=="ml2":
             # Monkeylogic tasks
             taskobj = params
@@ -57,8 +59,14 @@ class TaskClass(object):
 
         # Convert strokes to appropriate coordinate system
         # and generate Points
+        # convert things like self.StrokesOldCoords to self.Strokes
         if convert_coords_to_abstract:
             self._initialize_convcoords()
+        else:
+            # use the input coordinates
+            # TODO: self.ProgramOldCoords and others.
+            self.Strokes = self.StrokesOldCoords
+            self.Shapes = self.ShapesOldCoords
 
         # Convert strokes to points
         self.Points = np.stack([ss for s in self.Strokes for ss in s], axis=0) # flatten Strokes
@@ -176,6 +184,7 @@ class TaskClass(object):
     def _initialize_convcoords(self, out_="abstract"):
         """ initial conversion of input coordinate system into abstract system
         Modifies: Strokes and Points. 
+        Converts things like self.StrokesOldCoords to self.Strokes.
         TODO: have not done for self.Program and self.Strokes
         print("TODO (drawmodel-->taskgeneral): convert coords for self.Shapes. Do this in ml2 taskobject")
         """
@@ -188,8 +197,8 @@ class TaskClass(object):
 
         self.Strokes = [self._convertCoords(s, in_, out_) for s in self.StrokesOldCoords]
 
-        # print(self.Strokes)
-        # assert False
+        # TODO: self.Shapes = function(self.ShapesOldCoords) # have not coded this before. previously just
+        # used the input coordinate system.
 
     def _preprocess(self):
 
