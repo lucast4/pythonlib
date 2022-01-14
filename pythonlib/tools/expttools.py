@@ -45,9 +45,17 @@ def getDateList(sdate=None, edate=None):
     date_list = [d.strftime("%y%m%d") for d in date_list]
     return date_list
 
-def writeStringsToFile(fname, stringlist, silent=True):
-    """ atuoamtically does newline """
-    with open(fname, "w") as f:
+def writeStringsToFile(fname, stringlist, silent=True, append=False):
+    """ atuoamtically overwrite
+    fname, add .txt if you want.
+    PARAMS:
+    - append, bool, if True, then doesnt overwrite.
+    """
+    if append:
+        mode = "a"
+    else:
+        mode = "w"
+    with open(fname, mode) as f:
         for s in stringlist:
             if not silent:
                 print(s)
@@ -116,9 +124,11 @@ def checkIfDirExistsAndHasFiles(dirname):
 
     return (exists, hasfiles)
 
-def fileparts(path):
+def fileparts(path, return_up=False, append_slash=True):
     """ breaks down path into dir, path, ext. always works regaridless of whether give 
     relative or fullpath.
+    PARAMS:
+    - return_up, then also return one dir up.
     NOTES:
     - if path is full, then pathdir will be string.
     - if path is rel, then pathdir is empyt string.
@@ -129,10 +139,55 @@ def fileparts(path):
     import os
     pathdir, pathend = os.path.split(path)
     pathname, ext = os.path.splitext(pathend)
-    if len(pathdir)>0 and pathdir!="/":
-        pathdir+="/" # to allow reconstruction as pathdir + pathname + ext
-   
-    return pathdir, pathname, ext
+    if return_up:
+        pathdir_up, pathdir_end = os.path.split(pathdir)
+
+    if append_slash:
+        if len(pathdir)>0 and pathdir!="/":
+            pathdir+="/" # to allow reconstruction as pathdir + pathname + ext
+    
+    # also return one path up.
+    if return_up:
+        return pathdir, pathname, ext, pathdir_up, pathdir_end, pathend
+    else:
+        return pathdir, pathname, ext
+
+def deconstruct_filename(filename):
+    """ wrapper to do all procedures to get filename parts.
+    Assumes that you use "-" as separator for lowest part of ilename
+    PARAMS:
+    - filename, str, absolute path
+    RETURNS:
+    - dict, various deconstructions. check it to see.
+    """
+
+    # Extract all parts of entire string of filename (i.e., absolute path components)
+    list_entire_path_parts = fileparts(filename, True, append_slash=False)
+    list_entire_path_dirs = [list_entire_path_parts[i] for i in [3, 0]]
+    list_entire_path_subdirnames = [list_entire_path_parts[i] for i in [4, 5]]
+
+    path_final_string = list_entire_path_parts[5]
+
+    # Extract all parts of lowest string in filename 
+    list_string_components = []
+    ct = 0
+    x = extractStrFromFname(filename,"-", ct, False)
+    while x is not None:
+        list_string_components.append(x)
+        ct+=1
+        x = extractStrFromFname(filename,"-", ct, False)
+
+
+    path_parts = {}
+    path_parts["filename_components_hyphened"] = list_string_components
+    path_parts["basedirs"] = list_entire_path_dirs
+    path_parts["basedirs_filenames"] = list_entire_path_subdirnames
+    path_parts["filename_final_ext"] = path_final_string
+    path_parts["filename_final_noext"] = list_entire_path_parts[1]
+
+    return path_parts
+
+
 
     
 def modPathFname(path, prefix=None, suffix=None):
@@ -204,6 +259,9 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     """
     import glob
     
+    if strings_to_exclude_in_path is not None:
+        assert isinstance(strings_to_exclude_in_path, list)
+
     def _summarize(pathlist):
         print("Found this many paths:")
         print(len(pathlist))
@@ -265,7 +323,8 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     def string_check(path):
         """ returns True if none of the strings to check are in the path
         """
-        return all([s not in path for s in strings_to_exclude_in_path])
+        out = all([s not in path for s in strings_to_exclude_in_path])
+        return out
 
     pathlist = [path for path in pathlist if string_check(path)]
 
@@ -335,5 +394,15 @@ def update_yaml_dict(path, key, val, allow_duplicates=True):
             x[key] = [val]
         writeDictToYaml(x, path)
 
+def read_all_lines_from_textfile(filepath):
+    """ REturns list of strings
+    """
+    list_lines = []
+    with open(filepath, 'r') as f:
+        line = f.readline()
+        while line:
+            list_lines.append(line)
+            line = f.readline()
+    return list_lines
 
 

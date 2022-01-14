@@ -57,7 +57,8 @@ def smoothDat(x, window_len=11, window='hanning', flip_at_edges=False):
     
     input:
         x: the input signal 
-        window_len: the dimension of the smoothing window; should be an odd integer
+        window_len: the dimension of the smoothing window; should be an odd integer. autoamtiaclly
+        makes odd if not.
         window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
             flat window will produce a moving average smoothing.
 

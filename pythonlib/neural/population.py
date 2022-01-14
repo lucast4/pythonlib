@@ -1,6 +1,17 @@
 import numpy as np
 import pandas as pd
 
+
+def subsample_rand(X, n_rand):
+    """ get random sample (dim 0), or return all if n_rand larget than X.
+    """
+    import random
+    if n_rand>X.shape[0]:
+        return X, list(range(X.shape[0]))
+
+    inds = random.sample(range(X.shape[0]), n_rand)
+    return X[inds, ...], inds
+
 def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
     """ plot heatmap for data X.
     X must be (neuron, time)
@@ -27,12 +38,30 @@ def plotNeurHeat(X, ax=None, barloc="right", robust=True, zlims = None):
     ax.set_xlabel(f"robust={robust}|{minmax[0]:.2f}...{minmax[1]:.2f}")
     ax.set_ylabel('neuron #')
         
-def plotNeurTimecourse(X, Xerror=None, ax=None):
+def plotNeurTimecourse(X, Xerror=None, ax=None, n_rand=None, marker="-"):
     """ Plot overlaid timecourses. 
     - X, (neuron, time)
     - Xerror, (neuron, time), to add errorbars)
     """
 
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10,5))
+    
+    # X = self.activations[pop][tasknum]
+    X_nonan = X[:]
+    X_nonan = X_nonan[~np.isnan(X_nonan)]
+    minmax = (np.min(X_nonan), np.max(X_nonan))
+
+    if n_rand is not None:
+        X, indsrand = subsample_rand(X, n_rand)
+    t = np.arange(X.shape[1])
+    ax.plot(t, X.T, marker)
+    
+    # ax.set_xlabel(f"robust={robust}|{minmax[0]:.2f}...{minmax[1]:.2f}")
+    # ax.set_ylabel('neuron #')
 
 
 class PopAnal():
