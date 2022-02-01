@@ -170,7 +170,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
     clean_ordered=False, clean_ordered_ordinal=False, clean_task=False, 
     force_onsets_same_col_as_strokes=False, naked=False, mfc_input=None,
-    jitter_each_stroke=False):
+    jitter_each_stroke=False, number_from_zero=False):
     """given strokes (i.e. [stroke, stroke2, ...], with stroke2 N x 3)
     various ways of plotting
     fraction_of_stroke, from 0 to 1, indicates how much of the trial (i.e., in terms of time) 
@@ -392,7 +392,11 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
             # ax.text(s[0,0]-10, s[0,1]-11, f"{i+1}", color='k', fontsize=12)
 
             if add_stroke_number:
-                ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
+                if number_from_zero:
+                    snum = i
+                else:
+                    snum = i+1
+                ax.text(s[0,0], s[0,1], f"{snum}", color=tcol, fontsize=markersize+7, alpha=0.7)
                 # ax.text(s[0,0], s[0,1], f"{i+1}", color=col, fontsize=12)
     if not isinstance(fraction_of_stroke, list):
         return (timeon, timeoff)

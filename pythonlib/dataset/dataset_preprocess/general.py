@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from ..drawmodel.strokePlots import plotDatStrokes
+from pythonlib.drawmodel.strokePlots import plotDatStrokes
 from pythonlib.tools.pandastools import applyFunctionToAllRows
-from .analy_dlist import extract_strokes_monkey_vs_self
+from ..analy_dlist import extract_strokes_monkey_vs_self
 
 def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 

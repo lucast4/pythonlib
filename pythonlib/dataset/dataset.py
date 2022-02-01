@@ -4053,7 +4053,7 @@ class Dataset(object):
 
 
     def plotSingleTrial(self, idx, things_to_plot = ["beh", "task"],
-        sharex=False, sharey=False, params=None):
+        sharex=False, sharey=False, params=None, task_add_num=False):
         """ 
         idx, index into Dat, 0, 1, ...
         - params, only matters for some things.
@@ -4077,7 +4077,16 @@ class Dataset(object):
             elif thing=="task":
                 # overlay the stimulus
                 stim = dat["strokes_task"].values[idx]
-                plotDatStrokes(stim, ax, each_stroke_separate=True, plotver="onecolor", add_stroke_number=False, mark_stroke_onset=False, pcol="k")
+                if task_add_num:
+                    add_stroke_number=True
+                    mark_stroke_onset=True
+                else:
+                    add_stroke_number=False
+                    mark_stroke_onset=False
+
+                plotDatStrokes(stim, ax, each_stroke_separate=True, 
+                    plotver="onecolor", add_stroke_number=add_stroke_number, 
+                    mark_stroke_onset=mark_stroke_onset, pcol="k")
             elif thing=="beh_tc":
                 # === Plot motor timecourse for a single trial (smoothed velocity vs. time)
                 # fig, axes = plt.subplots(1,1, sharex=True, sharey=True)
@@ -4139,7 +4148,7 @@ class Dataset(object):
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
         add_stroke_number=True, centerize=False, jitter_each_stroke=False, 
-        titles_on_y=False, SIZE=2.5, is_task=False):
+        titles_on_y=False, SIZE=2.5, is_task=False, number_from_zero=False):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
@@ -4149,10 +4158,12 @@ class Dataset(object):
 
         if is_task:
             plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, 
-                add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
+                add_stroke_number=add_stroke_number, centerize=centerize, 
+                jitter_each_stroke=jitter_each_stroke, number_from_zero=number_from_zero)
         else:
             plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
-                add_stroke_number=add_stroke_number, centerize=centerize, jitter_each_stroke=jitter_each_stroke)
+                add_stroke_number=add_stroke_number, centerize=centerize, 
+                jitter_each_stroke=jitter_each_stroke, number_from_zero=number_from_zero)
         fig, axes= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
             titles_on_y=titles_on_y, SIZE=SIZE, return_axes=True)
 

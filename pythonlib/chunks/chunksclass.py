@@ -160,4 +160,5 @@ class ChunksClass(object):
         print("Chunks:", self.Chunks)
         print("Hier:" , self.Hier)
         print("Fixed Order:", self.FixedOrder)
+        print("list labels/shapes:", self.Labels)
         

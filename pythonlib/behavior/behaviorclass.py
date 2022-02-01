@@ -22,6 +22,8 @@ class BehaviorClass(object):
         params["strokes_beh"]
         params["strokes_task"]
         params["TaskClass"]
+        In any case, can have the following keys:
+        -- "shape_dist_thresholds", value is dict, specifying max distance for calling something a given label.
         """
 
         self.Dataset = None
@@ -113,12 +115,18 @@ class BehaviorClass(object):
                 shape_dist_thresholds = params["shape_dist_thresholds"]
                 mask_shapedist = []
                 for sh, dist in zip(labels, list_distances):
-                    if dist>shape_dist_thresholds[sh]:
-                        mask_shapedist.append(False)
-                    else:
+                    if isempty(dist):
+                        # then always allow this to pass
                         mask_shapedist.append(True)
+                    else:
+                        if dist>shape_dist_thresholds[sh]:
+                            mask_shapedist.append(False)
+                        else:
+                            mask_shapedist.append(True)
                 mask_shapedist = np.array(mask_shapedist)
             else:
+                if "shape_dist_thresholds" is in params.keys():
+                    assert False, "this not yet coded"
                 mask_shapedist = None
 
 
@@ -127,14 +135,14 @@ class BehaviorClass(object):
                 "shapes_task":list_shapes,
                 "strokes_beh":strokes_beh,
                 "taskstrokeinds_beh":inds_task, # list of list
-                "taskstrokeinds_dists":list_distances.squeeze(), # nparray
+                "taskstrokeinds_dists":list_distances.reshape(-1,), # nparray
                 "taskstrokeinds_beh_singleonly":inds_task_single, # np array, either single task ind, or nan
                 "shapes_beh":labels,
                 "gap_durations":gap_durations,
                 "stroke_durations":stroke_durations,
                 # "maskinds_repeated_beh": np.array(inds_task_mask, dtype=int)
                 "maskinds_repeated_beh": np.array(inds_task_mask), # true if this beh mathces taskind that has not been gotetn yuet
-                "maskinds_singlematch_beh": maskinds_single, # True if this beh matches only one task. 
+                "maskinds_singlematch_beh": maskinds_single, # True if this beh matches only one task stroke
                 "maskinds_shapedist_beh": mask_shapedist, #
                 "stroke_dists": np.array(motordat["dists_stroke"]),
                 "gap_dists": np.array(motordat["dists_gap"]),
