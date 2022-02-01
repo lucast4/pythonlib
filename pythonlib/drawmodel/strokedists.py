@@ -104,7 +104,8 @@ def distmatStrokes(strokes1, strokes2, ver="mindist"):
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
                    normalize_cols_range01=False, distStrok_kwargs={}, 
-                   rescale_strokes_ver=None, doprint=False):
+                   rescale_strokes_ver=None, doprint=False, 
+                   similarity_method="divide_by_max", cap_dist=None):
     """ 
     [use this over distmatStrokes]
     Given list of stroks, gets distance/similarity matrix, between all pariwise strokes.
@@ -118,7 +119,10 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     (done in final step)
     - ploton, then plots in heatmap
     - rescale_strokes_ver, then methods to rescale stroke before computing distance.
-
+    - cap_dist, either None or scalar. caps all distances to max this value. this useful
+    if there shold not be difference between strokes that are far apart and strokes that are
+    very far apart - they are both "far". reaosnalbe value is distance between strokes adjacent 
+    if on a grid. (e..g, 150)
     NOTE: if stroklist is None, then idxs1 and 2 must be lists of stroks
     RETURNS: 
     - D, returns distance matrix,
@@ -166,6 +170,13 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
             # print(strokbas)
             d = distStrok(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
             D[i_dat, i_bas] = d
+
+    # print(D)
+    if cap_dist is not None:
+        D[D>cap_dist] = cap_dist
+    # print(D)
+    # print(n1, n2)
+    # assert False
         
     if normalize_rows:
         dnorm = np.sum(D, axis=1, keepdims=True)
@@ -180,7 +191,14 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         
         
     if convert_to_similarity:
-        D = 1-D/np.max(D)
+        if similarity_method=="divide_by_max":
+            D = 1-D/np.max(D)
+        elif similarity_method=="divide_by_median":
+            tmp = D/np.median(D)
+            D = 1-tmp/np.max(tmp)
+        else:
+            assert False
+
         
     if ploton:
         plt.figure()

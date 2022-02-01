@@ -55,7 +55,8 @@ def furthest_pt_twotrajs(traj1, traj2, assymetry=None):
 
 
 def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver=None,
-             debug=False, auto_interpolate_if_needed=False, n_interp = 50):
+             debug=False, auto_interpolate_if_needed=False, n_interp = 50, 
+             asymmetric_ver=None):
     """ general purpose, distance between two strok
     - strok1, strok2, np arrays, N/M x 2, where N and 
     M could be different. This is wrapper for all other things.
@@ -82,7 +83,7 @@ def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver
         
     if ver=="hausdorff":
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2) 
+        return modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver) 
     elif ver=="hausdorff_means":
         # hausdorff, using means, to allow for more smooth distances
             #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then 
@@ -90,7 +91,13 @@ def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver
     #     # be clear if I tink about it.
 
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean") 
+        return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean", asymmetric_ver=asymmetric_ver) 
+    elif ver=="hausdorff_mins":
+        # This says: either good match from beh perspective, or from task perspective. Useful if
+        # expect sometimes multiple beh stroke over one task stroke, or vice versa.
+        from pythonlib.tools.distfunctools import modHausdorffDistance
+        return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="min", asymmetric_ver=asymmetric_ver) 
+
     elif ver=="euclidian":
         # pt-by-pt euclidian distance, lengths must be matched.
         from pythonlib.tools.distfunctools import distStrokTimeptsMatched
@@ -243,7 +250,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
 
 
 def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=None,
-    return_marginals=False):
+    return_marginals=False, asymmetric_ver=None):
     """
     Modified Hausdorff Distance.
 
@@ -269,10 +276,10 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=No
         else:
             D = cdist(itemA, itemB)
 
-    # print(D)
 
     mindist_A = D.min(axis=1)
     mindist_B = D.min(axis=0)
+
     if ver1=="mean":
         mean_A = np.mean(mindist_A)
         mean_B = np.mean(mindist_B)
@@ -289,16 +296,24 @@ def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=No
     else:
         assert False
 
-    if ver2=="mean":
-        dist = np.mean((mean_A,mean_B))
-    elif ver2=="max":
-        dist = np.max((mean_A,mean_B))
+    if asymmetric_ver==None:
+        # Then combine both scores, from perspective of pts1 and pts2
+        if ver2=="mean":
+            dist = np.mean((mean_A,mean_B))
+        elif ver2=="max":
+            dist = np.max((mean_A,mean_B))
+        elif ver2=="min":
+            dist = np.min((mean_A,mean_B))
+        else:
+            assert False
+    elif asymmetric_ver=="A":
+        # Then only care about "perspective" of ptsA. So as long as ptsB has pts close to A,
+        # doesn't matter what other ptsB pts are doing.
+        dist = mean_A
+    elif asymmetric_ver=="B":
+        dist = mean_B
     else:
         assert False
-
-    # print(dist)
-    # print(mindist_A)
-    # print(mindist_B)
 
     if return_marginals:
         return dist, mindist_A, mindist_B
