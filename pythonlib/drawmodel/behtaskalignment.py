@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 
 def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False, 
         do_dtw_refinement=False, sort_ver="max", cap_dist=150, squared_sim=True,
-        distancever_forsorting = "hausdorff_means", 
-        distancever_foroutput="hausdorff_mins", cap_sim=0.7):
+        distancever_forsorting = "hausdorff_mins", 
+        distancever_foroutput="hausdorff_mins", cap_sim=0.7,
+        similarity_method="divide_by_maxcap"):
     """ Instead of taking single strokes task ind that matches each beh ,
     return a distance matrix where tasks (columns) are sorted so that one can
     read out the order of columns as the best-aligned task sequence.
@@ -42,21 +43,22 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
         # Test out different versio of asymetry for hd.
         for av in [None, "A", "B"]:
             smat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=True, 
-                                   ploton=True, similarity_method="divide_by_median",
+                                   ploton=True, similarity_method=similarity_method,
                                   distStrok_kwargs={"asymmetric_ver":av}) # (nbeh, ntask)
 
     # Decision: Use symmetric version. 
     # - use this for deciding sorting
     smat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=True, 
                            ploton=ploton, distancever = distancever_forsorting, 
-                           similarity_method="divide_by_median", 
+                           similarity_method=similarity_method, 
                            distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
     # - use this for actual output similarity scores.
     smat_output = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=True, 
                            ploton=ploton, distancever = distancever_foroutput, 
-                           similarity_method="divide_by_median", 
+                           similarity_method=similarity_method, 
                            distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
 
+    # smat_output = smat
     # 2) any normalizations?
     # TODO, any other normalizations before compute? Specifically norm along columns
     # or rows?
@@ -89,6 +91,12 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
         max_inds = np.argmax(smat, axis=0)
         list_to_sort = [(i, d, indtaskstroke) for indtaskstroke, (d,i) in enumerate(zip(max_sims, max_inds))]
         list_to_sort = sorted(list_to_sort, key=lambda x:(x[0], -x[1]))
+
+        # print(max_sims)
+        # print(max_inds)
+        # print(list_to_sort)
+        # print(smat>0.7)
+        # print(smat>0.7)
         # list_to_sort = sorted(list_to_sort) # sort first by beh inds, then break ties by sim score.
         idxs = [l[2] for l in list_to_sort] # recover original task inds
     else:

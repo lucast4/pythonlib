@@ -78,9 +78,17 @@ def getStrokeColors(strokes, CMAP="jet"):
         # assert False
     return color_order, color_order_by_pt
 
-def formatDatStrokesPlot(ax, naked_axes=False):
+def formatDatStrokesPlot(ax, naked_axes=False, mark_stroke_onset=False, 
+    add_stroke_number=False, number_from_zero=False, strokes=None, 
+    strokes_cols=None, markersize=None):
     """ Applies formatting to plots of strokes, use this usulaly with either
     plotDatStrokesMapColor or plotDatStrokes  
+    PARAMS:
+    - mark_stroke_onset, add_stroke_number, number_from_zero, all bools, for marking stroke
+    onset with numbers. If do this, then need to pass in strokes and strokes_cols
+    - strokes, list of np array, 
+    - strokes_cols, list of colors. see other code for color format.
+
     """
     ax.set_facecolor((0.9, 0.9, 0.9))
     ax.set_aspect('equal')
@@ -90,10 +98,24 @@ def formatDatStrokesPlot(ax, naked_axes=False):
         ax.set_title(None)
         ax.tick_params(axis='both', which='both',length=0)
 
+    if mark_stroke_onset:
+        for i, (s, col) in enumerate(zip(strokes, strokes_cols)):
+            mfc = col
+            tcol=col
+            markersize = markersize + 0.5
+            ax.plot(s[0,0], s[0,1], mec=col, mfc= mfc, markersize=markersize+1.5, 
+                marker="o", alpha= 0.75)
+            if add_stroke_number:
+                if number_from_zero:
+                    snum = i
+                else:
+                    snum = i+1
+                ax.text(s[0,0], s[0,1], f"{snum}", color=tcol, fontsize=markersize+7, alpha=0.7)
+
     
 def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None, 
-    cmap="plasma", markersize=6, alpha=0.55, mark_stroke_onset=True, 
-    add_stroke_number=True, naked_axes=False):
+    cmap="winter", markersize=6, alpha=0.55, mark_stroke_onset=True, 
+    add_stroke_number=True, naked_axes=False, number_from_zero=False):
     """ plot strokes, similar to plotDatStrokes, but the color is proportional
     to value in strokes_values, where first remapped to range (vmin, vmax), and
     uses color gradient based on that range
@@ -115,14 +137,18 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
         val_ver = "list_of_vals"
         assert not np.any(np.isnan(strokes_values))
 
-    if vmin is None:
-        # Use 2th percentile
-        pts = np.concatenate(strokes_values)
-        vmin = np.percentile(pts, [2])[0]
-    if vmax is None:
-        # Use 98th percentile
-        pts = np.concatenate(strokes_values)
-        vmax = np.percentile(pts, [98])[0]
+    if val_ver=="list_of_arrays":
+        if vmin is None:
+            # Use 2th percentile
+            pts = np.concatenate(strokes_values)
+            vmin = np.percentile(pts, [2])[0]
+        if vmax is None:
+            # Use 98th percentile
+            pts = np.concatenate(strokes_values)
+            vmax = np.percentile(pts, [98])[0]
+    else:
+        vmin = np.min(strokes_values)
+        vmax = np.max(strokes_values)
 
     # First get colors for each stroke
     color_list = []
@@ -151,17 +177,9 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
             ax.plot(s[:,0], s[:,1], color=col, linewidth=(3/5)*markersize,
                 alpha=min([1, 1.5*alpha]))
 
-    if mark_stroke_onset:
-        for i, (s, col) in enumerate(zip(strokes, color_list)):
-            mfc = col
-            tcol=col
-            markersize = markersize + 0.5
-            ax.plot(s[0,0], s[0,1], mec=col, mfc= mfc, markersize=markersize+1.5, 
-                marker="o", alpha= 0.75)
-            if add_stroke_number:
-                ax.text(s[0,0], s[0,1], f"{i+1}", color=tcol, fontsize=markersize+7, alpha=0.7)
-
-    formatDatStrokesPlot(ax, naked_axes=naked_axes)
+    formatDatStrokesPlot(ax, naked_axes=naked_axes, mark_stroke_onset=mark_stroke_onset, 
+        add_stroke_number=add_stroke_number, number_from_zero=number_from_zero, 
+        strokes=strokes, strokes_cols=color_list, markersize=markersize)
     
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],

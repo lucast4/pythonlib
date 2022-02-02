@@ -3927,6 +3927,8 @@ class Dataset(object):
         return feature_list_names
 
 
+
+
     ############# EXTRACT PREPROCESSED STROKES - for subsequent analyses
     def extractStrokeLists(self, filtdict=None, recenter=False, rescale=False):
         """ extract preprocessed strokes (task and beh) useful for 
@@ -3990,6 +3992,50 @@ class Dataset(object):
 
     def dat_append_col_by_grp(self, grp_by, new_col_name):
         assert False, "moved to grouping_append_col"
+
+
+    ################# EXTRACT DATA AS OTHER CLASSES
+    def behclass_generate(self, indtrial):
+        """ Generate the BehaviorClass object for this trial
+        RETURNS:
+        - Beh, class instance
+        - NOTE: doesn't modify self
+        """
+        from pythonlib.behavior.behaviorclass import BehaviorClass
+
+        # TODO: shape_dist_thresholds, for only keeping good matches.
+        # params = {
+        # "D":self,
+        # "ind":ind,
+        # "shape_dist_thresholds":shape_dist_thresholds
+        # }
+        params = {
+            "D":self,
+            "ind":indtrial,
+        }
+        Beh = BehaviorClass(params, "dataset")
+        return Beh
+
+    def behclass_generate_alltrials(self):
+        """ Generate list of behClass objects, one for each trial,
+        and stores as part of self.
+        RETURNS:
+        - self.Dat["BehClass"], list of beh class iunstance.
+        """
+        ListBeh = [self.behclass_generate(i) for i in range(len(self.Dat))]
+        self.Dat["BehClass"] = ListBeh
+        
+        print("stored in self.Dat[BehClass]")
+
+    def behclass_extract(self, inds_trials = None):
+        """ Get list of behclass for these trials
+        - Gets precomputed
+        """
+        if inds_trials is None:
+            inds_trials = range(len(self.Dat))
+        return [self.Dat.iloc[i]["BehClass"] for i in inds_trials]
+
+
 
     ################ SAVE
     def make_fig_savedir_suffix(self, filterDict):
@@ -4121,9 +4167,22 @@ class Dataset(object):
             ax.set_title(thing)
         return fig
 
+
+    def plotMultStrokesByOrder(self, strokes_list, ncols = 5, titles=None, 
+        naked_axes=False, mark_stroke_onset=True, add_stroke_number=True, 
+        titles_on_y=False, SIZE=2.5, plotkwargs={}):
+        """ Helper to call plotMultStrokesColorMap so that plots by order
+        """
+        colors = [np.arange(0, len(s)) for s in strokes_list]
+        return self.plotMultStrokesColorMap(strokes_list, colors, 
+            ncols, titles, naked_axes, mark_stroke_onset,
+            add_stroke_number, titles_on_y, SIZE, plotkwargs)
+
+
+
     def plotMultStrokesColorMap(self, strokes_list, strokes_vals_list, 
         ncols = 5, titles=None, naked_axes=False, mark_stroke_onset=False,
-        add_stroke_number=True, titles_on_y=False, SIZE=2.5):
+        add_stroke_number=True, titles_on_y=False, SIZE=2.5, plotkwargs={}):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
@@ -4133,8 +4192,8 @@ class Dataset(object):
 
         plotfunc = lambda strokes_strokesvals, ax: plotDatStrokesMapColor(
             strokes_strokesvals[0], ax, strokes_strokesvals[1],
-            naked_axes=False, mark_stroke_onset=False, 
-            add_stroke_number=add_stroke_number)
+            naked_axes=naked_axes, mark_stroke_onset=mark_stroke_onset, 
+            add_stroke_number=add_stroke_number, **plotkwargs)
 
         list_data = [(strokes, strokes_vals) for strokes, strokes_vals in 
             zip(strokes_list, strokes_vals_list)]
@@ -4263,33 +4322,6 @@ class Dataset(object):
                 return None, None
             else:
                 return None
-
-        # if isinstance(idxs, int):
-        #     N = len(self.Dat)
-        #     k = idxs
-        #     idxs = random.sample(range(N), k=k)
-
-        # if nrand is not None:
-        #     if nrand < len(idxs):
-        #         idxs = sorted(random.sample(idxs, nrand))
-
-        # if which_strokes=="parses":
-        #     # then pull out a random parse for each case
-        #     assert "parses" in self.Dat.columns, "need to extract parses first..."
-        #     strokes_list = [[a.copy() for a in strokes] for strokes in self.Dat["parses"].values] # copy, or else will mutate
-        #     # for the indices you want to plot, prune to just a single parse
-        #     for i in idxs:
-        #         ithis = random.randrange(len(strokes_list[i]))
-        #         strokes_list[i] = strokes_list[i][ithis]
-        # else:
-        #     strokes_list = self.Dat[which_strokes].values
-
-        # # Keep only data to plot.
-        # strokes_list = [strokes_list[i] for i in idxs]
-
-        # if titles is None:
-        #     # use trialcodes
-        #     titles = self.Dat.iloc[idxs]["trialcode"].tolist()
 
         # Extract the final data
         if color_by is None:
@@ -4565,6 +4597,61 @@ class Dataset(object):
 
         self.Dat = applyFunctionToAllRows(self.Dat, F, "inds_same_task")
 
+    def analy_subsample_trials_for_example(self, scores, inds, method="uniform",
+        score_range=None, n=20):
+        """ Extract subset of trials based on some filter for some score.
+        e.g. get uniform distribution based on percentiles for score, or
+        get top 20, or bottom 100, etc.
+        Doesn't use self.Dat, you must enter the data here.
+        Useful for generating/plotting examples across range of dataset
+        PARAMS:
+        - scores, np.array, scalar values used for sorting
+        - inds, list or np.array, same length as scores. list of ids, usually ints, but could be tuples.
+        - method, str, {'top', 'bottom', 'uniform'}
+        - score_range, [min, max], will restrict to within this range. applies before taking
+        top or uniform, etc. None means use entire range.
+        - n, how many to take? will return in incresaing order of scores.
+        RETURNS:
+        - scores_sub, inds_sub, same length subsamples.
+        """
+
+        if isinstance(scores, list):
+            scores = np.asarray(scores)
+        assert isinstance(inds, list)
+
+        # sort scores
+        indsort = np.argsort(scores)
+        scores = scores[indsort]
+        inds = [inds[i] for i in indsort]
+
+        # Keep only within range
+        if score_range is None:
+            score_range = [min(scores), max(scores)] 
+        indrange = np.where((scores>=score_range[0]) & (scores<=score_range[1]))[0]
+        scores = scores[indrange]
+        inds = [inds[i] for i in indrange]
+
+        # you can't request for than available
+        if n>len(scores):
+            n = len(scores)
+
+        if method=="uniform":
+            # take uniform sample 
+            indstake = np.floor(np.linspace(0, len(scores)-1, n))
+            indstake = [int(i) for i in indstake]
+            scores_sub = scores[indstake]
+            inds_sub = [inds[i] for i in indstake]
+        elif method=="top":
+            scores_sub = scores[-n:]
+            inds_sub = inds[-n:]
+        elif method=="bottom":
+            scores_sub = scores[:n]
+            inds_sub = inds[:n]
+        elif method=="random":
+            assert False, "get random, then sort."
+        else:
+            assert False
+        return scores_sub, inds_sub
 
 
     def analy_get_tasks_strongesteffect(self, grouping, grouping_levels, feature,

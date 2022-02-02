@@ -196,6 +196,9 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         elif similarity_method=="divide_by_median":
             tmp = D/np.median(D)
             D = 1-tmp/np.max(tmp)
+        elif similarity_method=="divide_by_maxcap":
+            assert cap_dist is not None
+            D = 1-D/cap_dist
         else:
             assert False
 

@@ -7,6 +7,7 @@ Consolidating the following:
 - and so on...
 """
 import numpy as np
+import matplotlib.pyplot as plt
 
 class BehaviorClass(object):
     """docstring for BehaviorClass"""
@@ -125,7 +126,7 @@ class BehaviorClass(object):
                             mask_shapedist.append(True)
                 mask_shapedist = np.array(mask_shapedist)
             else:
-                if "shape_dist_thresholds" is in params.keys():
+                if "shape_dist_thresholds" in params.keys():
                     assert False, "this not yet coded"
                 mask_shapedist = None
 
@@ -230,6 +231,10 @@ class BehaviorClass(object):
             strokes = self.Dat["strokes_beh"]
         elif ver=="task":
             strokes = self.Dat["strokes_task"]
+        elif ver=="task_after_alignsim":
+            strokes = self.Dat["strokes_task"]
+            idxs = self.Alignsim_taskstrokeinds_sorted
+            strokes = [strokes[i] for i in idxs]
         else:
             assert False
 
@@ -342,5 +347,62 @@ class BehaviorClass(object):
                 list_matches.append(list(range(i, i+nmotif)))
 
         return list_matches
+
+    ##################################### Using similarity matrix to get beh-task alignment
+    def alignsim_compute(self, remove_bad_taskstrokes=False, taskstrokes_thresh=0.4):
+        """ Compute the aligned similarity matrix between beh and task strokes.
+        PARAMS:
+        - remove_bad_taskstrokes, bool, will not include taskstrokes whos max sim (across
+        beh strokes) is less that taskstrokes_thresh. This will prune smat_sorted and idxs, but
+        not smat, which is always the input order of taskstrokes.
+        """
+        from pythonlib.drawmodel.behtaskalignment import aligned_distance_matrix
+
+        strokes_beh = self.extract_strokes()
+        strokes_task = self.extract_strokes("task")
+        smat_sorted, smat, idxs = aligned_distance_matrix(strokes_beh, strokes_task, False)
+
+        # print("unpruned", smat)
+        # print("unpruned", idxs)
+        if remove_bad_taskstrokes:
+            maxsims = np.max(smat, axis=0)
+            indstokeep = np.where(maxsims > taskstrokes_thresh)[0]
+            # smat = smat[:, indstokeep]
+            # print(smat)
+            # print(indstokeep)
+            idxs = [i for i in idxs if i in indstokeep]
+            smat_sorted = smat[:, idxs]
+
+
+        self.Alignsim_taskstrokeinds_sorted = idxs
+        self.Alignsim_simmat_sorted = smat_sorted
+        self.Alignsim_simmat_unsorted = smat
+
+
+    def alignsim_plot_summary(self):
+        """Plot results of alignments
+        """
+        from pythonlib.dataset.dataset import Dataset
+        D = Dataset([])
+        strokes_beh = self.extract_strokes()
+        strokes_task = self.extract_strokes("task_after_alignsim")
+        # idxs = self.Alignsim_taskstrokeinds_sorted
+        smat_sorted = self.Alignsim_simmat_sorted
+        # strokes_task_aligned = [strokes_task[i] for i in idxs]
+
+        # fig1, _ = D.plotMultStrokes([strokes_beh, strokes_task_aligned], number_from_zero=True) # plot, crude, shwoing task after alignemnt.
+        fig1, _ = D.plotMultStrokesByOrder([strokes_beh, strokes_task],
+            titles=["beh", "task"],
+            plotkwargs = {"number_from_zero":True}) # plot, crude, shwoing task after alignemnt.
+
+        fig2 = plt.figure()
+        plt.imshow(smat_sorted, cmap="gray_r", vmin=0, vmax=1)
+        plt.colorbar()
+        plt.xlabel("task stroke inds")
+        plt.ylabel("beh stroke inds")
+        plt.title("after sorting task strokes")
+        
+        return fig1, fig2
+
 
     ##################################### PLOTS
