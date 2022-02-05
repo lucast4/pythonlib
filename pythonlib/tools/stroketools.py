@@ -598,21 +598,26 @@ def getStrokesFeatures(strokes):
 def splitTraj(traj, num=2):
     return _splitarray(traj, num)
 
-def _splitarray(A, num=2):
+def _splitarray(A, num=2, reduce_num_if_smallstroke=False):
     # split one numpy array into a list of two arrays
     # idx = int(np.ceil(A.shape[0]/2))
+    if not reduce_num_if_smallstroke:
+        assert A.shape[0]>=num, "not enough pts to split"
+    else:
+        if A.shape[0]<num:
+            num = A.shape[0] 
     edges = np.linspace(0, len(A), num+1)
     edges = [int(np.ceil(e)) for e in edges]
     return [A[i1:i2,:] for i1, i2 in zip(edges[:-1], edges[1:])]
 
-def splitStrokesOneTime(strokes, num=2):
+def splitStrokesOneTime(strokes, num=2, reduce_num_if_smallstroke=False):
     """like splitStrokes, but only ouptuts one list of np arrays,
     so will have 2x num arrays as input strokes. will maitnain input
     order (based on position. will ignore timepoints)"""
 
     strokes_split = []
     for A in strokes:
-        strokes_split.extend(_splitarray(A, num=num))
+        strokes_split.extend(_splitarray(A, num=num, reduce_num_if_smallstroke=reduce_num_if_smallstroke))
         # appends: [[a,b], [b,a]], where a and b are np arrays
     return strokes_split
 

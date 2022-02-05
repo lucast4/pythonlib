@@ -349,7 +349,8 @@ class BehaviorClass(object):
         return list_matches
 
     ##################################### Using similarity matrix to get beh-task alignment
-    def alignsim_compute(self, remove_bad_taskstrokes=False, taskstrokes_thresh=0.4):
+    def alignsim_compute(self, remove_bad_taskstrokes=False, 
+        taskstrokes_thresh=0.4, ploton=False):
         """ Compute the aligned similarity matrix between beh and task strokes.
         PARAMS:
         - remove_bad_taskstrokes, bool, will not include taskstrokes whos max sim (across
@@ -360,7 +361,7 @@ class BehaviorClass(object):
 
         strokes_beh = self.extract_strokes()
         strokes_task = self.extract_strokes("task")
-        smat_sorted, smat, idxs = aligned_distance_matrix(strokes_beh, strokes_task, False)
+        smat_sorted, smat, idxs = aligned_distance_matrix(strokes_beh, strokes_task, ploton)
 
         # print("unpruned", smat)
         # print("unpruned", idxs)

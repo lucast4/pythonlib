@@ -81,16 +81,44 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
         idxs = np.argsort(ranks)
     elif sort_ver=="max":
         # alternative method, for each column, get its beh stroke that is max. sort columns by beh stroke, breaking ties using the cost.
-        nbeh, ntask = smat.shape
-        if cap_sim is not None:
-            smat[smat>cap_sim] = cap_sim + 0.01
-            tmp = np.repeat(np.linspace(0, 0.01, nbeh)[:, None], ntask, 1)
-            smat = smat - tmp
+        def _process_smat(smat, use_cap=True):
+            nbeh, ntask = smat.shape
+            if use_cap:
+                if cap_sim is not None:
+                    smat[smat>cap_sim] = cap_sim + 0.01
+                    tmp = np.repeat(np.linspace(0, 0.01, nbeh)[:, None], ntask, 1)
+                    smat = smat - tmp
+            max_sims = np.max(smat, axis=0)
+            max_inds = np.argmax(smat, axis=0)
+            return smat, max_sims, max_inds
+        
+        smat, max_sims, max_inds = _process_smat(smat)
 
-        max_sims = np.max(smat, axis=0)
-        max_inds = np.argmax(smat, axis=0)
-        list_to_sort = [(i, d, indtaskstroke) for indtaskstroke, (d,i) in enumerate(zip(max_sims, max_inds))]
-        list_to_sort = sorted(list_to_sort, key=lambda x:(x[0], -x[1]))
+        # Add secondary and tertiary indices for sorting, by splitting beh strokes.
+        # This enforces temporal ordering for cases where single beh stroke covers multiple
+        # task strokes. The first one (split 2) helps not have small strokes, more accurate
+        # the second one (split 4) is a tie breaker, and important for longer strokes.
+        # use hausdorff_means, because want to really care about the shape match.
+        from pythonlib.tools.stroketools import splitStrokesOneTime
+        strokes_beh_split = splitStrokesOneTime(strokes_beh, num=2, reduce_num_if_smallstroke=True)
+        smat_split = distMatrixStrok(strokes_beh_split, strokes_task, convert_to_similarity=True, 
+                       ploton=ploton, distancever = "hausdorff_means", 
+                       similarity_method=similarity_method, 
+                       distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+        smat_split, max_sims_split, max_inds_split = _process_smat(smat_split, use_cap=False)
+
+        strokes_beh_split = splitStrokesOneTime(strokes_beh, num=4, reduce_num_if_smallstroke=True)
+        smat_split = distMatrixStrok(strokes_beh_split, strokes_task, convert_to_similarity=True, 
+                       ploton=ploton, distancever = "hausdorff_means", 
+                       similarity_method=similarity_method, 
+                       distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+        smat_split2, max_sims_split2, max_inds_split2 = _process_smat(smat_split, use_cap=False)
+
+        # list_to_sort = [(i, s, i2, s2, indtaskstroke) for indtaskstroke, (i, s, i2, s2) 
+        #     in enumerate(zip(max_inds, max_sims, max_inds_split, max_sims_split))]
+        list_to_sort = [(i, s, i2, s2, i3, s3, indtaskstroke) for indtaskstroke, (i, s, i2, s2, i3, s3) 
+            in enumerate(zip(max_inds, max_sims, max_inds_split, max_sims_split, max_inds_split2, max_sims_split2))]
+        list_to_sort = sorted(list_to_sort, key=lambda x:(x[0], x[2], x[4], -x[1], -x[3], -x[5]))
 
         # print(max_sims)
         # print(max_inds)
@@ -98,7 +126,7 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
         # print(smat>0.7)
         # print(smat>0.7)
         # list_to_sort = sorted(list_to_sort) # sort first by beh inds, then break ties by sim score.
-        idxs = [l[2] for l in list_to_sort] # recover original task inds
+        idxs = [l[6] for l in list_to_sort] # recover original task inds
     else:
         assert False
 

@@ -205,7 +205,7 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         
     if ploton:
         plt.figure()
-        plt.imshow(D, cmap="plasma")
+        plt.imshow(D, cmap="gray_r", vmin=0., vmax=1.)
         plt.colorbar()
         plt.xlabel("stroklist2")
         plt.ylabel("stroklist1")
