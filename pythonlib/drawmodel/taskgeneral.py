@@ -494,6 +494,125 @@ class TaskClass(object):
             print(F)
             assert False, "not coded"
 
+    ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
+    def tokens_generate(self, params, inds_taskstrokes=None):
+        """
+        Designed for grid tasks, where each prim is a distinct location on grid,
+        so "relations" are well-defined based on adjacency and direction
+        PARAMS:
+        - params, dict, like things defining the grid params for this expt
+        - inds_taskstrokes, list of ints, order for the taskstrokes. e..g,, [0,4,2]
+        if None, then uses the default order.
+        RETURNS:
+        - datsegs, list of dicts, each a token.
+        """
+        from math import pi
+
+        # Some hard coded things 
+        expt = params["expt"]
+        if expt=="gridlinecircle":
+            nhor = 3
+            nver = 3
+            xgrid = np.linspace(-1.7, 1.7, 3)
+            ygrid = np.linspace(-1.7, 1.7, 3)
+        else:
+            assert False
+
+        # format taskstrokes correctly
+        objects = self.ShapesOldCoords
+        if inds_taskstrokes is not None:
+            objects = [objects[i] for i in inds_taskstrokes]
+
+        # Sanity check that the hard coded things are correct.
+        for o in objects:
+            assert np.any(xgrid == o[1]["x"])
+            assert np.any(ygrid == o[1]["y"])
+
+        # 1) assign each object a grid location
+        locations = []
+        for o in objects:
+            xloc = o[1]["x"]
+            yloc = o[1]["y"]
+            xind = int(np.where(xgrid==xloc)[0]) - int((nhor-1)/2)
+            yind = int(np.where(ygrid==yloc)[0]) - int((nver-1)/2)
+            locations.append((xind, yind))
+
+
+        def _posdiffs(i, j):
+            # return xdiff, ydiff, 
+            # in grid units.
+            pos1 = locations[i]
+            pos2 = locations[j]
+            return pos2[0]-pos1[0], pos2[1] - pos1[1]
+
+        def _direction(i, j):
+            # only if adjacnet on grid.
+            xdiff, ydiff = _posdiffs(i,j)
+            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
+                return "up"
+            elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
+                return "down"
+            elif xdiff ==-1. and np.isclose(ydiff, 0.):
+                return "left"
+            elif xdiff ==1. and np.isclose(ydiff, 0.):
+                return "right"
+            else:
+                return "far"
+
+        def _orient(i):
+            # Angle, orientation
+            if np.isclose(objects[i][1]["theta"], 0.):
+                return "horiz"
+            elif np.isclose(objects[i][1]["theta"], pi):
+                return "horiz"
+            elif np.isclose(objects[i][1]["theta"], pi/2):
+                return "vert"
+            elif np.isclose(objects[i][1]["theta"], 3*pi/2):
+                return "vert"
+            else:
+                print(objects[i])
+                assert False
+
+        def _shape(i):
+            # return string
+            return objects[i][0]
+        
+        def _shape_oriented(i):
+            # different name depedning on orientaion
+            if _shape(i)=="line" and _orient(i)=="horiz":
+                return "hline"
+            elif _shape(i)=="line" and _orient(i)=="vert":
+                return "vline"
+            elif _shape(i)=="circle":
+                return "circle"
+            else:
+                assert False
+
+        def _relation_from_previous(i):
+            # relation to previous stroke
+            if i==0:
+                return "start"
+            else:
+                return _direction(i-1, i)
+
+        def _relation_to_following(i):
+            if i==len(objects)-1:
+                return "end"
+            else:
+                return _direction(i, i+1)       
+
+        # Create sequence of tokens
+        datsegs = []
+        for i in range(len(objects)):
+            datsegs.append({
+                "shape":_shape(i),
+                "shape_oriented":_shape_oriented(i),
+                "rel_from_prev": _relation_from_previous(i),
+                "rel_to_next": _relation_to_following(i),
+                "gridloc": locations[i]
+                })
+        return datsegs
+
 
                         
     ############ PARSER
