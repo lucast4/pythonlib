@@ -308,8 +308,15 @@ class BehaviorClass(object):
         """ Generic - given list of beh tokens, and a motif, find if/where this
         motif occurs.
         PARAMS:
-        - list_beh, list of tokens, either int or str. e..g, [line, circle, ...]
+        - list_beh, list of tokens, either int or str. e..g, [line, circle, ...], or list of
+        objects that can be checked for equality using =. So datsegs (list of dicts) are also
+        doable.
         - motif, list of tokens, same type as in list_beh. this is the filter.
+        If motif is list of dicts, then will only check the dict keys here. So if list_beh has more
+        keys, they will be ignored. Moreover, each element in motif can use different keys if
+        desired. e.g., 
+            motif = [{'shape': 'line'},
+                {'shape_oriented': 'circle'}]
         - list_beh_mask, np array of bool int, same len as list_beh. baseically says that 
         only conisder substrings in list_beh for which all tokens are True in this mask.
         RETURNS:
@@ -320,8 +327,16 @@ class BehaviorClass(object):
         def _motifs_are_same(behstring, motif):
             assert len(behstring)==len(motif)
             for a, b in zip(behstring, motif):
-                if not a==b:
-                    return False
+                if isinstance(a, dict) and isinstance(b, dict):
+                    # Then only check the keys in motif
+                    keys_to_check = b.keys()
+                    for k in keys_to_check:
+                        if not a[k] == b[k]:
+                            return False
+                else:
+                    # Then check for complete ewqulaiyt
+                    if not a==b:
+                        return False
             return True
 
         nend = len(list_beh) - len(motif)
@@ -379,6 +394,30 @@ class BehaviorClass(object):
         self.Alignsim_simmat_sorted = smat_sorted
         self.Alignsim_simmat_unsorted = smat
 
+    def alignsim_extract_datsegs(self, expt, plot_print_on=False):
+        """
+        Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
+        PARAMS:
+        - expt, str, name of expt which is used for defining params for extracting stroke labels. 
+        e..g, things like size of sketchpad grid.
+        RETURNS:
+        - datsegs, list of dicts, each w same keys, each a single token.
+        """
+        params = {
+            "expt":expt}
+
+        # Now use the aligned task inds
+        inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
+        Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
+
+        datsegs = Task.tokens_generate(params, inds_taskstrokes)
+
+        if plot_print_on:
+            for x in datsegs:
+                print(x)
+            self.alignsim_plot_summary()
+        return datsegs
+
 
     def alignsim_plot_summary(self):
         """Plot results of alignments
@@ -404,6 +443,59 @@ class BehaviorClass(object):
         plt.title("after sorting task strokes")
         
         return fig1, fig2
+
+
+    #################################### MOTIFS 
+    def motifs_generate_searchstring(self, kind, params=None, expt=None):
+        """
+        Generate a motif "search string" that can be used for filtering or 
+        searching within datsegs.
+        PARAMS:
+        - kind, str, category of motif
+        - params, dict, params which depend on kind
+        - expt, str, name of expt, which sometimes needed.
+        NOTE: this returns a specific string, without wildcards or regular expressions.
+        """
+
+        if kind=="repeat":
+            # Repeat a token n times
+            n = params["n"] 
+            token = params["token"] 
+            motif = [token for _ in range(n)] 
+        elif kind=="lolli":
+            # circle and adjacent line, orinetation can be one of 4. 
+            # order can be one of two
+            orientation = params["orientation"] # token1-->token2, str {up, down, left, right}
+            first_shape = params["first_shape"] # {circle, line}
+            motif = [{}, {}]
+
+            motif[1]["rel_from_prev"] = orientation
+
+            if first_shape=="circle":
+                motif[0]["shape_oriented"] = "circle"
+                if orientation in ["up", "down"]:
+                    motif[1]["shape_oriented"] = "vline"
+                elif orientation in ["left", "right"]:
+                    motif[1]["shape_oriented"] = "hline"
+                else:
+                    print(orientation)
+                    assert False
+            elif first_shape=="line":
+                motif[1]["shape_oriented"] = "circle"
+                if orientation in ["up", "down"]:
+                    motif[0]["shape_oriented"] = "vline"
+                elif orientation in ["left", "right"]:
+                    motif[0]["shape_oriented"] = "hline"
+                else:
+                    print(orientation)
+                    assert False
+            else:
+                assert False
+
+
+        return motif
+
+
 
 
     ##################################### PLOTS

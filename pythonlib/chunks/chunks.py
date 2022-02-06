@@ -154,6 +154,7 @@ def find_object_groups(Task, params):
     """
     from math import pi
     
+    assert False, "see TaskClass.tokens_generate to generate the toekns. then filter for things"
     expt = params["expt"]
     rule = params["rule"]
     if expt=="gridlinecircle":
