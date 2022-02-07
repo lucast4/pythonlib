@@ -349,10 +349,13 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     else:
         return df_new
 
-def filterPandas(df, filtdict, return_indices=False):
+def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True):
     """ 
     filtdict is dict, where each value is a list of
     allowable values.
+    PARAMS:
+    - auto_convert_tolist, then any values of filtdict that arent lsits are converted
+    to lists. assumes you tried to enter a single value to filter.
     - See filtdict for format
     NOTE - doesnt modify in place. just returns.
     NOTE - return_indices, returns the original row indices
@@ -365,6 +368,11 @@ def filterPandas(df, filtdict, return_indices=False):
         # print(k)
         # print(v)
 #         print(df[k].isin(v))
+        if not isinstance(v, list):
+            if auto_convert_tolist:
+                    v = [v]
+            else:
+                assert isinstance(v, list), "must make into lists the values of filtdict"
         if len(df)>0:
             if isinstance(v[0], np.ndarray) or isinstance(df[k].values[0], np.ndarray):
                 from .nptools import isin_close
