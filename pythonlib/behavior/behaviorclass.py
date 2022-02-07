@@ -29,13 +29,16 @@ class BehaviorClass(object):
 
         self.Dataset = None
         self.IndDataset = None
+        self.Expt = None
+
 
 
         if ver=="dataset":
             D = params["D"]
             ind = params["ind"]
             Task = D.Dat.iloc[ind]["Task"]
-
+            if "expt" in params.keys():
+                self.Expt = params["expt"]
             strokes_task = D.Dat.iloc[ind]["strokes_task"]
 
             # 2) Get the "names" for all task strokes
@@ -303,6 +306,84 @@ class BehaviorClass(object):
         return self._find_motif_in_beh(list_beh, labelmotif, list_beh_mask=maskinds)
 
 
+    def _find_motif_in_beh_wildcard(self, list_beh, motifname, motifparams={}, 
+        list_beh_mask=None):
+        """ More flexible way to find motifs, such as "a circle repeated N times" where 
+        N is wildcard so can be anything (or with constraint). Is the most abstract method.
+        PARAMS:
+        - list_beh, list of tokens. Usually datseg, which is list of dicts
+        - motifname, str, a keyword for the kind of motif, e.g, {'repeats', 'lollis'}
+        - motifparams, dict of params, flexible and depends on motifname
+        RETURNS:
+        - dict, where keys will depend on motifname, but generally reflect different subkinds of motifname.
+        e.g., for repeats will be different length repeats. values are always lists of lists of ints, where
+        ints are the indices.
+        """
+        dict_matches = {}
+
+        if motifname=="repeat":
+            # find all cases of repeats of the same shape. will make sure doesnt take the same 
+            # token more than once - e..g, for a 3-repeat, will not also return the 2-repeat. will
+            # take the max length rep.
+            shapekey = motifparams["shapekey"] # "shape" or "shape_oriented"
+            shape = motifparams["shape"] # e..g, circle
+            nmin = motifparams["nmin"] # min num repeats (inclusive)
+            nmax = motifparams["nmax"] # max num repeats (inclusive)
+
+            # construct single token
+            token = {shapekey:shape}
+
+            # search for repeats of incresaing n in the range of nmin to nmax, until fail.
+            # each time add a repeat, remove the repeat of the preceding length.
+            for n in range(nmin, nmax+1):
+
+                motif = [token for _ in range(n)]
+                list_matches = self._find_motif_in_beh(list_beh, motif, list_beh_mask)
+
+                # store list matches
+                dict_matches[n] = list_matches
+
+                # remove previous found matches if they use the same tokens.
+                def _is_in(match, n):
+                    """
+                    Returns True if match is a subset of one of the dict_matches in the list 
+                    of dict_matches for repeat length n
+                    - match, list of ints
+                    - n, int, num repeats
+                    e.g., 
+                    - match = [1,2]
+                    - dict_matches[n] = [[1,2,3], [7,8,9]]
+                    Then returns True
+                    """
+                    for match_check in dict_matches[n]:
+                        if all([m in match_check for m in match]):
+                            return True
+                    return False
+
+                if n>nmin:
+                    nprev = n-1
+                    dict_matches[nprev] = [match for match in dict_matches[nprev] if not _is_in(match, n)]
+
+        elif motifname=="lolli":
+            # Find all the lollis, which means all cases of circle to line or line to circle, in any
+            # direction (u d l r).
+            # If two lollis share anything (e..g, circle) will still call them 2 lollis.
+            # If want to have them exclusive, do something like what do for repeat above
+            list_orientation = ["up", "down", "left", "right"]
+            list_first_shape = ["circle", "line"]
+
+            for o in list_orientation:
+                for s in list_first_shape:
+                    par = {"orientation":o, "first_shape":s}
+                    m = self.alignsim_find_motif_in_beh_bykind("lolli", par)
+                    dict_matches[(o, s)] = m
+
+        else:
+            print(motifname)
+            assert False, "??"
+
+        return dict_matches
+
 
     def _find_motif_in_beh(self, list_beh, motif, list_beh_mask=None):
         """ Generic - given list of beh tokens, and a motif, find if/where this
@@ -393,16 +474,29 @@ class BehaviorClass(object):
         self.Alignsim_taskstrokeinds_sorted = idxs
         self.Alignsim_simmat_sorted = smat_sorted
         self.Alignsim_simmat_unsorted = smat
+        self.Alignsim_Datsegs = None
 
-    def alignsim_extract_datsegs(self, expt, plot_print_on=False):
+    def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False):
         """
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
+        Will only compute the first time run. then will save and reload cached every time run again
+        (unless recompute=True)
         PARAMS:
         - expt, str, name of expt which is used for defining params for extracting stroke labels. 
-        e..g, things like size of sketchpad grid.
+        e..g, things like size of sketchpad grid. None, to use self.Expt
         RETURNS:
         - datsegs, list of dicts, each w same keys, each a single token.
         """
+
+        if not recompute:
+            # Load cached datsegs
+            if self.Alignsim_Datsegs is not None:
+                return self.Alignsim_Datsegs
+
+        if expt is None:
+            expt = self.Expt
+            assert expt is not None
+
         params = {
             "expt":expt}
 
@@ -416,6 +510,10 @@ class BehaviorClass(object):
             for x in datsegs:
                 print(x)
             self.alignsim_plot_summary()
+
+        # Saved cached datsegs
+        self.Alignsim_Datsegs = datsegs
+
         return datsegs
 
 
@@ -445,7 +543,63 @@ class BehaviorClass(object):
         return fig1, fig2
 
 
+    def alignsim_find_motif_in_beh_specific(self, motif, list_beh_mask=None):
+        """ Helper to search for this motif in datsegs, extracted from aligned beh-task
+        using sim matrix alignement. Must enter specific motif
+        PARAMS:
+        - motif, list of tokens. Will search for this specific list.
+        """
+        tokens = self.alignsim_extract_datsegs()
+        return self._find_motif_in_beh(tokens, motif, list_beh_mask)
+
+
+    def alignsim_find_motif_in_beh_bykind(self, kind, params=None, list_beh_mask=None):
+        """ Helper to search for this kind of motif. More abstract, since kind and params
+        are used to construct the specific motif.
+        """
+        tokens = self.alignsim_extract_datsegs()
+        motif = self.motifs_generate_searchstring(kind, params)
+        return self._find_motif_in_beh(tokens, motif, list_beh_mask)
+
+
+    def alignsim_find_motif_in_beh_wildcard(self, motifname, motifparams={}, 
+            list_beh_mask=None):
+        """ Helper to search for a kind of motif (flexibly) within datsegs. 
+        The most abstract, since will automatically generate many specific motifs,
+        as many as needed.
+        """
+        tokens = self.alignsim_extract_datsegs()
+        return self._find_motif_in_beh_wildcard(tokens, motifname, motifparams, 
+            list_beh_mask)
+
     #################################### MOTIFS 
+    def motif_shorthand_name(self, motif_kind, motif_params):
+        """ Return string, useful for dtaframe columns,.
+        Works for motif_kind and motif_params that would pass into any of the two
+        methods for abstractly defining motifs:
+        alignsim_find_motif_in_beh_wildcard and alignsim_find_motif_in_beh_bykind
+        """
+        s = motif_kind
+
+        def _append_param(s, param_key):
+            if param_key in motif_params.keys():
+                s += f"-{motif_params[param_key]}"
+            elif "token" in motif_params.keys():
+                if param_key in motif_params["token"]:
+                    s += f"-{motif_params['token'][param_key]}"
+            return s
+            
+        if motif_kind=="repeat":
+            for param_key in ["shape", "n"]:
+                s=_append_param(s, param_key)
+        elif motif_kind =="lolli":
+            for param_key in ["orientation", "first_shape"]:
+                s=_append_param(s, param_key)
+        else:
+            assert False
+        return s
+
+
     def motifs_generate_searchstring(self, kind, params=None, expt=None):
         """
         Generate a motif "search string" that can be used for filtering or 

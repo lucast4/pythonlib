@@ -3995,11 +3995,14 @@ class Dataset(object):
 
 
     ################# EXTRACT DATA AS OTHER CLASSES
-    def behclass_generate(self, indtrial):
+    def behclass_generate(self, indtrial, expt=None):
         """ Generate the BehaviorClass object for this trial
+        PARAMS:
+        - expt, will try to extract if can't then you must enter
         RETURNS:
         - Beh, class instance
         - NOTE: doesn't modify self
+
         """
         from pythonlib.behavior.behaviorclass import BehaviorClass
 
@@ -4009,9 +4012,18 @@ class Dataset(object):
         # "ind":ind,
         # "shape_dist_thresholds":shape_dist_thresholds
         # }
+
+        if expt is None:
+            list_expt = self.expts()
+            if len(list_expt)!=1:
+                assert False, "you must enter expt"
+            else:
+                expt = list_expt[0]
+
         params = {
             "D":self,
             "ind":indtrial,
+            "expt":expt
         }
         Beh = BehaviorClass(params, "dataset")
         return Beh
@@ -4026,6 +4038,28 @@ class Dataset(object):
         self.Dat["BehClass"] = ListBeh
         
         print("stored in self.Dat[BehClass]")
+
+    def behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
+            taskstrokes_thresh=0.4):
+        """ Compute beh-task alignment. This is first step before extracting
+        datsegs, or discretized behavior.
+        PARAMS:
+        - remove_bad_taskstrokes, bool, removes taskstrokes that don't have any beh
+        match - these are usually skipped storke.s
+        - taskstrokes_thresh, scalar threshold below which strokes will be removed. this is
+        similarity score. 0.4 is chosen as good for gridlinecircle Pancho.
+        RETURNS:
+        - modifies "BehClass" column in self.Dat
+        """
+
+        for i in range(len(self.Dat)):
+            Beh = self.Dat.iloc[i]["BehClass"]
+            Beh.alignsim_compute(remove_bad_taskstrokes=remove_bad_taskstrokes, 
+                taskstrokes_thresh=taskstrokes_thresh)
+            if i%200==0:
+                print(i)
+
+
 
     def behclass_extract(self, inds_trials = None):
         """ Get list of behclass for these trials
@@ -4099,7 +4133,8 @@ class Dataset(object):
 
 
     def plotSingleTrial(self, idx, things_to_plot = ["beh", "task"],
-        sharex=False, sharey=False, params=None, task_add_num=False):
+        sharex=False, sharey=False, params=None, task_add_num=False,
+        number_from_zero=False):
         """ 
         idx, index into Dat, 0, 1, ...
         - params, only matters for some things.
@@ -4119,7 +4154,7 @@ class Dataset(object):
                 # Plot behavior for this trial
                 # - the ball marks stroke onset. stroke orders are color coded, and also indicated by numbers.
                 strokes = dat["strokes_beh"].values[idx]
-                plotDatStrokes(strokes, ax, each_stroke_separate=True)
+                plotDatStrokes(strokes, ax, each_stroke_separate=True, number_from_zero=number_from_zero)
             elif thing=="task":
                 # overlay the stimulus
                 stim = dat["strokes_task"].values[idx]
@@ -4132,7 +4167,7 @@ class Dataset(object):
 
                 plotDatStrokes(stim, ax, each_stroke_separate=True, 
                     plotver="onecolor", add_stroke_number=add_stroke_number, 
-                    mark_stroke_onset=mark_stroke_onset, pcol="k")
+                    mark_stroke_onset=mark_stroke_onset, pcol="k", number_from_zero=number_from_zero)
             elif thing=="beh_tc":
                 # === Plot motor timecourse for a single trial (smoothed velocity vs. time)
                 # fig, axes = plt.subplots(1,1, sharex=True, sharey=True)
@@ -4143,7 +4178,7 @@ class Dataset(object):
                     if "strokes_parse" not in dat.columns:
                         assert False, "need to tell me which pares to plot, run self.parsesChooseSingle()"
                     strokes = dat["strokes_parse"].values[idx]
-                    plotDatStrokes(strokes, ax, each_stroke_separate=True)
+                    plotDatStrokes(strokes, ax, each_stroke_separate=True, number_from_zero=number_from_zero)
             elif thing=="bpl_mp":
                 if "motor_program" in dat.columns:
                     # from ..bpl.strokesToProgram import plotMP
@@ -4159,7 +4194,7 @@ class Dataset(object):
             elif thing=="beh_splines":
                 assert "strokes_beh_splines" in dat.columns, "need to run convertToSplines first!"
                 strokes = dat["strokes_beh_splines"].values[idx]
-                plotDatStrokes(strokes, ax, each_stroke_separate=True)
+                plotDatStrokes(strokes, ax, each_stroke_separate=True, number_from_zero=number_from_zero)
             else:
                 print(thing)
                 assert False

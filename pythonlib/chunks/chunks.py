@@ -21,7 +21,8 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
     #TODO: 
     - should return empty chunks if there are not reasonable chunks? e..g lolli rule
     will still output all strokes even if there are no lollis at all.
-    - 
+    - NOTE: order within and across chunks will not matter. Identity is determined by
+    sorting lists of tuples. 
     """
 
     objects = Task.Shapes
@@ -241,7 +242,7 @@ def find_object_groups(Task, params):
 
 def sample_a_lolli_list(list_lollis, list_possible_inds):
     """ Hacky, but good template for future mods.
-    get all ways of sampling lollis, given sets of objects
+    get all ways of sampling lollis, given sets of objects. 
     IN:
     - list_lollis, list of all 2-tuples (circle, line), which are lollis.
     - left_over, list of ints, those unused in list_lollis.
