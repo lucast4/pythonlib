@@ -4,6 +4,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def _check_is_proper_chunk(chunk):
+    """ Must be list of lists.
+    """
+    assert isinstance(chunk, list)
+    for c in chunk:
+        assert isinstance(c, list)
+
 #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
 def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
     """ [GOOD] General purpose to return chunks, hierarchies,
@@ -30,6 +37,8 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
         from pythonlib.tools.stroketools import check_strokes_identical
         assert check_strokes_identical(Task.Strokes, strokes)
         assert len(objects)==len(strokes), "did you chunk the strokes already?"
+    else:
+        strokes = Task.Strokes
         
     def _inds_by_shape(shape):
         # Return list of inds with this shape
@@ -65,7 +74,7 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
                 "rule":rule,
                 "ver":"lolli"
             }
-            list_lollis, left_over = find_object_groups(Task, paramsthis)
+            list_lollis, left_over = find_object_groups_new(Task, paramsthis)
 
             # if len(list_lollis)==0:
             #     # then no lollis. then just skip this, since is same as baseline
@@ -143,8 +152,108 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {}):
     # Return as a list of possible chunkings.
     assert len(list_chunks)==len(list_hier)
     assert len(list_hier)==len(list_fixed_order)
+    # print(list_chunks, list_hier, list_fixed_order)
+    # assert False
     return list_chunks, list_hier, list_fixed_order
     
+
+def find_object_groups_new(Task, params):
+    """ return list of groups (list of objects/shapes) passing constraints.
+    Uses tokens from Task.tokens_generate(), and assumes this is unordered list. 
+    So assumes any ordering of tokens, which means this outputs different ways
+    of chunking. This differs from BehClass methods for finding motifs, because
+    the latter assumes ordered tokens.
+    e..g, find list of lollis, where each lolli is a set of 2 inds in objects
+    PARAMS:
+    - Task, taskclass instnace
+    - params, dict holding flexible params
+    RETURNS:
+    - list_groups, list of list, each inner list being a single group or chunk. Ordering
+    will not matter (both across chunks and within chunks)
+    - left_over, list of ints, taskstroke indices that were not used in any chunk
+    NOTE:
+    - a given object can be used more than once, or not at all,
+    e.g., if it participates in multiple gourpings.
+    """
+
+    # Generate tokens
+    tokens = Task.tokens_generate(params, track_order=False)
+    objects = tokens # naming convention change.
+
+    # Methods for defining tokens or relations between tokens in a pair
+    def _shape(i):
+        """ String name of shape of i"""
+        return objects[i]["shape"]
+    def _oshape(i):
+        """ String name, shape+orientation"""
+        return objects[i]["shape_oriented"]
+    def _location_grid(i):
+        """ Location on grid, in grid units (integers, centered at 0)
+        Returns (x,y)
+        """
+        return objects[i]["gridloc"]
+    def _posdiffs_grid(i, j):
+        """ Difference in positions between i and j, in grid units
+        Return xdiff, ydiff"""
+        pos1 = _location_grid(i)
+        pos2 = _location_grid(j)
+        return pos2[0]-pos1[0], pos2[1] - pos1[1]
+    def _direction_grid(i, j):
+        """ String name, cardinal direction, only if adjacnet on grid.
+        Uses grid locations. direction from i to j """
+        xdiff, ydiff = _posdiffs_grid(i,j)
+        if np.isclose(xdiff, 0.) and ydiff ==1.:
+            return "up"
+        elif np.isclose(xdiff, 0.) and ydiff ==-1.:
+            return "down"
+        elif xdiff ==-1. and np.isclose(ydiff, 0.):
+            return "left"
+        elif xdiff ==1. and np.isclose(ydiff, 0.):
+            return "right"
+        else:
+            return "far"
+    def _orient(i):
+        """ Orientation, in string, {'horiz, 'vert', ...}
+        """
+        assert False, "first pull in theta to objects in TaskClass"""
+        if np.isclose(objects[i][1]["theta"], 0.):
+            return "horiz"
+        elif np.isclose(objects[i][1]["theta"], pi):
+            return "horiz"
+        elif np.isclose(objects[i][1]["theta"], pi/2):
+            return "vert"
+        elif np.isclose(objects[i][1]["theta"], 3*pi/2):
+            return "vert"
+        else:
+            print(objects[i])
+            assert False
+
+
+    # Given a rule for chunking, extract all the ways of chunking
+    if params["expt"]=="gridlinecircle" and params["rule"]=="lolli":
+        # get list of all lollis possible
+        list_groups = [] # aleays [(circle, line), ...]
+
+        for i in range(len(objects)):
+            for j in range(i+1, len(objects)):
+                if _oshape(i)=="circle" and _oshape(j)=="hline":
+                    if _direction_grid(i, j) in ["left", "right"]:
+                        list_groups.append([i,j])
+                elif _oshape(i)=="circle" and _oshape(j)=="vline":
+                    if _direction_grid(i, j) in ["up", "down"]:
+                        list_groups.append([i,j])
+                elif _oshape(i)=="hline" and _oshape(j)=="circle":
+                    if _direction_grid(i, j) in ["left", "right"]:
+                        list_groups.append([i,j])
+                elif _oshape(i)=="vline" and _oshape(j)=="circle":
+                    if _direction_grid(i, j) in ["up", "down"]:
+                        list_groups.append([i,j])
+        # Find what objects are left over
+        list_groups_flat = [xx for x in list_groups for xx in x]
+        left_over = [i for i in range(len(objects)) if i not in list_groups_flat]
+
+    return list_groups, left_over
+
 def find_object_groups(Task, params):
     """ return list of groups (list of obj) passing constraints.
     General-purpse, takes in objects (Task.Shapes).
@@ -155,7 +264,7 @@ def find_object_groups(Task, params):
     """
     from math import pi
     
-    assert False, "see TaskClass.tokens_generate to generate the toekns. then filter for things"
+    assert False, "use find_object_groups_new"
     expt = params["expt"]
     rule = params["rule"]
     if expt=="gridlinecircle":
@@ -419,9 +528,9 @@ def chunk_strokes(strokes, chunks, use_each_traj_once=True,
         
     return strokes_chunked
 
-def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False,
+def chunks2parses(list_chunks, strokes, reorder=False, thresh=10, sanity_check=False,
     use_each_traj_once=True):
-    """ for this chunks (list of chunks) and model, extract
+    """ for this list_chunks (list of chunks) and model, extract
     each way to chunking strokes. e.g.
     [[0,1], 2] leads to chuning of strokes 0 and 1
     Returns one strokes object for each way of chunking. 
@@ -431,8 +540,8 @@ def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False,
     - parses_list is len of num chunks, each element a strokes.
     --- eachstroke, then will treat each stroke as chunk,
     INPUT:
-    - chunks, 
-    --- e.g,, chunks = [
+    - list_chunks, 
+    --- e.g,, list_chunks = [
         [[0, 1], 2], 
         [[0, 2], 1]]
     OUT:
@@ -441,10 +550,9 @@ def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False,
     # from pythonlib.tools.stroketools import concatStrokes
 
     parses_list = []
-    list_chunks = chunks
-    for chk in list_chunks:
+    for chunks in list_chunks:
         parses_list.append(
-            chunk_strokes(strokes, chk, use_each_traj_once=True,
+            chunk_strokes(strokes, chunks, use_each_traj_once=True,
                 reorder=reorder, thresh=thresh, sanity_check=sanity_check)
             )
         # strokesnew = [concatStrokes([strokes[i] for i in s], 
@@ -455,4 +563,113 @@ def chunks2parses(chunks, strokes, reorder=False, thresh=10, sanity_check=False,
     # parses_list = [[strok[:,[0,1]] for strok in strokes] for strokes in parses_list]
 
     return parses_list
+
+def hier_is_flat(hier):
+    """ 
+    Check if this hierarhcy is flat
+    PARAMS:
+    - hier is 2-level, list of list or list of mixture of ints and lists (see below)
+    e..g, [[1,2], 3] is not flat
+    e.g., [[1], [2], [3]] is flat
+    RETURNS:
+    - True if hierarchy is flat. evem this [[1], 2, [0]] woudl be True
+    """
+    for h in hier:
+        if isinstance(h, list):
+            if len(h)>1:
+                return False
+    return True
+
+def search_permutations_chunks(chunks_hier, fixed_order, max_perms=1000):
+    """ Returns all permutatoins of chunks or hierarchy, while folliwng 
+    fixed_order rules
+    PARAMS:
+    - chunks_hier, chunks or hierarhcy object, list of lists or ints
+    RETURNS:
+    - list_out, list of chunks, each of which has same shape as chunks_hier,
+    modulo permutations. is all the ways of permuiting chunks hier
+    """
+
+    from pythonlib.chunks.chunks import hier_is_flat
+    from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+    from itertools import product
+
+    _check_is_proper_chunk(chunks_hier)
+
+    def _get_permutations(inlist):
+        """ 
+        Also returns the input list
+        Gets all permutations
+        """
+        return getStrokePermutationsWrapper(inlist, "all_orders", num_max=max_perms)
+
+    def _get_permutations_hierarchical(list_of_list, list_of_fixed):
+        """ 
+        Will permute all the inner lists in list_of_list, if their correspoding fixed is False
+        RETURNS list, with shape being list(shape(list_of_list))
+        PARAMS:
+        - list_of_list, 
+        e.g., [[0,1], [2,3]]
+        - list_of_fixed
+        e.g., [True, False]
+        RETURNS:
+        e.g.,
+            [[[0,1], [2,3]], [[0,1], [3,2]]
+        """
+        assert len(list_of_list)==len(list_of_fixed)
+        assert isinstance(list_of_list, list) and isinstance(list_of_fixed, list)
+        
+        list_of_list_out_all = []
+        for inlist, fo in zip(list_of_list, list_of_fixed):
+            if not fo:
+                list_of_list_out = _get_permutations(inlist)
+                list_of_list_out_all.append(list_of_list_out)
+            else:
+                list_of_list_out_all.append([inlist])
+        if len(list_of_list_out_all)==1:
+            return list_of_list_out_all[0]
+        else:
+            return [list(x) for x in product(*list_of_list_out_all)] # list of lists, where inner lists are same shape as inner lsit of list_of_list.
+
+    hier = chunks_hier
+    # hier = C.Hier
+    # fixed_order = C.FixedOrder
+    # print(hier)
+    # print(fixed_order)
+
+    # First level
+    # - combine hier and fixed order, so not broken apart after permutation
+    hier_fo = [(h,f) for h, f in zip(hier, fixed_order[1])]
+    out = _get_permutations_hierarchical([hier_fo], [fixed_order[0]])
+
+    # Second level
+    list_out = []
+    for X in out:
+        hier = [x[0] for x in X] # [[0,1], [2,3]]
+        fo = [x[1] for x in X] # [False, True]
+        out = _get_permutations_hierarchical(hier, fo)
+        
+        list_out.append(out)
+        
+    list_out = [xx for x in list_out for xx in x]
+    return list_out
+
+
+# def search_permutations_chunks(chunks):
+#     """ Returns all permutations of chunks. THink of this as "grouding" the abstract
+#     chunking (grouping) into concrete sequence of tokens. 
+#     NOTE:
+#     - this is taken from parser.search_parse
+#     """
+#     from pythonlib.tools.stroketools import getStrokePermutationsWrapper
+#     if direction_within_stroke_doesnt_matter:
+#         # then just reorder. much quicker.
+#         list_parse = getStrokePermutationsWrapper(parse, 
+#             "all_orders", num_max=configs_per)
+#     else:
+#         from .search import search_parse as sp
+#         list_parse, _ = sp(parse, 
+#             configs_per=configs_per, trials_per=trials_per, 
+#             max_configs=max_configs)
+#     return list_parse
 

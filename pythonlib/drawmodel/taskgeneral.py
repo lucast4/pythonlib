@@ -495,7 +495,7 @@ class TaskClass(object):
             assert False, "not coded"
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
-    def tokens_generate(self, params, inds_taskstrokes=None):
+    def tokens_generate(self, params, inds_taskstrokes=None, track_order=True):
         """
         Designed for grid tasks, where each prim is a distinct location on grid,
         so "relations" are well-defined based on adjacency and direction
@@ -503,6 +503,10 @@ class TaskClass(object):
         - params, dict, like things defining the grid params for this expt
         - inds_taskstrokes, list of ints, order for the taskstrokes. e..g,, [0,4,2]
         if None, then uses the default order.
+        - track_order, bool, whether order is relevant. if True (e.g, for behavior)
+        then tracks things related to roder (e.g., sequential relations). If False
+        (e.g. for chunks where care only about grouping not order), then ignore those
+        features.
         RETURNS:
         - datsegs, list of dicts, each a token.
         """
@@ -607,10 +611,11 @@ class TaskClass(object):
             datsegs.append({
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
-                "rel_from_prev": _relation_from_previous(i),
-                "rel_to_next": _relation_to_following(i),
                 "gridloc": locations[i]
                 })
+            if track_order:
+                datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
+                datsegs[-1]["rel_to_next"] = _relation_to_following(i)
         return datsegs
 
 

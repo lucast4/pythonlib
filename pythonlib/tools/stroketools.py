@@ -986,7 +986,7 @@ def getStrokePermutationsWrapper(strokes, ver,  num_max=1000):
         # Then all possible unique orderings. This can get large,
         # so use num_max. Does not modify the direction within each stroke.
         from math import factorial
-        print(f"expect to get (ignoreing num max): {factorial(len(strokes))}")
+        # print(f"expect to get (ignoreing num max): {factorial(len(strokes))}")
         strokes_list, _ = getAllStrokeOrders(strokes, num_max =num_max)
     elif ver=="all_orders_directions":
         # Then all possible unique orderings. This can get large,

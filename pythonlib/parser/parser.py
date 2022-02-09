@@ -868,11 +868,8 @@ class Parser(object):
         RETURNS:
         - True if hierarchy is flat. evem this [[1], 2, [0]] woudl be True
         """
-        for h in hier:
-            if isinstance(h, list):
-                if len(h)>1:
-                    return False
-        return True
+        from pythonlib.chunks.chunks import hier_is_flat
+        return hier_is_flat(hier)
 
 
     def get_hier_permutations(self, indparse, is_base_parse=True, 
@@ -888,11 +885,13 @@ class Parser(object):
         TODO:
         - fixed_order controls both ordering and flipping. Instead, should separately
         control them (add another input, fixed_flipping)
+        NOTE: 
+        This should eventually be subsumed by ChunksClass.search_permutations_chunks()
         """
         # from .search import search_parse
         from pythonlib.drawmodel.tasks import chunk_strokes
         from pythonlib.tools.stroketools import getStrokePermutationsWrapper
-
+            
         assert direction_within_stroke_doesnt_matter==True, "havent tested that this works if allow diff directions."
 
         self._parses_reset_perm_of_list()
@@ -908,7 +907,7 @@ class Parser(object):
         # is hierarchy flat?
         if self._hier_is_flat(hier):
             # Then no hierarchy exists:
-            list_parses_all_flat = self.search_parse(list_p, nconfigs, 
+            list_parses_all_flat = self.search_parse(list_p, nconfigs,  
                 direction_within_stroke_doesnt_matter=direction_within_stroke_doesnt_matter)
 
             # if direction_within_stroke_doesnt_matter:

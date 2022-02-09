@@ -307,13 +307,15 @@ class BehaviorClass(object):
 
 
     def _find_motif_in_beh_wildcard(self, list_beh, motifname, motifparams={}, 
-        list_beh_mask=None):
+        list_beh_mask=None, return_as_number_instances=False):
         """ More flexible way to find motifs, such as "a circle repeated N times" where 
         N is wildcard so can be anything (or with constraint). Is the most abstract method.
         PARAMS:
         - list_beh, list of tokens. Usually datseg, which is list of dicts
         - motifname, str, a keyword for the kind of motif, e.g, {'repeats', 'lollis'}
         - motifparams, dict of params, flexible and depends on motifname
+        - return_as_number_instances, bool (False), return in format of number of occurances found, 
+        instaed of the list of instanc indices.
         RETURNS:
         - dict, where keys will depend on motifname, but generally reflect different subkinds of motifname.
         e.g., for repeats will be different length repeats. values are always lists of lists of ints, where
@@ -381,6 +383,11 @@ class BehaviorClass(object):
         else:
             print(motifname)
             assert False, "??"
+
+        if return_as_number_instances:
+            x = list(dict_matches.items())
+            for k, v in x:
+                dict_matches[k] = len(v)
 
         return dict_matches
 
@@ -525,7 +532,6 @@ class BehaviorClass(object):
         strokes_beh = self.extract_strokes()
         strokes_task = self.extract_strokes("task_after_alignsim")
         # idxs = self.Alignsim_taskstrokeinds_sorted
-        smat_sorted = self.Alignsim_simmat_sorted
         # strokes_task_aligned = [strokes_task[i] for i in idxs]
 
         # fig1, _ = D.plotMultStrokes([strokes_beh, strokes_task_aligned], number_from_zero=True) # plot, crude, shwoing task after alignemnt.
@@ -533,12 +539,16 @@ class BehaviorClass(object):
             titles=["beh", "task"],
             plotkwargs = {"number_from_zero":True}) # plot, crude, shwoing task after alignemnt.
 
-        fig2 = plt.figure()
-        plt.imshow(smat_sorted, cmap="gray_r", vmin=0, vmax=1)
-        plt.colorbar()
-        plt.xlabel("task stroke inds")
-        plt.ylabel("beh stroke inds")
-        plt.title("after sorting task strokes")
+        if hasattr(self, "Alignsim_simmat_sorted"):
+            fig2 = plt.figure()
+            smat_sorted = self.Alignsim_simmat_sorted
+            plt.imshow(smat_sorted, cmap="gray_r", vmin=0, vmax=1)
+            plt.colorbar()
+            plt.xlabel("task stroke inds")
+            plt.ylabel("beh stroke inds")
+            plt.title("after sorting task strokes")
+        else:
+            fig2 = None
         
         return fig1, fig2
 
@@ -563,14 +573,15 @@ class BehaviorClass(object):
 
 
     def alignsim_find_motif_in_beh_wildcard(self, motifname, motifparams={}, 
-            list_beh_mask=None):
+            list_beh_mask=None, return_as_number_instances=False):
         """ Helper to search for a kind of motif (flexibly) within datsegs. 
         The most abstract, since will automatically generate many specific motifs,
         as many as needed.
         """
         tokens = self.alignsim_extract_datsegs()
         return self._find_motif_in_beh_wildcard(tokens, motifname, motifparams, 
-            list_beh_mask)
+            list_beh_mask,return_as_number_instances=return_as_number_instances)
+
 
     #################################### MOTIFS 
     def motif_shorthand_name(self, motif_kind, motif_params):

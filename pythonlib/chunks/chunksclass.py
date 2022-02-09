@@ -9,9 +9,68 @@ Can do the same for chunks, e.g., chunk1 --> chunk2.
 
 import numpy as np
 
+class ChunksClassList(object):
+    """ A single ChunksClass instance represents all ways of chunking this Task given an
+    expt and rule."""
+
+    def __init__(self, Task, expt=None, rule=None):
+        """
+        PARAMS:
+        - Task, TaskClass instnace
+        - expt, str, the experiment name.
+        - rule, str, the rule name
+        NOTE:
+        - expt and rule are used for deciding what constitites a "chunk". Leave them as None if
+        want to enter other method for deciding chunk
+        """
+        from .chunks import find_chunks_wrapper
+
+        self.Task = Task
+        self.Expt = expt
+        self.Rule = rule
+
+        # Extract all chunks, hierarhchies, etc
+        list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
+            expt, rule)
+
+        # - Make one ChunksClass instance for each chunk:
+        # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)
+        list_shapes = [s for s in Task.Shapes]
+        self.ListChunksClass = []
+        for chunks, hier, fixedorder in zip(list_chunks, list_hier, list_fixed_order):
+            C = ChunksClass(chunks, hier, fixedorder, task_stroke_labels=list_shapes)
+            self.ListChunksClass.append(C)
+
+
+    def remove_chunks_that_concat_strokes(self):
+        """ Remove chunks from ListChunksClass that concatenates strokes.
+        i.e, wherever C.Chunks has a chunk with multiple strokes
+        e.g., [[1,2], [0]].
+        RETURNS:
+        - modifies self.ListChunksClass
+        """
+
+        def _does_concat(C):
+            chunks = C.Chunks
+            for c in chunks:
+                if len(c)>1:
+                    return True
+            else:
+                return False
+
+        self.ListChunksClass = [C for C in self.ListChunksClass if not _does_concat(C)]
+
+    def print_summary(self):
+        """
+        """
+        for i, C in enumerate(self.ListChunksClass):
+            print("--- Chunk num:", i)
+            C.print_summary()
+
+
 
 class ChunksClass(object):
-    """docstring for ChunksClass"""
+    """ Represents a single way of chunking a specific task"""
     def __init__(self, chunks, hier, fixed_order, task_stroke_labels = None,
         assume_all_strokes_used=True):
         """
@@ -31,7 +90,6 @@ class ChunksClass(object):
         assumes that all ids are used, but cannot know for sure since not passing in how many
         strokes there were in the task.
         """
-
 
         self.Chunks = chunks
         self.Hier = hier
@@ -148,6 +206,25 @@ class ChunksClass(object):
             return out
         else:
             return list_list_indhier
+
+    ########################### GROUDNING/CONVERTING TO CONCRETE SEQUENCES
+    def search_permutations_chunks(self, ver="hier", max_perms=1000 ):
+        """
+        Returns all permutatoins of chunks or hierarchy
+        PARAMS:
+        - ver, str, either "chunks", or "hier", which one to return permutations of.
+        """
+        from .chunks import search_permutations_chunks
+
+        if ver=="chunks":
+            assert False, "currently only works for Hier, since Fixed Order is only defined for that. can easlity make one for CHunks"
+        elif ver=="hier":
+            return search_permutations_chunks(self.Hier, self.FixedOrder, max_perms=max_perms)
+        else:
+            assert False
+
+
+
 
     ########################### WORKING WITH LABELS
 
