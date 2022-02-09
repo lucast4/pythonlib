@@ -299,6 +299,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
     ### Rename things as monkey train test depenidng on expt
+    preprocess_task_train_test(D, expt)
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
@@ -310,6 +311,24 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("SCORE_COL_NAMES", SCORE_COL_NAMES)
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
+
+
+def preprocess_task_train_test(D, expt):
+    """ Clean up naming of tasks as train or test
+    in the monkey_train_or_test key of D.Dat. Makes sure that all rows have either
+    "train" or "test" for this column.
+    RETURNS:
+    - modifies D.Dat
+    """
+
+    if expt in ["gridlinecircle"]:
+        # train were all random tasks, test were all fixed.
+        key = "random_task"
+        list_train = [True]
+        list_test = [False]
+        D.analy_reassign_monkeytraintest(key, list_train, list_test)
+    else:
+        assert False, "code it"
 
 
 def preprocess_dates(D, groupby, animal, expt, nmin = 5, return_filtered_dataset=False,
