@@ -30,8 +30,9 @@ class ChunksClassList(object):
         self.Rule = rule
 
         # Extract all chunks, hierarhchies, etc
+        use_baseline_if_dont_find = True # e..g, for lolli.
         list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
-            expt, rule)
+            expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
 
         # - Make one ChunksClass instance for each chunk:
         # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)
@@ -239,3 +240,25 @@ class ChunksClass(object):
         print("Fixed Order:", self.FixedOrder)
         print("list labels/shapes:", self.Labels)
         
+
+##### FAKE CHUNKS
+def generate_dummy_chunksclass():
+    """ Useful for debugging
+    """
+
+    # Different kinds of chunks
+
+    # hier = [1,2,3]
+    # fixed_order = {0:False, 1:[False, False, False]}
+
+    # hier = [[1,2,3]]
+    # fixed_order = {0:False, 1:[False]}
+
+    # hier = [[1,2], [3]]
+    # fixed_order = {0:False, 1:[False, False]}
+
+    C = ChunksClass(chunks, hier, fixed_order)
+    C.print_summary()
+    display(C.search_permutations_chunks())
+
+    return C

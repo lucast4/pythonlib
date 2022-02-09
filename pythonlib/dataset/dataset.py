@@ -4650,6 +4650,10 @@ class Dataset(object):
         - scores_sub, inds_sub, same length subsamples.
         """
 
+        if isinstance(scores, pd.core.series.Series):
+            scores = scores.tolist()
+            # or else the indices will mess up sorting
+
         if isinstance(scores, list):
             scores = np.asarray(scores)
         assert isinstance(inds, list)
@@ -4686,6 +4690,7 @@ class Dataset(object):
             assert False, "get random, then sort."
         else:
             assert False
+
         return scores_sub, inds_sub
 
 

@@ -307,7 +307,8 @@ class BehaviorClass(object):
 
 
     def _find_motif_in_beh_wildcard(self, list_beh, motifname, motifparams={}, 
-        list_beh_mask=None, return_as_number_instances=False):
+        list_beh_mask=None, return_as_number_instances=False, 
+        force_no_shared_tokens_across_motifs=False, force_no_shared_tokens_across_motifs_usealltokens=False):
         """ More flexible way to find motifs, such as "a circle repeated N times" where 
         N is wildcard so can be anything (or with constraint). Is the most abstract method.
         PARAMS:
@@ -316,12 +317,53 @@ class BehaviorClass(object):
         - motifparams, dict of params, flexible and depends on motifname
         - return_as_number_instances, bool (False), return in format of number of occurances found, 
         instaed of the list of instanc indices.
+        - force_no_shared_tokens_across_motifs, (False), maeks sure motifs don't share toekns. PRoblem:
+        if True, then can lead to undercounting, e.g, if there really are two lollis (l c l c) might only 
+        keep the midlde one (cl) thereby undercounting (1 instead of 2). This is turned on for cases where
+        it must be (e;..g repeats)
+        - force_no_shared_tokens_across_motifs_usealltokens, see inside code
         RETURNS:
         - dict, where keys will depend on motifname, but generally reflect different subkinds of motifname.
         e.g., for repeats will be different length repeats. values are always lists of lists of ints, where
         ints are the indices.
+        NOTE:
+        - by default ensures that no tokens are reused across different keys in dict. e.g., 
+        a two different lollis must use different tokens. does this by keeping matches that are
+        found later.
         """
         dict_matches = {}
+
+        def _is_in(match, key, use_all_tokens_in_match=force_no_shared_tokens_across_motifs_usealltokens):
+            """
+            Remove previous found matches (stored in dict_matches) 
+            if they use the same tokens as in match
+            Returns True if match is a subset of one of the dict_matches in the list 
+            of dict_matches for key key
+            - match, list of ints
+            - key, key into dict_matches. e.g., could be int, num repeats
+            - use_all_tokens_in_match, bool, if True, the says match has been used
+            (True) by searching that all tokens in match are subset of a previously found
+            token. If False, then only needs this to apply for one token in match
+            NOTE:
+            e.g., 
+            - match = [1,2]
+            - dict_matches[n] = [[1,2,3], [7,8,9]]
+            Then returns True
+            """
+            for match_check in dict_matches[key]:
+                if use_all_tokens_in_match:
+                    if all([m in match_check for m in match]):
+                        return True
+                else:
+                    if any([m in match_check for m in match]):
+                        return True                    
+            return False
+
+        def _remove_motifs_share_tokens(dict_matches, key_this):
+            for key_prev in dict_matches.keys():
+                if key_prev != key_this:
+                    dict_matches[key_prev] = [match for match in dict_matches[key_prev] if not _is_in(match, key_this)]
+            return dict_matches
 
         if motifname=="repeat":
             # find all cases of repeats of the same shape. will make sure doesnt take the same 
@@ -331,6 +373,7 @@ class BehaviorClass(object):
             shape = motifparams["shape"] # e..g, circle
             nmin = motifparams["nmin"] # min num repeats (inclusive)
             nmax = motifparams["nmax"] # max num repeats (inclusive)
+            force_no_shared_tokens_across_motifs = True
 
             # construct single token
             token = {shapekey:shape}
@@ -343,28 +386,13 @@ class BehaviorClass(object):
                 list_matches = self._find_motif_in_beh(list_beh, motif, list_beh_mask)
 
                 # store list matches
-                dict_matches[n] = list_matches
+                key_this = n
+                dict_matches[key_this] = list_matches
+
 
                 # remove previous found matches if they use the same tokens.
-                def _is_in(match, n):
-                    """
-                    Returns True if match is a subset of one of the dict_matches in the list 
-                    of dict_matches for repeat length n
-                    - match, list of ints
-                    - n, int, num repeats
-                    e.g., 
-                    - match = [1,2]
-                    - dict_matches[n] = [[1,2,3], [7,8,9]]
-                    Then returns True
-                    """
-                    for match_check in dict_matches[n]:
-                        if all([m in match_check for m in match]):
-                            return True
-                    return False
-
-                if n>nmin:
-                    nprev = n-1
-                    dict_matches[nprev] = [match for match in dict_matches[nprev] if not _is_in(match, n)]
+                if force_no_shared_tokens_across_motifs:
+                    dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
 
         elif motifname=="lolli":
             # Find all the lollis, which means all cases of circle to line or line to circle, in any
@@ -374,11 +402,20 @@ class BehaviorClass(object):
             list_orientation = ["up", "down", "left", "right"]
             list_first_shape = ["circle", "line"]
 
+            key_prev = None
             for o in list_orientation:
                 for s in list_first_shape:
                     par = {"orientation":o, "first_shape":s}
                     m = self.alignsim_find_motif_in_beh_bykind("lolli", par)
-                    dict_matches[(o, s)] = m
+
+                    key_this = (o,s)
+                    dict_matches[key_this] = m
+
+                    # Remove previous lollis that have any overlap with the current
+                    # - go thru all previous keys
+                    if force_no_shared_tokens_across_motifs:
+                        dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
+                        
 
         else:
             print(motifname)
