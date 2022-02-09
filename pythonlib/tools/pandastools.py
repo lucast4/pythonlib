@@ -536,7 +536,8 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     as a separate column. (e.g., if index=[a, b], then a and b will be columns in output.)
     - columns, generally keep this length 1, easy to understand. if len >1, then will be hierarchical 
     columns
-    - values, naems of values, list, is fine to input multiple.
+    - values, naems of values, list, is fine to input multiple. will be hierarhcial. can index into the output
+    df as df[col1][col2]...
     - flatten_col_names, if output is hierarchical, will flatten to <val>-<col1>-<col2>.., if 
     where col1, 2, ... are the items in columsn (if it is a list)
     RETURNS:
