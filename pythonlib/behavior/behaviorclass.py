@@ -560,7 +560,6 @@ class BehaviorClass(object):
 
         return datsegs
 
-
     def alignsim_plot_summary(self):
         """Plot results of alignments
         """
@@ -570,6 +569,7 @@ class BehaviorClass(object):
         strokes_task = self.extract_strokes("task_after_alignsim")
         # idxs = self.Alignsim_taskstrokeinds_sorted
         # strokes_task_aligned = [strokes_task[i] for i in idxs]
+        strokes_task_orig =  self.extract_strokes("task")
 
         # fig1, _ = D.plotMultStrokes([strokes_beh, strokes_task_aligned], number_from_zero=True) # plot, crude, shwoing task after alignemnt.
         fig1, _ = D.plotMultStrokesByOrder([strokes_beh, strokes_task],
