@@ -4,7 +4,7 @@ import pickle5 as pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.pandastools import applyFunctionToAllRows
-import torch
+# import torch
 import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
@@ -4302,13 +4302,13 @@ class Dataset(object):
         """
         import random
 
-        if len(idxs)==0:
-            return
-
         if isinstance(idxs, int):
             N = len(self.Dat)
             k = idxs
             idxs = random.sample(range(N), k=k)
+
+        if len(idxs)==0:
+            return
 
         if nrand is not None:
             if nrand < len(idxs):
