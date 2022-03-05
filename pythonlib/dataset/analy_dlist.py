@@ -129,6 +129,10 @@ def concatDatasets(Dlist):
 
     # Check consisitency
     Dnew._check_consistency()
+
+    # do cleanup?
+    Dnew._cleanup()
+    
     return Dnew
 
 

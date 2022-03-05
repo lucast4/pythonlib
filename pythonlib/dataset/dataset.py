@@ -87,7 +87,12 @@ class Dataset(object):
         --- "mult", allows multiple. if want animal or expt to 
         - rule, some datasets defined by a "rule". To skip, pass in "" or None
         NOTE: for animal, expt, or rule, can pass in lists of strings. Must use ver="mult"
+        MOST COMMON USAGE:
+            D = Dataset([])
+            D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist), where rulelist is 
+            list of strings.
         """
+
         if rule is None:
             rule = ""
 
@@ -518,42 +523,53 @@ class Dataset(object):
         - redo_cleanup, useful since some cleanup items require that tasks are already loaded.
         RETURN:
         - self.Dat has new column called Task
-        NOTE: fails if any row is not found.
+        NOTE:
+        - works even if multiple rules (i.e, multiple datasets loaded together, each correpsonding to a 
+        metadat)
         """
         from pythonlib.tools.expttools import findPath
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
         if convert_coords_to_abstract==False:
             assert reinitialize_taskobjgeneral==True, "otherwise convert_coords_to_abstract does nothing"
-        assert len(self.Metadats)==1, "only works for single datasets"
-        # Load tasks
-        a = self.animals()
-        e = self.expts()
-        r = self.Metadats[0]["rule"]
-        # print(self.Metadats[0])
-        # assert False
-        # print(r)
+        # assert len(self.Metadats)==1, "only works for single datasets"
 
-        if len(a)>1 or len(e)>1:
-            assert False, "currently only works if single animal/ext dataset. can modify easily"
+        # a = self.animals()
+        # e = self.expts()
+        # if len(a)>1 or len(e)>1:
+        #     assert False, "currently only works if single animal/ext dataset. can modify easily"
 
-        # Find path, load Tasks
-        if len(r)>0:
-            sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-{r}-all"
-        else:
-            sdir = f"/data2/analyses/database/TASKS_GENERAL/{a[0]}-{e[0]}-all"
+        # Pre-extract all tasks across all medatats (i.e., rules)
+        TasksDict = {}
+        for idx, M in self.Metadats.items():
+            
+            # Load tasks
+            r = M["rule"]
+            a = M["animal"]
+            e = M["expt"]
 
-        pathlist = findPath(sdir, [], "Tasks", "pkl")
-        if len(pathlist)!=1:
-            print(pathlist)
-            assert False
-        # assert len(pathlist)==1
-        with open(pathlist[0], "rb") as f:
-            Tasks = pickle.load(f)
+            # Find path, load Tasks
+            if len(r)>0:
+                sdir = f"/data2/analyses/database/TASKS_GENERAL/{a}-{e}-{r}-all"
+            else:
+                sdir = f"/data2/analyses/database/TASKS_GENERAL/{a}-{e}-all"
+
+            # Load the tasks
+            pathlist = findPath(sdir, [], "Tasks", "pkl")
+            if len(pathlist)!=1:
+                print(pathlist)
+                assert False
+            # assert len(pathlist)==1
+            with open(pathlist[0], "rb") as f:
+                Tasks = pickle.load(f)
+
+            # store tasks
+            TasksDict[idx] = Tasks
 
         # Align tasks with dataset
-        def _get_task(Tasks, trialcode):
-            tmp = [T["Task"] for T in Tasks if T["trialcode"]==trialcode]
+        def _get_task(trialcode, metadat_idx):
+            Tasksthis = TasksDict[metadat_idx]
+            tmp = [T["Task"] for T in Tasksthis if T["trialcode"]==trialcode]
             if len(tmp)==0:
                 assert False, "no found"
             if len(tmp)>1:
@@ -562,7 +578,8 @@ class Dataset(object):
 
         def F(x):
             trialcode = x["trialcode"]
-            T = _get_task(Tasks, trialcode)
+            metadat_idx = x["which_metadat_idx"]
+            T = _get_task(trialcode, metadat_idx)
 
             # Reinitalize tasks
             if reinitialize_taskobjgeneral:
@@ -4373,6 +4390,12 @@ class Dataset(object):
 
             # Plot
             fig= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left")
+
+        elif color_by=="order":
+            # Color strokes so that gradient of colors based on rank number.
+            fig, axes = self.plotMultStrokesByOrder(strokes_list, ncols, titles, naked_axes, 
+                add_stroke_number=add_stroke_number)
+            return fig, axes
 
         elif color_by=="speed":
             # instantaneuos speed
