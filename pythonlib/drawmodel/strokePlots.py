@@ -229,7 +229,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         each_stroke_separate=True
     
     if len(strokes)==0:
-        print("[pythonlib/plotDatStrokes] EMPTY STROKES - not plotting")
+        # print("[pythonlib/plotDatStrokes] EMPTY STROKES - not plotting")
+        formatDatStrokesPlot(ax, naked_axes=naked)
         return 
         
     from pythonlib.tools.stroketools import fakeTimesteps, strokesInterpolate

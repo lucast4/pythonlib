@@ -513,7 +513,8 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                    origin="lower_left", max_n_per_grid=None, 
                    col_labels = None, row_labels=None, tight=True,
                    aspect=0.8, ncols=6, titles=None, naked_axes=False, 
-                   titles_on_y=False, return_axes =False, fig_axes=None):
+                   titles_on_y=False, return_axes =False, fig_axes=None,
+                   xlabels = None):
     """ wrapper to plot each datapoint at a given
     col and row.
     INPUT:
@@ -532,10 +533,14 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     - clean_axes, then no x or y labels.
     - fig_axes, can pass in axes, but must be in exact shape expected given the other input params.
     (fig, axes)
+    - xlabels, list of strings, same len as df, for x axis labels.
     RETURNS:
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
     """
+
+    if xlabels is not None:
+        tight = False # or else cannot see
 
     if titles is not None:
         assert isinstance(titles, list)
@@ -553,18 +558,30 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     assert min(rows)==0, "if not, messes up plotting of titles"
     assert min(cols)==0
 
+    if xlabels is None:
+        xlabels = [None for _ in range(len(data))]
+
+    # Package all variables that should not be broken apart
+    allvars = [[d, r, c, xl] for d, r, c, xl in zip(data, rows, cols, xlabels)]
+    def unpack(allvars):
+        data = [t[0] for t in allvars]
+        rows = [t[1] for t in allvars]
+        cols = [t[2] for t in allvars]
+        xlabels = [t[3] for t in allvars]
+        return data, rows, cols, xlabels
+
     if max_n_per_grid is not None:
         assert isinstance(max_n_per_grid, int)
 
         # then shuffle
         import random
-        tmp = [[d, r, c] for d, r, c in zip(data, rows, cols)]
-        random.shuffle(tmp)
-        data = [t[0] for t in tmp]
-        rows = [t[1] for t in tmp]
-        cols = [t[2] for t in tmp]
+        # tmp = [[d, r, c] for d, r, c in zip(data, rows, cols)]
+        random.shuffle(allvars)
+        data, rows, cols, xlabels = unpack(allvars)
+        # data = [t[0] for t in tmp]
+        # rows = [t[1] for t in tmp]
+        # cols = [t[2] for t in tmp]
 
-    
     nr = int(max(rows)+1)
     nc = int(max(cols)+1)
     
@@ -585,7 +602,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     for col, row in zip(cols, rows):
         done[(row, col)] = 0
 
-    for i, (dat, col, row) in enumerate(zip(data, cols, rows)):
+    for i, (dat, col, row, xl) in enumerate(zip(data, cols, rows, xlabels)):
         if max_n_per_grid is not None:
             if done[(row, col)]==max_n_per_grid:
                 continue
@@ -594,6 +611,9 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         plotfunc(dat, ax)
 
         done[(row, col)] += 1
+
+        if xl is not None:
+            ax.set_xlabel(xl)
 
         if titles is not None:
             if isinstance(titles[i], str):

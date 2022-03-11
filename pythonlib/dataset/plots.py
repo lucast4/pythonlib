@@ -8,13 +8,15 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
     col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
-    max_cols = 40, max_rows=40, plot_task=True):
+    max_cols = 40, max_rows=40, plot_task=True, xlabels = None):
     """ in each grid position, plots a single trial; (e.. strokes)
     df must have two columns, row and col, which indicate where to plot each
     trial.
     by default, top-left is 0,0
     INPUTS:
     - strokes_by_order, then colors strokes by ordinal (from blue to pink, based on "cool")
+    - xlabels, list of strings, same len as df, for x axis labels. Useful since y axis is used for
+    labeleing row, and titles are used for labeling columns.
     RETURNS:
     - figbeh, figtask
     NOTES:
@@ -46,7 +48,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
                 force_onsets_same_col_as_strokes=True, naked=True)
         
     figbeh = plotGridWrapper(strokeslist, plotfuncbeh, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
-        col_labels = col_labels, row_labels=row_labels)
+        col_labels = col_labels, row_labels=row_labels, xlabels=xlabels)
 
 
     # Also plot tasks
@@ -64,7 +66,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
 def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True):
     """ [GOOD] flexible helper, can choose what variable to group by.
     INPUTS:
     - row_group and col_group are what variable to group trials by along rows or columns. e..g,
@@ -74,10 +76,15 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
     ----- "trial" in which case rows/columns will be separte trials, generally in chron order.
     ----- "trial_shuffled" shuffles within level. useful if too many trials.
     - row_levels, col_levels, list of levels, where if None, then will auto get all levels. 
+    - xlabel_trialcode, bool (True), on x axis labels each trial's trialcode. If on, then cannot make plot
+    tight (since will not see the trialcode).
     """
     from pythonlib.tools.pandastools import filterPandas
 
     dfthis = D.Dat
+
+    if strokes_by_order:
+        plotkwargs["strokes_by_order"] = True
 
     def _assign_row_col_inds(dfthis, group, levels, new_col_name, other_group=None):
         # If give levels, and if not covers all trials, then will give uncovered trials -1.
@@ -87,7 +94,8 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
             from pythonlib.tools.pandastools import append_col_with_index_in_group
             dfthis = append_col_with_index_in_group(dfthis, other_group, colname = new_col_name,
                 randomize = group=="trial_shuffled")
-            labels = range(0, max(dfthis[new_col_name]))
+            labels = range(0, max(dfthis[new_col_name])+1)
+            trialcode_list = dfthis["trialcode"].to_list()
         else:
             if levels is None:
                 levels = sorted(dfthis[group].unique().tolist())
@@ -107,10 +115,13 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
 
             dfthis = applyFunctionToAllRows(dfthis, mapper, new_col_name)
             labels = levels
-        return dfthis, labels
+            trialcode_list = dfthis["trialcode"].to_list()
 
-    dfthis, row_labels = _assign_row_col_inds(dfthis, row_group, row_levels, "row", col_group)
-    dfthis, col_labels = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
+        return dfthis, labels, trialcode_list
+
+    dfthis, row_labels, trialcode_list_1 = _assign_row_col_inds(dfthis, row_group, row_levels, "row", col_group)
+    dfthis, col_labels, trialcode_list_2 = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
+    assert trialcode_list_1 == trialcode_list_2
 
     # if labels too long, prune
     col_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in col_labels]
@@ -122,8 +133,15 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
 
     # col_labels = 
 
+    # print(col_labels)
+    # print(row_labels)
+    # print(dfthis["trial"])
+    # assert False
+
+    xlabels = trialcode_list_1 if xlabel_trialcode else None
+    
     figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, plotfuncbeh=plotfuncbeh, 
-        col_labels=col_labels, row_labels=row_labels,
+        col_labels=col_labels, row_labels=row_labels, xlabels = trialcode_list_1,
         max_cols=max_cols, max_rows=max_rows, **plotkwargs)
 
     return figbeh, figtask
