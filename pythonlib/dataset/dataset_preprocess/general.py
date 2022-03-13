@@ -131,6 +131,20 @@ def _groupingParams(D, expt):
             assert False
 
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
+    elif expt=="chunkbyshape1":
+        animal = D.animals()
+        if len(animal)>1:
+            assert False, "params different for each animal.."
+        else:
+            animal = animal[0]
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["rule1", "rule2"]
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
+
     else:
         print(expt)
         assert False
@@ -321,7 +335,7 @@ def preprocess_task_train_test(D, expt):
     - modifies D.Dat
     """
 
-    if expt in ["gridlinecircle"]:
+    if expt in ["gridlinecircle", "chunkbyshape1"]:
         # train were all random tasks, test were all fixed.
         key = "random_task"
         list_train = [True]

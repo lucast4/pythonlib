@@ -747,6 +747,7 @@ class Dataset(object):
             elif x["taskgroup"] in ["G2", "G3", "G4", "test_fixed", "test_random"]:
                 return "test"
             elif x["taskgroup"] in ["undefined"]:
+                # Not sure yet. Modify this later in postprocessing
                 return "undefined"
             else:
                 print(x)
@@ -4350,6 +4351,21 @@ class Dataset(object):
             titles = self.Dat.iloc[idxs]["trialcode"].tolist()
 
         return strokes_list, idxs, titles
+
+    def plotMultTrials2(self, idxs, which_strokes="strokes_beh", nrand=None,
+            titles = None, add_stroke_number=True, SIZE=2.5, plotkwargs={}):
+        """ V2, which uses plotMultStrokes
+        """
+
+        strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
+            nrand=nrand, titles=titles)
+        trialcodes =  self.Dat.iloc[idxs]["trialcode"].tolist()
+
+        is_task = which_strokes=="strokes_task"
+
+        return self.plotMultStrokes(strokes_list, titles=titles, add_stroke_number=add_stroke_number,
+            SIZE=SIZE, is_task=is_task, **plotkwargs)
+
 
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
         ncols = 5, titles=None, naked_axes=False, add_stroke_number=True, centerize=False, 

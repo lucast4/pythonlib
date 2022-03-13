@@ -67,7 +67,7 @@ def writeDictToYaml(dictdat, path):
 
     with open(path, 'w') as f:
         # yaml.dump(dictdat, f, default_flow_style=False)
-        yaml.dump(dictdat, f)
+        yaml.dump(dictdat, f, sort_keys=False)
 
 def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
