@@ -1227,11 +1227,12 @@ def get_task_probe_info(task):
         p = 0
         saved_setnum = []
     else:
+        INFO = task["TaskNew"]["Task"]["info"]
         try:
-            if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
+            if "prototype" not in INFO.keys():
                 p = 0
             else:
-                p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
+                p = int(INFO["prototype"][0][0])
         except Exception as err:
             print(err)
             print(task)
@@ -1239,13 +1240,26 @@ def get_task_probe_info(task):
             print("This is old task version. how to handle?")
             assert False
 
-        if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
-            if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
+        if "saved_setnum" in INFO.keys():
+            if len(INFO["saved_setnum"])==0:
                 saved_setnum = None
             else:    
-                saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
+                saved_setnum = int(INFO["saved_setnum"][0][0])
         else:
             saved_setnum = None
+
+        # Also get saved indices for this set (the real ones, giving a unique id)
+        if "load_old_set_setnum" in INFO.keys():
+            # Then this is 3/17/22 + . I saved this info now.
+            if len(INFO["load_old_set_setnum"])==0:
+                # Then this is not loaded old set.
+                saved_setnum = None
+                saved_inds = None
+                saved_ver = None
+            else:
+                saved_setnum = int(INFO["load_old_set_setnum"][0][0])
+                saved_inds = INFO["load_old_set_inds"][0]
+                saved_ver = INFO["load_old_set_ver"]
 
     # was this resynthesized?
     resynthesized = 0
