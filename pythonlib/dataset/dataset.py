@@ -920,7 +920,7 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
 
         # Collects across these dirs
-        SDIR_LIST = ["{base_dir}/database/", "{base_dir}/database/BEH"]
+        SDIR_LIST = [f"{base_dir}/database/", f"{base_dir}/database/BEH"]
 
         def _find(SDIR):
             pathlist = findPath(SDIR, [[animal, expt, rule]], "dat", ".pkl", True)
@@ -1563,7 +1563,7 @@ class Dataset(object):
 
         if "sdir" not in self.SFparams:
             ts = makeTimeStamp()
-            sdir = "{base_dir}/database/combined_strokfeats"
+            sdir = f"{base_dir}/database/combined_strokfeats"
             a = sorted(set(self.SF["animal"]))
             b = sorted(set(self.SF["expt"]))
             c = sorted(set([p["strokes_ver"] for p in self.SFparams["params_each_original_sf"]]))
@@ -1741,7 +1741,7 @@ class Dataset(object):
         - take_most_recent, then will allow if have multiple found paths by taking most recent.
         otherwise will raise error if get multiple.
         """
-        sdir = "{base_dir}/database/combined_strokfeats"
+        sdir = f"{base_dir}/database/combined_strokfeats"
         a = sorted(animals)
         b = sorted(expts)
         c = sorted(strokes)
@@ -3330,7 +3330,7 @@ class Dataset(object):
         OUT:
         - assigns scores to a new column, called "parser_post_{expt}_{mod}"
         """
-        SDIR = "{base_dir}/main/model_comp/planner"
+        SDIR = f"{base_dir}/main/model_comp/planner"
         sdir = f"{SDIR}/{model_id[0]}/dset_{self.identifier_string()}-vs-mod_{model_id[1]}"
         path = f"{sdir}/posterior_scores.pkl"
         with open(path, "rb") as f:
