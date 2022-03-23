@@ -9,6 +9,8 @@ import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 
+base_dir = "/Volumes/kdot/analyses"
+
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
     """
@@ -550,9 +552,9 @@ class Dataset(object):
 
             # Find path, load Tasks
             if len(r)>0:
-                sdir = f"/data2/analyses/database/TASKS_GENERAL/{a}-{e}-{r}-all"
+                sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-{r}-all"
             else:
-                sdir = f"/data2/analyses/database/TASKS_GENERAL/{a}-{e}-all"
+                sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-all"
 
             # Load the tasks
             pathlist = findPath(sdir, [], "Tasks", "pkl")
@@ -918,7 +920,7 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
 
         # Collects across these dirs
-        SDIR_LIST = ["/data2/analyses/database/", "/data2/analyses/database/BEH"]
+        SDIR_LIST = ["{base_dir}/database/", "{base_dir}/database/BEH"]
 
         def _find(SDIR):
             pathlist = findPath(SDIR, [[animal, expt, rule]], "dat", ".pkl", True)
@@ -1561,7 +1563,7 @@ class Dataset(object):
 
         if "sdir" not in self.SFparams:
             ts = makeTimeStamp()
-            sdir = "/data2/analyses/database/combined_strokfeats"
+            sdir = "{base_dir}/database/combined_strokfeats"
             a = sorted(set(self.SF["animal"]))
             b = sorted(set(self.SF["expt"]))
             c = sorted(set([p["strokes_ver"] for p in self.SFparams["params_each_original_sf"]]))
@@ -1739,7 +1741,7 @@ class Dataset(object):
         - take_most_recent, then will allow if have multiple found paths by taking most recent.
         otherwise will raise error if get multiple.
         """
-        sdir = "/data2/analyses/database/combined_strokfeats"
+        sdir = "{base_dir}/database/combined_strokfeats"
         a = sorted(animals)
         b = sorted(expts)
         c = sorted(strokes)
@@ -3328,7 +3330,7 @@ class Dataset(object):
         OUT:
         - assigns scores to a new column, called "parser_post_{expt}_{mod}"
         """
-        SDIR = "/data2/analyses/main/model_comp/planner"
+        SDIR = "{base_dir}/main/model_comp/planner"
         sdir = f"{SDIR}/{model_id[0]}/dset_{self.identifier_string()}-vs-mod_{model_id[1]}"
         path = f"{sdir}/posterior_scores.pkl"
         with open(path, "rb") as f:
