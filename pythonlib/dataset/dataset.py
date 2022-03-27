@@ -4363,8 +4363,9 @@ class Dataset(object):
 
         is_task = which_strokes=="strokes_task"
 
-        return self.plotMultStrokes(strokes_list, titles=titles, add_stroke_number=add_stroke_number,
+        fig, axes = self.plotMultStrokes(strokes_list, titles=titles, add_stroke_number=add_stroke_number,
             SIZE=SIZE, is_task=is_task, **plotkwargs)
+        return fig, axes, idxs
 
 
     def plotMultTrials(self, idxs, which_strokes="strokes_beh", return_idxs=False, 
@@ -4411,7 +4412,7 @@ class Dataset(object):
             # Color strokes so that gradient of colors based on rank number.
             fig, axes = self.plotMultStrokesByOrder(strokes_list, ncols, titles, naked_axes, 
                 add_stroke_number=add_stroke_number)
-            return fig, axes
+            return fig, axes, idxs
 
         elif color_by=="speed":
             # instantaneuos speed
@@ -4536,8 +4537,11 @@ class Dataset(object):
 
 
     def plotMultTrialsTimecourse(self, idxs, plotver="speed", which_strokes="strokes_beh", return_idxs=False, 
-        ncols = 5, titles=None, naked_axes=False, nrand=None, align_to="go_cue"):
+        ncols = 3, titles=None, naked_axes=False, nrand=None, align_to="go_cue"):
         """ Plot a grid of trials timecourses.
+        NOT FUNCTIONAL:
+        align_to
+
         """ 
  
         strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
@@ -4545,48 +4549,49 @@ class Dataset(object):
         if len(idxs)==0:
             return
 
+        if False:
+            for strokes in strokes_list:
+                try:
+                    assert strokes[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
+                    # assert strokes_list[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
+                except Exception as err:
+                    print(strokes)
+                    raise err
 
-        for strokes in strokes_list:
-            try:
-                assert strokes[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
-                # assert strokes_list[0][0,2]==0., "I made mistake, not actually aligning by 0 by default"
-            except Exception as err:
-                print(strokes)
-                raise err
+        if False:
+            if align_to=="go_cue":
+                # copy strokes.
+                strokes_list = [[s.copy() for s in strokes] for strokes in strokes_list] 
+                for ind, strokes in zip(idxs, strokes_list):
 
-        if align_to=="go_cue":
-            # copy strokes.
-            strokes_list = [[s.copy() for s in strokes] for strokes in strokes_list] 
-            for ind, strokes in zip(idxs, strokes_list):
+                    # get time from gocue to first touch
+                    motor = self.get_motor_stats(ind)
+                    x = motor["time_raise2firsttouch"] * 1000 # convert from s to ms.
 
-                # get time from gocue to first touch
-                motor = self.get_motor_stats(ind)
-                x = motor["time_raise2firsttouch"] * 1000 # convert from s to ms.
+                    if np.isnan(x):
+                        print("Here")
+                        print(x)
+                        print(ind)
+                        print(self.Dat.iloc[ind])
+                        assert False
+                    # add to all times
+                    # print(strokes)
+                    for s in strokes:
+                        s[:,2] += x
+                    # print(strokes)
+                    # assert False
 
-                if np.isnan(x):
-                    print("Here")
-                    print(x)
-                    print(ind)
-                    print(self.Dat.iloc[ind])
-                    assert False
-                # add to all times
-                # print(strokes)
-                for s in strokes:
-                    s[:,2] += x
-                # print(strokes)
-                # assert False
+                    # ME = Dthis.Dat.iloc[1]["motorevents"]
+                    # a = ME["ons"] - ME["raise"]
 
-                # ME = Dthis.Dat.iloc[1]["motorevents"]
-                # a = ME["ons"] - ME["raise"]
+                    # MT = Dthis.Dat.iloc[1]["motortiming"]
+                    # b = MT["time_raise2firsttouch"]
 
-                # MT = Dthis.Dat.iloc[1]["motortiming"]
-                # b = MT["time_raise2firsttouch"]
-
-                # assert a==b, "I forgot what my entries mean"
+                    # assert a==b, "I forgot what my entries mean"
 
         self.plotMultStrokesTimecourse(strokes_list, idxs, plotver, 
             return_idxs=return_idxs, ncols=ncols, 
-            titles=titles, naked_axes=naked_axes)
+            titles=titles, naked_axes=naked_axes, aspect=2)
 
 
 
