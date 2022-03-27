@@ -901,6 +901,8 @@ class TaskClass(object):
                 L = lines_good[0]
                 return L["affine"]
             else:
+                for l in lines_good:
+                    print(l)
                 assert len(lines_good)==1, "not yet coded for >1 lines, need to compose them"
             
 
@@ -963,6 +965,11 @@ class TaskClass(object):
         # print(len(lines_good))
         # print(lines_tform)
         # asfdsaf
+        # print('1')
+        # print(lines_obj)
+        # print(lines_tform)
+        # print(self)
+        # print('2')
         obj = _compare_to_primitive_templates(lines_obj)
         if len(lines_tform)>0:
             tform = _compose_transformations(lines_tform)
@@ -1223,59 +1230,6 @@ def get_task_probe_info(task):
     else:
         co = task["constraints_to_skip"]
 
-    if "TaskNew" not in task.keys():
-        p = 0
-        saved_setnum = []
-    else:
-        try:
-            if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
-                p = 0
-            else:
-                p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
-        except Exception as err:
-            print(err)
-            print(task)
-            print(task['TaskNew'])
-            print("This is old task version. how to handle?")
-            assert False
-
-        if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
-            if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
-                saved_setnum = None
-            else:    
-                saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
-        else:
-            saved_setnum = None
-
-    # was this resynthesized?
-    resynthesized = 0
-    rpath = None
-    rtrial = None
-    rsetnum = None
-    rsetname = None
-    if "savedTaskSet" in task.keys():
-        if len(task["savedTaskSet"])>0:
-            if task["savedTaskSet"]["reloaded"][0][0]==1:
-                resynthesized = 1
-                rpath = task["savedTaskSet"]["path"]
-                rtrial = int(task["savedTaskSet"]["trial"][0][0])
-
-                idx = task["savedTaskSet"]["path"].find("set")
-                rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
-                rsetname = task["savedTaskSet"]["path"][:idx-1]
-    else:
-        resynthesized = 0
-        rpath = None
-        rtrial = None
-        rsetnum = None
-        rsetname = None
-
-
-    if "feedback_ver_prms" not in task.keys():
-        fp = None
-    else:
-        fp = task["feedback_ver_prms"]
-
     # === get task number.
     # This identifies task if is prototype or savedsetnum.
     # This may not identify, if is random task, or resynthesized task.
@@ -1314,6 +1268,82 @@ def get_task_probe_info(task):
         # then is good
         tasknum = int(taskstr[idx+len(taskcat)+1:])
 
+
+    if "TaskNew" not in task.keys():
+        p = 0
+        saved_setnum = []
+    else:
+        INFO = task["TaskNew"]["Task"]["info"]
+        try:
+            if "prototype" not in INFO.keys():
+                p = 0
+            else:
+                p = int(INFO["prototype"][0][0])
+        except Exception as err:
+            print(err)
+            print(task)
+            print(task['TaskNew'])
+            print("This is old task version. how to handle?")
+            assert False
+
+        if "saved_setnum" in INFO.keys():
+            if len(INFO["saved_setnum"])==0:
+                saved_setnum = None
+            else:    
+                saved_setnum = int(INFO["saved_setnum"][0][0])
+        else:
+            saved_setnum = None
+
+        # NEwer vesrion, directly saving load old set
+        if "load_old_set_setnum" in INFO.keys():
+            los_setname = INFO["load_old_set_ver"]
+            los_setnum = INFO["load_old_set_setnum"][0]
+            los_setinds = INFO["load_old_set_inds"][0]
+            if "load_old_set_indthis" in INFO.keys():
+                los_setindthis =  INFO["load_old_set_indthis"][0]
+                # assert los_setindthis==los_setinds[tasknum]
+                tasknum = los_setindthis
+            else:
+                los_setindthis = []
+
+            # Replace old indices
+            assert saved_setnum==los_setnum
+        else:
+            los_setname = []
+            los_setnum = []
+            los_setinds = []
+            los_setindthis = []
+
+    # was this resynthesized?
+    resynthesized = 0
+    rpath = None
+    rtrial = None
+    rsetnum = None
+    rsetname = None
+    if "savedTaskSet" in task.keys():
+        if len(task["savedTaskSet"])>0:
+            if task["savedTaskSet"]["reloaded"][0][0]==1:
+                resynthesized = 1
+                rpath = task["savedTaskSet"]["path"]
+                rtrial = int(task["savedTaskSet"]["trial"][0][0])
+
+                idx = task["savedTaskSet"]["path"].find("set")
+                rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
+                rsetname = task["savedTaskSet"]["path"][:idx-1]
+    else:
+        resynthesized = 0
+        rpath = None
+        rtrial = None
+        rsetnum = None
+        rsetname = None
+
+
+    if "feedback_ver_prms" not in task.keys():
+        fp = None
+    else:
+        fp = task["feedback_ver_prms"]
+
+
     probe = {
         "probe":task["probe"][0][0], 
         "feedback_ver":task["feedback_ver"], 
@@ -1327,6 +1357,9 @@ def get_task_probe_info(task):
         "resynthesized_trial":rtrial, 
         "resynthesized_setnum":rsetnum, 
         "resynthesized_setname":rsetname, 
-        }
+        "los_setname": los_setname,
+        "los_setnum": los_setnum,
+        "los_setinds": los_setinds,
+        "los_setindthis":los_setindthis}
 
     return probe
