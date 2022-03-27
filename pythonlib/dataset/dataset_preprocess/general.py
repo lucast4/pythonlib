@@ -131,7 +131,7 @@ def _groupingParams(D, expt):
             assert False
 
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
-    elif expt=="chunkbyshape1":
+    elif expt in ["chunkbyshape1", "chunkbyshape1b"]:
         animal = D.animals()
         if len(animal)>1:
             assert False, "params different for each animal.."
@@ -142,8 +142,21 @@ def _groupingParams(D, expt):
         plantime_cats = {}
         features_to_remove_nan =  []
         features_to_remove_outliers = []
-        grouping_levels = ["rule1", "rule2"]
+        grouping_levels = ["horiz", "vert"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
+    elif expt in ["chunkbyshape2", "chunkbyshape2b"]:
+        animal = D.animals()
+        if len(animal)>1:
+            assert False, "params different for each animal.."
+        else:
+            animal = animal[0]
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = ["horiz", "vert"]
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]     
 
     else:
         print(expt)
