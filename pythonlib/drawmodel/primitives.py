@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib
 import torch
 from scipy.ndimage import gaussian_filter as gf
-import cairo
+#import cairo
 from math import tan
 from math import pi
 from itertools import permutations

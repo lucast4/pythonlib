@@ -920,7 +920,7 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
 
         # Collects across these dirs
-        SDIR_LIST = [f"{base_dir}/database/", f"{base_dir}/database/BEH"]
+        SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH"]
 
         def _find(SDIR):
             pathlist = findPath(SDIR, [[animal, expt, rule]], "dat", ".pkl", True)
