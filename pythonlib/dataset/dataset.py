@@ -9,7 +9,7 @@ import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 
-base_dir = "/Volumes/kdot/analyses"
+base_dir = os.path.expanduser("~/data2/analyses")
 
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
