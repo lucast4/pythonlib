@@ -348,6 +348,14 @@ def preprocess_task_train_test(D, expt):
     - modifies D.Dat
     """
 
+    probe_list = []
+    for i in range(0, len(D.Dat["Task"])):
+        t = D.Dat.iloc[i]["Task"]
+        t_p = t.Params["input_params"]
+        probe_val = t_p.info_summarize_task()["probe"]
+        probe_list.append(probe_val)
+    D.Dat["probe"] = probe_list
+
     if expt in ["gridlinecircle", "chunkbyshape1"]:
         # train were all random tasks, test were all fixed.
         key = "random_task"
@@ -355,7 +363,7 @@ def preprocess_task_train_test(D, expt):
         list_test = [False]
         D.analy_reassign_monkeytraintest(key, list_train, list_test)
     else:
-        assert False, "code it"
+        D.analy_reassign_monkeytraintest("probe", [0], [1])
 
 
 def preprocess_dates(D, groupby, animal, expt, nmin = 5, return_filtered_dataset=False,
