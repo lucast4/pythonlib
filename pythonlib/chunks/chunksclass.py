@@ -13,7 +13,59 @@ class ChunksClassList(object):
     """ A single ChunksClass instance represents all ways of chunking this Task given an
     expt and rule."""
 
-    def __init__(self, Task, expt=None, rule=None):
+    def __init__(self, method, params):
+        """ Different ways of initializing this list of chunks
+        """
+
+        self.Task = None
+        self.Expt = None
+        self.Rule = None
+
+        if method=="task_entry":
+            # enter the TaskClass object directly. Here will search for all chunks
+            # based on set of rules (expt, rule)
+            self._init_task_entry(params["Task"], params["expt"], params["rule"])
+        elif method=="chunkslist_entry":
+            # Enter a list of lists, each outer list correspoding to a single way of chunking
+            # assumes no "chunking" but instead is using hierarchy.
+            # This is the way you would input PlanClass information saved into ml2 tasks
+            # i.e., see drawmodel.tasks
+            self._init_chunkslist_entry(params["chunkslist"], params["nstrokes"], params["shapes"])
+        else:
+            print(method)
+            print(params)
+            assert False, "code it"
+
+    def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None):
+        """ Enter list of chunks, inputed in chunkslist format.
+        PARAMS:
+        - chunkslist, chunkslist[0] = [name, hier, flips, color],
+        --- name, string
+        --- hier, list of list of ints (or like)
+         e.g.,, [['default',
+              [array([1., 2.]), array([3., 4.])],
+              [array([0., 0.]), array([0., 0.])],
+              {'color': [array([0.44048823, 0.47708101, 0.44188513]),
+                array([0.47163037, 0.65416502, 0.40344111])]}]]
+        - nstrokes, int, need this since needs to make chunks all single strokes.
+        - shapes, list of string or ints, categories for these shapes, same len as nstrokes
+        """
+
+        assert len(list_shapes)==nstrokes
+
+        self.ListChunksClass = []
+        chunks = [i for i in range(nstrokes)] # assume that no stroke chunking
+        for chunkthis in chunkslist:
+            hier = chunkthis[1]
+            flips = chunkthis[2]
+            fixed_order = None # uses default.
+            name = chunkthis[0]
+            C = ChunksClass(chunks, hier, fixed_order=fixed_order, 
+                task_stroke_labels=list_shapes, name=name, flips=flips)
+            self.ListChunksClass.append(C)
+
+
+    def _init_task_entry(self, Task, expt=None, rule=None):
         """
         PARAMS:
         - Task, TaskClass instnace
@@ -28,6 +80,7 @@ class ChunksClassList(object):
         self.Task = Task
         self.Expt = expt
         self.Rule = rule
+        self.ListChunksClass = []
 
         # Extract all chunks, hierarhchies, etc
         use_baseline_if_dont_find = True # e..g, for lolli.
@@ -37,7 +90,6 @@ class ChunksClassList(object):
         # - Make one ChunksClass instance for each chunk:
         # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)
         list_shapes = [s for s in Task.Shapes]
-        self.ListChunksClass = []
         for chunks, hier, fixedorder in zip(list_chunks, list_hier, list_fixed_order):
             C = ChunksClass(chunks, hier, fixedorder, task_stroke_labels=list_shapes)
             self.ListChunksClass.append(C)
@@ -72,8 +124,8 @@ class ChunksClassList(object):
 
 class ChunksClass(object):
     """ Represents a single way of chunking a specific task"""
-    def __init__(self, chunks, hier, fixed_order, task_stroke_labels = None,
-        assume_all_strokes_used=True):
+    def __init__(self, chunks, hier, fixed_order=None, task_stroke_labels = None,
+        assume_all_strokes_used=True, name=None, flips=None):
         """
         PARAMS:
         - chunks, list of list, like [[1 2], [0 3], [5]], meaing chunk 0 uses strokes 1 and 2...
@@ -85,17 +137,27 @@ class ChunksClass(object):
         be reordered, or remain fixed in order. e.g. {0: False, 1: [False, False, False]}, if 
         hier is [[1, 0], [3, 2], [5, 4]],
         means level0 is not fixed, and the items within the 3 chunks are also not fixed.
+        If None, then assumes both levels are allows to be reordered.
         - task_stroke_labels, list of ints or str, which are names to give to each task stroke. e.g..
         ["L", "C", ..] for line and circle.
         - assume_all_strokes_used, asserts that each task stroke id is used only once. 
         assumes that all ids are used, but cannot know for sure since not passing in how many
         strokes there were in the task.
+        - name, string name (useful if correspnd to a model, for eg)
+        - flips, same type as hier, says for each chunkstroke in hier, whether to flip (might not be used).
         """
 
         self.Chunks = chunks
         self.Hier = hier
-        self.FixedOrder = fixed_order
+        if fixed_order is None:
+            # Enter default. assume both levels can be reordered:
+            from .chunks import fixed_order_for_this_hier
+            self.FixedOrder = fixed_order_for_this_hier(hier)
+        else:
+            self.FixedOrder = fixed_order
         self.Labels = task_stroke_labels
+        self.Name = name
+        self.Flips = flips
 
         self._preprocess()
 
@@ -103,15 +165,35 @@ class ChunksClass(object):
     def _preprocess(self):
         """ run once
         """
+        import numpy as np
 
         # 1) no ints, make sure all items are lists.
         for i, c in enumerate(self.Chunks):
             if isinstance(c, int):
                 self.Chunks[i] = [c]    
+            elif isinstance(c, np.ndarray):
+                self.Hier[i] = [int(cc) for cc in c]
+            else:
+                assert isinstance(c[0], int)
         
         for i, c in enumerate(self.Hier):
             if isinstance(c, int):
-                self.Hier[i] = [c]    
+                self.Hier[i] = [c] 
+            elif isinstance(c, np.ndarray):
+                self.Hier[i] = [int(cc) for cc in c]
+            else:
+                assert isinstance(c[0], int)
+
+        if self.Flips is not None:
+            for i, c in enumerate(self.Flips):
+                if isinstance(c, int):
+                    self.Flips[i] = [c] 
+                elif isinstance(c, np.ndarray):
+                    self.Flips[i] = [int(cc) for cc in c]
+                else:
+                    assert isinstance(c[0], int)
+            for h,f in zip(self.Hier, self.Flips):
+                assert len(h)==len(f)
 
         # N task strokes
         chunks_flat = [c for C in self.Chunks for c in C]
@@ -234,11 +316,14 @@ class ChunksClass(object):
     def print_summary(self):
         """ quick printing of chunks, etc
         """
-
+        print("Name:", self.Name)
         print("Chunks:", self.Chunks)
         print("Hier:" , self.Hier)
         print("Fixed Order:", self.FixedOrder)
         print("list labels/shapes:", self.Labels)
+        if self.Flips is not None:
+            print("Flips:", self.Flips)
+
         
 
 ##### FAKE CHUNKS

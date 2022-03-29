@@ -148,20 +148,14 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
         def _fixed_order_for_this_hier(hier):
             if rule in ["baseline", "lolli"]:
                 # Order allows all reordering
-                fixed_order = {}
-                fixed_order[0] = False
-                fixed_order[1] = [False for _ in range(len(hier))]
+                fixed_order = fixed_order_for_this_hier(True, True)
             elif rule in ["circletoline", "linetocircle"]:
                 # Order only allows for reordering both hier levels.
-                fixed_order = {}
-                fixed_order[0] = True
-                fixed_order[1] = [False for _ in range(len(hier))]
+                fixed_order = fixed_order_for_this_hier(False, True)
             elif rule in ["alternate"]:
                 # becasue hier is a specific sequence for altenration
                 # e..g, hier = [0, 1, 2, 3]
-                fixed_order = {}
-                fixed_order[0] = True
-                fixed_order[1] = [True for _ in range(len(hier))]
+                fixed_order = fixed_order_for_this_hier(False, False)
             else:
                 assert False
             return fixed_order
@@ -745,6 +739,19 @@ def search_permutations_chunks(chunks_hier, fixed_order, max_perms=1000):
     for out in list_out:
         _check_is_proper_chunk(out)
     return list_out
+
+def fixed_order_for_this_hier(hier, top_level_allow_reorder=True, 
+        bottom_level_allow_reorder=True):
+    """ automaticlaly generate fixed_order for this hierarchy
+    PARAMS:
+    - hier, list of list of ints, e.g., [[1,2], [0]]
+    - top_level_allow_reorder, bottom_level_allow_reorder, bools, for whether
+    allow reorder.
+    """
+    fixed_order = {}
+    fixed_order[0] = not top_level_allow_reorder
+    fixed_order[1] = [not bottom_level_allow_reorder for _ in range(len(hier))]
+    return fixed_order
 
 
 # def search_permutations_chunks(chunks):
