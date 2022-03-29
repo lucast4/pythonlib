@@ -1296,18 +1296,24 @@ def get_task_probe_info(task):
 
         # NEwer vesrion, directly saving load old set
         if "load_old_set_setnum" in INFO.keys():
-            los_setname = INFO["load_old_set_ver"]
-            los_setnum = INFO["load_old_set_setnum"][0]
-            los_setinds = INFO["load_old_set_inds"][0]
-            if "load_old_set_indthis" in INFO.keys():
-                los_setindthis =  INFO["load_old_set_indthis"][0]
-                # assert los_setindthis==los_setinds[tasknum]
-                tasknum = los_setindthis
-            else:
-                los_setindthis = []
+            if len(INFO["load_old_set_setnum"])>0:
+                los_setname = INFO["load_old_set_ver"]
+                los_setnum = INFO["load_old_set_setnum"][0]
+                los_setinds = INFO["load_old_set_inds"][0]
+                if "load_old_set_indthis" in INFO.keys():
+                    los_setindthis =  INFO["load_old_set_indthis"][0]
+                    # assert los_setindthis==los_setinds[tasknum]
+                    tasknum = los_setindthis
+                else:
+                    los_setindthis = []
 
-            # Replace old indices
-            assert saved_setnum==los_setnum
+                # Replace old indices
+                assert saved_setnum==los_setnum
+            else:
+                los_setname = []
+                los_setnum = []
+                los_setinds = []
+                los_setindthis = []                
         else:
             los_setname = []
             los_setnum = []
