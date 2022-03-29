@@ -1,6 +1,7 @@
 """ stuff to do with tasks...
 specifically for tasks in monkeylogic
 """
+
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
 from pythonlib.chunks.chunks import chunk_strokes, chunks2parses
@@ -27,6 +28,8 @@ class TaskClass(object):
             assert False, "see Probedat.pd2strokes for how to get this."
         self.Strokes = self.Task["strokes"]
         self.Program = None
+        self.Objects = None
+        self.PlanDat = None
 
         if isinstance(task, dict):
             keys_to_check = ["x", "y", "stage"] # simply keys that are diagnostic of this being ml2 task
@@ -470,9 +473,14 @@ class TaskClass(object):
         return assignments
 
     ######################## PLOTS
-    def plotTaskOnAx(self, ax, plotkwargs = {}):
+    def plotTaskOnAx(self, ax=None, plotkwargs = {}):
         """ plot task on axes"""
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        import matplotlib.pyplot as plt
+
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
         strokes = self.Strokes
         
         plotkwargs["clean_unordered"] = True
@@ -558,25 +566,8 @@ class TaskClass(object):
         - line={'1': 'transform', '2': array([[0.]]), '3': array([[0.]]), '4': array([[0.]]), '5': array([[1.]]), '6': array([[1.]]), '7': 'trs'}
         OUTPUT:
         - line_list = ['transform', array(0.), array(0.), array(0.), array(1.), array(1.), 'trs']"""
-
-        def _f(x):
-            if isinstance(x, str):
-                return x
-            elif isinstance(x, np.ndarray):
-                return x.squeeze()
-            elif isinstance(x, dict):
-                # Then this is nested dict...
-                return self._program_line_dict2list(x)
-            else:
-                print(type(x))
-                assert False, "if this is dict, then you are looking at nested dict."
-        line_list = []
-        for i in range(len(line)):
-            idx = f"{i+1}"
-            val = _f(line[idx])
-            line_list.append(val)
-        return line_list
-
+        from pythonlib.tools.monkeylogictools import dict2list, dict2list2
+        return dict2list2(line)
 
     def program_extract(self, skip_if_already_done=True):
         """ Initial extraction of program into useful format.
@@ -982,6 +973,93 @@ class TaskClass(object):
             "tform":tform}
         
         return out
+
+    ####################### LATEST (FINAL) EXTRACTION OF OBJECTS/PLANS
+    # Supercedes previous code on programs extract.
+    # Here looks directly into "Plan" representation, which is the latest way that tasks
+    # are defined in matlab side.
+
+    def planclass_extract_all(self):
+        """ Wrapper to extract all planclass info.
+        NOTE: if old version (no planclass) should fail gracefully, return None
+        RETURNS:
+        - dat, dict holding all plan things, including processed.
+        - self.PlanDat will be replaced with dat
+        """
+        from pythonlib.tools.monkeylogictools import dict2list2, dict2list
+        
+        Plan = self.get_tasknew()["Plan"]
+
+        dat = {}
+
+        # Extract things
+        _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
+        # _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
+        for k in _list_keys:
+            dat[k] = dict2list2(Plan[k])
+
+        # Extract useful summaries
+        # - (Base) prims and their locations
+        # - Chunks
+        # from pythonlib.chunks import ChunksClassList
+        # CL = ChunksClassList():
+        # dat["ChunksList"]
+        # for chunk in dat["ChunksList"]:
+
+        # Extract shapes and their params
+        from pythonlib.primitives.primitiveclass import PrimitiveClass
+        dat["shapes"] = [x[0] for x in dat["Prims"]]
+        dat["primitives"] = []
+        for prim, loc in zip(dat["Prims"], dat["CentersActual"]):
+            shape = prim[0]
+            params = prim[1]
+            assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
+            # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
+
+            Prim = PrimitiveClass()
+            Prim.input_prim("prototype_prim_abstract", {
+                    "shape":prim[0],
+                    "scale":params[1],
+                    "rotation":params[2],
+                    "x":loc[0],
+                    "y":loc[1]})
+            dat["primitives"].append(Prim)
+
+
+        # Sanity checks
+        # - Base prims should correspond to objects
+        if self.Objects is not None:
+            for o, p in zip(self.Objects, dat["primitives"]):
+                if False:
+                    # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
+                    assert o["obj"] == p.Shape
+                assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
+                assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
+
+        # - nstrokes here should match nstrokes extracted elsewhere
+        _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]
+        for k in _list_keys_check_nstrokes:
+            assert len(dat[k]) == len(self.Strokes)
+
+        # Get chunks in ChunksListClass format
+        # print("*** GETTING CHUNKS")
+        from pythonlib.chunks.chunksclass import ChunksClassList
+        nstrokes = len(self.Strokes)
+        # ChunksClassList
+        CL = ChunksClassList("chunkslist_entry", 
+            {"chunkslist":dat["ChunksList"], "nstrokes":nstrokes, 
+            "shapes":dat["shapes"]})
+        # CL.print_summary()
+        dat["ChunksListClass"] = CL
+
+        
+        # Remove strokes, only needed above
+        del dat["Strokes"]
+
+        # store
+        self.PlanDat = dat
+
+        return dat
 
 
 ######################################## OTHER STUFF
