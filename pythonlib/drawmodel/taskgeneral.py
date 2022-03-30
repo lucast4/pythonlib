@@ -18,6 +18,7 @@ class TaskClass(object):
         self.Name = None
         self.Parser = None
         self.Parses = None
+        self.ShapesOldCoords = None
 
     def initialize(self, ver, params, coord_force_same_aspect_ratio=True,
             convert_coords_to_abstract=True, split_large_jumps=False):
@@ -107,13 +108,23 @@ class TaskClass(object):
         taskobj.program_extract() 
         self.ProgramOldCoords = taskobj.Program
 
-        taskobj.objects_extract()
-        self.ShapesOldCoords = taskobj.Objects
-        self.ShapesOldCoords = [[S["obj"], S["tform"]] for S in self.ShapesOldCoords] # conver to general format
-        for i in range(len(self.ShapesOldCoords)):
-            if self.ShapesOldCoords[i][1] is not None:
-                self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
-                del self.ShapesOldCoords[i][1]["th"]
+        # Get abstract representaion of objects (primitives)
+        taskobj.planclass_extract_all()
+        if taskobj.PlanDat is None:
+            # Then this is old version, before using planclass
+            taskobj.objects_extract()
+            self.ShapesOldCoords = taskobj.Objects
+            self.ShapesOldCoords = [[S["obj"], S["tform"]] for S in self.ShapesOldCoords] # conver to general format
+            for i in range(len(self.ShapesOldCoords)):
+                if self.ShapesOldCoords[i][1] is not None:
+                    self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
+                    del self.ShapesOldCoords[i][1]["th"]
+        else:
+            # New version, use planclass representation of prims. Dont have to re-extract
+            # here post-hoc. Dont use the "Shapes" thing anymore, instead represent them as
+            # PrimitiveClass objects
+            self.Primitives = taskobj.PlanDat["primitives"]
+            self.PlanDat = taskobj.PlanDat
 
     def _initialize_drawnn(self, program=None, shapes=None, chunks=None):
         """
