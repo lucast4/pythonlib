@@ -30,8 +30,9 @@ class BehaviorClass(object):
         self.Dataset = None
         self.IndDataset = None
         self.Expt = None
-
-
+        self.Strokes = None
+        self.StrokesVel = None
+        self.StrokesOrdinal = None
 
         if ver=="dataset":
             D = params["D"]
@@ -155,6 +156,11 @@ class BehaviorClass(object):
 
             self.Dataset = D
             self.IndDataset = ind
+
+            #### easier access to some variables
+            self.Strokes = self.Dat["strokes_beh"]
+            self.MotorStats = motordat
+
         else:
             assert False, "not coded"
 
@@ -218,6 +224,60 @@ class BehaviorClass(object):
 
 
     ##################### HELPERS TO EXTRACT
+    def extract_strokes_ordinal(self, cache=True):
+        """ For each timepoint in strokes, assigns it ordinal (0,1,2,..)
+        # By convention, during gap will return ordinal for the preceding stroke.
+        # starts at 0 (before first stroke). So betweeen onset of first and 2nd stroke
+        # is 1.
+        RETURNS:
+        - strokes_ordinal, list of np array, each (N,2), with col 1 ordina, col2 times ( same as strokes);
+        - saves in self.StrokesOrdinal, if cache==True
+        """
+
+        if self.StrokesOrdinal is None:
+            motor = self.MotorStats
+
+            # Funct applies to single timpoint. 
+            onsarray = np.array(motor["ons"])
+            def fun(x):
+                """
+                Counts how many "ons" this time (x) is chronoltically after
+                """
+                return np.sum(x >= onsarray)
+            vfun = np.vectorize(fun)
+
+            strokes_ordinal = []
+            for s in self.Strokes:
+                times = s[:,2]
+                strokes_ordinal.append(np.c_[vfun(times), times])
+
+            if cache:
+                self.StrokesOrdinal = strokes_ordinal
+        else:
+            strokes_ordinal = self.StrokesOrdinal
+        return strokes_ordinal
+
+
+
+    def extract_strokes_vels(self, cache=True):
+        """ Extract stroke velocities using defgault params
+        PARAMS:
+        - cache, bool (True), if Ture, saves in self.StrokesVel
+        RETURNS:
+        - strokes_vels, same shape as strokes.
+        NOTE: only runs if self.StrokesVel is None
+        """
+
+        if self.StrokesVel is None:
+            from pythonlib.tools.stroketools import strokesVelocity
+            fs = self.Dataset.get_sample_rate(self.IndDataset)
+            strokes_vel, strokes_speeds = strokesVelocity(self.Strokes, fs, clean=True)
+            if cache:
+                self.StrokesVel = strokes_vel
+        else:
+            strokes_vel = self.StrokesVel
+        return strokes_vel
+
     def extract_strokes(self, ver="beh", list_inds=None):
         """ Extract strokes for this trial.
         PARAMS:
@@ -696,6 +756,148 @@ class BehaviorClass(object):
 
 
         return motif
+
+
+    #################################### FEATURE TIMECOURSES
+    # in all cases, signature is time_wind --> feature vector
+    def timeseries_extract_features_all(self):
+        """ For each timepoint in this trial, extract a feature vector.
+        """
+        pass
+
+    def timepoint_extract_features_all(self, twind):
+        """ Extract all features for this time window, including
+        - continuos (related to strokes motor features)
+        - categorical (related to chunks, etc)
+        - progression (continuos and categor, related to progression along
+        trial or strokes, etc)
+        PARAMS:
+        - twind, [t1, t2], inclusive, secs
+        RETURNS:
+        - Either:
+            - featuredict, dict feature: vals, where vals are np arrays, shape depends on feature.
+            e.g., {'cont_pos_mean_xy': array([-115.4969943 ,   45.23218542]),
+                 'cont_vel_mean_xy': array([ -8.39052243, 481.03840076]),
+                 'catg_ordinal': array([6.])}
+            - None, if all values are none  
+        """
+        from pythonlib.tools.stroketools import timepoint_extract_features_continuous
+
+        # Preprocess
+        self.extract_strokes_vels(cache=True)
+
+        # Collect
+        featuredict = {} # Collects all variables for this timewindow
+
+        # 1. Extract cotinuous motor features
+        list_feature = ["mean_xy"]
+        for strokeskind in ["pos", "vel"]:
+            if strokeskind=="pos":
+                strokes = self.Strokes
+            elif strokeskind=="vel":
+                strokes = self.StrokesVel
+            else:
+                assert False
+            
+            vals = timepoint_extract_features_continuous(strokes, twind, list_feature)
+            for f,v in zip(list_feature, vals):
+                featuredict[f"cont_{strokeskind}_{f}"] = v     
+
+        # 2. Extract categorical variables
+        list_feature = ["ordinal", "shape_oriented"]
+        vals = self.timepoint_extract_features_categorical_(twind, list_feature)
+        for f,v in zip(list_feature, vals):
+            featuredict[f"catg_{f}"] = v   
+            
+        # 3. Extract continuous variables about task progression
+        if False:
+            # Havent coded
+            list_feature = ["doneness_trial"]
+            vals = timepoint_extract_features_progression_(self, twind, list_feature)
+            for f,v in zip(list_feature, vals):
+                featuredict[f"catg_{f}"] = v   
+
+        # SAnity checks
+        # - if any vals are None, then they must all be None
+        x = [np.any(v==None) for k, v in featuredict.items()] # list of bools
+        if any(x):
+            assert all(x)
+            featuredict = None
+
+        return featuredict
+
+
+    def timepoint_extract_features_categorical_(self, twind, 
+            list_feature=["ordinal", "shape_oriented"]):
+        """ Extract categorical feature for this stroke at this timepoint
+        PARAMS:
+        - twind, [t1, t2], where feature uses data within this windopw (inclusinve)
+        - list_feature, list of string, name of feature
+        RETURNS:
+        - features, list of values for features. Type for each feature can vary
+        -- returns list of None (saem len as list_feature) if this window has no data...
+        """
+        from pythonlib.tools.stroketools import sliceStrokes
+        from scipy import stats
+
+        # Preprocess
+        self.extract_strokes_ordinal()
+
+        # Get motor timing stats
+        # Extract time of events
+    #     motor = D.get_motor_stats(idx)
+        motor = self.MotorStats
+        
+    #     # go cue
+    #     motor["go_cue"]
+
+    #     # raise
+    #     motor["raise"]
+
+    #     # stroke onsets
+    #     motor["ons"]
+
+    #     # stroke offsets
+    #     motor["offs"]
+
+    #     # touch done
+    #     motor["done_touch"]
+
+        # First, get this time slice for ordinal.
+        # then all categorical variables will be indexed by ordinal
+        strokes_ordinal_sliced = sliceStrokes(self.StrokesOrdinal, twind, False)
+        if len(strokes_ordinal_sliced)==0:
+            # no data, return None
+            return [None for _ in range(len(list_feature))]
+
+        pts_ordinal = np.concatenate(strokes_ordinal_sliced) # (N,2)
+        mode_ordinal = stats.mode(pts_ordinal[:,0]).mode
+
+        
+        # take mean within this slice
+        features = []
+        for f in list_feature:
+            if f=="ordinal":
+                # which stroke number?
+                # By convention, during gap will return ordinal for the preceding stroke.
+                # starts at 0 (before first stroke). So betweeen onset of first and 2nd stroke
+                # is 1.
+                # - If time window spans an onset, then will assign it to ordinal for which 
+                # more timepoints are overlaping.
+                val = mode_ordinal
+            elif f=="chunk ordinal":
+                pass
+            elif f=="shape_oriented":
+                # Uses datsegs from alignment
+                datsegs = self.alignsim_extract_datsegs()
+                ind_stroke = int(mode_ordinal)-1
+                val = datsegs[ind_stroke]["shape_oriented"]
+            else:
+                print(f)
+                assert False, "code it"
+            features.append(val)
+
+        return features
 
 
 
