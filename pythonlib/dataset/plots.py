@@ -148,7 +148,7 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
 
 
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
-    plotfuncbeh=None, max_n_per_grid=1):
+    plotfuncbeh=None, max_n_per_grid=1, max_n_trials=50):
     """
     Helper (USEFUL) for plotting 2d grid of beh (strokes), with columns as unique tasks, and
     rows as flexible grouping variable.
@@ -163,6 +163,15 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
     """
     from pythonlib.dataset.plots import plot_dat_grid_inputrowscols
     dfthis = df[df["character"].isin(tasklist)]
+
+    # @KGG 3/30/22
+    # if the dataframe is sufficiently big, then subset it into a random sample 
+    if len(dfthis) > max_n_trials:
+        # in plottools.py/plotGridWrapper, *need* row 0 and col 0 for plotting to work
+        df_0 = dfthis.iloc[0]
+        # arbitrary choice to sample 30% of data
+        df_sample = dfthis.sample(int(len(dfthis)*0.3))
+        df_this = pd.concat([df_0, df_sample])
 
     # get levels for rows
     row_levels = sorted(dfthis[row_variable].unique().tolist())
