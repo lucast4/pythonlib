@@ -984,11 +984,19 @@ class TaskClass(object):
         NOTE: if old version (no planclass) should fail gracefully, return None
         RETURNS:
         - dat, dict holding all plan things, including processed.
+        -- or None, if no Plan dat
         - self.PlanDat will be replaced with dat
         """
         from pythonlib.tools.monkeylogictools import dict2list2, dict2list
         
+        if "Plan" not in self.get_tasknew().keys():
+            self.PlanDat = None
+            return None
+
         Plan = self.get_tasknew()["Plan"]
+        if len(Plan)==0:
+            self.PlanDat = None
+            return None
 
         dat = {}
 

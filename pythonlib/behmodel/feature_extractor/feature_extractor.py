@@ -1,5 +1,8 @@
 """ one job - take in a single datapoint (e..g, parse) applies stored parameters to 
-score this datapoint """
+score this datapoint 
+single parse --> single feature vector (i.e., not by timepoint or strokes)
+
+"""
 import numpy as np
 
 from pythonlib.drawmodel.features import strokeCircularity, strokeDistances

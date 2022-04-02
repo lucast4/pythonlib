@@ -167,31 +167,24 @@ class ChunksClass(object):
         """
         import numpy as np
 
-        # 1) no ints, make sure all items are lists.
-        for i, c in enumerate(self.Chunks):
-            if isinstance(c, int):
-                self.Chunks[i] = [c]    
-            elif isinstance(c, np.ndarray):
-                self.Hier[i] = [int(cc) for cc in c]
-            else:
-                assert isinstance(c[0], int)
-        
-        for i, c in enumerate(self.Hier):
-            if isinstance(c, int):
-                self.Hier[i] = [c] 
-            elif isinstance(c, np.ndarray):
-                self.Hier[i] = [int(cc) for cc in c]
-            else:
-                assert isinstance(c[0], int)
-
-        if self.Flips is not None:
-            for i, c in enumerate(self.Flips):
+        def _clean(input_list):
+            output_list = []
+            for i, c in enumerate(input_list):
                 if isinstance(c, int):
-                    self.Flips[i] = [c] 
-                elif isinstance(c, np.ndarray):
-                    self.Flips[i] = [int(cc) for cc in c]
+                    output_list.append([c])
+                elif isinstance(c, np.ndarray) and len(c.shape)==0:
+                    output_list.append([int(c)])
+                elif isinstance(c, np.ndarray) and len(c)>1:
+                    output_list.append([int(cc) for cc in c])
                 else:
                     assert isinstance(c[0], int)
+            return output_list
+
+        # 1) no ints, make sure all items are lists.
+        self.Chunks = _clean(self.Chunks)
+        self.Hier = _clean(self.Hier)
+        if self.Flips is not None:
+            self.Flips = _clean(self.Flips)
             for h,f in zip(self.Hier, self.Flips):
                 assert len(h)==len(f)
 

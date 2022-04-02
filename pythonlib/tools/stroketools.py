@@ -1455,3 +1455,65 @@ def insert_strok_into_strokes_to_maximize_alignment(strokes_template, strokes_mo
     if do_insertion:
         strokes_mod.insert(slot, traj)
     return slot
+
+def sliceStrokes(strokes, twind, retain_n_strokes=False):
+    """ Get a time slice of strokes, returned in strokes format.
+    PARAMS:
+    - [IGNORE] list_twind, list of twinds, where keeps pts that are within any of the 
+    windows in this list. A single twind:
+    - strokes: lsat column must be time!!
+    - twind, [tstart, tend], time window (inclusive), in whatever units
+    strokes are in. Usuallyl seconds.
+    - return_n_strokes, bool (False), if True, then output strokes is same length as input.
+    So some trajs in strokes can be empty lists. if False, then will only keep trajs
+    that have non-zero legnth.
+    RETURNS:
+    - strokes_out
+    """
+
+
+    def _slice(traj):
+        dim_time = traj.shape[1]-1 # num columns
+        # assume last col is time.
+        inds = (traj[:, dim_time]>=twind[0]) & (traj[:, dim_time]<=twind[1])
+        return traj[inds, :]
+
+    strokes_out = [_slice(s) for s in strokes]
+    if retain_n_strokes==False:
+        strokes_out = [s for s in strokes_out if len(s)>0]
+    return strokes_out
+
+
+################# STROKE FEATURE TIMECOURSE
+def timepoint_extract_features_continuous(strokes, twind, list_feature=["mean_xy"]):
+    """ Extract feature for this stroke at this timepoint
+    PARAMS:
+    - twind, [t1, t2], where feature uses data within this windopw (inclusinve)
+    - list_feature, list of string, name of feature
+    RETURNS:
+    - features, list of np array of this fatures, each feature shape can depend on feature
+    -- returns list of None (saem len as list_feature) if this window has no data...
+    """
+    from pythonlib.tools.stroketools import sliceStrokes
+        
+    # Slice strokes to get this time window
+    strokes_sliced = sliceStrokes(strokes, twind, False)
+    
+    if len(strokes_sliced)==0:
+        # no data, return None
+        return [None for _ in range(len(list_feature))]
+    
+    pts = np.concatenate(strokes_sliced) # combine across traj, if this time window spans them --> (N,3) array
+    # take mean within this slice
+    features = []
+    for f in list_feature:
+        if f=="mean_xy":
+            # (x,y), shape (2,)
+            val = np.mean(pts,0)[:2]
+        else:
+            print(feature)
+            assert False, "code it"
+        features.append(val)
+    
+    return features
+        

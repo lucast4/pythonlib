@@ -5,6 +5,8 @@ into a single new stroke)
 3/29/22 - Try to use this for representations of tasks
 """
 
+import numpy as np
+
 class PrimitiveClass(object):
     """
     """
@@ -29,8 +31,8 @@ class PrimitiveClass(object):
                 "rotation":int(params["rotation"]),
             }
             self.ParamsConcrete = {
-                "x":params["x"],
-                "y":params["y"]
+                "x":np.around(params["x"], 3),
+                "y":np.around(params["y"], 3)
             }
 
         elif ver=="prototype_prim_concrete":
@@ -85,5 +87,43 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
+    def extract_params(self):
+        """ Extract params for this prim in a dict format
+        RETURNS:
+        - params, dict, where keys are things like scale, rotation, etc.
+        """
 
+        out = {}
+        out["shape"] = self.Shape
+
+        for k, v in self.ParamsAbstract.items():
+            out[f"abs_{k}"] = v
+        for k, v in self.ParamsConcrete.items():
+            out[f"cnr_{k}"] = v
+        
+        out["shape_rot"] = f"{self.Shape}-{out['abs_rotation']}"
+        
+        return out
+
+    def convert_to_primtuple(self, use_abstract=True, as_string=False):
+        """ A hashable represetnation of this prim, 
+        either as tuple (defualt) or string (concatenation)
+        - is unique id for this prim
+        """
+
+        params = self.extract_params()
+
+        if use_abstract:
+            scale = params["abs_scale"]
+            rot = params["abs_rotation"]
+        else:
+            scale = params["cnr_scale"]
+            rot = params["cnr_theta"]
+
+        # shape x rotation defines prim
+        primtuple = (params["shape_rot"], params["shape"], scale, rot, params["cnr_x"], params["cnr_y"])
+
+        if as_string:
+            primtuple = "_".join([f"{x}" for x in primtuple])
+        return primtuple
 
