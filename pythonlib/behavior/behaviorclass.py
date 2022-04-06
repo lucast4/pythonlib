@@ -30,7 +30,7 @@ class BehaviorClass(object):
         self.Dataset = None
         self.IndDataset = None
         self.Expt = None
-        self.Strokes = None
+        self.Strokes = None # holds strokes as strokeclass
         self.StrokesVel = None
         self.StrokesOrdinal = None
 
@@ -158,7 +158,9 @@ class BehaviorClass(object):
             self.IndDataset = ind
 
             #### easier access to some variables
-            self.Strokes = self.Dat["strokes_beh"]
+            # self.Strokes = self.Dat["strokes_beh"]
+            from .strokeclass import StrokeClass
+            self.Strokes = [StrokeClass(S) for S in self.Dat["strokes_beh"]]
             self.MotorStats = motordat
 
         else:
@@ -509,6 +511,7 @@ class BehaviorClass(object):
         would match motif. e.g., [[0,1], [4,5]]
         """
 
+        assert isinstance(motif, list) and isinstance(list_beh, list)
         def _motifs_are_same(behstring, motif):
             assert len(behstring)==len(motif)
             for a, b in zip(behstring, motif):
@@ -649,6 +652,21 @@ class BehaviorClass(object):
         
         return fig1, fig2
 
+
+    def alignsim_find_motif_in_beh_specific_byindices(self, taskstroke_inds, list_beh_mask=None):
+        """ Find this motif, where motif is defined as a specific sequence of taskstroke indices.
+        PARAMS:
+        - taskstroke_inds, list of list of ints, where each inner list is a specific sequence 
+        of taskstroek inds to look for. E..g, [1,2] means look for beh that got 1 --> 2. beh, if 
+        found, will be same length as taskstroke_inds.
+        NOTE: will use beh representation that is based on only useing each taskstroke once.
+        RETURNS:
+        - list_behstroke_inds, list of inds into datsegs.
+        """
+        
+        tokens = self.alignsim_extract_datsegs()
+        motifthis = [tokens[i] for i in taskstroke_inds]
+        return self.alignsim_find_motif_in_beh_specific(motifthis, list_beh_mask)
 
     def alignsim_find_motif_in_beh_specific(self, motif, list_beh_mask=None):
         """ Helper to search for this motif in datsegs, extracted from aligned beh-task

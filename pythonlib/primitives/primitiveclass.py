@@ -87,7 +87,32 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
-    def extract_params(self):
+    def extract_as(self, output="primtuple"):
+        """ [Wrapper] Help extract ths primitives in different formats
+        PARAMS:
+        - output, string name for how to extract
+        """
+
+        if output=="primtuple":
+            return self._convert_to_primtuple()
+        if output=="primtuple_string":
+            return self._convert_to_primtuple(as_string=True)
+        elif output=="shape":
+            """ TaskGeneral.Shape, which is like ["line", {"x":x, "y":y, ...}]
+            """
+            par = self._extract_params()
+            return [par["shape_rot"], {
+                "x":par["cnr_x"],
+                "y":par["cnr_y"]}
+                ] # leave the tform as None, ideally extract this from combining (x,y) in plan and sizes/rotation for this primtive
+        elif output=="params":
+            """ A dict holding relevant params"""
+            return self._extract_params()
+        else:
+            print(output)
+            assert False, "code it"
+
+    def _extract_params(self):
         """ Extract params for this prim in a dict format
         RETURNS:
         - params, dict, where keys are things like scale, rotation, etc.
@@ -105,13 +130,13 @@ class PrimitiveClass(object):
         
         return out
 
-    def convert_to_primtuple(self, use_abstract=True, as_string=False):
+    def _convert_to_primtuple(self, use_abstract=True, as_string=False):
         """ A hashable represetnation of this prim, 
         either as tuple (defualt) or string (concatenation)
         - is unique id for this prim
         """
 
-        params = self.extract_params()
+        params = self._extract_params()
 
         if use_abstract:
             scale = params["abs_scale"]
@@ -126,4 +151,7 @@ class PrimitiveClass(object):
         if as_string:
             primtuple = "_".join([f"{x}" for x in primtuple])
         return primtuple
+
+
+
 

@@ -125,6 +125,9 @@ class TaskClass(object):
             # PrimitiveClass objects
             self.Primitives = taskobj.PlanDat["primitives"]
             self.PlanDat = taskobj.PlanDat
+            
+            # populate self.ShapesOldCoords, for backwards compativbility with other code.
+            self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
 
     def _initialize_drawnn(self, program=None, shapes=None, chunks=None):
         """
@@ -506,6 +509,17 @@ class TaskClass(object):
             assert False, "not coded"
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
+    def get_grid_params(self):
+        """ What is the grid structure (if any) for this task?
+        This is saved now (3/2022) in PlanClass in matlab.
+        RETURNS:
+        - gridparams, dict holding things like {grid_x, grid_y, ...}, with np array values
+        """
+        T = self.extract_as('ml2')
+        return T.PlanDat["TaskGridClass"]["GridParams"]
+
+
+
     def tokens_generate(self, params, inds_taskstrokes=None, track_order=True):
         """
         Designed for grid tasks, where each prim is a distinct location on grid,
@@ -526,12 +540,15 @@ class TaskClass(object):
         # Some hard coded things 
         expt = params["expt"]
         if expt=="gridlinecircle":
-            nhor = 3
-            nver = 3
             xgrid = np.linspace(-1.7, 1.7, 3)
             ygrid = np.linspace(-1.7, 1.7, 3)
         else:
-            assert False
+            # Look for this saved
+            gridparams = self.get_grid_params()
+            xgrid = gridparams["grid_x"]
+            ygrid = gridparams["grid_y"]
+        nver = len(ygrid)
+        nhor = len(xgrid)
 
         # format taskstrokes correctly
         objects = self.ShapesOldCoords
@@ -601,7 +618,7 @@ class TaskClass(object):
             elif _shape(i)=="circle":
                 return "circle"
             else:
-                assert False
+                return _shape(i)
 
         def _relation_from_previous(i):
             # relation to previous stroke
@@ -643,6 +660,22 @@ class TaskClass(object):
         self.Parses = parses_list
 
 
+    ############ Extract in different formats
+    def extract_as(self, this):
+        """ Extract this task in different fromats
+        """
+
+        if this=="ml2":
+            """ Extract as ml2 task. fails if this is not actually an ml2 task
+            """
+            if self.Params["input_ver"]=="ml2":
+                return self.Params["input_params"]
+            else:
+                print(self.Params)
+                assert False, "this is not an ml2 task"
+        else:
+            print(this)
+            assert False
 
     ############ SAVING
     def save(self, sdir, suffix):
