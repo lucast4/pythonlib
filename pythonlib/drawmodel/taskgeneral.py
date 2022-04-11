@@ -39,6 +39,8 @@ class TaskClass(object):
         self.Params["input_ver"] = ver
         self.Params["input_params"] = params
         self.Params["coord_force_same_aspect_ratio"] = coord_force_same_aspect_ratio
+        self.Params["convert_coords_to_abstract"] = convert_coords_to_abstract
+        self.Params["split_large_jumps"] = split_large_jumps
 
         # Extract Strokes
         if ver=="drawnn":
@@ -251,6 +253,24 @@ class TaskClass(object):
 
         return pts_out
 
+    def get_sketchpad_final(self):
+        """ Helps to return the sketchpad associated wtih the final coordinate
+        system. i.e,., whgat' sin self.Points, etc.
+        RETURNS:
+        - skethpad, 2x2 np array, where sketchpad[0,:] are xlims...
+        """
+
+        if self.Params["convert_coords_to_abstract"]:
+            # Then final pts are in abstract coords
+            sketchpad = self._Sketchpads["abstract"]
+        else:
+            # then are in input coords
+            if self.Params["input_ver"] == "ml2":
+                sketchpad = self._Sketchpads["ml2"]
+            else:
+                assert False, "code this"
+        return sketchpad
+
     def _make_sketchpads(self):
         """ get sketchpad coordinates, both hard coded and dynamic.
         for format, see _converCoords for detaisl
@@ -263,8 +283,7 @@ class TaskClass(object):
             }
 
             if self.Params["input_ver"] == "ml2":
-                self._Sketchpads["ml2"] = edges_in = self.Params["input_params"].Task["sketchpad"].T
-
+                self._Sketchpads["ml2"] = self.Params["input_params"].Task["sketchpad"].T
                 # print("Generated self._Sketchpads to:")
             if self.Params["coord_force_same_aspect_ratio"]:
                 from .image import coordsMatchAspectRatio
@@ -287,13 +306,29 @@ class TaskClass(object):
                 self._Sketchpads = sketchpad_new
 
 
+
     def _check_out_of_bounds(self):
         """
         check no pts out of bounds. would indicate mistake in sketchpad in.
         assumes hav already converted to abstract
+        RETURNS:
+        - fails (assert False) if pts not in bounds.
         """
 
-        print("TODO: check out of bounds")
+        self._make_sketchpads()
+        sketchpad = self.get_sketchpad_final()
+        xlims = sketchpad[0,:]
+        ylims = sketchpad[1,:]
+        pts = self.Points
+
+        a = np.all((pts[:,0]>xlims[0]) & (pts[:,0]<xlims[1]))
+        b = np.all((pts[:,1]>ylims[0]) & (pts[:,1]<ylims[1]))
+        if a==False or b==False:
+            print(sketchpad)
+            print(pts)
+            print(self.Strokes)
+            print(self.Params)
+            assert False , "not in bounds"
 
 
     ########################
