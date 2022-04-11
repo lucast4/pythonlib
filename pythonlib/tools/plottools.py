@@ -356,7 +356,10 @@ def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay",
 
     elif ver=="separate_no_background":
         fig, axes = plt.subplots(len(labellist), 1, figsize=(8, 8*len(labellist)))
-        for i, (l, ax) in enumerate(zip(labellist, axes.flatten())):
+        if len(labellist)==1:
+            axes =  [axes]
+        
+        for i, (l, ax) in enumerate(zip(labellist, axes)):
             inds = [i for i, lab in enumerate(labels) if lab==l]
             Xthis = X[inds]
             # initiate a plot

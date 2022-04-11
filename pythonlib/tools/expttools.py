@@ -73,8 +73,13 @@ def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
     pull out arc2 if give me sep="_" and pos = "2"
     - pos is 0,1, ..., or -1 to get end
+    --- or, pos="all", to return list of strings
     - if return_entire_filename, then overwrites sep and pos, and instead returns 
     201030_164324_arc2_Pancho_3
+    RETURNS:
+    - either:
+    --- single string (if pos is numer)
+    --- list of strings (if pos=="all")
     """
     import os
     import re
@@ -91,20 +96,28 @@ def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     idxs = [m.start() for m in re.finditer(sep, path)]
     idxs.append(len(path)) # to allow getting of last substr
     idxs.insert(0, -1) # to allow getting of first
-    if pos==-1:
-        # shift it back one, isnce appended -1 to end
-        pos = -2
-    # 2) get substring
-#     print(idxs)
-    if pos==-2 or len(idxs)>=pos+2:
-        # print(path)
-        # print(idxs)
-        # print(pos)
-        # assert False
-        return path[idxs[pos]+1:idxs[pos+1]]
+    if isinstance(pos, str):
+        if pos=="all":
+            # return list of strings
+            return [path[idxs[i]+1:idxs[i+1]] for i in range(len(idxs)-1)]
+        else:
+            assert False
     else:
-        print("this pos otu of bounds (returning None)")
-        return None
+        if pos==-1:
+            # shift it back one, isnce appended -1 to end
+            pos = -2
+        # 2) get substring
+    #     print(idxs)
+        if pos==-2 or len(idxs)>=pos+2:
+            # print(path)
+            # print(idxs)
+            # print(pos)
+            # assert False
+            return path[idxs[pos]+1:idxs[pos+1]]
+
+        else:
+            print("this pos otu of bounds (returning None)")
+            return None
 
 def checkIfDirExistsAndHasFiles(dirname):
     """ returns (exists?, hasfiles?), 
