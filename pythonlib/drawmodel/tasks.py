@@ -991,17 +991,20 @@ class TaskClass(object):
         
         if "Plan" not in self.get_tasknew().keys():
             self.PlanDat = None
-            return None
+            return
 
         Plan = self.get_tasknew()["Plan"]
         if len(Plan)==0:
             self.PlanDat = None
-            return None
+            return
+
+        _list_keys = ['Plan', 'CentersActual', 'Rels', 'Prims', 'ChunksList', 'Strokes']
+        # older version didnt hold TaskGridClass
+        if 'TaskGridClass' in Plan.keys():
+            _list_keys.append('TaskGridClass')
 
         dat = {}
-
         # Extract things
-        _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
         # _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
         for k in _list_keys:
             dat[k] = dict2list2(Plan[k])
