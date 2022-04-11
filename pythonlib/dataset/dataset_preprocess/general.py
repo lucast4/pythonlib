@@ -21,6 +21,16 @@ def _groupingParams(D, expt):
     features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
     features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
 
+    def _get_defaults(D):
+        F = {}
+        grouping = "epoch"
+        plantime_cats = {}
+        features_to_remove_nan =  []
+        features_to_remove_outliers = []
+        grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
+        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]     
+        return F, grouping, plantime_cats, features_to_remove_nan, \
+            features_to_remove_outliers, grouping_levels, feature_names
 
     ### FILTER BLOCKS
     if expt == "neuralprep2":
@@ -129,27 +139,8 @@ def _groupingParams(D, expt):
             grouping_levels = ["baseline", "Ltoline"]
         else:
             assert False
-
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
-    elif expt in ["chunkbyshape1", "chunkbyshape1b"]:
-        animal = D.animals()
-        if len(animal)>1:
-            assert False, "params different for each animal.."
-        else:
-            animal = animal[0]
-        F = {}
-        grouping = "epoch"
-        plantime_cats = {}
-        features_to_remove_nan =  []
-        features_to_remove_outliers = []
-        grouping_levels = ["horiz", "vert"]
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
-    elif expt in ["chunkbyshape2", "chunkbyshape2b"]:
-        animal = D.animals()
-        if len(animal)>1:
-            assert False, "params different for each animal.."
-        else:
-            animal = animal[0]
+    elif expt in ["chunkbyshape1", "chunkbyshape1b", "chunkbyshape2", "chunkbyshape2b"]:
         F = {}
         grouping = "epoch"
         plantime_cats = {}
@@ -157,10 +148,14 @@ def _groupingParams(D, expt):
         features_to_remove_outliers = []
         grouping_levels = ["horiz", "vert"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]     
-
+    elif expt=="character34":
+        assert False, "fix this, see here"
+        # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
+        # should have affect in subsewuen code redefining monkye train test.
     else:
-        print(expt)
-        assert False
+        # Get defaults
+        F, grouping, plantime_cats, features_to_remove_nan, \
+         features_to_remove_outliers, grouping_levels, feature_names = _get_defaults(D)
 
     if len(F)>0:
         D = D.filterPandas(F, return_ver="dataset")
@@ -465,3 +460,30 @@ def preprocess_dates(D, groupby, animal, expt, nmin = 5, return_filtered_dataset
         return DictDateEarlyLate, DictDay, DictDateInds, Dfilt
     else:
         return DictDateEarlyLate, DictDay, DictDateInds
+
+
+def extract_expt_metadat(expt=None, animal=None, rule=None, metadat_dir = "/home/lucast4/drawmonkey/expt_metadat"):
+    """ Get matadata for this expt, without having to load a Dataset first. useful if want to
+    know what rules exits (for exampel) before extracting those datsaets.
+    This is looks for expt metadat yaml files defined usually in drawmonkey repo.
+    PARAMS:
+    - expt, animal, rule, all strings or None. If None, then gets ignores this feature (e.g., animal).
+    e.g., expt="lines5" gets all rules and animals under lines5.
+    - metadat_dir, string name of path where yaml files saved. 
+    RETURNS:
+    - list_expts, list of lists of strings, where inner lists are like ['chunkbyshape1', 'rule2', 'Pancho']
+    """
+    from pythonlib.tools.expttools import findPath, extractStrFromFname
+
+    # construct the path wildcard
+    pathwildcard = []
+    if expt is not None:
+        pathwildcard.append(expt)
+    if rule is not None:
+        pathwildcard.append(rule)
+    if animal is not None:
+        pathwildcard.append(animal)
+
+    list_path = findPath(metadat_dir, [pathwildcard], None)
+    list_expts = [(extractStrFromFname(path, "-", "all")) for path in list_path]
+    return list_expts
