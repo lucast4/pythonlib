@@ -6,7 +6,6 @@ This is related to notebook:
 analy_dataset_summarize_050621
 """
 
-
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
         LIST_N_PER_GRID = [1], strokes_by_order=True):
     """ 
@@ -54,7 +53,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
                 figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-beh.pdf");
                 figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
                 #assert False
-            plt.close("all")
+            #plt.close("all")
             
             
             
