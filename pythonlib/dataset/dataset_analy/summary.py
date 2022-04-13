@@ -53,7 +53,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
                                                             plotkwargs={"strokes_by_order":strokes_by_order})
                 figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-beh.pdf");
                 figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
-                assert False
+                #assert False
             plt.close("all")
             
             
