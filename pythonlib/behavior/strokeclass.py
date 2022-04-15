@@ -5,18 +5,20 @@ Here is wrapper for (N,3) np array.
 Think of BehaviorClass as holding a sequence of strokeclasses
 """
 
+import numpy as np
+
 class StrokeClass(object):
     """
     """
-    def __init__(self, stroke=None):
+    def __init__(self, traj=None):
         """
         PARAMS:
-        - stroke, (N,3) np array. 
+        - traj, (N,3) np array. 
         """
-        if stroke is None:
+        if traj is None:
             self.Stroke = None
         else:
-            self.input_data("nparray", stroke)
+            self.input_data("nparray", traj)
 
     def __call__(self):
         """ Returns the np array"""
@@ -48,11 +50,50 @@ class StrokeClass(object):
         RETURNS:
         - val,
         """
+        
+        strokes = [self.Stroke]
+        from pythonlib.drawmodel.features import strokeCircularity, stroke2angle, strokeDistances, strokeDisplacements
 
         if featurename=="circularity":
-            assert False, "see drawmodel.features"
+            return strokeCircularity(strokes)[0]
+        elif featurename=="distcum":
+            return strokeDistances(strokes)[0]
+        elif featurename=="displacement":
+            return strokeDisplacements(strokes)[0]
+        elif featurename=="angle":
+            return stroke2angle(strokes)[0]
+        else:
+            print(featurename)
+            assert False, "finish this."
 
-        assert False, "finish this."
+    ############# STROKE SPATIAL DIMENSIONS
+    def extract_spatial_dimensions(self, scale_convert_to_int=False):
+        """ Extract spatial dimensions for this stroke
+        PARAMS;
+        - scale_convert_to_int, then helps avoid numericla precision situation
+        where everything has slightly different value.
+        RETURNS:
+        - outdict, k:v are different kinds of spatial dimensions
+        """
+        from pythonlib.tools.stroketools import getMinMaxVals
+
+        outdict = {}
+
+        # Get width and height of the prim
+        strokes = [self.Stroke]
+        xyminmax = getMinMaxVals(strokes)
+        outdict["width"] = xyminmax[1] - xyminmax[0]
+        outdict["height"] = xyminmax[3] - xyminmax[2]
+
+        # diagonal
+        outdict["diag"] = (outdict["width"]**2 + outdict["height"]**2)**0.5
+
+        if scale_convert_to_int:
+            for k in ["width", "height", "diag"]:
+                outdict[k] = int(outdict[k])
+        outdict["max_wh"] = np.max([outdict["width"], outdict["height"]])
+
+        return outdict
     
 
 
