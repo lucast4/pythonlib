@@ -1,4 +1,4 @@
-""" Represents a single primitive.
+""" Represents a single primitive, usually a task stroke.
 Usually this is a base primitive. Usually corresponds to a single stroke, 
 but doesnt have to (i.e. could be a chunk, which is multiple strokes concatenated
 into a single new stroke)
@@ -14,9 +14,12 @@ class PrimitiveClass(object):
     def __init__(self):
         self.ParamsAbstract = None
         self.ParamsConcrete = None
+        self.Stroke = None # strokeclass representation
 
-    def input_prim(self, ver, params):
+    def input_prim(self, ver, params, traj=None):
         """ Initialize data, represnting a single primtiive
+        PARAMS:
+        - traj, optional stroke, np array (N,2 or 3). If input, then creates strokeclass
         """
         if ver=="prototype_prim_abstract":
             """ A prototype prim as in matlab ml2 code, where each prim is
@@ -34,6 +37,9 @@ class PrimitiveClass(object):
                 "x":np.around(params["x"], 3),
                 "y":np.around(params["y"], 3)
             }
+
+            if traj is not None:
+                self.strokeclass_generate(traj)
 
         elif ver=="prototype_prim_concrete":
             """ A prototype prim, but inputing concrete tform variables.
@@ -151,6 +157,19 @@ class PrimitiveClass(object):
         if as_string:
             primtuple = "_".join([f"{x}" for x in primtuple])
         return primtuple
+
+    ##################### REPRESENTING AS STROKECLASS
+    def strokeclass_generate(self, traj):
+        """ Represent this primitive as a concrete stroke using 
+        StrokeClass. Allows using all the methods there.
+        PARAMS:
+        - traj, np.array, (N,2 or 3).
+        MODIFIES:
+        - self.StrokeClass is replaced.
+        """
+        from pythonlib.behavior.strokeclass import StrokeClass
+        self.Stroke = StrokeClass(traj)
+
 
 
 

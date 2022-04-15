@@ -4,7 +4,7 @@ specifically for tasks in monkeylogic
 
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
-from pythonlib.chunks.chunks import chunk_strokes, chunks2parses
+from pythonlib.behavior.chunks import chunk_strokes, chunks2parses
 
 class TaskClass(object):
     """ Holds a single task object.
@@ -1021,9 +1021,11 @@ class TaskClass(object):
         from pythonlib.primitives.primitiveclass import PrimitiveClass
         dat["shapes"] = [x[0] for x in dat["Prims"]]
         dat["primitives"] = []
-        for prim, loc in zip(dat["Prims"], dat["CentersActual"]):
+        for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
             shape = prim[0]
             params = prim[1]
+            traj = self.Strokes[i]
+
             assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
             # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
 
@@ -1033,7 +1035,7 @@ class TaskClass(object):
                     "scale":params[1],
                     "rotation":params[2],
                     "x":loc[0],
-                    "y":loc[1]})
+                    "y":loc[1]}, traj = traj)
             dat["primitives"].append(Prim)
 
 
