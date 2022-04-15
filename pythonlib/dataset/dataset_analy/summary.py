@@ -60,4 +60,3 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
             plt.close("all")
             
             
-            
