@@ -558,8 +558,16 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         cols = np.array(cols)
         rows = np.array(rows)
 
-    assert min(rows)==0, "if not, messes up plotting of titles"
-    assert min(cols)==0
+    # if lost row=0, then shift all values down. this could happen if removed datapts becuase of 
+    # column pruning. subsequent code needs first row to be 0.
+    rows = rows - min(rows)
+    
+    if min(rows)!=0 or min(cols)!=0:
+        print(rows, cols)
+        print(min(rows), min(cols))
+        print(min(rows)!=0)
+        print(min(cols)!=0)
+        assert False, "if not, messes up plotting of titles"
 
     if xlabels is None:
         xlabels = [None for _ in range(len(data))]
