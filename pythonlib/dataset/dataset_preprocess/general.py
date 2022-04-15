@@ -351,7 +351,7 @@ def preprocess_task_train_test(D, expt):
         probe_list.append(probe_val)
     D.Dat["probe"] = probe_list
 
-    if expt in ["gridlinecircle", "chunkbyshape1"]:
+    if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:
         # train were all random tasks, test were all fixed.
         key = "random_task"
         list_train = [True]

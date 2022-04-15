@@ -5,10 +5,12 @@
 This is related to notebook:
 analy_dataset_summarize_050621
 """
-
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
-        LIST_N_PER_GRID = [1], strokes_by_order=True):
+        LIST_N_PER_GRID = [1], strokes_by_order=True, how_to_split_files = "task_stagecategory"):
     """ 
     Plot grid, where y axis is usually date (or epoch) and x axis are each unique task.
     Plots one (or n) examples per grid cell. Plots multiple iterations to get many random examples, 
@@ -21,6 +23,8 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     - subfolder, string name of subfolder within SAVEDIR_FIGS. makes it if doesnt exist.
     - yaxis_ver, string name, indexes column. usually "date" or "epoch"
     - LIST_N_PER_GRID, list of ints, where each int is n examples to plot per grid.
+    - how_to_split_files, string col name in Dat, will make seprate plots for each level of this.
+
     RETURNS:
     - saves figures.
     """
@@ -34,9 +38,9 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     print(" ** SAVING AT : ", sdirthis)
     
     # 2) one plot for each task category
-    taskcats = Dthis.Dat["task_stagecategory"].unique()
+    taskcats = Dthis.Dat[how_to_split_files].unique()
     for tc in taskcats:
-        tasklist = Dthis.Dat[Dthis.Dat["task_stagecategory"]==tc]["character"].unique()
+        tasklist = Dthis.Dat[Dthis.Dat[how_to_split_files]==tc]["character"].unique()
         for max_n_per_grid in LIST_N_PER_GRID:
             
             # How many iterations?
@@ -53,7 +57,6 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
                                                             plotkwargs={"strokes_by_order":strokes_by_order})
                 figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-beh.pdf");
                 figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
-                assert False
             plt.close("all")
             
             
