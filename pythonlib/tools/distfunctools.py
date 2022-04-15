@@ -161,6 +161,23 @@ def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver
         assert False
 
 
+def distPtsTimePtsMatched(pts1, pts2):
+    """
+    Get cumulative pt by pt distance between pts1 and pts2.
+    Gets euclidian distance.
+    PARAMS;
+    - pts1, pts2, each np array, (N,2+) where N is same for them
+    If >2 columns, will autoatmicalyl take just first 2.
+    RETURNS:
+    - dist, sum euclidian dist
+    """
+    assert pts1.shape[0]==pts2.shape[0]
+    dist = 0
+    for p1, p2 in zip(pts1[:,:2], pts2[:,:2]):
+        dist+=np.linalg.norm(p1-p2)
+    return dist
+
+
 def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False, 
                            min_strok_dur=0.175, return_separate_scores=False, 
                            vec_over_spatial_ratio=1, lowpass_freq=5):
@@ -198,12 +215,9 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
     if skip_spatial:
         dist_spatial = 0.
     else:
-        assert False, ":instead, do this:"
-        # d = 0
-        # for p1, p2 in zip(pts_ml2, pts_cam):
-        #     d+=np.linalg.norm(p1-p2)
-
-        dist_spatial = np.linalg.norm(strok_beh[:,[0,1]] - strok_mod[:,[0,1]])
+        dist_spatial = distPtsTimePtsMatched(strok_beh, strok_mod)
+        # Old version, incorrect
+        # dist_spatial2 = np.linalg.norm(strok_beh[:,[0,1]] - strok_mod[:,[0,1]])
 
     # 2) velocity distance - also use mean squared error of velocity timecourses
     if skip_vel:
@@ -213,7 +227,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
             assert False, "to get vel distance, you must pass in fs"
         strok_beh_vel = strokesVelocity([strok_beh], fs=fs, lowpass_freq=lowpass_freq)[0][0]
         strok_mod_vel = strokesVelocity([strok_mod], fs=fs, lowpass_freq=lowpass_freq)[0][0]
-        dist_vel = np.linalg.norm(strok_beh_vel[:,[0,1]] - strok_mod_vel[:,[0,1]])
+        dist_vel = distPtsTimePtsMatched(strok_beh_vel, strok_mod_vel)
     
     # normalize by timesteps
     dist_spatial/=strok_beh.shape[0]

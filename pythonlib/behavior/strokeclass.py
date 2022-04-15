@@ -1,6 +1,6 @@
 """ Holds a single stroke, usualyl behavior, but could be task as well.
 Contrast this with PrimitiveClass, which also holds a single storke (uusally) but is about
-a symbolic represnetaiotn.
+a symbolic represnetaiotn, so usually is task.
 Here is wrapper for (N,3) np array.
 Think of BehaviorClass as holding a sequence of strokeclasses
 """
@@ -37,6 +37,23 @@ class StrokeClass(object):
         else:
             print(ver)
             assert False, "code it"
+
+
+    ############# STROKE FEATURES
+    def extract_single_feature(self, featurename):
+        """ Extract this single feature, usually a scalar value.
+        Wrapper for various methods written over the years to do this.
+        PARAMS:
+        - featurename, string name,
+        RETURNS:
+        - val,
+        """
+
+        if featurename=="circularity":
+            assert False, "see drawmodel.features"
+
+        assert False, "finish this."
+    
 
 
 
