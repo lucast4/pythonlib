@@ -626,6 +626,18 @@ class TaskClass(object):
             else:
                 return "far"
 
+        def _horizontal_or_vertical(i, j):
+            xdiff, ydiff = _posdiffs(i,j)
+            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
+                assert False, "strokes are on the same grid location, decide what to call this"
+            elif np.isclose(xdiff, 0.):
+                return "vertical"
+            elif np.isclose(ydiff, 0.):
+                return "horizontal"
+            else: # xdiff, ydiff are both non-zero
+                return "diagonal" 
+
+
         def _orient(i):
             # Angle, orientation
             if np.isclose(objects[i][1]["theta"], 0.):
@@ -666,7 +678,19 @@ class TaskClass(object):
             if i==len(objects)-1:
                 return "end"
             else:
-                return _direction(i, i+1)       
+                return _direction(i, i+1)   
+
+        def _horiz_vert_move_from_previous(i):
+            if i==0:
+                return "start"
+            else:
+                return _horizontal_or_vertical(i-1, i)
+
+        def _horiz_vert_move_to_following(i):
+            if i==len(objects)-1:
+                return "end"
+            else:
+                return _horizontal_or_vertical(i, i+1)   
 
         # Create sequence of tokens
         datsegs = []
@@ -679,6 +703,8 @@ class TaskClass(object):
             if track_order:
                 datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
                 datsegs[-1]["rel_to_next"] = _relation_to_following(i)
+                datsegs[-1]["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
+                datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
         return datsegs
 
 

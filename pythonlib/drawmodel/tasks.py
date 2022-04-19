@@ -4,7 +4,7 @@ specifically for tasks in monkeylogic
 
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
-from pythonlib.behavior.chunks import chunk_strokes, chunks2parses
+from pythonlib.chunks.chunks import chunk_strokes, chunks2parses
 
 class TaskClass(object):
     """ Holds a single task object.
