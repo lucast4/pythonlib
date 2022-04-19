@@ -574,7 +574,7 @@ class TaskClass(object):
 
         # Some hard coded things 
         expt = params["expt"]
-        if expt=="gridlinecircle":
+        if expt in ["gridlinecircle", "chunkbyshape2"]:
             xgrid = np.linspace(-1.7, 1.7, 3)
             ygrid = np.linspace(-1.7, 1.7, 3)
         else:
