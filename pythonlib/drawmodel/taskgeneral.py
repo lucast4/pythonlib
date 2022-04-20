@@ -332,22 +332,27 @@ class TaskClass(object):
 
 
     ########################
-    def get_task_id(self):
-        """ get unique id for this task
-        RETUNRS:
-        tuple (category, number in cat)
+
+    # def get_task_id(self):
+    #     """ get unique id for this task. 
+    #     RETUNRS:
+    #     tuple (category, number in cat)
+    #     """
+    #     if self.Params["input_ver"]=="ml2":
+    #         taskcat = self.Params["input_params"].Task["stage"]
+    #         taskstr = self.Params["input_params"].Task["str"]
+    #         idx = taskstr.find(taskcat)
+    #         tasknum = int(taskstr[idx+len(taskcat)+1:])
+    #     else:
+    #         assert False
+    #     return taskcat, tasknum
+
+    def get_task_category(self):
+        """ [GOOD] Get human-interpretable task category
+        This flexible depending ion task
+        RETURNS:
+        - taskcat, str, 
         """
-
-        if self.Params["input_ver"]=="ml2":
-            taskcat = self.Params["input_params"].Task["stage"]
-            taskstr = self.Params["input_params"].Task["str"]
-            idx = taskstr.find(taskcat)
-            tasknum = int(taskstr[idx+len(taskcat)+1:])
-        else:
-            assert False
-        return taskcat, tasknum
-
-    def get_category_setnum(self):
         if self.Params["input_ver"]=="ml2":
             taskcat = self.Params["input_params"].info_name_this_task_category()   
             return taskcat
@@ -364,7 +369,6 @@ class TaskClass(object):
             return self.Params["input_params"].info_summarize_task()["los_info"]
         else:
             assert False
-
 
 
     def get_number_hash(self, ndigs = 6, include_taskstrings=True, 

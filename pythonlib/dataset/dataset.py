@@ -670,7 +670,7 @@ class Dataset(object):
 
 
     ############# CLEANUP
-    def _cleanup(self, remove_dot_strokes=True):
+    def _cleanup(self, remove_dot_strokes=True): 
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
         """
@@ -827,7 +827,7 @@ class Dataset(object):
         assert "Task" in self.Dat.columns
 
         # Replace unique name with new one, if tasks have been loaded
-        if unique_names_post_Sep17:
+        if unique_names_post_Sep17: 
             def F(x):
                 return self._task_hash(Task=x["Task"], random_task=x["random_task"], 
                     original_ver_before_sep21=False)
@@ -842,7 +842,7 @@ class Dataset(object):
 
         # task cartegories should include setnum
         def F(x):
-            return x["Task"].get_category_setnum()
+            return x["Task"].get_task_category()
         self.Dat = applyFunctionToAllRows(self.Dat, F, "task_stagecategory")
 
         # rename charactesrs
