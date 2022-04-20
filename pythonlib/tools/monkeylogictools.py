@@ -76,6 +76,9 @@ def dict2list2(line):
             return x
         elif isinstance(x, np.ndarray):
             return x.squeeze()
+        elif isinstance(x, dict) and len(x.keys())==0:
+            # Then just return, its empty dict
+            return x
         elif isinstance(x, dict) and list(x.keys())[0]=="1":
             # Then this is nested dict like:
             # {'1': 'transform', '2': array([[0.]]), '3': array([[0.]]), '4': array([[0.]]), '5': array([[1.]]), '6': array([[1.]]), '7': 'trs'}

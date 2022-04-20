@@ -10,6 +10,28 @@ def _check_is_proper_chunk(chunk):
     assert isinstance(chunk, list)
     for c in chunk:
         assert isinstance(c, list)
+        for cc in c:
+            assert isinstance(cc, int)
+
+
+def check_all_strokes_used(chunks, nstrokes):
+    """ REturns true if each stroke is used once and only once across all ch in chunks
+    PARAMS:
+    - chunks, list of list, e.g, [[0,1], [2]]
+    - nstrokes, int, how many strokes.
+    RETURNS:
+    - bool, indiciating whether all used.
+    """
+    
+    _check_is_proper_chunk(chunks)
+
+    inds_used = sorted([cc for c in chunks for cc in c])
+    inds_check = list(range(nstrokes))
+    if inds_used==inds_check:
+        return True
+    else:
+        return False
+
 
 #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
 def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},

@@ -36,7 +36,7 @@ class ChunksClassList(object):
             print(params)
             assert False, "code it"
 
-    def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None):
+    def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None, check_matches_nstrokes=True):
         """ Enter list of chunks, inputed in chunkslist format.
         PARAMS:
         - chunkslist, chunkslist[0] = [name, hier, flips, color],
@@ -49,6 +49,8 @@ class ChunksClassList(object):
                 array([0.47163037, 0.65416502, 0.40344111])]}]]
         - nstrokes, int, need this since needs to make chunks all single strokes.
         - shapes, list of string or ints, categories for these shapes, same len as nstrokes
+        - check_matches_nstrokes, bool, then asserts that got all and only these storkes. helpful for 
+        catching 1-indexing from matlab.
         """
 
         assert len(list_shapes)==nstrokes
@@ -62,7 +64,15 @@ class ChunksClassList(object):
             name = chunkthis[0]
             C = ChunksClass(chunks, hier, fixed_order=fixed_order, 
                 task_stroke_labels=list_shapes, name=name, flips=flips)
+            if check_matches_nstrokes:
+                from .chunks import check_all_strokes_used
+                all_used = check_all_strokes_used(C.Hier, nstrokes)
+                if not all_used:
+                    print(nstrokes)
+                    C.print_summary()
+                    assert False, "maybe iyou entered using 1-indexing"
             self.ListChunksClass.append(C)
+
 
 
     def _init_task_entry(self, Task, expt=None, rule=None):
@@ -176,7 +186,12 @@ class ChunksClass(object):
                     output_list.append([int(c)])
                 elif isinstance(c, np.ndarray) and len(c)>1:
                     output_list.append([int(cc) for cc in c])
+                elif isinstance(c, np.float64):
+                    # THis is like 3.0. check it is int, then convert to list.
+                    assert np.floor(c) == c
+                    output_list.append([int(c)])
                 else:
+                    print(type(c))
                     assert isinstance(c[0], int)
             return output_list
 
@@ -197,6 +212,11 @@ class ChunksClass(object):
         assert len(self.FixedOrder[1]) == len(self.Hier)
         if self.Labels is not None:
             assert len(self.Labels)==n_taskstrokes
+
+        # # Check that each stroke has been assigned, and no assigned strokes outside of range
+        # print(self.Hier)
+        # print(self.Chunks)
+
 
 
     def _find_group_for_this_ind(self, ind, ver="chunks"):
