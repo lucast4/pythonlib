@@ -625,17 +625,18 @@ class TaskClass(object):
         """
         from math import pi
 
-        # format taskstrokes correctly
+        # Extract shapes, formatted correctly
         objects = self.ShapesOldCoords
         if inds_taskstrokes is not None:
             objects = [objects[i] for i in inds_taskstrokes]
         
-        # Some info about this task
+        # Some grid params for this task
+        # - was this on grid?
         grid_ver = self.get_grid_ver()
 
-        # Some hard coded things 
+        # - grid spatial params 
         expt = params["expt"]
-        if expt=="gridlinecircle":
+        if expt in ["gridlinecircle", "chunkbyshape2"]:
             xgrid = np.linspace(-1.7, 1.7, 3)
             ygrid = np.linspace(-1.7, 1.7, 3)
         else:
@@ -646,6 +647,7 @@ class TaskClass(object):
         nver = len(ygrid)
         nhor = len(xgrid)
 
+        # METHODS (doesnt matter if on grid)
         def _orient(i):
             # Angle, orientation
             if np.isclose(objects[i][1]["theta"], 0.):
@@ -679,8 +681,6 @@ class TaskClass(object):
         if grid_ver in ["on_grid"]:
             # Sanity check that the hard coded things are correct.
             for o in objects:
-                print(xgrid)
-                print(o)
                 assert np.any(xgrid == o[1]["x"])
                 assert np.any(ygrid == o[1]["y"])
 
@@ -726,6 +726,29 @@ class TaskClass(object):
                     return "end"
                 else:
                     return _direction(i, i+1)       
+
+            def _horizontal_or_vertical(i, j):
+                xdiff, ydiff = _posdiffs(i,j)
+                if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
+                    assert False, "strokes are on the same grid location, decide what to call this"
+                elif np.isclose(xdiff, 0.):
+                    return "vertical"
+                elif np.isclose(ydiff, 0.):
+                    return "horizontal"
+                else: # xdiff, ydiff are both non-zero
+                    return "diagonal" 
+
+            def _horiz_vert_move_from_previous(i):
+                if i==0:
+                    return "start"
+                else:
+                    return _horizontal_or_vertical(i-1, i)
+
+            def _horiz_vert_move_to_following(i):
+                if i==len(objects)-1:
+                    return "end"
+                else:
+                    return _horizontal_or_vertical(i, i+1)   
         else:
             assert grid_ver in ["on_rel"]
 
@@ -733,17 +756,22 @@ class TaskClass(object):
         # Create sequence of tokens
         datsegs = []
         for i in range(len(objects)):
+
+            # 1) Things that don't depend on grid
             datsegs.append({
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
                 })
-
+            
+            # 2) Things that depend on grid
             if grid_ver=="on_grid":
                 # Then this is on grid, so assign grid locations.
                 datsegs[-1]["gridloc"] = locations[i]
                 if track_order:
                     datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
                     datsegs[-1]["rel_to_next"] = _relation_to_following(i)
+                    datsegs[-1]["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
+                    datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 pass
