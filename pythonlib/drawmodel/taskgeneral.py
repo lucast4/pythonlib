@@ -354,6 +354,18 @@ class TaskClass(object):
         else:
             assert False
 
+    def get_los_id(self):
+        """ Get load_old_set information, which means info for this as a fixed task
+        that was loaded online during expt
+        RETURNS:
+
+        """
+        if self.Params["input_ver"]=="ml2":
+            return self.Params["input_params"].info_summarize_task()["los_info"]
+        else:
+            assert False
+
+
 
     def get_number_hash(self, ndigs = 6, include_taskstrings=True, 
         include_taskcat_only=False, compact = False):
@@ -544,6 +556,47 @@ class TaskClass(object):
             assert False, "not coded"
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
+    def get_grid_ver(self):
+        """ Each task is either on a grid or off a grid. 
+        RETURNS:
+        - grid_ver, string, in 
+        --- 'on_grid', meaning that all objects are centered on a global grid location
+        --- 'on_rel', meaning that all objects are anchored to other obejcts, not to
+        global grid
+        """
+
+        # Latest version, this is saved as a meta param
+
+        # Older version, infer it from the saved centers.
+        # if all centers are aligned with grid centers, then this is on grid.
+        centers = self.PlanDat["CentersActual"]
+
+        # Only consider centers for the first prim in each chunk. This is concvention.
+        CLC = self.PlanDat["ChunksListClass"]
+        # Use the first chunk, by convnetion
+        Ch = CLC.ListChunksClass[0]
+        print(centers)
+        centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
+        print(centers)
+
+        grid_x = self.get_grid_params()["grid_x"]
+        grid_y = self.get_grid_params()["grid_x"]
+        grid_centers = []
+        for x in grid_x:
+            for y in grid_y:
+                grid_centers.append(np.asarray([x, y]))
+
+        if np.all(np.isin(centers, grid_centers)):
+            # Then each stroke center matches a grid center
+            grid_ver = "on_grid"
+        else:
+            # Then at least one stroke is off grid.
+            grid_ver = "on_rel"
+
+        return grid_ver
+
+
+
     def get_grid_params(self):
         """ What is the grid structure (if any) for this task?
         This is saved now (3/2022) in PlanClass in matlab.
@@ -572,6 +625,14 @@ class TaskClass(object):
         """
         from math import pi
 
+        # format taskstrokes correctly
+        objects = self.ShapesOldCoords
+        if inds_taskstrokes is not None:
+            objects = [objects[i] for i in inds_taskstrokes]
+        
+        # Some info about this task
+        grid_ver = self.get_grid_ver()
+
         # Some hard coded things 
         expt = params["expt"]
         if expt=="gridlinecircle":
@@ -584,47 +645,6 @@ class TaskClass(object):
             ygrid = gridparams["grid_y"]
         nver = len(ygrid)
         nhor = len(xgrid)
-
-        # format taskstrokes correctly
-        objects = self.ShapesOldCoords
-        if inds_taskstrokes is not None:
-            objects = [objects[i] for i in inds_taskstrokes]
-
-        # Sanity check that the hard coded things are correct.
-        for o in objects:
-            assert np.any(xgrid == o[1]["x"])
-            assert np.any(ygrid == o[1]["y"])
-
-        # 1) assign each object a grid location
-        locations = []
-        for o in objects:
-            xloc = o[1]["x"]
-            yloc = o[1]["y"]
-            xind = int(np.where(xgrid==xloc)[0]) - int((nhor-1)/2)
-            yind = int(np.where(ygrid==yloc)[0]) - int((nver-1)/2)
-            locations.append((xind, yind))
-
-
-        def _posdiffs(i, j):
-            # return xdiff, ydiff, 
-            # in grid units.
-            pos1 = locations[i]
-            pos2 = locations[j]
-            return pos2[0]-pos1[0], pos2[1] - pos1[1]
-
-        def _direction(i, j):
-            # only if adjacnet on grid.
-            xdiff, ydiff = _posdiffs(i,j)
-            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
-                return "up"
-            elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
-                return "down"
-            elif xdiff ==-1. and np.isclose(ydiff, 0.):
-                return "left"
-            elif xdiff ==1. and np.isclose(ydiff, 0.):
-                return "right"
-            else:
-                return "far"
 
         def _orient(i):
             # Angle, orientation
@@ -655,18 +675,60 @@ class TaskClass(object):
             else:
                 return _shape(i)
 
-        def _relation_from_previous(i):
-            # relation to previous stroke
-            if i==0:
-                return "start"
-            else:
-                return _direction(i-1, i)
+        ################## GRID THINGS
+        if grid_ver in ["on_grid"]:
+            # Sanity check that the hard coded things are correct.
+            for o in objects:
+                print(xgrid)
+                print(o)
+                assert np.any(xgrid == o[1]["x"])
+                assert np.any(ygrid == o[1]["y"])
 
-        def _relation_to_following(i):
-            if i==len(objects)-1:
-                return "end"
-            else:
-                return _direction(i, i+1)       
+            # 1) assign each object a grid location
+            locations = []
+            for o in objects:
+                xloc = o[1]["x"]
+                yloc = o[1]["y"]
+                xind = int(np.where(xgrid==xloc)[0]) - int((nhor-1)/2)
+                yind = int(np.where(ygrid==yloc)[0]) - int((nver-1)/2)
+                locations.append((xind, yind))
+
+            def _posdiffs(i, j):
+                # return xdiff, ydiff, 
+                # in grid units.
+                pos1 = locations[i]
+                pos2 = locations[j]
+                return pos2[0]-pos1[0], pos2[1] - pos1[1]
+
+            def _direction(i, j):
+                # only if adjacnet on grid.
+                xdiff, ydiff = _posdiffs(i,j)
+                if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
+                    return "up"
+                elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
+                    return "down"
+                elif xdiff ==-1. and np.isclose(ydiff, 0.):
+                    return "left"
+                elif xdiff ==1. and np.isclose(ydiff, 0.):
+                    return "right"
+                else:
+                    return "far"
+
+            def _relation_from_previous(i):
+                # relation to previous stroke
+                if i==0:
+                    return "start"
+                else:
+                    return _direction(i-1, i)
+
+            def _relation_to_following(i):
+                if i==len(objects)-1:
+                    return "end"
+                else:
+                    return _direction(i, i+1)       
+        else:
+            assert grid_ver in ["on_rel"]
+
 
         # Create sequence of tokens
         datsegs = []
@@ -674,11 +736,23 @@ class TaskClass(object):
             datsegs.append({
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
-                "gridloc": locations[i]
                 })
-            if track_order:
-                datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
-                datsegs[-1]["rel_to_next"] = _relation_to_following(i)
+
+            if grid_ver=="on_grid":
+                # Then this is on grid, so assign grid locations.
+                datsegs[-1]["gridloc"] = locations[i]
+                if track_order:
+                    datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
+                    datsegs[-1]["rel_to_next"] = _relation_to_following(i)
+            elif grid_ver=="on_rel":
+                # Then this is using relations, not spatial grid.
+                pass
+                # _get_rel_features(i)
+                # assert False, 'complete this'
+            else:
+                print(grid_ver)
+                assert False, "code it"
+
         return datsegs
 
 

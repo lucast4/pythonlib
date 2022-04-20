@@ -4,7 +4,7 @@ specifically for tasks in monkeylogic
 
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
-from pythonlib.behavior.chunks import chunk_strokes, chunks2parses
+from pythonlib.chunks.chunks import chunk_strokes, chunks2parses
 
 class TaskClass(object):
     """ Holds a single task object.
@@ -90,7 +90,7 @@ class TaskClass(object):
         """ if True, then fixed, False, then random
             [Copied from drawmonkey utils
         """
-        if self.info_summarize_task()["stage"]=="triangle_circle":
+        if self.info_summarize_task()["probe"]["stage"]=="triangle_circle":
             # since was random, but actualyl only small set of fixed tasks.
             return True
         
@@ -99,15 +99,33 @@ class TaskClass(object):
             # thne this is old version. they were never "fixed"
             return False
 
-        if info["prototype"]==0 and info["saved_setnum"] is None and info["resynthesized"]==0:
+        probe = info["probe"]
+        if probe["prototype"]==0 and probe["saved_setnum"] is None and probe["resynthesized"]==0:
             # then this is new random task sampled each block.
             return False
         else:
             return True
 
+
+    # def get_los_info(self):
+    #     """ Get load_old_set information, which means info for this as a fixed task
+    #     that was loaded online during expt
+    #     RETURNS:
+    #     """
+
+    #     probe_info = get_task_probe_info(self.Task)
+    #     print(probe_info)
+
+    #     probe_info[]
+
+
     def info_summarize_task(self):
         """ helper to extract summary information
-        [Copied from drawmonkey utils
+        RETURNS:
+        dict, holding:
+        - probe, Copied from drawmonkey utils
+        - los_info, tuple, (setname, setnum, index), if this is fixed task.
+        - tsc_info, tasksetclass info.
         """
 
         if self.info_is_new()==False:
@@ -119,92 +137,23 @@ class TaskClass(object):
 
         probe["stage"] = self.Task["stage"]
 
-        # if "constraints_to_skip" not in task.keys():
-        #     # then this was when I used general version in block params
-        #     if "constraints_to_skip" not in getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]:
-        #         co = ""
-        #     else:
-        #         co = getTrialsBlockParamsHotkeyUpdated(filedata, trial)["probes"]["constraints_to_skip"]
-        # else:
-        #     co = task["constraints_to_skip"]
+        # LOS (load old set) info
+        if probe["los_setindthis"] is not None:
+            los_info = (probe["los_setname"], int(probe["los_setnum"]), int(probe["los_setindthis"]))
+        else:
+            los_info = None
 
-        # if "TaskNew" not in task.keys():
-        #     p = 0
-        #     saved_setnum = []
-        # else:
-        #     try:
-        #         if "prototype" not in task["TaskNew"]["Task"]["info"].keys():
-        #             p = 0
-        #         else:
-        #             p = int(task["TaskNew"]["Task"]["info"]["prototype"][0][0])
-        #     except Exception as err:
-        #         print(err)
-        #         print(task)
-        #         print(task['TaskNew'])
-        #         print("This is old task version. how to handle?")
-        #         assert False
+        # TSC, TaskSetClass info
+        # TODO: extract this.
+        tsc_info = None
 
-        #     if "saved_setnum" in task["TaskNew"]["Task"]["info"].keys():
-        #         if len(task["TaskNew"]["Task"]["info"]["saved_setnum"])==0:
-        #             saved_setnum = None
-        #         else:    
-        #             saved_setnum = int(task["TaskNew"]["Task"]["info"]["saved_setnum"][0][0])
-        #     else:
-        #         saved_setnum = None
+        info = {
+            "probe":probe,
+            "los_info":los_info,
+            "tsc_info":tsc_info
+        }
 
-        # # was this resynthesized?
-        # resynthesized = 0
-        # rpath = None
-        # rtrial = None
-        # rsetnum = None
-        # rsetname = None
-        # if "savedTaskSet" in task.keys():
-        #     if len(task["savedTaskSet"])>0:
-        #         if task["savedTaskSet"]["reloaded"][0][0]==1:
-        #             resynthesized = 1
-        #             rpath = task["savedTaskSet"]["path"]
-        #             rtrial = int(task["savedTaskSet"]["trial"][0][0])
-
-        #             idx = task["savedTaskSet"]["path"].find("set")
-        #             rsetnum = int(task["savedTaskSet"]["path"][idx+3:])
-        #             rsetname = task["savedTaskSet"]["path"][:idx-1]
-        # else:
-        #     resynthesized = 0
-        #     rpath = None
-        #     rtrial = None
-        #     rsetnum = None
-        #     rsetname = None
-
-
-        # if "feedback_ver_prms" not in task.keys():
-        #     fp = None
-        # else:
-        #     fp = task["feedback_ver_prms"]
-
-        # # === get task number.
-        # # This identifies task if is prototype or savedsetnum.
-        # # This may not identify, if is random task, or resynthesized task.
-        # taskcat = task["TaskNew"]["Task"]["stage"]
-        # taskstr = task["TaskNew"]["Task"]["str"]
-        # idx = taskstr.find(taskcat)
-        # tasknum = int(taskstr[idx+len(taskcat)+1:])
-
-        # probe = {
-        #     "probe":task["probe"][0][0], 
-        #     "feedback_ver":task["feedback_ver"], 
-        #     "feedback_ver_prms":fp,
-        #     "constraints_to_skip":co, 
-        #     "prototype":p,
-        #     "saved_setnum":saved_setnum,
-        #     "tasknum":tasknum, 
-        #     "resynthesized":resynthesized, 
-        #     "resynthesized_path":rpath, 
-        #     "resynthesized_trial":rtrial, 
-        #     "resynthesized_setnum":rsetnum, 
-        #     "resynthesized_setname":rsetname, 
-        #     "stage":self.Task["stage"]
-        #     }
-        return probe
+        return info
     
     def info_generate_unique_name(self, strokes=None, nhash = 6, 
         include_taskstrings=True, include_taskcat_only=False):
@@ -284,10 +233,17 @@ class TaskClass(object):
 
         # Compose the task name
         taskcat = self.info_name_this_task_category()
-        tasknum = self.info_summarize_task()["tasknum"]
+        tasknum = self.info_summarize_task()["probe"]["tasknum"]
+
+        # If LOS exists, then use that
+        los_info = self.info_summarize_task()["los_info"]
+        if los_info is not None:
+            taskcat = f"{los_info[0]}-{los_info[1]}"
+            tasknum = los_info[2]
+
         if include_taskstrings:
             assert include_taskcat_only is False, "choose one or other"
-            return f"{taskcat}_{tasknum}-{_hash}"
+            return f"{taskcat}-{tasknum}-{_hash}"
         elif include_taskcat_only:
             return f"{taskcat}-{_hash}"
         else:
@@ -335,15 +291,15 @@ class TaskClass(object):
         if fixed, then what set num is it?
         [Copied from utils, similar to make unique name]
         """
-        info = self.info_summarize_task()
+        probe = self.info_summarize_task()["probe"]
         task = self.Task
         if self.info_is_fixed():
-            if info["resynthesized"]==1:
-                taskname = f"{task['stage']}-rsyn-{info['resynthesized_setname']}-{info['resynthesized_setnum']}-{info['resynthesized_trial']}"
-            elif info["saved_setnum"] is not None:
-                taskname = f"{task['stage']}-ss-{info['saved_setnum']}"
+            if probe["resynthesized"]==1:
+                taskname = f"{task['stage']}-rsyn-{probe['resynthesized_setname']}-{probe['resynthesized_setnum']}-{probe['resynthesized_trial']}"
+            elif probe["saved_setnum"] is not None:
+                taskname = f"{task['stage']}-ss-{probe['saved_setnum']}"
                 # print(taskname)
-            elif info["prototype"]==1:
+            elif probe["prototype"]==1:
                 taskname = f"{task['stage']}-pt"
             elif task["stage"]=="triangle_circle":
                 # then OK, hard coded to maek this a fixed task.
@@ -998,10 +954,17 @@ class TaskClass(object):
             self.PlanDat = None
             return
 
-        _list_keys = ['Plan', 'CentersActual', 'Rels', 'Prims', 'ChunksList', 'Strokes']
-        # older version didnt hold TaskGridClass
-        if 'TaskGridClass' in Plan.keys():
-            _list_keys.append('TaskGridClass')
+        if True:
+            # get all keys, except explicitly ignored
+            _list_keys_to_ignore = ['PlanSpatial', 'StrokesBasePrims', 'CentersBasePrims', 
+                'PrimsAsTasks', 'PrimsAsTasksNoMods', 'TaskClass', 'InputGridname', 'TaskGridname']
+            _list_keys = [k for k in Plan.keys() if k not in _list_keys_to_ignore]
+        else:
+            # tell what keys to get. this doesnt keep up with new versions
+            _list_keys = ['Plan', 'CentersActual', 'Rels', 'Prims', 'ChunksList', 'Strokes']
+            # older version didnt hold TaskGridClass
+            if 'TaskGridClass' in Plan.keys():
+                _list_keys.append('TaskGridClass')
 
         dat = {}
         # Extract things
@@ -1038,6 +1001,10 @@ class TaskClass(object):
                     "y":loc[1]}, traj = traj)
             dat["primitives"].append(Prim)
 
+        # ChunksList should be indexed from 0
+        for this in dat["ChunksList"]:
+            chunks = this[1]
+            this[1] = [ch-1 for ch in chunks]
 
         # Sanity checks
         # - Base prims should correspond to objects
@@ -1067,7 +1034,8 @@ class TaskClass(object):
 
         
         # Remove strokes, only needed above
-        del dat["Strokes"]
+        if "Strokes" in dat.keys():
+            del dat["Strokes"]
 
         # store
         self.PlanDat = dat
@@ -1297,6 +1265,7 @@ def task2parses(task, model):
     return parses
 
 
+
 def get_task_probe_info(task):
     """
     task is not class, is dict from ml2.
@@ -1389,27 +1358,27 @@ def get_task_probe_info(task):
         if "load_old_set_setnum" in INFO.keys():
             if len(INFO["load_old_set_setnum"])>0:
                 los_setname = INFO["load_old_set_ver"]
-                los_setnum = INFO["load_old_set_setnum"][0]
-                los_setinds = INFO["load_old_set_inds"][0]
+                los_setnum = int(INFO["load_old_set_setnum"][0])
+                los_setinds = [int(x) for x in INFO["load_old_set_inds"][0]]
                 if "load_old_set_indthis" in INFO.keys():
-                    los_setindthis =  INFO["load_old_set_indthis"][0]
+                    los_setindthis =  int(INFO["load_old_set_indthis"][0])
                     # assert los_setindthis==los_setinds[tasknum]
                     tasknum = los_setindthis
                 else:
-                    los_setindthis = []
+                    los_setindthis = None
 
                 # Replace old indices
                 assert saved_setnum==los_setnum
             else:
-                los_setname = []
-                los_setnum = []
-                los_setinds = []
-                los_setindthis = []                
+                los_setname = None
+                los_setnum = None
+                los_setinds = None
+                los_setindthis = None              
         else:
-            los_setname = []
-            los_setnum = []
-            los_setinds = []
-            los_setindthis = []
+            los_setname = None
+            los_setnum = None
+            los_setinds = None
+            los_setindthis = None
 
     # was this resynthesized?
     resynthesized = 0

@@ -347,7 +347,7 @@ def preprocess_task_train_test(D, expt):
     for i in range(0, len(D.Dat["Task"])):
         t = D.Dat.iloc[i]["Task"]
         t_p = t.Params["input_params"]
-        probe_val = t_p.info_summarize_task()["probe"]
+        probe_val = t_p.info_summarize_task()["probe"]["probe"]
         probe_list.append(probe_val)
     D.Dat["probe"] = probe_list
 

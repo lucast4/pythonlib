@@ -735,6 +735,7 @@ class Dataset(object):
             "resynthesized", "resynthesized_path", "resynthesized_trial",
             "resynthesized_setnum", "resynthesized_setname", "modelscore", 
             "modelcomp", "hausdorff_positive", "circleness", "kind"]
+        cols_to_remove.extend(["los_setinds", "los_setindthis", "los_setname", "los_setnum"]) # additional things to remove, these should use taskclass
         for col in cols_to_remove:
             if col in self.Dat.columns:
                 del self.Dat[col]
@@ -4362,7 +4363,7 @@ class Dataset(object):
         strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
             nrand=nrand, titles=titles)
         trialcodes =  self.Dat.iloc[idxs]["trialcode"].tolist()
-
+ 
         is_task = which_strokes=="strokes_task"
 
         fig, axes = self.plotMultStrokes(strokes_list, titles=titles, add_stroke_number=add_stroke_number,
