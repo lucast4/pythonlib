@@ -133,16 +133,13 @@ class TaskClass(object):
             los_info = None
 
         # TSC, TaskSetClass info
+        tsc_info = None
         if self.PlanDat is not None:
-            if "TaskSetClass" in self.PlanDat["Info"].keys():
-                tsc_info = self.PlanDat["Info"]["TaskSetClass"]
-                if len(tsc_info)==0:
-                    tsc_info = None
-            else:
-                tsc_info = None
-        else:
-            tsc_info = None
-
+            if "Info" in self.PlanDat.keys():
+                if "TaskSetClass" in self.PlanDat["Info"].keys():
+                    tsc_info = self.PlanDat["Info"]["TaskSetClass"]
+                    if len(tsc_info)==0:
+                        tsc_info = None
 
         info = {
             "probe":probe,
@@ -279,7 +276,7 @@ class TaskClass(object):
     # # figt.savefig(f"{sdirthis}/{task}-task.pdf");
     # # plt.close("all")
 
-
+    
 
     def info_name_this_task_category(self):
         """ 
@@ -1369,12 +1366,7 @@ def _get_task_probe_info(task):
                     los_setindthis = None
 
                 # Replace old indices
-                # if saved_setnum!=los_setnum:
-                #     print("1", saved_setnum)
-                #     print("2", los_setnum)
-                #     print(INFO)
-                #     print()
-                #     assert False
+                # assert saved_setnum==los_setnum
             else:
                 los_setname = None
                 los_setnum = None
