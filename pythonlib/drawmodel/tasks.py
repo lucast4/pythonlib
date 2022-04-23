@@ -1369,7 +1369,12 @@ def _get_task_probe_info(task):
                     los_setindthis = None
 
                 # Replace old indices
-                assert saved_setnum==los_setnum
+                # if saved_setnum!=los_setnum:
+                #     print("1", saved_setnum)
+                #     print("2", los_setnum)
+                #     print(INFO)
+                #     print()
+                #     assert False
             else:
                 los_setname = None
                 los_setnum = None
