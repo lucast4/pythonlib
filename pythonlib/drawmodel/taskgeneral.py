@@ -370,8 +370,24 @@ class TaskClass(object):
         else:
             assert False
 
+    def get_unique_name(self):
+        """ Wrapper to get good unique name
+        THIS is good version, identical to Dataset class
+        RETURNS:
+        - name, string name that is unique to this task.
+        """
+        if self.Params["input_ver"]=="ml2":
+            Task = self.Params["input_params"]
+            random_task = not Task.info_is_fixed()
+            if random_task:
+                return self._get_number_hash(ndigs=10, include_taskstrings=False,
+                    include_taskcat_only=True, compact=True)
+            else:
+                return self._get_number_hash(ndigs=6, include_taskstrings=True)
+        else:
+            assert False
 
-    def get_number_hash(self, ndigs = 6, include_taskstrings=True, 
+    def _get_number_hash(self, ndigs = 6, include_taskstrings=True, 
         include_taskcat_only=False, compact = False):
         """ Returns number, with digits ndigs, based on 
         coordinates of task. shodl be unique id.
@@ -381,16 +397,19 @@ class TaskClass(object):
         """
         # if include_taskcat_only:
         #     assert include_taskstrings is False, "choose either entier string, or just the cat"
-        idnum = self.Params["input_params"].info_generate_unique_name(self.Strokes, 
-            nhash=ndigs, include_taskstrings=include_taskstrings, include_taskcat_only=include_taskcat_only)
+        if self.Params["input_ver"]=="ml2":
+            idnum = self.Params["input_params"].info_generate_unique_name(self.Strokes, 
+                nhash=ndigs, include_taskstrings=include_taskstrings, include_taskcat_only=include_taskcat_only)
 
-        if compact:
-            # remove long "random" in string
-            ind = idnum.find("random")
-            if ind>0:
-                idnum = idnum[:ind+1] + idnum[ind+6:]
+            if compact:
+                # remove long "random" in string
+                ind = idnum.find("random")
+                if ind>0:
+                    idnum = idnum[:ind+1] + idnum[ind+6:]
 
-        return idnum
+            return idnum
+        else:
+            assert False
 
     #############################
     def program2shapes(self, program):

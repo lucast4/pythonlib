@@ -600,7 +600,7 @@ class Dataset(object):
         if redo_cleanup:
             self._cleanup_using_tasks(unique_names_post_Sep17=unique_names_post_Sep17)
 
-    def _task_hash(self, Task, random_task, use_objects = False, 
+    def _task_hash(self, Task, use_objects = False, 
         original_ver_before_sep21=True):
         if use_objects:
             assert False, "not coded"
@@ -614,35 +614,35 @@ class Dataset(object):
             ndigs = 6
             return Task.get_number_hash(ndigs=ndigs, include_taskstrings=True)
         else:
-            if random_task:
-                return Task.get_number_hash(ndigs=10, include_taskstrings=False,
-                    include_taskcat_only=True, compact=True)
+            return Task.get_unique_name()
+            # if random_task:
+            #     return Task.get_number_hash(ndigs=10, include_taskstrings=False,
+            #         include_taskcat_only=True, compact=True)
 
-            else:
-                # Thiese two lines are identical. This is idenitcal to before Sep 17
-                return Task.get_number_hash(ndigs=6, include_taskstrings=True)
-                # return self.Dat.iloc[ind]["unique_task_name"]
+            # else:
+            #     # Thiese two lines are identical. This is idenitcal to before Sep 17
+            #     return Task.get_number_hash(ndigs=6, include_taskstrings=True)
+            #     # return self.Dat.iloc[ind]["unique_task_name"]
 
 
-    def task_hash(self, ind, use_objects = False, 
-        original_ver_before_sep21=True):
-        """ Return task hash, differeing depending in smart way on onctext
-        INPUT:
-        - either ind or Task
-        RETURNS: 
-        - hashable identifier that should apply across all datsaets.
-        --- if task is Fixed, then returns the unique_task_name
-        --- if task is random, then returns a 10-digit hash.
-        --- if use_objects, then overwrites others, and returns a FrozenSet with
-        the objects (and affine features). This only works after ML2 using objects, so like
-        July 2021 +. SO: only change is for random tasks. Fixed tasks have exact same name as 
-        before.
-        """
+    # def task_hash(self, ind, use_objects = False, 
+    #     original_ver_before_sep21=True):
+    #     """ Return task hash, differeing depending in smart way on onctext
+    #     INPUT:
+    #     - either ind or Task
+    #     RETURNS: 
+    #     - hashable identifier that should apply across all datsaets.
+    #     --- if task is Fixed, then returns the unique_task_name
+    #     --- if task is random, then returns a 10-digit hash.
+    #     --- if use_objects, then overwrites others, and returns a FrozenSet with
+    #     the objects (and affine features). This only works after ML2 using objects, so like
+    #     July 2021 +. SO: only change is for random tasks. Fixed tasks have exact same name as 
+    #     before.
+    #     """
 
-        Task = self.Dat.iloc[ind]["Task"]
-        random_task = self.Dat.iloc[ind]["random_task"]
-        return self._task_hash(Task, random_task, use_objects = use_objects, 
-            original_ver_before_sep21=original_ver_before_sep21)
+    #     Task = self.Dat.iloc[ind]["Task"]
+    #     return self._task_hash(Task, use_objects = use_objects, 
+    #         original_ver_before_sep21=original_ver_before_sep21)
 
 
 

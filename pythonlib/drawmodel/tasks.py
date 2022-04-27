@@ -58,14 +58,8 @@ class TaskClass(object):
         """
 
         # 1) remove redundant information
-        del self.Task["x_before_sketchpad"]
-        del self.Task["y_before_sketchpad"]
-        del self.Task["x"]
-        del self.Task["y"]
-        del self.Task["x_rescaled"]
-        del self.Task["y_rescaled"]
-
-        # 2) Pull all useful stuff into top level
+        _list_keys_to_ignore = ["x_before_sketchpad", "y_before_sketchpad", "x", "y", "x_rescaled", "y_rescaled"]
+        self.Task = {k:v for k,v in self.Task.items() if k not in _list_keys_to_ignore}
 
 
 
@@ -148,8 +142,7 @@ class TaskClass(object):
         }
 
         return info
-
-    
+        
     def info_generate_unique_name(self, strokes=None, nhash = 6, 
         include_taskstrings=True, include_taskcat_only=False):
         """ This is simialr to in utils, but here is more confident that each task
@@ -235,7 +228,6 @@ class TaskClass(object):
         if los_info is not None:
             taskcat = f"{los_info[0]}-{los_info[1]}"
             tasknum = los_info[2]
-
         if include_taskstrings:
             assert include_taskcat_only is False, "choose one or other"
             return f"{taskcat}-{tasknum}-{_hash}"
@@ -1366,7 +1358,8 @@ def _get_task_probe_info(task):
                     los_setindthis = None
 
                 # Replace old indices
-                # assert saved_setnum==los_setnum
+                saved_setnum=los_setnum
+                tasknum = los_setindthis 
             else:
                 los_setname = None
                 los_setnum = None
