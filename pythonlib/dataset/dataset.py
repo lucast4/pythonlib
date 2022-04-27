@@ -612,7 +612,7 @@ class Dataset(object):
             # tasknums can be arbitrary). Solution, increase hash length, and dont have 
             # taskstrings
             ndigs = 6
-            return Task.get_number_hash(ndigs=ndigs, include_taskstrings=True)
+            return Task._get_number_hash(ndigs=ndigs, include_taskstrings=True)
         else:
             return Task.get_unique_name()
             # if random_task:
@@ -829,12 +829,10 @@ class Dataset(object):
         # Replace unique name with new one, if tasks have been loaded
         if unique_names_post_Sep17: 
             def F(x):
-                return self._task_hash(Task=x["Task"], random_task=x["random_task"], 
-                    original_ver_before_sep21=False)
+                return self._task_hash(Task=x["Task"], original_ver_before_sep21=False)
         else:
             def F(x):
-                return self._task_hash(Task=x["Task"], random_task=x["random_task"], 
-                    original_ver_before_sep21=True)
+                return self._task_hash(Task=x["Task"], original_ver_before_sep21=True)
             # Equivalent to line above.
             # def F(x):
             #     # return x["Task"].Params["input_params"].info_generate_unique_name()
