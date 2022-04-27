@@ -161,6 +161,7 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
     RETURNS:
     - figbeh, figtask
     """
+    print(" ** TODO: this should call plot_beh_grid_flexible_helper. It is redundant")
     from pythonlib.dataset.plots import plot_dat_grid_inputrowscols
     dfthis = df[df["character"].isin(tasklist)]
 

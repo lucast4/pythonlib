@@ -8,6 +8,7 @@ analy_dataset_summarize_050621
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import os
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
         LIST_N_PER_GRID = [1], strokes_by_order=True, how_to_split_files = "task_stagecategory"):
@@ -28,6 +29,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     RETURNS:
     - saves figures.
     """
+    PRINT("*** FIX - don't subsample trials. instead make mulitpel plots")
     from pythonlib.dataset.plots import plot_beh_grid_grouping_vs_task
     import os
     
@@ -60,3 +62,64 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
             plt.close("all")
             
             
+############## PRINT THINGS
+
+
+def print_save_task_information(D, SDIR_MAIN):
+    """ Print into text file summary of tasks presented across experiment, broken down
+    into task categories and then unique tasks.
+    Also print sample sizes
+    """
+
+    def _print_save_task_information(D, SDIR_MAIN, date=None):
+        """ Print into text file summary of tasks presented across experiment, broken down
+        into task categories and then unique tasks.
+        Also print sample sizes
+        """
+        from pythonlib.tools.expttools import writeDictToYaml
+        
+        df = D.Dat
+        
+        # Specific date
+        if date is not None:
+            df = df[df["date"]==date]
+            suffix = f"-{date}"
+        else:
+            suffix = "-ALLDATES"
+        sdir = f"{SDIR_MAIN}/task_printed_summaries"
+        os.makedirs(sdir, exist_ok=True)
+        
+        # get task categories    
+        taskcats = df["task_stagecategory"].unique()
+
+        catdict = {}
+        catndict = {}
+        for cat in taskcats:
+            dfthis = df[df["task_stagecategory"] == cat]
+
+            taskdict = {}
+            tasks = sorted(dfthis["unique_task_name"].unique())
+            for t in tasks:
+                n = sum(dfthis["unique_task_name"]==t)
+                taskdict[t] = n
+
+            catdict[cat] = taskdict
+
+            # Information about this category
+
+            catndict[cat] = {
+                "n_trials":len(dfthis),
+                "n_unique_tasks":len(tasks),
+                "min_ntrials_across_tasks":min(taskdict.values()),
+                "max_ntrials_across_tasks":max(taskdict.values()),
+            }
+
+        writeDictToYaml(catdict, f"{sdir}/all_tasks_bycategory{suffix}.yaml")
+        writeDictToYaml(catndict, f"{sdir}/all_categories{suffix}.yaml")
+
+    # Across all dates
+    _print_save_task_information(D, SDIR_MAIN)
+
+    # Separate for each date
+    for date in D.Dat["date"].unique():
+        _print_save_task_information(D, SDIR_MAIN, date)
