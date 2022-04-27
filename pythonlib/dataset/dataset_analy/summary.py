@@ -29,7 +29,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     RETURNS:
     - saves figures.
     """
-    PRINT("*** FIX - don't subsample trials. instead make mulitpel plots")
+    print("*** FIX - don't subsample trials. instead make mulitpel plots")
     from pythonlib.dataset.plots import plot_beh_grid_grouping_vs_task
     import os
     
