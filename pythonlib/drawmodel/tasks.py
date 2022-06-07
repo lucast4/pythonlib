@@ -454,26 +454,34 @@ class TaskClass(object):
 
         # V1: based on saved Objects
         if "Objects" in T.keys():
-            # New version, like 6/2021 
-            if "Features" in T["Objects"]:
-                Feat = T["Objects"]["Features"]
-            elif "Features_Active" in T["Objects"]:
-                Feat = T["Objects"]["Features_Active"]
-            if isinstance(Feat, dict):
-                # print(Feat)
-                # print(type(Feat))
-                # for k, v in Feat.items():
-                #     print(k, v)
-                shapes1 = Feat["shapes"] # dict
-                shapes1 = self._program_line_dict2list(shapes1)
+            if len(T["Objects"])>0:
+                # New version, like 6/2021 
+                if "Features" in T["Objects"]:
+                    Feat = T["Objects"]["Features"]
+                elif "Features_Active" in T["Objects"]:
+                    Feat = T["Objects"]["Features_Active"]
+                else:
+                    print(T["Objects"])
+                    assert False, "not sure why..."
+                if isinstance(Feat, dict):
+                    # print(Feat)
+                    # print(type(Feat))
+                    # for k, v in Feat.items():
+                    #     print(k, v)
+                    shapes1 = Feat["shapes"] # dict
+                    shapes1 = self._program_line_dict2list(shapes1)
+                else:
+                    # print("---")
+                    # print(self.Task)
+                    # print("---")
+                    # for k, v in T.items():
+                    #     print(k, v)
+                    # assert False
+                    shapes1 = None
             else:
-                # print("---")
-                # print(self.Task)
-                # print("---")
-                # for k, v in T.items():
-                #     print(k, v)
-                # assert False
                 shapes1 = None
+        else:
+            shapes1 = None
 
         # V2: if this is "mixture2" task, then the mixture2 params
         Task = T["Task"]
