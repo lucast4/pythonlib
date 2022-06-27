@@ -689,3 +689,54 @@ def get_ylim(vals, pertile=[1.5, 98.5]):
     YLIM[0]-=0.1*ydelt
     YLIM[1]+=0.1*ydelt
     return YLIM
+
+def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, sharex=True, sharey=True, ylim=None):
+    """
+    Makes multiple figures, each with same num of subplots, for cases with too many supblots for a single figure
+    function that returns subplots axes.
+    PARAMS:
+    - ncols, int
+    - nrowsmax, int, resets and starts ne figure if get psat this.
+    - SIZE, sides of each subplot
+    - sharex, share, bool.
+    - ylim, (2,) array or list.
+    RETURNS:
+    - getax, a function, called ax = getax(n) where n is the index to subplot.
+    - figholder, list of (fig, axes)), length of num plots.
+    
+    - nplots, int.
+
+    """
+    
+    nrows = int(np.ceil(ndat/ncols))
+    nplots = int(np.ceil(nrows/nrowsmax))
+    if nplots>1:
+        nrows_per_plot = nrowsmax
+    else:
+        nrows_per_plot = nrows
+    
+    ndats_per_plot = nrows_per_plot * ncols
+    
+    figholder = []
+    for _ in range(nplots):
+        fig, axes = plt.subplots(nrows_per_plot, ncols, sharex=sharex, sharey=sharey, 
+                                 figsize=(ncols*SIZE, nrows_per_plot*SIZE))
+        if ylim is not None:
+            for ax in axes.flatten():
+                ax.set_ylim(ylim)
+        figholder.append((fig, axes))
+    
+    def getax(n):
+        """given the datapoint (n), return the fig
+        and axis handle
+        """
+        
+        fignum = int(np.ceil((n+1)/ndats_per_plot))-1
+        subplotnum = n%ndats_per_plot
+        
+        fig, axes =  figholder[fignum]
+        ax = axes.flatten()[subplotnum]
+        
+        return fig, ax
+    return getax, figholder, nplots
+        

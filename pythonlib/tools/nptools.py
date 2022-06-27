@@ -46,9 +46,23 @@ def sortPop(X, dim, filt):
     Xcopy = np.moveaxis(Xcopy, 0, dim)
     return Xcopy   
 
-
 def isin_close(a, v):
-    """ returns True if a (number) is in v (vector) allowing
+    """ returns True if a (scalar) is in v (vector) allowing
     for tolerace. essentially a for loop using np.isclose
+    RETURNS:
+    - bool, whether a is in v
+    - idx, location of a in v.
     """
-    return np.any([np.isclose(a, b) for b in v])
+    x = [np.isclose(a, b) for b in v]
+    return np.any(x), np.where(x)[0]
+
+def isin_array(arr, list_arr):
+    """ Returns True if arr (array) is equal to at least one of arrays in list_arr
+    PARAMS;
+    - arr, np array
+    - list_arr, list of arrays
+    """
+    tmp = [(arr == x).all() for x in list_arr] # array of bools.
+    tmp = [np.allclose(arr, x) for x in list_arr] # array of bools.
+    return any(tmp)
+

@@ -349,7 +349,8 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     else:
         return df_new
 
-def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True):
+def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True, 
+        reset_index=True):
     """ 
     filtdict is dict, where each value is a list of
     allowable values.
@@ -386,7 +387,10 @@ def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True):
     if return_indices:
         return list(df.index)
     else:
-        return df.reset_index(drop=True)
+        if reset_index:
+            return df.reset_index(drop=True)
+        else:
+            return df
 
 def findPandas(df, colname, list_of_vals, reset_index=True):
     """ returns df with only rows matchibng list_of_vals. 
