@@ -935,11 +935,14 @@ class TaskClass(object):
 
     def planclass_extract_all(self):
         """ Wrapper to extract all planclass info.
+        Also extracts "Objects" based on plan (e.g,, motifs that are touching are 
+        actually a single object)
         NOTE: if old version (no planclass) should fail gracefully, return None
         RETURNS:
         - dat, dict holding all plan things, including processed.
         -- or None, if no Plan dat
         - self.PlanDat will be replaced with dat
+        - self.Objects modified.
         """
         from pythonlib.tools.monkeylogictools import dict2list2, dict2list
         

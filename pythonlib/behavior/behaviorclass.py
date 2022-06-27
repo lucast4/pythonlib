@@ -27,7 +27,8 @@ class BehaviorClass(object):
         -- "shape_dist_thresholds", value is dict, specifying max distance for calling something a given label.
         """
 
-        self.Dataset = None
+        # self.Dataset = None
+        self.Datrow = None
         self.IndDataset = None
         self.Expt = None
         self.Strokes = None # holds strokes as strokeclass
@@ -154,8 +155,9 @@ class BehaviorClass(object):
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
                 "character":D.Dat.iloc[ind]["character"]}
 
-            self.Dataset = D
-            self.IndDataset = ind
+            # self.Dataset = D.copy() # must copy, or else if modify D, the ind doesnt match anymore.
+            # self.IndDataset = ind
+            self.Datrow = D.Dat.iloc[ind]
 
             #### easier access to some variables
             # self.Strokes = self.Dat["strokes_beh"]
@@ -261,18 +263,22 @@ class BehaviorClass(object):
 
 
 
-    def extract_strokes_vels(self, cache=True):
+    def extract_strokes_vels(self, Dataset, IndDataset, cache=True):
         """ Extract stroke velocities using defgault params
         PARAMS:
+        - Dataset, uses this to get fs
+        - IndDataset, index into Dataset (for this trial)
         - cache, bool (True), if Ture, saves in self.StrokesVel
         RETURNS:
         - strokes_vels, same shape as strokes.
         NOTE: only runs if self.StrokesVel is None
         """
 
+
         if self.StrokesVel is None:
             from pythonlib.tools.stroketools import strokesVelocity
-            fs = self.Dataset.get_sample_rate(self.IndDataset)
+            # fs = self.Dataset.get_sample_rate(self.IndDataset)
+            fs = Dataset.get_sample_rate(IndDataset)
             strokes_vel, strokes_speeds = strokesVelocity(self.Strokes, fs, clean=True)
             if cache:
                 self.StrokesVel = strokes_vel
@@ -334,6 +340,15 @@ class BehaviorClass(object):
 
 
         return taskinds_this, strokes_task, distances
+
+    #################### Task stuff
+    def task_extract(self):
+        """ Return the TaskClass object
+        """
+
+        # print(self.Dataset)
+        # return self.Dataset.Dat.iloc[self.IndDataset]["Task"]
+        return self.Datrow["Task"]
 
 
 
@@ -561,6 +576,7 @@ class BehaviorClass(object):
         not smat, which is always the input order of taskstrokes.
         """
         from pythonlib.drawmodel.behtaskalignment import aligned_distance_matrix
+        import numpy as np
 
         strokes_beh = self.extract_strokes()
         strokes_task = self.extract_strokes("task")
@@ -577,11 +593,37 @@ class BehaviorClass(object):
             idxs = [i for i in idxs if i in indstokeep]
             smat_sorted = smat[:, idxs]
 
+        if smat_sorted.shape[1]==0:
+            # due to thresholding this datapoint is empty. 
+            # i..e, no beh stroke matches even one task stroke
+            self.Alignsim_taskstrokeinds_sorted = idxs
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted = []
+            self.Alignsim_simmat_sorted = smat_sorted
+            self.Alignsim_simmat_unsorted = smat
+            self.Alignsim_Datsegs = None
+        else:
+            # Compute for each beh stroke the best matching task stroke, based on the max similarity
+            # [1,2,2,0] means behstroke 0 is aligned to takstroke 0, etc... after taskstrokes are sorted.
+            try:
+                idxs_beh = np.argmax(smat_sorted, axis=1)
+            except Exception as err:
+                self.plotStrokes()
+                self.plotTaskStrokes()
+                print("--")
+                print(strokes_beh)
+                print(smat)
+                print(idxs)
+                print("----")
+                print(smat_sorted)
+                print(len(smat_sorted))
+                print(smat_sorted.shape)
+                raise err
 
-        self.Alignsim_taskstrokeinds_sorted = idxs
-        self.Alignsim_simmat_sorted = smat_sorted
-        self.Alignsim_simmat_unsorted = smat
-        self.Alignsim_Datsegs = None
+            self.Alignsim_taskstrokeinds_sorted = idxs
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted = idxs_beh
+            self.Alignsim_simmat_sorted = smat_sorted
+            self.Alignsim_simmat_unsorted = smat
+            self.Alignsim_Datsegs = None
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False):
         """
@@ -609,7 +651,8 @@ class BehaviorClass(object):
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
-        Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
+        # Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
+        Task = self.task_extract()
 
         datsegs = Task.tokens_generate(params, inds_taskstrokes)
 
@@ -917,7 +960,22 @@ class BehaviorClass(object):
 
         return features
 
-
-
-
     ##################################### PLOTS
+    def plotStrokes(self, ax=None):
+        """ Quick plot of this task
+        """
+        import matplotlib.pyplot as plt
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        strokes = [S() for S in self.Strokes]
+        plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, number_from_zero=True)
+        return ax
+
+    def plotTaskStrokes(self, ax=None):
+        """ Quick plot of this task
+        """
+        T = self.task_extract()
+        T.plotStrokes(ax)

@@ -215,6 +215,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
         assert clean_unordered==False, "can only choose one of these 2 options"
         each_stroke_separate= True
         plotver = "order_gradient"
+        force_onsets_same_col_as_strokes = True
     elif clean_task:
         add_stroke_number=False 
         each_stroke_separate = True

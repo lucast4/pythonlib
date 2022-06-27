@@ -131,6 +131,39 @@ class TaskClass(object):
             # populate self.ShapesOldCoords, for backwards compativbility with other code.
             self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
 
+            # Extract Chunks
+            self.ChunksListClass = taskobj.PlanDat["ChunksListClass"]
+
+            # Extract primitivechunks (e..g, motif is actually a single object)
+            print("TODO (taskgeneral)")
+            if False:
+                self.objects_extract_using_planclass()
+
+    def objects_extract_using_planclass(self):
+        """ Uses plan in PlanClass version of task to decide on Objcts. Main point is
+        the following chunking organization, based on the hand-coded prim categories (matlab):
+        Objects are: (i) base prims; (ii) motifs that are touching. Otherwise, Objects are lower 
+        level, so the following are split up: (i) characters [dont really have to do anything] (
+        (ii) motifs not touchign [e.g. parallele lines]
+        RETURNS:
+        - modifies self.PrimitivesObjects
+        """
+
+        # 1) Get the chunks and prims categories
+        CLC = self.ChunksListClass
+        primcats = self.PlanDat["PrimsCategories"]
+        strokes = self.Strokes
+
+        # 2) For each chunk, decide if it is motif and if is touching
+        CLC.print_summary()
+        print(primcats)
+        print(len(strokes))
+
+        # 3) For any motif, figure out if all strokes are connected to al other strokes.
+        assert False, "not coded"
+
+
+
     def _initialize_drawnn(self, program=None, shapes=None, chunks=None):
         """
         To initialize a new task for drawnn training.
@@ -580,13 +613,16 @@ class TaskClass(object):
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
     def get_grid_ver(self):
-        """ Each task is either on a grid or off a grid. 
+        """ Each task is either on a grid or off a grid, based on locations of centers of the primitves.
+
         RETURNS:
         - grid_ver, string, in 
         --- 'on_grid', meaning that all objects are centered on a global grid location
         --- 'on_rel', meaning that all objects are anchored to other obejcts, not to
         global grid
+
         """
+        from pythonlib.tools.nptools import isin_array
 
         # Latest version, this is saved as a meta param
 
@@ -598,9 +634,7 @@ class TaskClass(object):
         CLC = self.PlanDat["ChunksListClass"]
         # Use the first chunk, by convnetion
         Ch = CLC.ListChunksClass[0]
-        print(centers)
         centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
-        print(centers)
 
         grid_x = self.get_grid_params()["grid_x"]
         grid_y = self.get_grid_params()["grid_x"]
@@ -609,10 +643,17 @@ class TaskClass(object):
             for y in grid_y:
                 grid_centers.append(np.asarray([x, y]))
 
-        if np.all(np.isin(centers, grid_centers)):
+        if all([isin_array(c, grid_centers) for c in centers]):
+            # print("centers are on grid:")
+            # print(centers)
+            # print(grid_centers)
             # Then each stroke center matches a grid center
             grid_ver = "on_grid"
         else:
+            # print("---")
+            # print(centers)
+            # print(grid_centers)
+            # print([isin_array(c, grid_centers) for c in centers])
             # Then at least one stroke is off grid.
             grid_ver = "on_rel"
 
@@ -631,7 +672,7 @@ class TaskClass(object):
 
 
 
-    def tokens_generate(self, params, inds_taskstrokes=None, track_order=True):
+    def tokens_generate(self, params = {}, inds_taskstrokes=None, track_order=True):
         """
         Designed for grid tasks, where each prim is a distinct location on grid,
         so "relations" are well-defined based on adjacency and direction
@@ -648,21 +689,42 @@ class TaskClass(object):
         """
         from math import pi
 
+        ############ PREPARE DATA
         # Extract shapes, formatted correctly
         objects = self.ShapesOldCoords
+        print("TODO: instead of ShapesOldCoords, should first concatenate strokes that are (i) in same motif and (ii) touching")
+        print("see: get_grid_ver")
+        print("should be in self.PrimitivesObjects")
+        # also extract as primitiveclasses (NOTE: this should also be changed to primitivechunk)
+        Prims = self.Primitives
+        assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
+        # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
+
         if inds_taskstrokes is not None:
-            objects = [objects[i] for i in inds_taskstrokes]
-        
-        # Some grid params for this task
+            try:
+                objects = [objects[i] for i in inds_taskstrokes]
+                Prims = [Prims[i] for i in inds_taskstrokes]
+            except Exception as err:
+                print(objects)
+                print(len(objects))
+                print(inds_taskstrokes)
+                print(len(self.Strokes))
+                self.plotStrokes()
+                raise err
+
+        ############# Some grid params for this task
         # - was this on grid?
         grid_ver = self.get_grid_ver()
 
         # - grid spatial params 
-        expt = params["expt"]
-        if expt in ["gridlinecircle", "chunkbyshape2"]:
-            xgrid = np.linspace(-1.7, 1.7, 3)
-            ygrid = np.linspace(-1.7, 1.7, 3)
-        else:
+        get_grid = True
+        if "expt" in params.keys():
+            expt = params["expt"]
+            if expt in ["gridlinecircle", "chunkbyshape2"]:
+                xgrid = np.linspace(-1.7, 1.7, 3)
+                ygrid = np.linspace(-1.7, 1.7, 3)
+                get_grid = False
+        if get_grid:
             # Look for this saved
             gridparams = self.get_grid_params()
             xgrid = gridparams["grid_x"]
@@ -670,7 +732,7 @@ class TaskClass(object):
         nver = len(ygrid)
         nhor = len(xgrid)
 
-        # METHODS (doesnt matter if on grid)
+        ################ METHODS (doesnt matter if on grid)
         def _orient(i):
             # Angle, orientation
             if np.isclose(objects[i][1]["theta"], 0.):
@@ -684,6 +746,16 @@ class TaskClass(object):
             else:
                 print(objects[i])
                 assert False
+
+        # Spatial scales.
+        def _width(i):
+            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["width"]
+        def _height(i):
+            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["height"]
+        def _diag(i):
+            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["diag"]
+        def _max_wh(i):
+            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["max_wh"]
 
         def _shape(i):
             # return string
@@ -700,20 +772,30 @@ class TaskClass(object):
             else:
                 return _shape(i)
 
-        ################## GRID THINGS
+        ################## GRID METHODS
         if grid_ver in ["on_grid"]:
             # Sanity check that the hard coded things are correct.
+            from pythonlib.tools.nptools import isin_close
             for o in objects:
-                assert np.any(xgrid == o[1]["x"])
-                assert np.any(ygrid == o[1]["y"])
+                assert isin_close(o[1]["x"], xgrid)
+                assert isin_close(o[1]["y"], ygrid)
+
+                # assert np.any(xgrid == o[1]["x"])
+                # assert np.any(ygrid == o[1]["y"])
 
             # 1) assign each object a grid location
             locations = []
             for o in objects:
                 xloc = o[1]["x"]
                 yloc = o[1]["y"]
-                xind = int(np.where(xgrid==xloc)[0]) - int((nhor-1)/2)
-                yind = int(np.where(ygrid==yloc)[0]) - int((nver-1)/2)
+                # print(yloc, ygrid)
+                # print(isin_close(yloc, ygrid))
+                # print(isin_close(yloc, ygrid)[1])
+                # print(isin_close(yloc, ygrid)[1].shape)
+                # print(isin_close(yloc, ygrid)[1][0])
+
+                xind = int(isin_close(xloc, xgrid)[1][0]) - int((nhor-1)/2)
+                yind = int(isin_close(yloc, ygrid)[1][0]) - int((nver-1)/2)
                 locations.append((xind, yind))
 
             def _posdiffs(i, j):
@@ -784,6 +866,10 @@ class TaskClass(object):
             datsegs.append({
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
+                "width":_width(i),
+                "height":_height(i),
+                "diag":_diag(i),
+                "max_wh":_max_wh(i)
                 })
             
             # 2) Things that depend on grid
@@ -806,6 +892,40 @@ class TaskClass(object):
 
         return datsegs
 
+    #############
+    def get_task_kind(self, SIMPLE = True):
+        """ Get the kind for this task, things like prims_in_grid, chars, etc.
+        This only after like early 2022, when created this distinction between 
+        tasks. improving the method computing this. Does this by checking whether 
+        The prims are all on the grid.
+        NOTE: newer versions should do this byu checking the TaskSetClass (matlab 
+        class) definitons for reltiaons ands o on.
+        PARAMS;
+        - SIMPLE< bool, if True, then only lmits to "prims_on_grid" and "character". If false, 
+        thena lso include "prims_in_rel", motifs_in_grid. But tod o this, ened to extract and parse
+        reelations.
+
+        """
+
+        if SIMPLE:
+            grid_ver = self.get_grid_ver()
+            if grid_ver=="on_grid":
+                if len(self.Strokes)==1:
+                    return "prims_single"
+                else:
+                    return "prims_on_grid"
+            elif grid_ver=="on_rel":
+                return "character"
+            else:
+                print(grid_ver)
+                assert False
+        else:
+            # self.PlanDat["RelsBeforeRescaleToGrid"] Look in here for thetarelations,
+            # if they are small, then this is prims in rel
+
+            # To know if is motif, look at the toikes extracted from self.tokens_generate,
+            # based ojn hard coded map between names and motif/oprim
+            assert False
 
                         
     ############ PARSER
@@ -836,6 +956,22 @@ class TaskClass(object):
         else:
             print(this)
             assert False
+
+    ######### PLOT
+    def plotStrokes(self, ax= None, ordinal=False):
+        """ Quick plot of this task
+        """
+        import matplotlib.pyplot as plt
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        if ordinal:
+            plotDatStrokes(self.Strokes, ax, clean_ordered_ordinal=True, number_from_zero=True)
+        else:
+            plotDatStrokes(self.Strokes, ax, clean_task=True)
+        return ax
 
     ############ SAVING
     def save(self, sdir, suffix):
