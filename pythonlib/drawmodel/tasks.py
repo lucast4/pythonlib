@@ -988,6 +988,18 @@ class TaskClass(object):
         for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
             shape = prim[0]
             params = prim[1]
+
+            primkind = params[0] # e.g., prot, abstract, motif
+            scale = params[1]
+            rotation = params[2]
+            if len(params)>=4:
+                col = params[3] # not using here... (color)
+            else:
+                col = np.nan
+            if len(params)>=5:
+                reflect = params[4] # 1 means reflect.
+            else:
+                reflect = np.array(0.)
             traj = self.Strokes[i]
 
             assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
@@ -995,9 +1007,10 @@ class TaskClass(object):
 
             Prim = PrimitiveClass()
             Prim.input_prim("prototype_prim_abstract", {
-                    "shape":prim[0],
-                    "scale":params[1],
-                    "rotation":params[2],
+                    "shape":shape,
+                    "scale":scale,
+                    "rotation":rotation,
+                    "reflect":reflect,
                     "x":loc[0],
                     "y":loc[1]}, traj = traj)
             dat["primitives"].append(Prim)
