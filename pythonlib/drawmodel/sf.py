@@ -7,19 +7,28 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import random
+from ..dataset.dataset_strokes import DatStrokes
 
-def computeSimMatrix(SF, rescale_strokes_ver, distancever, npts_space, Nbasis):
-    # 1) Get distance matrix, entire dataset, with random instances chosen for basis
-    # preprocess stroklist
-    stroklist = list(SF["strok"].values)
+
+def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, npts_space):
+    """ Compute sim matrix between all strokes in SF vs. the specific inputed basis strokes
+    PARAMS:
+    - Dat, dataframe of strokes with col name "strok"
+    - DatBasis, same, but the basis set
+    """
     from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2
     from .strokedists import distMatrixStrok
+    
+    ############# Extract data
+    # data
+    stroklist = Dat["strok"].values.tolist()
+    idxs_stroklist_dat = range(len(stroklist))
+    
+    # data (basis set) (append)
+    stroklist.extend(DatBasis["strok"].values.tolist())
+    idxs_stroklist_basis = range(len(idxs_stroklist_dat), len(stroklist))
 
-    if Nbasis>len(SF):
-        print(Nbasis)
-        print(len(SF))
-        assert False, "not enough data..."
-
+    ############# Preprocess
     # rescale
     if rescale_strokes_ver=="stretch_to_1":
         stroklist = [rescaleStrokes([s])[0] for s in stroklist]
@@ -34,10 +43,30 @@ def computeSimMatrix(SF, rescale_strokes_ver, distancever, npts_space, Nbasis):
     else:
         assert False, "which?"
 
-    idxs_stroklist_dat = list(range(len(stroklist)))
-    idxs_stroklist_basis = random.sample(range(len(stroklist)), Nbasis)
+    ### Cmpute sim matrix
     similarity_matrix = distMatrixStrok(idxs_stroklist_dat, idxs_stroklist_basis, stroklist=stroklist,
                        normalize_rows=False, normalize_cols_range01=True, distancever=distancever)
+
+    return similarity_matrix
+
+
+def computeSimMatrix(SF, rescale_strokes_ver="idxs_stroklist_dat", 
+        distancever="euclidian_diffs", npts_space=50, Nbasis=300):
+    """ Get distance matrix, entire dataset, with random instances chosen for basis
+    PARAMS:
+    """
+
+    if Nbasis>len(SF):
+        print(Nbasis)
+        print(len(SF))
+        assert False, "not enough data..."
+
+    idxs_stroklist_dat = list(range(len(SF)))
+    idxs_stroklist_basis = random.sample(range(len(SF)), Nbasis)
+
+    # Get sim matrix
+    similarity_matrix = computeSimMatrixGivenBasis(SF, SF.iloc[idxs_stroklist_basis], 
+        rescale_strokes_ver, distancever, npts_space)
 
     return similarity_matrix, idxs_stroklist_basis
 

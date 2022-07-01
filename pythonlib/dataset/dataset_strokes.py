@@ -27,6 +27,7 @@ class DatStrokes(object):
 
         self.Dataset = Dataset
         self.Dat = None
+        self.Params = {}
 
         self._prepare_dataset()
         self._extract_strokes_from_dataset(version=version)
@@ -75,7 +76,7 @@ class DatStrokes(object):
             # 2) Information about task (e..g, grid size)
             
             # 2) For each beh stroke, get its infor
-            for stroke, dseg in zip(primlist, datsegs_behlength):
+            for i, (stroke, dseg) in enumerate(zip(primlist, datsegs_behlength)):
                 DAT_BEHPRIMS.append({
                     'Stroke':stroke,
                     'datseg':dseg})
@@ -89,7 +90,11 @@ class DatStrokes(object):
                 
                 ### Task information
                 DAT_BEHPRIMS[-1]["gridsize"] = T.PlanDat["TaskGridClass"]["Gridname"]
-                
+
+                # Info linking back to dataset
+                DAT_BEHPRIMS[-1]["dataset_trialcode"] = D.Dat.iloc[ind]["trialcode"]
+                DAT_BEHPRIMS[-1]["stroke_index"] = i
+
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         for DAT in DAT_BEHPRIMS:
             for k, v in DAT["datseg"].items():
@@ -101,6 +106,13 @@ class DatStrokes(object):
 
         # generate a table with features
         self.Dat = pd.DataFrame(DAT_BEHPRIMS)
+
+        # make a new column with the strok eexposed, for legacy code
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            strok = x["Stroke"]() 
+            return strok
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "strok")
 
         print("This many beh strokes extracted: ", len(DAT_BEHPRIMS))       
 
@@ -128,10 +140,27 @@ class DatStrokes(object):
             T = D.Dat.iloc[ind]["Task"]
             len(T.Strokes)
 
-    def _process_strokes(self):
+    def _process_strokes(self, align_to_onset = True, min_stroke_length_percentile = 2, 
+        min_stroke_length = 50, max_stroke_length_percentile = 99.5, centerize=False, 
+        rescale_ver=None):
         """ To do processing of strokes, e.g,, centerizing, etc.
         """
-        assert False, "see dataset.sf_preprocess..."
+        from ..drawmodel.sf import preprocessStroks
+
+        params = {
+            "align_to_onset":align_to_onset,
+            "min_stroke_length_percentile":min_stroke_length_percentile,
+            "min_stroke_length":min_stroke_length,
+            "max_stroke_length_percentile":max_stroke_length_percentile,
+            "centerize":centerize,
+            "rescale_ver":rescale_ver
+        }
+
+        self.Dat = preprocessStroks(self.Dat, params)
+
+        # Note down done preprocessing in params
+        self.Params["params_preprocessing"] = params
+
 
 
     ########################## EXTRACTIONS
@@ -150,6 +179,30 @@ class DatStrokes(object):
             print(version)
             assert False
         return strokes
+
+    ###################### RELATED to original dataset
+    def _dataset_index(self, ind, return_row=False):
+        """ For this index (in self), what is its index into self.Dataset?
+        PARAMS:
+        - ind, int index into self.Dat
+        - return_row, bool (FAlse) if True return the dataframe row. if False,
+        just the index (df.index)
+        """
+        tc = self.Dat.iloc[ind]["dataset_trialcode"]
+        row = self.Dataset.Dat[self.Dataset.Dat["trialcode"] == tc]
+        assert len(row)==1
+
+        if return_row:
+            return row
+        else:
+            return row.index.tolist()[0]
+
+    def dataset_extract(self, colname, ind):
+        """ Extract value for this colname in original datset,
+        for ind indexing into the strokes (self.Dat)
+        """
+
+        return self._dataset_index(ind, True)[colname].tolist()[0]
 
 
     ######################### SUMMARIZE

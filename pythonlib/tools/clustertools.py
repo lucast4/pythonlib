@@ -62,3 +62,55 @@ def clusterSimMatrix(similarity_matrix, PCAdim = 5, gmm_n_mixtures = list(range(
     }
 
     return DAT
+
+
+################### SORTING
+def sort_by_labels(X, labels):
+    """ Sort X by labels, in incresaing order.
+    PARAMS:
+    - X, ndat x ndim np array, rows will be osrted.
+    - labels, list of ints, length ndat
+    RETURNS:
+    - X, labels, but sorted (copies)
+    """
+    
+    inds = np.argsort(labels)
+    X = X[inds,:]
+    labels = [labels[i] for i in inds]
+    
+    return X, labels
+
+################### PLOTS
+def plot_examples_grouped_by_label_columns(SF, labels, labellist_toplot,
+        n_examples = 3):
+    """ columns are labels, rows are n examples. Useful to align to bottom
+    of a histogram plot of frequencies for each label in dataset
+    PARAMS;
+    - SF, dataframe with "strok"
+    - labels, list of label names associated with SF
+    - labellist_toplot, list of names in order to plot
+    - n_examples, num rows (unique eg)
+    """
+    # -- plot single example of each bin, ordred
+    from pythonlib.drawmodel.strokePlots import plotStroksInGrid
+    import random
+
+    assert len(SF) == len(labels)
+
+    # === for each cluster, plot examples
+    indsplot =[]
+    titles=[]
+    for ii in range(n_examples):
+        # collect inds
+        for lab in labellist_toplot:
+            inds = [i for i, l in enumerate(labels) if l==lab]
+            indsplot.append(random.sample(inds, 1)[0])
+            if ii==0:
+                titles.append(lab)
+            else:
+                titles.append('')
+
+    # plot    
+    stroklist = [SF["strok"].values[i] for i in indsplot]
+    fig = plotStroksInGrid(stroklist, ncols=len(labellist_toplot), titlelist=titles);
+#     fig.savefig(f"{SDIRFIGS}/gmmlab-hist-examplebeh.pdf")

@@ -349,8 +349,14 @@ class Dataset(object):
         return Dnew
 
 
-
-
+    def subsetDataframe(self, inds):
+        """ prunes self.Dat (dataframe) to only use the given inds,
+        This modifies Dataset in place so is different from subsetDataset. resets dataframe indices.
+        """
+        self.Dat = self.Dat.iloc[inds].reset_index(drop=True)
+        print("self.Dat starting legnth: ", len(self.Dat))
+        print("Modified self.Dat, keeping only the inputted inds")
+        print("self.Dat final legnth: ", len(self.Dat))
 
     def findPandas(self, col, list_of_vals, reset_index=True):
         """ returns slice of self.Dat, where rows are matched one-to-one to list_of_vals.
@@ -4012,6 +4018,33 @@ class Dataset(object):
     def dat_append_col_by_grp(self, grp_by, new_col_name):
         assert False, "moved to grouping_append_col"
 
+    def grouping_get_inner_items(self, groupouter="task_stagecategory", 
+            groupinner="index"):
+        """ Return dict of unique items (levels of groupinner), grouped
+        by groupouter levels. 
+        PARAMS:
+        - groupouter, string, the first grouping.
+        - groupinner, string, the second grouping. either a column or "index"
+        RETURNS:
+        - groupdict, where each key is a level of groupouter, and
+        items are the unique values of groupinner that exist for that
+        groupouter level.
+        EXAMPLE:
+        - if groupouter = date and groupinner = character, then returns
+        {date1:<list of strings of unique characters for date1>, 
+        date2:<list of strings ....}
+        """
+        levelsouter = self.Dat[groupouter].unique()
+        groupdict = {}
+        for lev in levelsouter:
+            dfthisgroup = self.Dat[self.Dat[groupouter]==lev]
+            if groupinner=="index":
+                itemsinner = dfthisgroup.index.tolist()
+            else:
+                itemsinner = dfthisgroup[groupinner].unique()
+            groupdict[lev] = itemsinner
+        return groupdict
+
 
     ################# EXTRACT DATA AS OTHER CLASSES
     def behclass_generate(self, indtrial, expt=None):
@@ -4089,6 +4122,53 @@ class Dataset(object):
         return [self.Dat.iloc[i]["BehClass"] for i in inds_trials]
 
 
+    def behclass_extract_beh_and_task(self, indtrial):
+        """ Extract both beh (oist of PrimitiveClass) and task
+        (List of datsegs) for this trial, they will be length of 
+        num beh strokes.
+        This requires doing alignsim stuff fifirst.
+        RETURNS:
+        - primlist, list of strokeClass instances
+        - datsegs_behlength, tokens, same length as primlist, for the best match for
+        each beh stroke
+        - datsegs_tasklength, tokens, same length as num task strokes, in order of first time
+        each task stroke gotten by beh.
+        """
+
+
+        Beh = self.Dat.iloc[indtrial]["BehClass"]
+
+        # task datsegs (get in both (i) length of task and (ii) length of beh.
+        datsegs_tasklength = Beh.alignsim_extract_datsegs()
+        datsegs_behlength = [datsegs_tasklength[i] for i in Beh.Alignsim_taskstrokeinds_foreachbeh_sorted]
+
+        # Assocaite each beh prim with a datseg.
+        primlist = Beh.Strokes
+
+        assert len(primlist) == len(datsegs_behlength)
+        return primlist, datsegs_behlength, datsegs_tasklength
+
+    def behclass_clean(self):
+        """ Clean by removing any trials where all beh strokes fail to m atch even a single
+        taks stroke"""
+
+        # Figure out the bad trials
+        trials_bad = []
+        trials_good = []
+        for ind in range(len(self.Dat)):
+            Beh = self.Dat.iloc[ind]["BehClass"]
+            n1 = len(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
+            # n2 = len(Beh.Strokes)
+            if n1==0:
+                trials_bad.append(ind)
+            else:
+                trials_good.append(ind)
+
+        # Only keep good trials.
+        print("Removing these trials: ")
+        print(trials_bad)
+        self.subsetDataframe(trials_good)
+
 
     ################ SAVE
     def make_fig_savedir_suffix(self, filterDict):
@@ -4160,6 +4240,8 @@ class Dataset(object):
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokes, plotDatStrokesTimecourse, plotDatWaterfall
         dat = self.Dat
+
+        assert not isinstance(idx, list)
 
         # === Plot a single trial
         ncols=4
