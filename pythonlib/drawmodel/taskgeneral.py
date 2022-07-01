@@ -536,10 +536,11 @@ class TaskClass(object):
         # affine transofmr params
         prms_in_order = ["x", "y", "sx", "sy", "order", "theta"]
         for key in prms_in_order:
-            this = shape[1][key]
-            if isinstance(this, np.ndarray):
-                this = str(this)[:4]
-            outstring += f"{key[:2]}{this}"
+            if key in shape[1].keys():
+                this = shape[1][key]
+                if isinstance(this, np.ndarray):
+                    this = str(this)[:4]
+                outstring += f"{key[:2]}{this}"
         
         return outstring
 

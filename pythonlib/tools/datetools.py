@@ -51,7 +51,7 @@ def getDateList(sdate=None, edate=None):
     date_list = [d.strftime("%y%m%d") for d in date_list]
     return date_list
 
-def standardizeTime(datetime, datestart, daystart=10/24, dayend=21/24, staybounded=True):
+def standardizeTime(datetime, datestart, daystart=9/24, dayend=21/24, staybounded=True):
     """ get a universal "time" value, which is within-experiemnt.
     based on day of ext. e.g., 1.0 means start of first day and 1.99 
     is end of first day. scale will be identical across days. to do this,
