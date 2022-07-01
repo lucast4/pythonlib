@@ -30,9 +30,11 @@ class PrimitiveClass(object):
 
             self.Shape = params["shape"]
             self.ParamsAbstract = {
+                "reflect":int(params["reflect"]),
                 "scale":int(params["scale"]),
                 "rotation":int(params["rotation"]),
             }
+
             self.ParamsConcrete = {
                 "x":np.around(params["x"], 3),
                 "y":np.around(params["y"], 3)
@@ -132,7 +134,9 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             out[f"cnr_{k}"] = v
         
-        out["shape_rot"] = f"{self.Shape}-{out['abs_rotation']}"
+        # assert False, 'also add reflection here'
+        # print("Also add reflection here")
+        out["shape_rot"] = f"{self.Shape}-{out['abs_rotation']}-{out['abs_reflect']}"
         
         return out
 
@@ -147,12 +151,14 @@ class PrimitiveClass(object):
         if use_abstract:
             scale = params["abs_scale"]
             rot = params["abs_rotation"]
+            refl = params["abs_reflect"]
         else:
             scale = params["cnr_scale"]
             rot = params["cnr_theta"]
+            refl = params["abs_reflect"]
 
         # shape x rotation defines prim
-        primtuple = (params["shape_rot"], params["shape"], scale, rot, params["cnr_x"], params["cnr_y"])
+        primtuple = (params["shape_rot"], params["shape"], scale, rot, refl, params["cnr_x"], params["cnr_y"])
 
         if as_string:
             primtuple = "_".join([f"{x}" for x in primtuple])
