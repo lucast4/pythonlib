@@ -150,6 +150,12 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
         vmin = np.min(strokes_values)
         vmax = np.max(strokes_values)
 
+    # If only one pt or one stroke, then vmin and vmax will be the same. this leads to divide by 0 error below.
+    # fix by making them a bit diff, so will plot as if maped to stroke 1.
+    if vmin==vmax:
+        vmin = vmin
+        vmax = vmax+0.01
+
     # First get colors for each stroke
     color_list = []
     if isinstance(strokes_values[0], np.ndarray) and (strokes_values[0].shape[0]>1 or strokes_values[0].shape[1]>1):
@@ -173,6 +179,9 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
             col = colorGradient((v-vmin)/(vmax-vmin), cmap=cmap)
             color_list.append(col)
 
+        # print(color_list)
+        # print(v, vmin, vmax)
+        # assert False
         for i, (s, col) in enumerate(zip(strokes, color_list)):
             ax.plot(s[:,0], s[:,1], color=col, linewidth=(3/5)*markersize,
                 alpha=min([1, 1.5*alpha]))
@@ -544,7 +553,7 @@ def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1.,
     ignore it. up to you to make sure passing in reasonable strokenums.
     """
     from pythonlib.drawmodel.strokePlots import plotDatStrokes
-    from pythonlib.tools.stroketools import strokesInterpolate
+    from pythonlib.tools.stroketools import strokesInterpolate, strokes_average
     from pythonlib.tools.plottools import confidence_ellipse
 
     # pick out that desired stroke num
@@ -553,13 +562,8 @@ def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1.,
         print(f"[plotStrokesMean] no trials had enough strokes for strokenum={strokenum} - not doing antyhing")
         return
 
-    # interpolate each strokes (using actual time)
-    # stack the arrays and then take average
-    stroklist_interp = strokesInterpolate(stroklist, Ninterp)    
-    stroklist_interp_stack = np.stack(stroklist_interp)
-    
-    # == PLOT MEAN
-    strok_mean = np.mean(stroklist_interp_stack, axis=0)
+    strok_mean, stroklist_interp_stack = strokes_average(stroklist, Ninterp)
+
     plotDatStrokes([strok_mean], ax=ax, plotver=color, each_stroke_separate=True, alpha=alpha, add_stroke_number=False, markersize=7)
 
     # == overlay confidence elipses

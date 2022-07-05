@@ -13,19 +13,30 @@ from ..dataset.dataset_strokes import DatStrokes
 def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, npts_space):
     """ Compute sim matrix between all strokes in SF vs. the specific inputed basis strokes
     PARAMS:
-    - Dat, dataframe of strokes with col name "strok"
+    - Dat, 
+    --- dataframe of strokes with col name "strok"
+    --- or strokes (list of np array)
     - DatBasis, same, but the basis set
+    --- or strokes (list of np array)
     """
     from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2
     from .strokedists import distMatrixStrok
     
     ############# Extract data
     # data
-    stroklist = Dat["strok"].values.tolist()
+    if isinstance(Dat, pd.core.frame.DataFrame):
+        # Then is pandas dataframe 
+        stroklist = Dat["strok"].values.tolist()
+    else:
+        stroklist = Dat
     idxs_stroklist_dat = range(len(stroklist))
     
     # data (basis set) (append)
-    stroklist.extend(DatBasis["strok"].values.tolist())
+    if isinstance(DatBasis, pd.core.frame.DataFrame):
+        strokes_basis = DatBasis["strok"].values.tolist()
+    else:
+        strokes_basis = DatBasis
+    stroklist.extend(strokes_basis)
     idxs_stroklist_basis = range(len(idxs_stroklist_dat), len(stroklist))
 
     ############# Preprocess

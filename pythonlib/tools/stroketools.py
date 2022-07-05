@@ -1517,3 +1517,19 @@ def timepoint_extract_features_continuous(strokes, twind, list_feature=["mean_xy
     
     return features
         
+
+def strokes_average(strokes, Ninterp=50):
+    """ Get average of trajs in strokes, after linearly interpolating them
+    to all be the same
+    PARAMS:
+    - strokes, list of np array
+    = strokes_stacked, np array, shape (n strokes, Ninterp, 3)
+    """
+    from pythonlib.tools.stroketools import strokesInterpolate
+
+    # interpolate each strokes (using actual time)
+    # stack the arrays and then take average
+    stroklist_interp = strokesInterpolate(strokes, Ninterp)    
+    strokes_stacked = np.stack(stroklist_interp)
+    strok_mean = np.mean(strokes_stacked, axis=0)
+    return strok_mean, strokes_stacked

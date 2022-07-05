@@ -748,3 +748,38 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
 
 
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
+
+def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
+                                    F = {}):
+    """ To uniformly sample rows so that spans levels of a given variable (column)
+    e..g, if a col is "shape" and you want to get one example trial of each shape,
+    then varname="shape" and varlevels = list of shape names, or None to get all.
+    PARAMS:
+    - df, dataframe
+    - varname, column name
+    - varlevels, list of string, levels. or None to get all.
+    - n_examples, how many to get of each (random)
+    - F, dict for filtering. will use this and append the varname:varlevel.
+    RETURNS:
+    - list_inds, list of ints or None (for cases where can't get this many examples, 
+    will fail all examples, not just the excess... (should fix this)). if n_examples >1, then
+    adjacnet inds will be for the same example.
+    - varlevels
+    """
+    import random
+
+    # Get the levels of this vars
+    if varlevels is None:
+        varlevels = df[varname].unique().tolist()
+    
+    # For each level, find n examples
+    list_inds = []
+    for val in varlevels:
+        F[varname] = val
+        list_idx = filterPandas(df, F, True)
+        if len(list_idx)>=n_examples:
+            inds = random.sample(list_idx, n_examples)[:n_examples]
+        else:
+            inds = [None for _ in range(n_examples)]
+        list_inds.extend(inds)
+    return list_inds, varlevels

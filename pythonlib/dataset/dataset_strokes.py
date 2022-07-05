@@ -164,17 +164,24 @@ class DatStrokes(object):
 
 
     ########################## EXTRACTIONS
-    def extract_strokes(self, version):
-        """ Methods to extract strokes
+    def extract_strokes(self, version="list_arrays", inds=None):
+        """ Methods to extract strokes across all trials
         PARAMS:
         - version, string, what format to output
+        - inds, indices, if None then gets all
         RETURNS:
         - strokes
         """
 
+        if inds is None:
+            inds = range(len(self.Dat))
+
         if version=="list_arrays":
             # List of np arrays (i.e., "strokes" type)
-            strokes = [self.Dat.iloc[i]["Stroke"]() for i in range(len(self.Dat))]
+            strokes = [self.Dat.iloc[i]["Stroke"]() for i in inds]
+        elif version=="list_list_arrays":
+            # i.e., like multiple strokes...
+            strokes = [[self.Dat.iloc[i]["Stroke"]()] for i in inds]
         else:
             print(version)
             assert False
@@ -213,4 +220,18 @@ class DatStrokes(object):
 
 
     ####################### PLOTS
-     
+    def plot_single(self, ind, ax=None):
+        """ Plot a single stroke
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        if ax==None:
+            fig, ax = plt.subplots(1,1)
+        S = self.Dat.iloc[ind]["Stroke"]
+        plotDatStrokes([S()], ax, clean_ordered_ordinal=True)
+        return ax
+
+    def plot_multiple(self, list_inds):
+        """ Plot mulitple strokes, each on a subplot
+        """
+        strokes = self.extract_strokes("list_list_arrays", inds = list_inds)
+        self.Dataset.plotMultStrokes(strokes)

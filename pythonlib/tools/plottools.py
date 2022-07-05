@@ -530,7 +530,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     --- ncols, only matters if have to automticalyl get cols and rows.
     - max_n_per_grid, then only plots max n per col/row combo. each time will shuffle
     so that is different. Leave none to plot all
-    - col_labels, row_labels, list of things to label the cols and rows.
+    - col_labels, row_labels, list of things to label the cols and rows. indexed by the row or col
     - titles, same length as data. If present, will overwrite row_labels and col_labels.
     - aspect, w/h
     - clean_axes, then no x or y labels.
