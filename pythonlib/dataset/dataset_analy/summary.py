@@ -61,7 +61,27 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
                 figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
             plt.close("all")
             
-            
+
+def plot_all_drawings_in_grid(Dthis, SAVEDIR_FIGS, MAX_COLS = 66, MAX_ROWS = 5, strokes_by_order = True):
+    """ Plot beh and task in separate grids, where y axis is examples and x is unique tasks, where
+    each plot is a specific task group (e.g., task set).
+    """
+    from ..plots import plot_beh_grid_flexible_helper, plot_beh_grid_grouping_vs_task
+
+    # Make saving directory
+    sdirthis = f"{SAVEDIR_FIGS}/alltrial_vs_task_bycat"
+    os.makedirs(sdirthis, exist_ok=True)
+
+    # One plot for each task category
+    list_taskcat = Dthis.filterPandas({"random_task":[False]}, "dataframe")["task_stagecategory"].unique().tolist()
+    for cat in list_taskcat:
+        Dthiscat = Dthis.filterPandas({"task_stagecategory":[cat]}, "dataset")
+        figbeh, figtask = plot_beh_grid_flexible_helper(Dthiscat, row_group ="trial", col_group="unique_task_name", 
+                                      max_rows=MAX_ROWS, max_cols=MAX_COLS, plotkwargs={"strokes_by_order":strokes_by_order})
+        
+        figbeh.savefig(f"{sdirthis}/{cat}-beh.pdf");
+        figtask.savefig(f"{sdirthis}/{cat}-task.pdf");
+                
 ############## PRINT THINGS
 
 
