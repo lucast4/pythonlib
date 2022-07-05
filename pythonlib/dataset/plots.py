@@ -46,7 +46,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
         else:
             plotfuncbeh = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, alpha=0.4, add_stroke_number=False,
                 force_onsets_same_col_as_strokes=True, naked=True)
-        
+
     figbeh = plotGridWrapper(strokeslist, plotfuncbeh, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
         col_labels = col_labels, row_labels=row_labels, xlabels=xlabels)
 
@@ -287,7 +287,8 @@ def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=No
     return fig
 
 
-def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True):
+def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True,
+        grouping_each_panel = ["task_stagecategory", "taskgroup"], colwrap = 4):
     """
     Plot timecourse, (feature vs. tval) to summarize an expt. Separate 
     columns (character) and rows (taskgroup) and colors (epochs).
@@ -297,14 +298,26 @@ def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, d
     --- "epoch" then is grouping across trials, based on epoch.
     - features_list, list of strings, columns of D.Dat, where values are scalars
     - grouping, string, where defines levels (for colored epochs)
+    - grouping_each_panel, list of str, each level of this varibable will have its own panel.
+    --- if len==2, then is interpreted as [row, col]
+    --- if len==1, then is interpreted as [col], with colwrap used.
+
     NOTE:
     - this used in model expt timecurse analyses
     """
     from pythonlib.tools.snstools import timecourse_overlaid
     DF = D.Dat
     # YLIM = [0, 6]
-    row = "task_stagecategory"
-    col = "taskgroup"
+
+    if len(grouping_each_panel)==2:
+        row = grouping_each_panel[0]
+        col = grouping_each_panel[1]
+    elif len(grouping_each_panel)==1:
+        col = grouping_each_panel[0]
+        row = None
+    else:
+        assert False
+        
     figlist = []
     for f in features_list:
         # feat = f"FEAT_{f}"
