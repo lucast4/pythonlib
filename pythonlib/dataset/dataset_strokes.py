@@ -144,6 +144,7 @@ class DatStrokes(object):
         min_stroke_length = 50, max_stroke_length_percentile = 99.5, centerize=False, 
         rescale_ver=None):
         """ To do processing of strokes, e.g,, centerizing, etc.
+        - Only affects the "strok" key in self.Dat
         """
         from ..drawmodel.sf import preprocessStroks
 
@@ -176,12 +177,21 @@ class DatStrokes(object):
         if inds is None:
             inds = range(len(self.Dat))
 
+        def _extractsinglestroke(i):
+            """ extracts strok if exists, otherwise gets Stroke()
+            """
+            if "strok" in self.Dat.columns:
+                return self.Dat.iloc[i]["strok"]
+            else:
+                return self.Dat.iloc[i]["Stroke"]()
+
+        # -----
         if version=="list_arrays":
             # List of np arrays (i.e., "strokes" type)
-            strokes = [self.Dat.iloc[i]["Stroke"]() for i in inds]
+            strokes = [_extractsinglestroke(i) for i in inds]
         elif version=="list_list_arrays":
             # i.e., like multiple strokes...
-            strokes = [[self.Dat.iloc[i]["Stroke"]()] for i in inds]
+            strokes = [[_extractsinglestroke(i)] for i in inds]
         else:
             print(version)
             assert False
@@ -211,6 +221,59 @@ class DatStrokes(object):
 
         return self._dataset_index(ind, True)[colname].tolist()[0]
 
+    def dataset_append_column(self, colname):
+        """ Append a column to self.Dat from original datsaet.
+        Overwrites if it already exists
+        """
+        valsthis = [self.dataset_extract(colname, i) for i in range(len(self.Dat))]
+        self.Dat[colname] = valsthis
+        print(f"Appended {colname} to self.Dat")
+
+
+    def dataset_slice_by(self, key, list_vals, return_index=False):
+        """ Extract slice of dataset using key-val pairs that may not yet 
+        exist in self.Dat, but may be extracted by mapping back from orignal
+        Dataset. First checks if this key exitss, if not then appends it as a
+        new column.
+        PARAMS:
+        - key, string name
+        - list_vals, list of vals, where keeps rows in dataset that are in this list
+        - return_index, bool (False), ifTrue then returns just the index. otherwise the dataframe
+        RETURNS:
+        - df, sliced dataset or index/
+        """
+
+        if key not in self.Dat.columns:
+            # Then pull it from dstaset
+            self.dataset_append_column(key)
+
+        dfthis = self.Dat[self.Dat[key].isin(list_vals)]
+
+        if return_index:
+            return dfthis.index.tolist()
+        else:
+            return dfthis
+
+    def dataset_slice_by_mult(self, filtdict, return_indices=False, reset_index=True):
+        """ Get subset of dataset, filtering in multiple intersecting ways
+        Gets the key-val from original datset, if theyu are not arleady present
+        PARAMS:
+        - filtdict, keys are columns, and vals are lists of items to keep.
+        - return_indices, bool (False), then returns indices. otherwise dataframe
+        RETURNS:
+        - pandas dataframe (indices reset) or indices
+        """
+        from pythonlib.tools.pandastools import filterPandas
+
+        # 1) If a key doesnt already exist in self.Dat, then extract it from Dataset
+        list_keys = filtdict.keys()
+        for k in list_keys:
+            if k not in self.Dat.columns:
+                self.dataset_append_column(k)
+
+        # 2) Filter
+        return filterPandas(self.Dat, filtdict, return_indices=return_indices, reset_index=reset_index)
+
 
     ######################### SUMMARIZE
     def print_summary(self):
@@ -230,8 +293,94 @@ class DatStrokes(object):
         plotDatStrokes([S()], ax, clean_ordered_ordinal=True)
         return ax
 
-    def plot_multiple(self, list_inds):
+    def plot_multiple(self, list_inds, titles=None):
         """ Plot mulitple strokes, each on a subplot
         """
         strokes = self.extract_strokes("list_list_arrays", inds = list_inds)
-        self.Dataset.plotMultStrokes(strokes)
+        self.Dataset.plotMultStrokes(strokes, titles=titles)
+
+    def plot_strokes_overlaid(self, inds, ax=None, nmax = 50):
+        """ Plot strokes all overlaid on same plot
+        Colors strokes by order
+        PARAMS;
+        - inds, indices into self.Dat (must be less than nmax)
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        assert len(inds)<=nmax, "too many strokes to oveerlay..."
+        
+        strokes = [S() for S in self.Dat.iloc[inds]["Stroke"]]
+        plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, alpha=0.5)
+
+        return ax
+
+    def plot_egstrokes_grouped_in_subplots(self, task_kind="prims_on_grid", 
+        key_subplots="shape_oriented",
+        key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
+        n_examples = 2):
+        """
+        PARAMS:
+        - task_kind, string, indexes into the task_kind column
+        --- e..g, {"character", "prims_on_grid"}
+        - key_subplots, string, each level of this grouping variable will have its
+        own subplot.
+        - key_to_extract_stroke_variations_in_single_subplot, string, for each subplot, 
+        how to extract exabple strokes. e..g, if "gridloc", then strokes will be at
+        variable locations in the subplot. This is ignored if task_kind=="character", because
+        that doesnt have structured variation in these params.
+        """
+        from pythonlib.tools.plottools import subplot_helper
+        from pythonlib.tools.pandastools import extract_trials_spanning_variable
+        import random
+
+                
+        if task_kind=="character":
+            key_to_extract_stroke_variations_in_single_subplot = None
+
+        # 0) Static params:
+        F = {
+            "task_kind":[task_kind],
+        }
+
+        # One plot for each level
+        subplot_levels = sorted(self.Dat[key_subplots].unique().tolist())
+        getax, figholder, nplots = subplot_helper(4, 10, len(subplot_levels), SIZE=4)
+        for i, level in enumerate(subplot_levels):
+            
+            # - update the shape
+            F[key_subplots] = level
+
+            # 2) For each combo of features, select a random case of it.
+            if key_to_extract_stroke_variations_in_single_subplot is None:
+                # Use entire pool, not specific variation
+                list_idx = self.dataset_slice_by_mult(F, return_indices=True)
+                if len(list_idx)>=n_examples:
+                    inds = random.sample(list_idx, n_examples)[:n_examples]
+                else:
+                    inds = [None for _ in range(n_examples)]
+                list_inds = inds
+            else:
+                # 1) get all unique values for a given key
+                def bad(x):
+                    # Return True is this value is a nan
+                    if isinstance(x, (tuple, list)):
+                        return False
+                    else:
+                        return np.isnan(x)
+                vals_vary = self.Dat[key_to_extract_stroke_variations_in_single_subplot].unique().tolist()
+                vals_vary = [v for v in vals_vary if not bad(v)]
+                list_inds, _ = extract_trials_spanning_variable(self.Dat, 
+                    key_to_extract_stroke_variations_in_single_subplot, vals_vary, n_examples, F)
+
+            # 3) pull out these examples and plot
+            list_inds = [i for i in list_inds if i is not None]
+            if len(list_inds)>0:
+                ax = getax(i)[1]
+                self.plot_strokes_overlaid(list_inds, ax=ax)
+                
+            ax.set_title(level)
+
+                
+
