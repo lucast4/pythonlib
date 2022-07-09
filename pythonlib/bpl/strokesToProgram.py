@@ -147,6 +147,8 @@ def prepStrokes(strokes, sketchpad_edges, imageWH = 105):
     """
     from pythonlib.drawmodel.image import convCoordGeneral
     strokes_matlab = [s[:,:2] for s in strokes]
+    # if sketchpad_edges is None:
+    #     sketchpad_edges = np.array([[0., 1.], [0., 1.]]) # fuill screen, this is possibel if in matlab didn't specify sketchpad.
     strokes_matlab = [convCoordGeneral(s, sketchpad_edges, np.array([[0, imageWH-1], [-(imageWH-1), 0]])) for s in strokes_matlab]
     strokes_matlab = [[s.tolist() for s in strokes_matlab], [s.tolist() for s in strokes_matlab]]
     return strokes_matlab

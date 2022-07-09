@@ -335,7 +335,13 @@ class TaskClass(object):
     ####################### HELPERS
     def get_tasknew(self):
         """ extract tasknew, which is the one from makeDrawTasks
+        RETURNS:
+        - NOne, if doesnt exist (older tasks) or TaskNew, a dict.
         """
+        if "TaskNew" not in self.Task:
+            return None
+        if len(self.Task["TaskNew"])==0:
+            return None
         return self.Task["TaskNew"]
 
     ####################### GET FEATURES
@@ -445,12 +451,16 @@ class TaskClass(object):
         """ Initial extraction of objects (and their transforms).
         RETURNS:
         - modified self.Objects, which is list of dicts, one for each object.
+        or None, if TaskNew doesnt exist.
         - fail_if_no_match, then is fail if any subprograms not converted succesfulyl into object.
         NOTE:
         - There are multiple sources of this information. Get all, and make sure they corroborate.
         Also useful for me so here saving notes that might be useful later.
         """
+
         T = self.get_tasknew()
+        if T is None:
+            return None
 
         # V1: based on saved Objects
         if "Objects" in T.keys():
@@ -536,6 +546,18 @@ class TaskClass(object):
                     if len(self.Program)>0:
                         return
 
+        if self.get_tasknew() is None:
+            self.Program = None
+            return None
+
+        TaskNew = self.get_tasknew()["Task"]
+
+        # --- Tasknew doesnt exist (older code)
+        if TaskNew is None:
+            self.Program = None
+            return None
+
+        # --- TaskNew exists...
         program = self.get_tasknew()["Task"]["program"]
         if True:
             # use recursive function
@@ -946,6 +968,10 @@ class TaskClass(object):
         """
         from pythonlib.tools.monkeylogictools import dict2list2, dict2list
         
+        if self.get_tasknew() is None:
+            self.PlanDat = None
+            return None
+
         if "Plan" not in self.get_tasknew().keys():
             self.PlanDat = None
             return
@@ -966,7 +992,6 @@ class TaskClass(object):
             # older version didnt hold TaskGridClass
             if 'TaskGridClass' in Plan.keys():
                 _list_keys.append('TaskGridClass')
-
         dat = {}
         # Extract things
         # _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
