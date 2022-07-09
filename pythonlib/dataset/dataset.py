@@ -651,6 +651,20 @@ class Dataset(object):
     #         original_ver_before_sep21=original_ver_before_sep21)
 
 
+    def save_task_for_dragmonkey(self, indtrial, 
+        SDIR = "/data2/analyses/main/resaved_tasks_for_matlab"):
+        """ Save the task in a format that can be loaded in dragmonkey (matlab)
+        to generate tasks for experiments
+        """
+        from pythonlib.tools.matlabtools import convert_to_npobject
+        from scipy.io import savemat
+
+        # 1) Extract the task and save
+        T = self.Dat.iloc[indtrial]["Task"]
+        idstring = self.identifier_string()
+        trialcode = self.Dat.iloc[indtrial]["trialcode"]
+        fname = f"trial_{indtrial}-trialcode_{trialcode}"
+        T.save_task_for_dragmonkey(subdirname=idstring, fname=fname)
 
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
@@ -860,6 +874,12 @@ class Dataset(object):
                 x["Task"]._split_strokes_large_jump()
             return x["Task"].Strokes    
         self.Dat = applyFunctionToAllRows(self.Dat, F, "strokes_task")
+
+        # Task kind (e..g, prims_on_grid, character, etc)
+        def F(x):
+            return x["Task"].get_task_kind()
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "task_kind")
+
 
 
     def _cleanup_rename_characters(self):
@@ -4343,7 +4363,8 @@ class Dataset(object):
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
         add_stroke_number=True, centerize=False, jitter_each_stroke=False, 
-        titles_on_y=False, SIZE=2.5, is_task=False, number_from_zero=False):
+        titles_on_y=False, SIZE=2.5, is_task=False, number_from_zero=False,
+        color_by = "by_order"):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.
         """
@@ -4356,7 +4377,7 @@ class Dataset(object):
                 add_stroke_number=add_stroke_number, centerize=centerize, 
                 jitter_each_stroke=jitter_each_stroke, number_from_zero=number_from_zero)
         else:
-            plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered=True, 
+            plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, 
                 add_stroke_number=add_stroke_number, centerize=centerize, 
                 jitter_each_stroke=jitter_each_stroke, number_from_zero=number_from_zero)
         fig, axes= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
@@ -4436,7 +4457,9 @@ class Dataset(object):
         return strokes_list, idxs, titles
 
     def plotMultTrials2(self, idxs, which_strokes="strokes_beh", nrand=None,
-            titles = None, add_stroke_number=True, SIZE=2.5, plotkwargs={}):
+            titles = None, add_stroke_number=True, SIZE=2.5, color_by="order",
+            number_from_zero = True, 
+            plotkwargs={}):
         """ V2, which uses plotMultStrokes
         """
 
@@ -4447,7 +4470,8 @@ class Dataset(object):
         is_task = which_strokes=="strokes_task"
 
         fig, axes = self.plotMultStrokes(strokes_list, titles=titles, add_stroke_number=add_stroke_number,
-            SIZE=SIZE, is_task=is_task, **plotkwargs)
+            SIZE=SIZE, is_task=is_task, number_from_zero=number_from_zero, color_by=color_by, 
+            **plotkwargs)
         return fig, axes, idxs
 
 
@@ -4474,6 +4498,9 @@ class Dataset(object):
                 return None, None
             else:
                 return None
+
+        if which_strokes=="strokes_beh":
+            color_by = "order"
 
         # Extract the final data
         if color_by is None:

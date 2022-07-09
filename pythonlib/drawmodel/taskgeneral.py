@@ -109,35 +109,36 @@ class TaskClass(object):
 
         taskobj.program_extract() 
         self.ProgramOldCoords = taskobj.Program
+        
+        if taskobj.get_tasknew() is not None:
+            # Get abstract representaion of objects (primitives)
+            taskobj.planclass_extract_all()
+            if taskobj.PlanDat is None:
+                # Then this is old version, before using planclass
+                taskobj.objects_extract()
+                self.ShapesOldCoords = taskobj.Objects
+                self.ShapesOldCoords = [[S["obj"], S["tform"]] for S in self.ShapesOldCoords] # conver to general format
+                for i in range(len(self.ShapesOldCoords)):
+                    if self.ShapesOldCoords[i][1] is not None:
+                        self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
+                        del self.ShapesOldCoords[i][1]["th"]
+            else:
+                # New version, use planclass representation of prims. Dont have to re-extract
+                # here post-hoc. Dont use the "Shapes" thing anymore, instead represent them as
+                # PrimitiveClass objects
+                self.Primitives = taskobj.PlanDat["primitives"]
+                self.PlanDat = taskobj.PlanDat
+                
+                # populate self.ShapesOldCoords, for backwards compativbility with other code.
+                self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
 
-        # Get abstract representaion of objects (primitives)
-        taskobj.planclass_extract_all()
-        if taskobj.PlanDat is None:
-            # Then this is old version, before using planclass
-            taskobj.objects_extract()
-            self.ShapesOldCoords = taskobj.Objects
-            self.ShapesOldCoords = [[S["obj"], S["tform"]] for S in self.ShapesOldCoords] # conver to general format
-            for i in range(len(self.ShapesOldCoords)):
-                if self.ShapesOldCoords[i][1] is not None:
-                    self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
-                    del self.ShapesOldCoords[i][1]["th"]
-        else:
-            # New version, use planclass representation of prims. Dont have to re-extract
-            # here post-hoc. Dont use the "Shapes" thing anymore, instead represent them as
-            # PrimitiveClass objects
-            self.Primitives = taskobj.PlanDat["primitives"]
-            self.PlanDat = taskobj.PlanDat
-            
-            # populate self.ShapesOldCoords, for backwards compativbility with other code.
-            self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
+                # Extract Chunks
+                self.ChunksListClass = taskobj.PlanDat["ChunksListClass"]
 
-            # Extract Chunks
-            self.ChunksListClass = taskobj.PlanDat["ChunksListClass"]
-
-            # Extract primitivechunks (e..g, motif is actually a single object)
-            print("TODO (taskgeneral)")
-            if False:
-                self.objects_extract_using_planclass()
+                # Extract primitivechunks (e..g, motif is actually a single object)
+                print("TODO (taskgeneral)")
+                if False:
+                    self.objects_extract_using_planclass()
 
     def objects_extract_using_planclass(self):
         """ Uses plan in PlanClass version of task to decide on Objcts. Main point is
@@ -987,6 +988,39 @@ class TaskClass(object):
         print(f"Saved to: {path}")
 
 
+    def save_task_for_dragmonkey(self, subdirname, fname, SDIR = "/data2/analyses/main/resaved_tasks_for_matlab"):
+        """ Save the task in a format that can be loaded in dragmonkey (matlab)
+        to generate tasks for experiments
+        PARAMS:
+        - subdirname, string
+        - fname, string
+        --- file will be f"{SDIR}/{subdirname}/{fname}.mat"
+        RETURNS:
+        - saves at path above.
+        """
+        from pythonlib.tools.matlabtools import convert_to_npobject
+        from scipy.io import savemat
+        import os
+
+        # 2) Things to save
+        savedict = {}
+        savedict["tsc_name"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["exptname"]
+        savedict["tsc_constraints"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["constraints"]
+        savedict["tsc_online_updates"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["online_updates"]
+        savedict["tsc_params_planclass"] = self.PlanDat["Info"]["TaskSetClass"]["params_planclass"]
+        savedict["Plan"] = self.PlanDat["Plan"]
+        savedict["PrimsCategories"] = self.PlanDat["PrimsCategories"]
+
+        # 3) convert to format that can be saved into mat file
+        for k, v in savedict.items():
+            savedict[k] = convert_to_npobject(v)
+
+        # 4) Save
+        sdir = f"{SDIR}/{subdirname}"
+        os.makedirs(sdir, exist_ok=True)
+        fname = f"{sdir}/{fname}.mat"
+        savemat(fname, savedict)
+        print("Saved to: ", fname)
 
 
 

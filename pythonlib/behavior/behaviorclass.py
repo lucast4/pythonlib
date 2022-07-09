@@ -466,7 +466,6 @@ class BehaviorClass(object):
                 key_this = n
                 dict_matches[key_this] = list_matches
 
-
                 # remove previous found matches if they use the same tokens.
                 if force_no_shared_tokens_across_motifs:
                     dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
@@ -493,7 +492,6 @@ class BehaviorClass(object):
                     if force_no_shared_tokens_across_motifs:
                         dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
                         
-
         else:
             print(motifname)
             assert False, "??"
@@ -664,6 +662,10 @@ class BehaviorClass(object):
         # Saved cached datsegs
         self.Alignsim_Datsegs = datsegs
 
+        # Extract best guess for behavior-length datsegs
+        datsegs_behlength = [datsegs[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
+        self.Alignsim_Datsegs_BehLength = datsegs
+
         return datsegs
 
     def alignsim_plot_summary(self):
@@ -715,7 +717,8 @@ class BehaviorClass(object):
         """ Helper to search for this motif in datsegs, extracted from aligned beh-task
         using sim matrix alignement. Must enter specific motif
         PARAMS:
-        - motif, list of tokens. Will search for this specific list.
+        - motif, list of tokens. Will search for this specific list. This can be like wildcard,
+        if each dict in motif (lsit of dicts) only uses a subset of the keys in datsegs.
         """
         tokens = self.alignsim_extract_datsegs()
         return self._find_motif_in_beh(tokens, motif, list_beh_mask)
@@ -734,7 +737,9 @@ class BehaviorClass(object):
             list_beh_mask=None, return_as_number_instances=False):
         """ Helper to search for a kind of motif (flexibly) within datsegs. 
         The most abstract, since will automatically generate many specific motifs,
-        as many as needed.
+        as many as needed. THink of this almost as running 
+        alignsim_find_motif_in_beh_bykind, but in a loop, returning dict where 
+        each key is one run with different params.
         """
         tokens = self.alignsim_extract_datsegs()
         return self._find_motif_in_beh_wildcard(tokens, motifname, motifparams, 
