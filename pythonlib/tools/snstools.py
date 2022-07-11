@@ -164,3 +164,18 @@ def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None
     g.map(plt.axhline, **{"color":[0.7, 0.7, 0.7]})
 
     return g
+
+
+def get_xticklabels(fig):
+    """ Returns teh labels in order for each axis in fig
+    PARAMS:
+    - fig, a facetgrid object, e.g,, output from sns.catplot
+    RETURNS:
+    - list of labels, where list is len num axes, and each inner list is 
+    len num x labels, in order.
+    """
+    out = []
+    for ax in fig.axes.flatten():
+        out.append([lab.get_text() for lab in ax.get_xticklabels()])
+    return out
+            
