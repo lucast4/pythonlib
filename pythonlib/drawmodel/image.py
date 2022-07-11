@@ -63,10 +63,12 @@ def coordsMatchAspectRatio(edgesgood, edgesmod):
     
     ratiogood = np.diff(edgesgood[1,:])/np.diff(edgesgood[0,:]) # y/x
     
+
     dy = np.diff(edgesmod[1,:])
     dx = np.diff(edgesmod[0,:])
     ratiomod = dy/dx
-    
+    assert not np.isnan(ratiomod), "bug?"
+
     if ratiomod>ratiogood:
         # then pad x
         dx_new = dy/ratiogood
@@ -77,9 +79,15 @@ def coordsMatchAspectRatio(edgesgood, edgesmod):
         dy_new = ratiogood*dx
         pad = (dy_new - dy)/2
         edgesmod[1,:] = [edgesmod[1,0]-pad, edgesmod[1,1]+pad]
+    else:
+        if not np.isclose(ratiomod, ratiogood):
+            print(ratiogood)
+            print(ratiomod)
+            print(edgesmod)
+            print(np.diff(edgesmod[1,:]))
+            print(np.diff(edgesmod[0,:]))
+            assert False, "bug in code?"
         
-    assert np.isclose(ratiogood, np.diff(edgesmod[1,:])/np.diff(edgesmod[0,:]))
-    
     return edgesmod
     
 
