@@ -668,6 +668,39 @@ class BehaviorClass(object):
 
         return datsegs
 
+    def alignsim_extract_datsegs_both_beh_task(self):
+        """
+        [GOOD] get summary of beh and task strokes, including their alignemnet.
+        RETURNS:
+        - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
+        order that they are gotten (based on alignsim). Each tuple: 
+        (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into self.Strokes,
+        strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
+        """        
+
+        # task datsegs (get in both (i) length of task and (ii) length of beh.
+        datsegs_tasklength = self.alignsim_extract_datsegs()
+        datsegs_behlength = [datsegs_tasklength[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
+
+
+        # Combined representaion, list (length num taskstrokes) of tuples, each tuple:
+        # (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into self.Strokes,
+        # strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
+
+        def find_inds_behstroke_aligned_to_this_taskstroke(indtask_get):
+            return [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted) if indtask==indtask_get]
+        out_combined = []
+        for i, dseg_task in enumerate(datsegs_tasklength):
+            # get all the beh that are aligned with this task
+            inds_beh = find_inds_behstroke_aligned_to_this_taskstroke(i)
+            # beh = [{"indbeh":i, "behstroke":self.Strokes[i]} for i in inds_beh]
+            strokesbeh = [self.Strokes[i] for i in inds_beh]
+            out_combined.append((inds_beh, strokesbeh, dseg_task))
+
+        return out_combined, datsegs_behlength, datsegs_tasklength
+
+
+
     def alignsim_plot_summary(self):
         """Plot results of alignments
         """

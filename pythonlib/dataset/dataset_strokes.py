@@ -28,6 +28,7 @@ class DatStrokes(object):
         self.Dataset = Dataset
         self.Dat = None
         self.Params = {}
+        self.Version = None
 
         self._prepare_dataset()
         self._extract_strokes_from_dataset(version=version)
@@ -57,7 +58,6 @@ class DatStrokes(object):
         - modifies self.Dat to hold dataframe where each row is stroke.
         """
 
-        assert version=="beh", "not yhet coded!!"
         D = self.Dataset
 
         # Collect all beh strokes
@@ -71,12 +71,25 @@ class DatStrokes(object):
             T = D.Dat.iloc[ind]["Task"]
             
             # 1) get each beh stroke, both continuous and discrete represntations.
-            primlist, datsegs_behlength, _ = D.behclass_extract_beh_and_task(ind)
+            primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
             
+            if version=="beh":
+                strokes = primlist
+                datsegs = datsegs_behlength
+                combined_tuple = (None for _ in range(len(strokes)))
+            elif version=="task":
+                strokes = [dat[2]["Prim"].Stroke for dat in out_combined] # list of PrimitiveClass
+                datsegs = [dat[2] for dat in out_combined] # task version
+                combined_tuple = out_combined
+                assert datsegs == datsegs_tasklength, "bug?"
+            else:
+                print(version)
+                assert False
+
             # 2) Information about task (e..g, grid size)
             
             # 2) For each beh stroke, get its infor
-            for i, (stroke, dseg) in enumerate(zip(primlist, datsegs_behlength)):
+            for i, (stroke, dseg, comb) in enumerate(zip(strokes, datsegs, combined_tuple)):
                 DAT_BEHPRIMS.append({
                     'Stroke':stroke,
                     'datseg':dseg})
@@ -94,6 +107,11 @@ class DatStrokes(object):
                 # Info linking back to dataset
                 DAT_BEHPRIMS[-1]["dataset_trialcode"] = D.Dat.iloc[ind]["trialcode"]
                 DAT_BEHPRIMS[-1]["stroke_index"] = i
+
+                # Specific things for Task
+                if version=="task":
+                    DAT_BEHPRIMS[-1]["aligned_beh_inds"] = comb[0]
+                    DAT_BEHPRIMS[-1]["aligned_beh_strokes"] = comb[1]
 
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         for DAT in DAT_BEHPRIMS:
@@ -115,6 +133,8 @@ class DatStrokes(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, "strok")
 
         print("This many beh strokes extracted: ", len(DAT_BEHPRIMS))       
+
+        self.Version = version
 
         # DEBUGGING
         if False:
@@ -165,11 +185,14 @@ class DatStrokes(object):
 
 
     ########################## EXTRACTIONS
-    def extract_strokes(self, version="list_arrays", inds=None):
+    def extract_strokes(self, version="list_arrays", inds=None, ver_behtask=None):
         """ Methods to extract strokes across all trials
         PARAMS:
         - version, string, what format to output
         - inds, indices, if None then gets all
+        - ver_behtask, None means get whatever is active version. otherwies:
+        --- task
+        --- beh (gets the best matching one)
         RETURNS:
         - strokes
         """
@@ -177,13 +200,29 @@ class DatStrokes(object):
         if inds is None:
             inds = range(len(self.Dat))
 
+        if ver_behtask is None:
+            ver_behtask = self.Version
+            
         def _extractsinglestroke(i):
             """ extracts strok if exists, otherwise gets Stroke()
             """
-            if "strok" in self.Dat.columns:
-                return self.Dat.iloc[i]["strok"]
+            if ver_behtask==self.Version:
+                if "strok" in self.Dat.columns:
+                    return self.Dat.iloc[i]["strok"]
+                else:
+                    return self.Dat.iloc[i]["Stroke"]()
+            elif ver_behtask=="task":
+                assert False, "code it"
+            elif ver_behtask=="beh":
+                # Then pull out the beh taht matches this task stroek the best
+                assert "aligned_beh_strokes_disttotask" in self.Dat.columns, "need to extract this first"
+                strokes_beh = [S() for S in self.Dat.iloc[i]["aligned_beh_strokes"]]
+                distances = self.Dat.iloc[i]["aligned_beh_strokes_disttotask"]
+                return strokes_beh[np.argmin(distances)]
             else:
-                return self.Dat.iloc[i]["Stroke"]()
+                assert False
+
+        assert isinstance(inds, list)
 
         # -----
         if version=="list_arrays":
@@ -293,13 +332,16 @@ class DatStrokes(object):
         plotDatStrokes([S()], ax, clean_ordered_ordinal=True)
         return ax
 
-    def plot_multiple(self, list_inds, titles=None):
+    def plot_multiple(self, list_inds, ver_behtask=None, titles=None):
         """ Plot mulitple strokes, each on a subplot
+        PARAMS:
+        - ver_behtask, "task", "beh", or None(default).
         """
-        strokes = self.extract_strokes("list_list_arrays", inds = list_inds)
+        strokes = self.extract_strokes("list_list_arrays", 
+            inds = list_inds, ver_behtask=ver_behtask)
         self.Dataset.plotMultStrokes(strokes, titles=titles)
 
-    def plot_strokes_overlaid(self, inds, ax=None, nmax = 50):
+    def plot_strokes_overlaid(self, inds, ax=None, nmax = 50, color_by="order", ver_behtask=None):
         """ Plot strokes all overlaid on same plot
         Colors strokes by order
         PARAMS;
@@ -311,15 +353,19 @@ class DatStrokes(object):
 
         assert len(inds)<=nmax, "too many strokes to oveerlay..."
         
-        strokes = [S() for S in self.Dat.iloc[inds]["Stroke"]]
-        plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, alpha=0.5)
+        strokes = self.extract_strokes("list_arrays", inds, ver_behtask=ver_behtask)
+        # strokes = [S() for S in self.Dat.iloc[inds]["Stroke"]]
+        if color_by=="order":
+            plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, alpha=0.5)
+        else:
+            plotDatStrokes(strokes, ax, clean_ordered=True, alpha=0.5)
 
         return ax
 
     def plot_egstrokes_grouped_in_subplots(self, task_kind="prims_on_grid", 
         key_subplots="shape_oriented",
         key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
-        n_examples = 2):
+        n_examples = 2, color_by="order", ver_behtask=None):
         """
         PARAMS:
         - task_kind, string, indexes into the task_kind column
@@ -378,9 +424,37 @@ class DatStrokes(object):
             list_inds = [i for i in list_inds if i is not None]
             if len(list_inds)>0:
                 ax = getax(i)[1]
-                self.plot_strokes_overlaid(list_inds, ax=ax)
+                self.plot_strokes_overlaid(list_inds, ax=ax, color_by=color_by, ver_behtask=ver_behtask)
                 
             ax.set_title(level)
 
-                
+    ############################### DISTANCES (scoring)
+    def _dist_strok_pair(self, strok1, strok2):
+        """ compute doistance between strok1 and 2
+        uses by defaiult hausdorff mean
+        """
+        from pythonlib.drawmodel.strokedists import distMatrixStrok
+        return distMatrixStrok([strok1], [strok2], convert_to_similarity=False).squeeze()
+
+    def dist_alignedbeh_to_task(self):
+        """ Get distance from each beh stroke to their matched task stroke (i.e,, N to 1).
+        Only applies for self.Version=="task"
+        RETURNS:
+        - new columnin self.Dat, aligned_beh_strokes_disttotask, np array, len num beh strokes assginged
+        to that task stroke, distance in hd
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        assert self.Version=="task"
+
+        def F(x):
+            
+            # task stroke
+            strok_task = x["strok"]
+
+            # get distances against all beh strokes
+            list_dist = np.array([self._dist_strok_pair(strok_task, strok_beh()) for strok_beh in x["aligned_beh_strokes"]])
+            return list_dist
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "aligned_beh_strokes_disttotask")
 

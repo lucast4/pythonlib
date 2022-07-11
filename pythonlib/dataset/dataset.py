@@ -666,6 +666,8 @@ class Dataset(object):
         fname = f"trial_{indtrial}-trialcode_{trialcode}"
         T.save_task_for_dragmonkey(subdirname=idstring, fname=fname)
 
+        return SDIR, idstring
+
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
         """ True if single, False, if you 
@@ -4159,14 +4161,13 @@ class Dataset(object):
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        datsegs_tasklength = Beh.alignsim_extract_datsegs()
-        datsegs_behlength = [datsegs_tasklength[i] for i in Beh.Alignsim_taskstrokeinds_foreachbeh_sorted]
+        out_combined, datsegs_behlength, datsegs_tasklength = Beh.alignsim_extract_datsegs_both_beh_task()
 
         # Assocaite each beh prim with a datseg.
         primlist = Beh.Strokes
 
         assert len(primlist) == len(datsegs_behlength)
-        return primlist, datsegs_behlength, datsegs_tasklength
+        return primlist, datsegs_behlength, datsegs_tasklength, out_combined
 
     def behclass_clean(self):
         """ Clean by removing any trials where all beh strokes fail to m atch even a single
@@ -4215,16 +4216,19 @@ class Dataset(object):
 
         return suff
 
-    def save_state(self, SDIR_MAIN, SDIR_SUB):
+    def save_state(self, SDIR_MAIN, SDIR_SUB, add_tstamp = True):
         """
         RETURNS:
         - SDIR_THIS, dir where this saved.
         """
         import os
 
-        ts = makeTimeStamp()
-        # os.makedirs(SDIR_MAIN, exist_ok=True)
-        SDIR_THIS = f"{SDIR_MAIN}/{SDIR_SUB}-{ts}"
+        if add_tstamp:
+            ts = makeTimeStamp()
+            # os.makedirs(SDIR_MAIN, exist_ok=True)
+            SDIR_THIS = f"{SDIR_MAIN}/{SDIR_SUB}-{ts}"
+        else:
+            SDIR_THIS = f"{SDIR_MAIN}/{SDIR_SUB}"
         os.makedirs(SDIR_THIS, exist_ok=True)
         print(SDIR_THIS)
 
@@ -4251,15 +4255,23 @@ class Dataset(object):
         plotMP(MP, ax=ax)
 
 
-    def plotSingleTrial(self, idx, things_to_plot = ["beh", "task"],
+    def plotSingleTrial(self, idx=None, things_to_plot = ["beh", "task"],
         sharex=False, sharey=False, params=None, task_add_num=False,
         number_from_zero=False):
         """ 
-        idx, index into Dat, 0, 1, ...
+        Plot a single trial
+        PARAMS;
+        - idx, index into Dat, 0, 1, ... 
+        --- if None, then picks a rnadom trial
+        - things_to_plot, list of str.
         - params, only matters for some things.
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokes, plotDatStrokesTimecourse, plotDatWaterfall
+        
         dat = self.Dat
+        if idx is None:
+            import random
+            idx = random.choice(range(len(dat)))
 
         assert not isinstance(idx, list)
 

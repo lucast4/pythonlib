@@ -871,7 +871,8 @@ class TaskClass(object):
                 "width":_width(i),
                 "height":_height(i),
                 "diag":_diag(i),
-                "max_wh":_max_wh(i)
+                "max_wh":_max_wh(i),
+                "Prim":Prims[i]
                 })
             
             # 2) Things that depend on grid

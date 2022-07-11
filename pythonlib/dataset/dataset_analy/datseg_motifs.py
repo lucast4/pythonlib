@@ -12,7 +12,7 @@ VARIABLES_KEEP = ["shape_oriented", "gridloc"]
 
 def generate_dict_of_all_used_motifs(D, nprims=2, 
     variables_keep = VARIABLES_KEEP,
-    WHICH_DATSEGS = "task"):
+    WHICH_DATSEGS = "task", shapes_to_ignore=None):
     """ Generate dict holding all motifs used in this dataset.
     PARAMS:
     - D, Dataset
@@ -21,6 +21,8 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
     defines the feature tuple for each token. e..g, ["shape_oriented", "gridloc"]
     - WHICH_DATSEGS, str, {'beh', 'task'}, defines which datsegs to use, ether
     aligned to beh or task.
+    - shapes_to_ignore, list of str of shapes_oriented, ignores any motifs that inlcude this
+    shape. None to not apply this
     RETURNS:
     - motifs_all_dict, dict, where keys are motifs (tuples of tokens) and itmes are 
     list of indices, where and index is (trial, starting strokenum)
@@ -68,21 +70,40 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
             else:
                 motifs_all_dict[motif] = [index]
 
+    # prune motifs
+    if shapes_to_ignore is not None:
+        # First, check you didnt make mistake netering shapes
+        list_shapes = extract_list_shapes_loc(motifs_all_dict)[0]
+        for sh in shapes_to_ignore:
+            if sh not in list_shapes:
+                print(sh)
+                print(list_shapes)
+                assert False
+
+        # Second, clean up the motifs
+        def _is_bad(motif):
+            for token in motif:
+                if token[0] in shapes_to_ignore:
+                    return True
+            return False
+
+        motifs_all_dict_new = {}
+        for motif, v in motifs_all_dict.items():
+            if _is_bad(motif):
+                print("removing motif: ", motif)
+                continue
+            else:
+                motifs_all_dict_new[motif] = v
+        motifs_all_dict = motifs_all_dict_new
+
     print("Found this many motifs: ", len(motifs_all_dict))
     sorted(list(motifs_all_dict.keys()))
     print("This many instances per motif: ", [len(v) for k, v in motifs_all_dict.items()])
     return motifs_all_dict
 
-def generate_motifgroup_data(motifs_all_dict, 
-        list_group_kind= ["same", "diff_sequence", "diff_location", "diff_prims"]):
-    """ Main extraction of computed data. For each way of grouping (e.g., same prim, same seq, diff location),
-    pull out each "motifgroup" (which is a set of all motifs which are related under this grouping), and
-    for each motifgroup save the trials that have these motifs. 
-    RETURNS:
-    - DatGroups, dict where keys are each kind of grouping (e.g, diff_sequence), and items 
-    are lists of dicts, where each dict is a motifgroup and its data.
+def extract_list_shapes_loc(motifs_all_dict):
+    """ get the list of all unqiue shapes and locations
     """
-
     # 1) Get list of all unique shapes and locations in the dataset.
     list_shapes = []
     list_locs = []
@@ -94,7 +115,20 @@ def generate_motifgroup_data(motifs_all_dict,
             list_shapes.append(shape)
     list_locs = sorted(list(set(list_locs)))
     list_shapes = sorted(list(set(list_shapes)))
+    return list_shapes, list_locs
 
+def generate_motifgroup_data(motifs_all_dict, 
+        list_group_kind= ["same", "diff_sequence", "diff_location", "diff_prims"]):
+    """ Main extraction of computed data. For each way of grouping (e.g., same prim, same seq, diff location),
+    pull out each "motifgroup" (which is a set of all motifs which are related under this grouping), and
+    for each motifgroup save the trials that have these motifs. 
+    RETURNS:
+    - DatGroups, dict where keys are each kind of grouping (e.g, diff_sequence), and items 
+    are lists of dicts, where each dict is a motifgroup and its data.
+    """
+
+    list_shapes, list_locs = extract_list_shapes_loc(motifs_all_dict)
+    
     # 2) Extract data
     DatGroups = {}
     for group_kind in list_group_kind:
@@ -268,10 +302,12 @@ def get_all_motifs_found_for_this_motifgroup(DatGroups, which_group, motifgroup)
     - motifgroup, either:
     --- int index, motifgroup sorted by num cases (trials) in which case 0 means get the motifgroup with the most identified cases 
     --- tuple (motif), see above.tuple, a group that indexes DAT
-
     RETURNS:
     - list_motifs, list of motifs for which >0 cases found, 
     in this motif group
+    - motifgroup, the tuple holding all possible motifs
+    - list_tokens, list of unique tokens across used motifs
+    - list_shapes, list of unique shapes across used motifs
     """
     
     datdict, motifgroup = extract_motifgroup_dict(DatGroups, which_group, motifgroup)
@@ -284,7 +320,12 @@ def get_all_motifs_found_for_this_motifgroup(DatGroups, which_group, motifgroup)
     for motif, ncases in zip(datdict["key"], datdict["n_trials_per_motif"]):
         if ncases>0:
             list_motifs.append(motif)
-    return list_motifs, motifgroup
+
+    # tokens and shapes
+    list_tokens = list(set([token for motif in list_motifs for token in motif]))
+    list_shapes = list(set([token[0] for token in list_tokens]))
+
+    return list_motifs, motifgroup, list_tokens, list_shapes
     
 def get_inds_this_motif(motifs_all_dict, motif, random_subset=None):
     """ REturn list of indices that have this motif
@@ -326,7 +367,7 @@ def get_inds_this_motifgroup(DatGroups, which_group, motifs_all_dict, motifgroup
     - list_motifs_all, aligned with the above, the motif for each.
     """
         
-    list_motifs, motifgroup = get_all_motifs_found_for_this_motifgroup(DatGroups, which_group, motifgroup)
+    list_motifs, motifgroup = get_all_motifs_found_for_this_motifgroup(DatGroups, which_group, motifgroup)[:2]
     # for each motif, extract trials
 
     if list_motifs is None:
@@ -344,4 +385,3 @@ def get_inds_this_motifgroup(DatGroups, which_group, motifs_all_dict, motifgroup
             list_motifs_all.append(motif)
 
     return inds_idxs_all, list_motifs_all, motifgroup
-

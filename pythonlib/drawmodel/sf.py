@@ -56,7 +56,7 @@ def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, 
 
     ### Cmpute sim matrix
     similarity_matrix = distMatrixStrok(idxs_stroklist_dat, idxs_stroklist_basis, stroklist=stroklist,
-                       normalize_rows=False, normalize_cols_range01=True, distancever=distancever)
+                       normalize_cols_range01=True, distancever=distancever)
 
     return similarity_matrix
 
