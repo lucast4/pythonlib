@@ -183,6 +183,36 @@ class DatStrokes(object):
         self.Params["params_preprocessing"] = params
 
 
+    ######################### MOTOR TIMING
+    def timing_extract_basic(self):
+        """Extract basis stats for timing, such as time of onset and offset,
+        - Looks into Dataset to find there
+        RETURNS:
+        - Appends columns to self.Dat, including "time_onset", "time_offset" 
+        (of strokes, relative to start of trial.)
+        """
+
+        # 1) Collect onset and offset of each stroke by refereing back to original dataset.
+        list_ons = []
+        list_offs = []
+        for ind in range(len(self.Dat)):
+            me = self.dataset_extract("motorevents", ind)
+            indstrok = self.Dat.iloc[ind]["stroke_index"]
+            
+            # onset and offset
+            on = me["ons"][indstrok]
+            off = me["offs"][indstrok]
+            # Note: I have checked that these match exactly what would get if use
+            # neural "Session" object to get timings (which goes thru getTrials ...)
+            
+            # save it
+            list_ons.append(on)
+            list_offs.append(off)
+            
+        self.Dat["time_onset"] = list_ons
+        self.Dat["time_offset"] = list_offs
+        print("DONE!")
+            
 
     ########################## EXTRACTIONS
     def extract_strokes(self, version="list_arrays", inds=None, ver_behtask=None):
@@ -255,9 +285,8 @@ class DatStrokes(object):
 
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
-        for ind indexing into the strokes (self.Dat)
+        for ind indexing into the strokes (DatsetStrokes.Dat)
         """
-
         return self._dataset_index(ind, True)[colname].tolist()[0]
 
     def dataset_append_column(self, colname):
