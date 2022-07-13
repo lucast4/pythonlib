@@ -1005,9 +1005,20 @@ class TaskClass(object):
 
         # 2) Things to save
         savedict = {}
-        savedict["tsc_name"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["exptname"]
+        if "exptname" in self.PlanDat["Info"]["TaskSetClass"]["params"].keys():
+            # older version
+            savedict["tsc_name"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["exptname"]
+        else:
+            savedict["tsc_name"] = self.PlanDat["Info"]["TaskSetClass"]["UniqueID"]
+
         savedict["tsc_constraints"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["constraints"]
-        savedict["tsc_online_updates"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["online_updates"]
+        if "online_updates" in self.PlanDat["Info"]["TaskSetClass"]["params"].keys():
+            # older version
+            savedict["tsc_online_updates"] = self.PlanDat["Info"]["TaskSetClass"]["params"]["online_updates"]
+        else:
+            savedict["tsc_online_updates"] = []
+
+
         savedict["tsc_params_planclass"] = self.PlanDat["Info"]["TaskSetClass"]["params_planclass"]
         savedict["Plan"] = self.PlanDat["Plan"]
         savedict["PrimsCategories"] = self.PlanDat["PrimsCategories"]

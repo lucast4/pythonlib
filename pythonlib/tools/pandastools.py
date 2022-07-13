@@ -750,7 +750,7 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
-                                    F = {}):
+                                    F = {}, return_as_dict=False):
     """ To uniformly sample rows so that spans levels of a given variable (column)
     e..g, if a col is "shape" and you want to get one example trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
@@ -760,6 +760,7 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     - varlevels, list of string, levels. or None to get all.
     - n_examples, how many to get of each (random)
     - F, dict for filtering. will use this and append the varname:varlevel.
+    - return_as_dict, then returns as out[level] = <list of indices>
     RETURNS:
     - list_inds, list of ints or None (for cases where can't get this many examples, 
     will fail all examples, not just the excess... (should fix this)). if n_examples >1, then
@@ -774,6 +775,7 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     
     # For each level, find n examples
     list_inds = []
+    outdict = {}
     for val in varlevels:
         F[varname] = val
         list_idx = filterPandas(df, F, True)
@@ -782,4 +784,8 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
         else:
             inds = [None for _ in range(n_examples)]
         list_inds.extend(inds)
-    return list_inds, varlevels
+        outdict[val] = inds
+    if return_as_dict:
+        return outdict, varlevels
+    else:
+        return list_inds, varlevels
