@@ -63,13 +63,72 @@ def plotNeurTimecourse(X, Xerror=None, ax=None, n_rand=None, marker="-"):
     # ax.set_xlabel(f"robust={robust}|{minmax[0]:.2f}...{minmax[1]:.2f}")
     # ax.set_ylabel('neuron #')
 
+def plotStateSpace(X, dim1=None, dim2=None, plotndim=2, ax=None, color=None):
+    """ general, for plotting state space, will work
+    with trajectories or pts (with variance plotted)
+    X, shape should always be (neurons, time), if is larger, then
+    will raise error. 
+    - dim1, 2, list of inds to take. if None, then will take auto (for dim1
+    takes first N depending on plotver) and dim2 takes all. length of dim1 should
+    match the plotndim.
+    - plotndim, [2, 3] whether 2d or 3d
+    """
+    assert False, "copied over from drawnn.notebooks_analy.analy_everythinguptonow_021021 Not sure if works here."
+    import seaborn as sns
+    
+    if ax is None:
+        fig, ax = plt.subplots()
+        
+    # check that input X is correct shape
+    assert len(X.shape)<=2
+    
+    # how many neural dimensions>?
+    if dim1 is not None:
+        assert len(dim1)==plotndim
+    else:
+        dim1 = np.arange(plotndim)
+    
+    # how many time bins?
+    if dim2 is None:
+        dim2 = np.arange(X.shape[1])
+            
+    # PLOT
+    if plotndim==2:
+        x1 = X[dim1[0], dim2]
+        x2 = X[dim1[1], dim2]
+        ax.scatter(x1, x2, c=color)
+        ax.plot(x1, x2, '-', color=color)
+        if len(x1)>1:
+            ax.plot(x1[0], x2[0], "ok") # mark onset
+    elif plotndim==3:
+        assert False, not coded
+        # %matplotlib notebook
+        fig, axes = plt.subplots(1,2, figsize=(12,6))
+        from mpl_toolkits.mplot3d import Axes3D
+    
+        # --- 1
+        ax = fig.add_subplot(121, projection='3d')
+        ax.scatter(Xsub[:,0], Xsub[:,1], Xsub[:,2], c=[x for x in Mod.A.calcNumStrokes()])
+        # --- 2
+        tasks_as_nums = mapStrToNum(Mod.Tasks["train_categories"])[1]
+        ax = fig.add_subplot(122, projection='3d')
+        ax.scatter(Xsub[:,0], Xsub[:,1], Xsub[:,2], c=tasks_as_nums)
+
+    # fig, ax= plt.subplots()
+    # for b in [0,1]:
+    #     X = Xmean[:,:,b]
+    #     plotStateSpace(X, ax=ax)
+
+
 
 class PopAnal():
     """ for analysis of population state spaces
     """
 
-    def __init__(self, X, axislabels=None, dim_units=0, stack_trials_ver="append_nan", 
-        feature_list = None):
+    def __init__(self, X, times, chans=None, dim_units=0, 
+        stack_trials_ver="append_nan", 
+        feature_list = None, spike_trains=None,
+        print_shape_confirmation = True):
         """ 
         Options for X:
         - array, where one dimensions is nunits. by dfefualt that should 
@@ -80,13 +139,17 @@ class PopAnal():
         preprocess in standard ways to make them all one stack.
         - pandas dataframe, where each row is a trial. must have a column called
         "neur" which is (nunits, timebins)
+        - times,  array of time values for each time bin. same for all trials.
         --------
         - axislabels = list of strings
+        - chans, list of ids for each chan, same len as nunits. if None, then labels them [0, 1, ..]
         - dim_units, dimeision holding units. if is not
         0 then will transpose to do all analyses.
         - feature_list = list of strings, each identifying one column for X if 
         X is datafarme, where these are features already extracted in X, useful for 
         downstream analysis.
+        - spike_trains, list of list of spike trains, where the outer list is 
+        trials, and inner list is one for each chan.
         ATTRIBUTES:
         - X, (nunits, cond1, cond2, ...). NOTE, can enter different
         shape, but tell me in dim_units which dimension is units. will then
@@ -94,6 +157,8 @@ class PopAnal():
 
         """
         self.Xdataframe = None
+        self.Xz = None
+        
         self.dim_units = dim_units
         if isinstance(X, list):
             from ..tools.timeseriestools import stackTrials
@@ -113,11 +178,33 @@ class PopAnal():
 
             self.Featurelist = feature_list
         else:
-            self.X = X
+            if len(X.shape)==2:
+                # assume it is (nunits, timebins). unsqueeze so is (nunits, 1, timebins)
+                self.X = np.expand_dims(X, 1)
+            else:
+                self.X = X
+        
         self.Saved = {}
+        self.Times = times
+        assert len(times)==self.X.shape[2], "n trials doesnt match"
+
+        if chans is None:
+            self.Chans = range(self.X.shape[0])
+        else:
+            assert len(chans)==self.X.shape[0]
+            self.Chans = chans
+
+        # Spike trains
+        self.SpikeTrains = spike_trains
+        if spike_trains is not None:    
+            assert len(spike_trains)==self.X.shape[1], "doesnt match num trials"
+            for st in spike_trains:
+                assert len(st)==self.X.shape[0], "doesnt match number chans"
+
         self.preprocess()
-        print("Final shape of self.X; confirm that is (nunits, ntrials, time)")
-        print(self.X.shape)
+        if print_shape_confirmation:
+            print("Final shape of self.X; confirm that is (nunits, ntrials, time)")
+            print(self.X.shape)
 
 
 
@@ -414,6 +501,26 @@ class PopAnal():
 
         self.Xdataframe = applyFunctionToAllRows(self.Xdataframe, F, newcolname="neur_z")
 
+    def zscoreFrNotDataframe(self):
+        """ z-score across trials and time bins, separately for each chan
+        RETURNS:
+        - modifies self.Xz
+        - return self.Xz
+        """
+
+        X = self.X
+
+        # reshape to (nchans, trials*time)
+        x = X.reshape((X.shape[0], X.shape[1]*X.shape[2]))
+        xstd = np.std(x, axis=1)
+        xmean = np.mean(x, axis=1)
+        xstd = xstd.reshape(xstd.shape[0], 1, 1)
+        xmean = xmean.reshape(xmean.shape[0], 1, 1)
+
+        self.Xz = (X - xmean)/xstd
+        return self.Xz
+
+
     def binFeatures(self, nbins, feature_list=None):
         """ assign bin to each trial, based on its value for feature
         in feature_list.
@@ -507,10 +614,62 @@ class PopAnal():
         else:
             return XdataframeAgg
 
+    ####################### SLICING
+    def slice_by_time_window(self, t1, t2, return_as_popanal=False):
+        """ Slice population by time window, where
+        time is based on self.Times
+        PARAMS;
+        - t1, t2, start and end time for slicing
+        RETURNS:
+        - np array, (nchans, ntrials, timesliced)
+        """
+        inds = (self.Times>=t1) & (self.Times<=t2)
+        x_windowed = self.X[:, :, inds]
+        times = self.Times[inds]
 
+        if return_as_popanal:
+            PA = PopAnal(x_windowed, times, chans=self.Chans, print_shape_confirmation=False)
+            return PA
+        else:
+            return x_windowed, times
+
+
+    def mean_over_axis(self, axis):
+        """ Take mean over any axis
+        PARAMS:
+        - axis, int
+        """
+        assert False, "write it"
+
+
+
+    #### EXTRACT ACTIVITY
+    def extract_activity(self, trial, version="raw"):
+        """ REturn activity for this trial
+        PARAMS:
+        - trial, int
+        - version, string, ee.g. {'raw', 'z'}
+        RETURNS:
+        - X, shape (nchans, 1, ntime)
+        """
+
+        if version=="raw":
+            return self.X[:, trial, :]
+        elif version=="z":
+            assert self.Xz is not None, "need to do zscore first"
+            return self.Xz[:, trial, :]
+        else:
+            print(version)
+            assert False
 
 
     ### PLOTTING
+    def plotNeurHeat(self, trial, version="raw", **kwargs):
+        X = self.extract_activity(trial, version)
+        return plotNeurHeat(X, **kwargs)
+
+    def plotNeurTimecourse(self, trial, **kwargs):
+        X = self.extract_activity(trial, version)
+        return plotNeurTimecourse(X, **kwargs)
 
 
-    
