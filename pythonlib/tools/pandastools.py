@@ -460,20 +460,24 @@ def printOverview(df, MAX=50):
                 print(df[col].value_counts())
 
 
-def append_col_with_grp_index(df, grp, new_col_name):
+def append_col_with_grp_index(df, grp, new_col_name, use_strings=True):
     """ for each col, gets its grp index (based on grp list),
     and appends as new column. first converts to string by str(list)
     INPUTS:
     - grp, list of strings, each a column. order matters!
+    - use_strings, bool (True), then items are strings, otherwise are tuples.
     RETURNS:
-    - df, but with new col.
+    - df, but with new col. either values as string or tuples
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
  
     # add a column, which is grp index
     def F(x):
         tmp = [x[g] for g in grp]
-        return str(tmp)
+        if use_strings:
+            return str(tmp) 
+        else:
+            return tuple(tmp)
     
     return applyFunctionToAllRows(df, F, new_col_name)    
 
@@ -789,3 +793,62 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
         return outdict, varlevels
     else:
         return list_inds, varlevels
+
+
+def grouping_get_inner_items(df, groupouter="task_stagecategory", 
+    groupinner="index", groupouter_levels=None):
+    """ Return dict of unique items (levels of groupinner), grouped
+    by groupouter levels. 
+    PARAMS:
+    - groupouter, string, the first grouping.
+    - groupinner, string, the second grouping. either a column or "index"
+    - groupouter_levels, list of values to use for groupouter. if None, then 
+    finds and uses all.
+    RETURNS:
+    - groupdict, where each key is a level of groupouter, and
+    items are the unique values of groupinner that exist for that
+    groupouter level.
+    EXAMPLE:
+    - if groupouter = date and groupinner = character, then returns
+    {date1:<list of strings of unique characters for date1>, 
+    date2:<list of strings ....}
+    """
+    if groupouter_levels is None:
+        groupouter_levels = df[groupouter].unique()
+    groupdict = {}
+    for lev in groupouter_levels:
+        dfthisgroup = df[df[groupouter]==lev]
+        if groupinner=="index":
+            itemsinner = dfthisgroup.index.tolist()
+        else:
+            itemsinner = dfthisgroup[groupinner].unique()
+        groupdict[lev] = itemsinner
+    return groupdict
+
+
+
+def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
+    groupinner="index", groupouter_levels=None):
+    """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
+    Useful if e./g., you want to get all indices for each of the levels in a combo group,
+    where the group is defined by conjunction of two columns.
+    PARAMS:
+    - list_groupouter_grouping_vars, list of strings, to define a new grouping variabe,
+    will append this to df. this acts as the groupouter.
+    - groupinner, see grouping_get_inner_items
+    - groupouter_levels, see grouping_get_inner_items
+    RETURNS:
+    - groupdict, see grouping_get_inner_items
+    """
+
+    # 1) Append new grouping variable to each row
+    new_col_name = "grp"
+    while new_col_name in df.columns:
+        new_col_name+="_"
+    df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)
+
+
+    # 2) Get dict of eaceh group
+    groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
+    
+    return groupdict
