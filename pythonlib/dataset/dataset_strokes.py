@@ -351,14 +351,21 @@ class DatStrokes(object):
 
 
     ####################### PLOTS
+    def plot_single_strok(self, strok, ax=None):
+        """ plot a single inputed strok on axis.
+        INPUT:
+        - strok, np array,
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        plotDatStrokes([strok], ax, clean_ordered_ordinal=True)
+
     def plot_single(self, ind, ax=None):
         """ Plot a single stroke
         """
-        from pythonlib.drawmodel.strokePlots import plotDatStrokes
         if ax==None:
             fig, ax = plt.subplots(1,1)
         S = self.Dat.iloc[ind]["Stroke"]
-        plotDatStrokes([S()], ax, clean_ordered_ordinal=True)
+        self.plot_single_strok(S(), ax)
         return ax
 
     def plot_multiple(self, list_inds, ver_behtask=None, titles=None):
@@ -457,6 +464,52 @@ class DatStrokes(object):
                 
             ax.set_title(level)
 
+    ############################## GROUPING
+    def grouping_get_inner_items(self, groupouter="shape_oriented", groupinner="index"):
+        from pythonlib.tools.pandastools import grouping_get_inner_items
+        groupdict = grouping_get_inner_items(self.Dat, groupouter, groupinner)
+        return groupdict
+
+
+    def grouping_append_and_return_inner_items(self, list_grouping_vars=["shape_oriented", "gridloc"]):
+        """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
+        Useful if e./g., you want to get all indices for each of the levels in a combo group,
+        where the group is defined by conjunction of two columns.
+        PARAMS:
+        - list_groupouter_grouping_vars, list of strings, to define a new grouping variabe,
+        will append this to df. this acts as the groupouter.
+        - groupinner, see grouping_get_inner_items
+        - groupouter_levels, see grouping_get_inner_items
+        RETURNS:
+        - groupdict, see grouping_get_inner_items
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+
+        groupdict = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
+            "index")
+
+        return groupdict
+
+
+    ################################ SIMILARITY/CLUSTERING
+    def cluster_compute_sim_matrix(self, inds, do_preprocess=False):
+        """ Compute similarity matrix between each pair of trials in inds
+        """
+        from ..drawmodel.sf import computeSimMatrixGivenBasis
+
+        if do_preprocess:
+            self._process_strokes()
+
+        list_strokes = self.extract_strokes("list_list_arrays", inds)
+        simmat = computeSimMatrixGivenBasis(list_strokes, list_strokes, 
+            rescale_strokes_ver="stretch_to_1", distancever="euclidian_diffs", npts_space=50) 
+
+        plt.figure()
+        plt.imshow(simmat)
+        assert False, "not finished"
+
+
+
     ############################### DISTANCES (scoring)
     def _dist_strok_pair(self, strok1, strok2):
         """ compute doistance between strok1 and 2
@@ -464,6 +517,8 @@ class DatStrokes(object):
         """
         from pythonlib.drawmodel.strokedists import distMatrixStrok
         return distMatrixStrok([strok1], [strok2], convert_to_similarity=False).squeeze()
+
+
 
     def dist_alignedbeh_to_task(self):
         """ Get distance from each beh stroke to their matched task stroke (i.e,, N to 1).

@@ -4056,17 +4056,8 @@ class Dataset(object):
         {date1:<list of strings of unique characters for date1>, 
         date2:<list of strings ....}
         """
-        levelsouter = self.Dat[groupouter].unique()
-        groupdict = {}
-        for lev in levelsouter:
-            dfthisgroup = self.Dat[self.Dat[groupouter]==lev]
-            if groupinner=="index":
-                itemsinner = dfthisgroup.index.tolist()
-            else:
-                itemsinner = dfthisgroup[groupinner].unique()
-            groupdict[lev] = itemsinner
-        return groupdict
-
+        from pythonlib.tools.pandastools import grouping_get_inner_items
+        return grouping_get_inner_items(self.Dat, groupouter, groupinner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
     def behclass_generate(self, indtrial, expt=None):
@@ -4133,8 +4124,6 @@ class Dataset(object):
             if i%200==0:
                 print(i)
 
-
-
     def behclass_extract(self, inds_trials = None):
         """ Get list of behclass for these trials
         - Gets precomputed
@@ -4143,6 +4132,26 @@ class Dataset(object):
             inds_trials = range(len(self.Dat))
         return [self.Dat.iloc[i]["BehClass"] for i in inds_trials]
 
+    def behclass_find_behtask_token(self, indtrial, indstroke, version="beh"):
+        """ Find the token (combines info on beh and task) that matches this trial
+        and indstroke
+        PARAMS;
+        - indtrial, int index into self.Dat.
+        - indstroke, int index with strokes, either beh or task (version)
+        - version, string, eitehr beh or task, which indstroke to search for.
+        RETURNS:
+        - token, tuple, (<list of beh stroke inds>, <list of beh strokeclass>, task datseg (single))
+        """
+        out = self.behclass_extract_beh_and_task(indtrial)[3] 
+        if version=="beh":
+            for o in out:
+                if indstroke in o[0]:
+                    return o
+            assert False, "didnt find this beh stroke..."
+        elif version=="task":
+            return out[indstroke]
+        else:
+            assert False
 
     def behclass_extract_beh_and_task(self, indtrial):
         """ Extract both beh (oist of PrimitiveClass) and task

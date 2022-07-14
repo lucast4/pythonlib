@@ -128,7 +128,7 @@ class PopAnal():
     def __init__(self, X, times, chans=None, dim_units=0, 
         stack_trials_ver="append_nan", 
         feature_list = None, spike_trains=None,
-        print_shape_confirmation = True):
+        print_shape_confirmation = False):
         """ 
         Options for X:
         - array, where one dimensions is nunits. by dfefualt that should 
@@ -158,7 +158,7 @@ class PopAnal():
         """
         self.Xdataframe = None
         self.Xz = None
-        
+
         self.dim_units = dim_units
         if isinstance(X, list):
             from ..tools.timeseriestools import stackTrials
@@ -273,7 +273,7 @@ class PopAnal():
         self.Xcentered = X
         self.Saved["centerAndStack_means"] = means # if want to apply same trnasformation in future data.
 
-    def pca(self, ver="eig", ploton=False):
+    def pca(self, ver="svd", ploton=False):
         """ perform pca
         - saves in cache the axes, self.Saved["pca"]
         """
@@ -281,7 +281,15 @@ class PopAnal():
         self.centerAndStack()
 
         if ver=="svd":
-            u, s, v = np.linalg.svd(self.Xcentered)
+
+            if self.Xcentered.shape[1]>self.Xcentered.shape[0]:
+                # "dim 1 is time x trials..., shoudl be larger"
+                full_matrices=False
+            else:
+                full_matrices=True
+
+            u, s, v = np.linalg.svd(self.Xcentered, full_matrices=full_matrices)
+            nunits = self.X.shape[0]
             w = s**2/(nunits-1)
             
         elif ver=="eig":
@@ -306,6 +314,8 @@ class PopAnal():
                 axes[1].imshow(v)
                 axes[1].set_title('eigen vects')
                 axes[1].set_xlabel('vect')
+        else:
+            assert False
 
         w = w/np.sum(w)
 
@@ -316,6 +326,7 @@ class PopAnal():
 
             axes[0].plot(w, '-ok')
             axes[1].plot(np.cumsum(w)/np.sum(w), '-or')
+            axes[1].set_title('cumulative variance explained')
             axes[1].hlines(0.9, 0, len(w))
 
             axes[0].set_title('s vals')
@@ -401,8 +412,11 @@ class PopAnal():
         - X, (nunits, *), as many dim as wanted, as long as first dim is nunits (see reproject
         for how to deal if first dim is not nunits)
         - Dimslist, insteast of Ndim, can give me list of dims. Must leave Ndim None.
-        ==== RETURNS
+        RETURNS:
         - Xsub, (Ndim, *) [X not modified]
+        NOTE: 
+        - This also applis centering tranformation to X using the saved mean of data
+        used to compute the PCA space.
         """
 
         nunits = X.shape[0]
@@ -434,7 +448,7 @@ class PopAnal():
         X = X - self.Saved["centerAndStack_means"] # demean
 
         # 2) 
-        w = self.Saved["pca"]["w"]
+        # w = self.Saved["pca"]["w"]
         u = self.Saved["pca"]["u"]
         if Ndim is None:
             usub = u[:,Dimslist]
@@ -633,31 +647,144 @@ class PopAnal():
         else:
             return x_windowed, times
 
-
-    def mean_over_axis(self, axis):
-        """ Take mean over any axis
+    def slice_by_trial(self, trials, version="raw", return_as_popanal=False):
+        """ Slice activity to only get these trials, returned as popanal
+        if return_as_popanal is True
         PARAMS:
-        - axis, int
+        - trials, list of ints, indices into dim 1 of self.X
         """
-        assert False, "write it"
 
+        X = self.extract_activity(version=version)
+        X = X[:, trials, :]
+        if return_as_popanal:
+            PA = PopAnal(X, self.Times, chans=self.Chans, print_shape_confirmation=False)
+            return PA
+        else:
+            return X
+
+    def slice_by_chan(self, chans, version="raw", return_as_popanal=True, 
+            chan_inputed_row_index=False,):
+        """ Slice data to keep only subset of channels
+        PARAMS;
+        - chans, list of chan labels, These are NOT the row indices, but are instead
+        the chan labels in self.Chans. To use row indices (0,1,2, ...), make
+        chan_inputed_row_index=True. 
+        (NOTE: will be sorted as in chans)
+        RETURNS:
+        - EIther:
+        --- X, np array, shape
+        --- PopAnal object (if return_as_popanal)
+        """
+
+        # convert from channel labels to row indices
+        if chan_inputed_row_index:
+            inds = chans
+        else:
+            inds = [self.index_find_this_chan(ch) for ch in chans]
+
+        # Slice
+        X = self.extract_activity(version=version)
+        X = X[inds, :, :]
+        if return_as_popanal:
+            PA = PopAnal(X, self.Times, chans=chans)
+            return PA
+        else:
+            return X
+
+    def copy(self):
+        """ Returns a copy. 
+        Actually does this by slicing by trial, but entering all chans...
+        So will not copy all attributes...
+        """
+        trials = range(self.X.shape[1])
+        return self.slice_by_trial(trials, return_as_popanal=True)
+
+    def mean_over_time(self, version="raw", return_as_popanal=False):
+        """ Return X, but mean over time,
+        shape (nchans, ntrials)
+        """
+        X = self.extract_activity(version = version)
+        if return_as_popanal:
+            Xnew = np.mean(X, axis=2, keepdims=True)
+            return PopAnal(Xnew, times=np.array([0.]), chans=self.Chans, print_shape_confirmation=False)
+        else:
+            Xnew = np.mean(X, axis=2, keepdims=False)
+            return Xnew
+
+    def mean_over_trials(self, version="raw"):
+        """ Return X, but mean over trials,
+        out shape (nchans, 1, time)
+        """
+        X = self.extract_activity(version=version)
+        return np.mean(X, axis=1, keepdims=True)
+
+
+    def agg_by_trialgrouping(self, groupdict, version="raw", return_as_popanal=True):
+        """ aggreagate so that trials dimension is reduced,
+        by collecting multiple trials into single groups
+        by taking mean over trials. 
+        PARAMS:
+        - groupdict, {groupname:trials_list}, output from
+        pandatools...
+        RETURNS:
+        - eitehr PopAnal or np array, with data shape = (nchans, ngroups, time),
+        with ngroups replacing ntrials after agging.
+        """
+
+        # 1) Collect X (trial-averaged) for each group
+        list_x = []
+        for grp, inds in groupdict.items():
+            PAthis = self.slice_by_trial(inds, version=version, return_as_popanal=True)
+            x = PAthis.mean_over_trials()
+            list_x.append(x)
+
+        # 2) Concatenate all groups
+        X = np.concatenate(list_x, axis=1)
+
+        # 3) Convert to PA
+        if return_as_popanal:
+            # assert PAnew.shape[1]==len(groupdict)
+            return PopAnal(X, PAthis.Times, PAthis.Chans)
+        else:
+            return X
+
+    ################ INDICES
+    def index_find_this_chan(self, chan):
+        """ Returns the index (into self.X[:, index, :]) for this
+        chan, looking into self.Chans, tyhe lables.
+        PARAMS:
+        - chan, label, as in self.Chans
+        RETURNS;
+        - index, see above
+        """
+
+        for i, ch in enumerate(self.Chans):
+            if ch==chan:
+                return i
+        assert False, "this chan doesnt exist in self.Chans"
 
 
     #### EXTRACT ACTIVITY
-    def extract_activity(self, trial, version="raw"):
+    def extract_activity(self, trial=None, version="raw"):
         """ REturn activity for this trial
         PARAMS:
-        - trial, int
+        - trial, int, if None, then returns over all trials
         - version, string, ee.g. {'raw', 'z'}
         RETURNS:
-        - X, shape (nchans, 1, ntime)
+        - X, shape (nchans, 1, ntime), or (nchans, ntrials, ntime, if trial is None)
         """
 
         if version=="raw":
-            return self.X[:, trial, :]
+            if trial is None:
+                return self.X
+            else:
+                return self.X[:, trial, :]
         elif version=="z":
             assert self.Xz is not None, "need to do zscore first"
-            return self.Xz[:, trial, :]
+            if trial is None:
+                return self.Xz
+            else:
+                return self.Xz[:, trial, :]
         else:
             print(version)
             assert False
