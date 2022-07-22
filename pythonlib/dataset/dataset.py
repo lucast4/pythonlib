@@ -21,7 +21,8 @@ def _checkPandasIndices(df):
 class Dataset(object):
     """ 
     """
-    def __init__(self, inputs, append_list=None, reloading_saved_state=False):
+    def __init__(self, inputs, append_list=None, reloading_saved_state=False,
+            remove_dot_strokes=True, remove_online_abort=True):
         """
         Load saved datasets. 
         - inputs, is either:
@@ -38,6 +39,11 @@ class Dataset(object):
         reloading the probedat-->dataset, but is if reload after saving using Dataset.save...
         """
 
+        # Cleanup params
+        self.ParamsCleanup = {
+            "remove_dot_strokes":remove_dot_strokes,
+            "remove_online_abort":remove_online_abort
+        }
 
         self._reloading_saved_state = reloading_saved_state
 
@@ -120,8 +126,8 @@ class Dataset(object):
 
 
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
-        """ loading function, use this for all loading purposes
-        - animal_expt_rule = [aer1, aer2, ..] length of inputs, where aer1 is like (a, e, r)
+        """ MAIN loading function, use this for all loading purposes
+        - animal_exp MAINt_rule = [aer1, aer2, ..] length of inputs, where aer1 is like (a, e, r)
         -- only applies if input is paths
         """
         
@@ -136,7 +142,10 @@ class Dataset(object):
             # then you passed in pandas dataframes directly.
             self._store_dataframes(inputs, append_list)
         if not self._reloading_saved_state:
-            self._cleanup()
+            self._cleanup(
+                remove_dot_strokes = self.ParamsCleanup["remove_dot_strokes"],
+                remove_online_abort = self.ParamsCleanup["remove_online_abort"]
+                )
             self._check_consistency()
 
 
@@ -692,7 +701,7 @@ class Dataset(object):
 
 
     ############# CLEANUP
-    def _cleanup(self, remove_dot_strokes=True): 
+    def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True): 
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
         """
@@ -716,7 +725,11 @@ class Dataset(object):
 
         # reset 
         self.Dat = self.Dat.reset_index(drop=True)
-
+        # print(sum(self.Dat["trialcode"] == "220608-1-132"))
+        # print(sum((self.Dat["trial"] == 132) & (self.Dat["session"] == 1) & (self.Dat["date"] == "220608")))
+        # print(sum((self.Dat["trial"] == 132) & (self.Dat["session"] == 1)))
+        # print(sum(self.Dat["trial"] == 132))
+        # assert False
 
         # Make sure strokes are all in format (N,3)
         def F(x):
@@ -816,15 +829,22 @@ class Dataset(object):
         self.Dat["online_abort_ver"] = self.Dat["online_abort"] # so not confused in previous code for Non
         self.Dat = self.Dat.drop("online_abort_ver", axis=1)
 
+        # print(self.Dat["aborted"].value_counts())
+        # assert False
+        # print(remove_online_abort)
+        # print(sum(self.Dat["trialcode"] == "220608-1-132"))
+        if remove_online_abort:
+            print("HERE")
+            # Remove any trials that were online abort.
+            self.Dat = self.Dat[self.Dat["aborted"]==False]
+            print("Removed online aborts")
+        # print(sum(self.Dat["trialcode"] == "220608-1-132"))
+        # assert False
         if "Task" in self.Dat.columns:
             self._cleanup_using_tasks()
 
         # assign a "character" name to each task.
         self._cleanup_rename_characters()
-
-        # Remove any trials that were online abort.
-        self.Dat = self.Dat[self.Dat["aborted"]==False]
-        print("Removed online aborts")
 
         # dates for summary , make sure assigned
         # for MD in self.Metadats.values():

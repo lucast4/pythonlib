@@ -160,11 +160,35 @@ class DatStrokes(object):
             T = D.Dat.iloc[ind]["Task"]
             len(T.Strokes)
 
+    def _process_strokes_inputed(self, strokes, align_to_onset = True, min_stroke_length_percentile = 2, 
+        min_stroke_length = 50, max_stroke_length_percentile = 99.5, centerize=False, 
+        rescale_ver=None):
+        """
+        Process the inpute strokes 
+        RETURNS:
+        - strokes, without modifying anything in  strol
+        """
+        from ..drawmodel.sf import preprocessStroksList 
+
+        params = {
+            "align_to_onset":align_to_onset,
+            "min_stroke_length_percentile":min_stroke_length_percentile,
+            "min_stroke_length":min_stroke_length,
+            "max_stroke_length_percentile":max_stroke_length_percentile,
+            "centerize":centerize,
+            "rescale_ver":rescale_ver
+        }
+
+        return preprocessStroks(strokes, params)
+
+
     def _process_strokes(self, align_to_onset = True, min_stroke_length_percentile = 2, 
         min_stroke_length = 50, max_stroke_length_percentile = 99.5, centerize=False, 
         rescale_ver=None):
         """ To do processing of strokes, e.g,, centerizing, etc.
         - Only affects the "strok" key in self.Dat
+        RETURNS:
+        - Modifies self.Dat["strok"]
         """
         from ..drawmodel.sf import preprocessStroks
 
@@ -181,6 +205,52 @@ class DatStrokes(object):
 
         # Note down done preprocessing in params
         self.Params["params_preprocessing"] = params
+
+    def clean_data(self, methods=[]):
+        """ Combine methods for pruning dataset to get clean data in specific ways
+        PARAMS;
+        - methods, list of str, each a method to run in order
+        RETURNS:
+        - Modifies self.Dat
+        """
+
+        for meth in methods:
+            if meth=="remove_if_multiple_behstrokes_per_taskstroke":
+                # Only keep trials with good behavior
+                # - takes at most one beh strok to get this task strok.
+                list_inds_bad = []
+                for i in range(len(self.Dat)):
+                    indtrial = self._dataset_index(i)
+                    indstroke = self.Dat.iloc[i]["stroke_index"]
+                    tok = self.dataset_call_method("behclass_find_behtask_token", [indtrial, indstroke], {"version":"beh"})
+                    n_beh_strokes = len(tok[0])
+                    if n_beh_strokes>1:
+                        # Then this beh stroke is part of multiple beh strokes targeting same task strokes.
+                        list_inds_bad.append(i)
+                print("This many cases with >1 beh stroke needed to completed a task stroke: ", len(list_inds_bad))
+                self.Dat = self.Dat.drop(list_inds_bad).reset_index(drop=True)
+            elif meth=="visual_accuracy":
+                # Remove if innacurate 
+                assert False, "in progress"
+                # Visal accuracy (stroke beh vs. stroke task)
+                i = 104
+                indtrial = DS._dataset_index(i)
+                indstroke = DS.Dat.iloc[i]["stroke_index"]
+                tok = D.behclass_find_behtask_token(indtrial, indstroke, version="beh")
+
+                beh_stroke = tok[1][0]
+                task_prim = tok[2]["Prim"]
+
+                D.plotMultStrokes([[beh_stroke(), task_prim.Stroke()]]) 
+
+                # Compute distance
+                DS._dist_strok_pair(beh_stroke(), task_prim.Stroke())
+
+                # TODO: filter based on this score.
+            else:
+                print(meth)
+                assert False, "code it"
+
 
 
     ######################### MOTOR TIMING
@@ -228,7 +298,7 @@ class DatStrokes(object):
         """
 
         if inds is None:
-            inds = range(len(self.Dat))
+            inds = list(range(len(self.Dat)))
 
         if ver_behtask is None:
             ver_behtask = self.Version
@@ -242,7 +312,10 @@ class DatStrokes(object):
                 else:
                     return self.Dat.iloc[i]["Stroke"]()
             elif ver_behtask=="task":
-                assert False, "code it"
+                strokes_task = self.dataset_extract("strokes_task", i)
+                print("HACKY (extract_strokes) for task, taking entire task")
+                return np.concatenate(strokes_task, axis=0)
+                # return strokes_task[0]
             elif ver_behtask=="beh":
                 # Then pull out the beh taht matches this task stroek the best
                 assert "aligned_beh_strokes_disttotask" in self.Dat.columns, "need to extract this first"
@@ -342,6 +415,11 @@ class DatStrokes(object):
         # 2) Filter
         return filterPandas(self.Dat, filtdict, return_indices=return_indices, reset_index=reset_index)
 
+    def dataset_call_method(self, method, args, kwargs):
+        """
+        return D.<method>(*args, **kwargs)
+        """
+        return getattr(self.Dataset, method)(*args, **kwargs)
 
     ######################### SUMMARIZE
     def print_summary(self):
@@ -404,7 +482,7 @@ class DatStrokes(object):
         n_examples = 2, color_by="order", ver_behtask=None):
         """
         PARAMS:
-        - task_kind, string, indexes into the task_kind column
+        - task_kind, string, indexes into the task_kind column. Leave None to keep any
         --- e..g, {"character", "prims_on_grid"}
         - key_subplots, string, each level of this grouping variable will have its
         own subplot.
@@ -422,9 +500,12 @@ class DatStrokes(object):
             key_to_extract_stroke_variations_in_single_subplot = None
 
         # 0) Static params:
-        F = {
-            "task_kind":[task_kind],
-        }
+        if task_kind is None:
+            F = {}  
+        else:
+            F = {
+                "task_kind":[task_kind],
+            }
 
         # One plot for each level
         subplot_levels = sorted(self.Dat[key_subplots].unique().tolist())
@@ -459,10 +540,70 @@ class DatStrokes(object):
             # 3) pull out these examples and plot
             list_inds = [i for i in list_inds if i is not None]
             if len(list_inds)>0:
-                ax = getax(i)[1]
+                ax = getax(i)
                 self.plot_strokes_overlaid(list_inds, ax=ax, color_by=color_by, ver_behtask=ver_behtask)
-                
-            ax.set_title(level)
+                ax.set_title(level)
+
+    def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
+            flip_plot=False):
+        """ 
+        Plot grid of strokes, where cols are (e.g.) shapes and rows are
+        example trials
+        PARAMS:
+        - flip_plot, bool, if True, then cols are actually plotted as rows
+        """
+        from pythonlib.tools.pandastools import extract_trials_spanning_variable        
+        from pythonlib.tools.plottools import plotGridWrapper
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        outdict = extract_trials_spanning_variable(self.Dat, "shape_oriented", 
+            col_levels, n_examples=2, return_as_dict=True)[0]
+        list_row = []
+        list_col = []
+        list_inds = []
+        for col, (shape, inds) in enumerate(outdict.items()):
+            for row, index in enumerate(inds):
+                list_inds.append(index)
+                list_row.append(row)
+                list_col.append(col)
+
+        strokes = self.Dat.iloc[list_inds]["strok"].values
+        def plotfunc(strok, ax):
+            plotDatStrokes([strok], ax)
+        if flip_plot:
+            plotGridWrapper(strokes, plotfunc, list_row, list_col[::-1])
+        else:
+            plotGridWrapper(strokes, plotfunc, list_col, list_row)
+
+
+    def plotStrokOrderedByLabel(labels, SF, labels_in_order=None):
+        """ plot example (rows) of each label(cols), ordred as in 
+        labels_in_order.
+        INPUTS:
+        - labels_in_order, if None, then will use sorted(set(labels))
+        - labels, list, same len as SF
+        """
+
+        from pythonlib.drawmodel.strokePlots import plotStroksInGrid
+        # === for each cluster, plot examples
+        if labels_in_order is None:
+            labels_in_order = sorted(list(set(labels)))
+
+        indsplot =[]
+        titles=[]
+        for ii in range(3):
+            # collect inds
+            for lab in labels_in_order:
+                inds = [i for i, l in enumerate(labels) if l==lab]
+                indsplot.append(random.sample(inds, 1)[0])
+                if ii==0:
+                    titles.append(lab)
+                else:
+                    titles.append('')
+
+        # plot    
+        stroklist = [SF["strok"].values[i] for i in indsplot]
+        fig = plotStroksInGrid(stroklist, ncols=len(labels_in_order), titlelist=titles);
 
     ############################## GROUPING
     def grouping_get_inner_items(self, groupouter="shape_oriented", groupinner="index"):
@@ -492,22 +633,42 @@ class DatStrokes(object):
 
 
     ################################ SIMILARITY/CLUSTERING
-    def cluster_compute_sim_matrix(self, inds, do_preprocess=False):
+    def cluster_compute_sim_matrix(self, inds, do_preprocess=False, label_by="shape_oriented"):
         """ Compute similarity matrix between each pair of trials in inds
+        PARAMS:
+        - label_by, either string (col name) or list of string (will make a new grouping 
+        that conjunction of these)
         """
         from ..drawmodel.sf import computeSimMatrixGivenBasis
+        from ..cluster.clustclass import Clusters
 
+        strokes = self.extract_strokes("list_arrays", inds)
+
+
+        # Preprocess storkes if descired
         if do_preprocess:
-            self._process_strokes()
+            strokes = self._process_strokes_inputed(strokes, min_stroke_length_percentile = None, 
+                min_stroke_length = None, max_stroke_length_percentile = None)
 
-        list_strokes = self.extract_strokes("list_list_arrays", inds)
-        simmat = computeSimMatrixGivenBasis(list_strokes, list_strokes, 
+        simmat = computeSimMatrixGivenBasis(strokes, strokes, 
             rescale_strokes_ver="stretch_to_1", distancever="euclidian_diffs", npts_space=50) 
 
-        plt.figure()
-        plt.imshow(simmat)
-        assert False, "not finished"
+        # labels
+        if isinstance(label_by, list):
+            assert False, "to do, take conjuctins, see grouping_append_and_return_inner_items"
 
+        label_by = "shape_oriented"
+        labels = self.Dat.iloc[inds][label_by]
+
+        # Make cluster class
+        Cl = Clusters(X = simmat, labels=labels)
+
+        # Plot
+        Cl.plot_heatmap_data()
+        Cl.plot_heatmap_data(sortver=0)
+        Cl.plot_heatmap_data(sortver=2)
+
+        return Cl
 
 
     ############################### DISTANCES (scoring)

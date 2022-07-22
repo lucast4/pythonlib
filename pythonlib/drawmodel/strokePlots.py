@@ -879,7 +879,7 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
 
 def plotStroksInGrid(stroklist, ncols=5, titlelist = None):
     """ quick plot, in grid, centered."""
-#     ncols = 5
+    assert False, "see dataset_strokes.plot_examples_grid, and replace here."
     nrows = int(np.ceil(len(stroklist)/ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*2, nrows*2), sharex=True, sharey=True)
     

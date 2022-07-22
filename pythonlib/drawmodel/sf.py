@@ -82,6 +82,21 @@ def computeSimMatrix(SF, rescale_strokes_ver="idxs_stroklist_dat",
     return similarity_matrix, idxs_stroklist_basis
 
 
+def preprocessStroksList(strokes, params):
+    """ Preprioess strokes same as
+    preprocessStroks, but takes in list of np arrays
+    PARAMS:
+    - strokes, list of np arrays
+    - params, dict, see preprocessStroks
+    RETURNS:
+    - strokes, list of np arrays modified. does not modify input.
+    """
+
+    dfthis = pd.DataFrame({"strok":strokes})
+    dfthis = preprocessStroks(dfthis, params)
+    strokes = dfthis["strok"].tolist()
+    return strokes
+
 def preprocessStroks(df, params):
     """
     preprocessing, including normalizing, centering, etc, on a set of strok data.
@@ -107,23 +122,35 @@ def preprocessStroks(df, params):
 # #             df["strok"] = df["stroknew"] # replace old
 # #             del df["stroknew"]
 # #             print(df.iloc[0])
-    
-    if "align_to_onset" in params.keys() and "centerize" in params.keys():
-        assert params["align_to_onset"] != params["centerize"], "cannot do both"
+            
+    # Fill gaps with defaults
+    params_default = {
+        "align_to_onset":False,
+        "min_stroke_length_percentile":None,
+        "min_stroke_length":None,
+        "max_stroke_length_percentile":None,
+        "centerize":False,
+        "rescale_ver":None
+    }
+    for k, v in params_default.items():
+        if k not in params.keys():
+            params[k] = v
 
+    # Sanity check
+    assert params["align_to_onset"] != params["centerize"], "cannot do both"
 
     print("starting length of dataframe:")
     print(len(df))
 
     # pre-extract features,. if needed
-    if "max_stroke_length_percentile" or "min_stroke_length_percentile" or "min_stroke_length_length" in params.keys():
+    if params["max_stroke_length_percentile"] or params["min_stroke_length_percentile"] or params["min_stroke_length"]:
         # then get distance(length) for each strok
         if "distance" not in df.columns:
             from pythonlib.drawmodel.features import strokeDistances
             strok_lengths = strokeDistances(list(df["strok"].values))
             df["distance"] = strok_lengths
     
-    if "max_stroke_length_percentile" in params.keys():
+    if params["max_stroke_length_percentile"] is not None:
         thresh =  np.percentile(df["distance"], [params["max_stroke_length_percentile"]])
         # if False:
         #     plt.figure(figsize=(15,5))
@@ -139,7 +166,8 @@ def preprocessStroks(df, params):
         del df["keep"]
         # df = df.reset_index()
 
-    if "min_stroke_length_percentile" in params.keys():
+    # if "min_stroke_length_percentile" in params.keys():
+    if params["min_stroke_length_percentile"] is not None:
         thresh =  np.percentile(df["distance"], [params["min_stroke_length_percentile"]])
         # if False:
         #     plt.figure(figsize=(15,5))
@@ -154,7 +182,8 @@ def preprocessStroks(df, params):
         del df["keep"]
         # df = df.reset_index()
 
-    if "min_stroke_length" in params.keys():
+    # if "min_stroke_length" in params.keys():
+    if params["min_stroke_length"] is not None:
         thresh =  params["min_stroke_length"]
         def F(x):
             return x["distance"]>thresh

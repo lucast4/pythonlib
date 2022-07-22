@@ -392,6 +392,77 @@ def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True,
         else:
             return df
 
+
+def filterPandasMultOrs(df, list_varnames, list_filts, return_as = "inds",
+    verbose=False):
+    """ Apply multiple filters in a row, and get the union of all
+    the resulting indices into df. 
+    Flexible way to define filters.
+    PARAMS;
+    - df, dataframe
+    - list_varnames, list of str, the column names to consider
+    - list_filts, list of lists, where each inner list has items
+    which define what levels to keep fore ach var. the final output
+    is the conjunction of each of these inner items. A few ways to define.
+    e..g, list_filts = [list1, list2, ... (arbitrary number of lists)], where
+    list1 = [list_of_levels_for_var1, list_of_levels_for_var2], where var1 and var2 are in list_varnames
+    list1 = [level_for_var1,...] so like above, but a single level
+    list1 = [None, ..] where None means keep all levels (i.e., ignore this variable).
+    RETURNS:
+    - Depends on return_as:
+    --- if "inds", then indices (corresponding to df.index), 
+    --- if "dataframe", then df
+    --- if "dict", then list of dicts
+    NOTE:
+    - useful, for eg. if taking subset of data as heldout data for model testing.
+    - is "or" for outer list, "and" for inner list.
+    EG:
+    list_varnames = DATAPLOT_GROUPING_VARS
+    list_filts = [
+        ["Lcentered-4-0", (1,1)],
+        ["V-2-0", None],
+        [["squiggle3-1-0", "circle-1-0"], None],
+        [["squiggle3-1-0", "circle-1-0"], [(-1,1), (-1,-1)]]
+    ]
+
+    """
+    
+    list_inds = []
+    for innerlist in list_filts:
+        # get trials that are conjucntion of these features
+        F = {}
+        for varname, levels in zip(list_varnames, innerlist):
+            if levels is None:
+                # skip, i.e., get all levels
+                continue
+            if isinstance(levels, list):
+                # then keep if it is any item in the list
+                F[varname] = levels
+    #         elif isinstance(levels, (str, tuple)):
+            else:
+                # this is assumed to be a single item. put in a list
+                F[varname] = [levels]
+
+        if verbose:
+            print("For this filt: ", innerlist, ' -- Using this filt: ' , F)
+
+        # Apply filter 
+        inds = filterPandas(df, F, return_indices=True)
+        list_inds.extend(inds)
+
+    list_inds = sorted(set(list_inds))
+    if verbose:
+        print("Got this many indices: ", len(list_inds))
+
+    if return_as=="dataframe":
+        return df.iloc[list_inds]
+    elif return_as=="inds":
+        return list_inds
+    elif return_as=="dict":
+        return df.iloc[list_inds].to_dict("records")
+    else:
+        assert False
+
 def findPandas(df, colname, list_of_vals, reset_index=True):
     """ returns df with only rows matchibng list_of_vals. 
     output will be same length as list_of_vals, with order matching.
@@ -754,7 +825,7 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
-                                    F = {}, return_as_dict=False):
+                                    F = {}, return_as_dict=False, method_if_not_enough_examples="all_none"):
     """ To uniformly sample rows so that spans levels of a given variable (column)
     e..g, if a col is "shape" and you want to get one example trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
@@ -773,6 +844,8 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     """
     import random
 
+    if method_if_not_enough_examples=="prune_subset":
+        assert return_as_dict==True, "otherwise will lose traick of inidces."
     # Get the levels of this vars
     if varlevels is None:
         varlevels = df[varname].unique().tolist()
@@ -786,7 +859,15 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
         if len(list_idx)>=n_examples:
             inds = random.sample(list_idx, n_examples)[:n_examples]
         else:
-            inds = [None for _ in range(n_examples)]
+            if method_if_not_enough_examples == "all_none":
+                # option 1< return all as None
+                inds = [None for _ in range(n_examples)]
+            elif method_if_not_enough_examples=="prune_subset":
+                # sample size changes...
+                n_examples = len(list_idx)
+                inds = random.sample(list_idx, n_examples)[:n_examples]
+            else:
+                assert False
         list_inds.extend(inds)
         outdict[val] = inds
     if return_as_dict:

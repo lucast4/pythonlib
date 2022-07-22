@@ -65,7 +65,7 @@ def clusterSimMatrix(similarity_matrix, PCAdim = 5, gmm_n_mixtures = list(range(
 
 
 ################### SORTING
-def sort_by_labels(X, labels):
+def sort_by_labels(X, labels, axis=0):
     """ Sort X by labels, in incresaing order.
     PARAMS:
     - X, ndat x ndim np array, rows will be osrted.
@@ -75,7 +75,14 @@ def sort_by_labels(X, labels):
     """
     
     inds = np.argsort(labels)
-    X = X[inds,:]
+
+    if axis==0:
+        X = X[inds,:]
+    elif axis==1:
+        X = X[:, inds]
+    else:
+        assert False
+
     labels = [labels[i] for i in inds]
     
     return X, labels
