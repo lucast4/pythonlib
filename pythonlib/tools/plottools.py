@@ -110,6 +110,25 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
+def color_make_pallete_categories(df, category_name):
+    """ 
+    Make colors for categorical variables.
+    PARAMS;
+    - df, will use levels for df[category_name] (assumes is categorical)
+    - category_name, string key in to df
+    RETURNS:
+    - pallete dict, where key:val is
+    key is level in this categgory
+    val is (4,) np array, rgba
+    """
+    levels = sorted(df[category_name].unique().tolist())
+    cols_arrays = makeColors(len(levels), cmap="turbo")
+    pallete = {}
+    for lev, col in zip(levels, cols_arrays):
+        pallete[lev] = col
+    return pallete
+
+
 def makeColors(numcol, alpha=1, cmap="plasma"):
     """ gets evensly spaced colors. currntly uses plasma map"""
     import matplotlib.pylab as pl

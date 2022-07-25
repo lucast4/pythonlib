@@ -906,8 +906,6 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         groupdict[lev] = itemsinner
     return groupdict
 
-
-
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
     groupinner="index", groupouter_levels=None):
     """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
@@ -933,3 +931,20 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
     
     return groupdict
+
+
+def replaceNone(dfthis, column, replace_with):
+    """ replace Nones in this column with... 
+    modifies in place.
+    Retains the original called <column>_orig
+    """
+
+    # 1) save orig
+    dfthis[f"{column}_orig"] = dfthis[column]
+    # 2) replace
+    tmp = dfthis[column].tolist()
+    for i, x in enumerate(tmp):
+        if x is None:
+            tmp[i] = replace_with
+    dfthis[column] = tmp
+    return dfthis

@@ -323,6 +323,8 @@ class DatStrokes(object):
                 distances = self.Dat.iloc[i]["aligned_beh_strokes_disttotask"]
                 return strokes_beh[np.argmin(distances)]
             else:
+                print(self.Version)
+                print(ver_behtask)
                 assert False
 
         assert isinstance(inds, list)
@@ -460,12 +462,15 @@ class DatStrokes(object):
         Colors strokes by order
         PARAMS;
         - inds, indices into self.Dat (must be less than nmax)
+        - nmax, if over, then takes random subset
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
         if ax is None:
             fig, ax = plt.subplots(1,1)
 
-        assert len(inds)<=nmax, "too many strokes to oveerlay..."
+        if len(inds)>nmax:
+            import random
+            inds = sorted(random.sample(inds, nmax))
         
         strokes = self.extract_strokes("list_arrays", inds, ver_behtask=ver_behtask)
         # strokes = [S() for S in self.Dat.iloc[inds]["Stroke"]]
@@ -543,6 +548,7 @@ class DatStrokes(object):
                 ax = getax(i)
                 self.plot_strokes_overlaid(list_inds, ax=ax, color_by=color_by, ver_behtask=ver_behtask)
                 ax.set_title(level)
+        return figholder
 
     def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
             flip_plot=False):
@@ -556,8 +562,8 @@ class DatStrokes(object):
         from pythonlib.tools.plottools import plotGridWrapper
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
 
-        outdict = extract_trials_spanning_variable(self.Dat, "shape_oriented", 
-            col_levels, n_examples=2, return_as_dict=True)[0]
+        outdict = extract_trials_spanning_variable(self.Dat, col_grp,
+            col_levels, n_examples=nrows, return_as_dict=True)[0]
         list_row = []
         list_col = []
         list_inds = []
@@ -631,6 +637,31 @@ class DatStrokes(object):
 
         return groupdict
 
+    # def generate_data_groupdict(self, list_grouping_vars, GET_ONE_LOC, gridloc, PRUNE_SHAPES, bad_shapes = ["Lcentered-3-0"],
+    #         verbose=False):
+        
+    #     # 1) generate new groups and return groupdict.
+    #     groupdict = self.grouping_append_and_return_inner_items(list_grouping_vars)
+    #     list_cats = groupdict.keys()
+        
+    #     # Prune list to only one specific grid location
+    #     if GET_ONE_LOC:
+    #         # gridloc = (1,1)
+    #         list_cats = [cat for cat in list_cats if cat[1]==gridloc]
+
+    #     if PRUNE_SHAPES:
+    #         # PRUNE certain shapes (ad hoc)
+
+    #         # Remove, since does in diff orders on diff trials: Lcentered-3-0
+    #         list_cats = [cat for cat in list_cats if cat[0] not in bad_shapes]
+
+    #     groupdict = {k:v for k,v in groupdict.items() if k in list_cats}
+    #     if verbose:
+    #         print("FINAL GROUPDICT")
+    #         for k in groupdict.keys():
+    #             print(k)
+
+    #     return groupdict
 
     ################################ SIMILARITY/CLUSTERING
     def cluster_compute_sim_matrix(self, inds, do_preprocess=False, label_by="shape_oriented"):
