@@ -424,9 +424,8 @@ class DatStrokes(object):
             list_inds = [i for i in list_inds if i is not None]
             if len(list_inds)>0:
                 ax = getax(i)[1]
-                self.plot_strokes_overlaid(list_inds, ax=ax, color_by=color_by, ver_behtask=ver_behtask)
-                
-            ax.set_title(level)
+                self.plot_strokes_overlaid(list_inds, ax=ax, color_by=color_by, ver_behtask=ver_behtask)   
+                ax.set_title(level)
 
     ############################### DISTANCES (scoring)
     def _dist_strok_pair(self, strok1, strok2):

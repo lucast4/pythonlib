@@ -2,6 +2,7 @@
 import numpy as np
 
 from pythonlib.tools.distfunctools import modHausdorffDistance
+from math import pi
 
 # def _convert_to_rel_units(x,y):
 #     # converts from x,y to relative units from top-left corner
@@ -139,10 +140,28 @@ def angle_diff_vectorized(a1, a2):
     assert np.all(a<=2*pi)
     return a
 
+# @param angles_all: array of angles (all data must be between [0, 2*pi])
+# @param negative_angle: transform data equivalent to angles in [0, negative_angle] to be negative
+#
+# example: angles_all=[pi/2, pi, 3*pi/2, 7.1*pi/4, 7.2*pi/4], negative_angle= -pi/4
+# - only [7.1*pi/4, 7.2*pi/4] are in between 0 and -pi/4
+# - they are changed to [-0.9*pi/4, -0.8*pi/4]
+#
+# originally coded to help with binning arrowheads
+# - arrowhead pointing right: angles between [-pi/4, pi/4]; but data is always between [0, 2*pi]
+# - solution: transform data between [7*pi/4, 2*pi] to negative equivalents [-pi/4, 0]
+def transform_data_to_negative_start(angles_all, negative_angle):
+    assert negative_angle<=0, "negative_angle must be negative!"
+    temp=np.array(angles_all)
+    inds = (temp>=(2*pi+negative_angle)) & (temp<=2*pi) 
+    temp[inds] = temp[inds]-2*pi
+    return temp
 
 
-
-def bin_angle_by_direction(angles_all, num_angle_bins=4, binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}):
+# takes in angles_all: all your angles from data
+# spits out a same-size array as angles_all, but with categorical info
+# i.e. creates bins, and categorizes your angles
+def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4, binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}):
     """ bin angle, based on slicing circle into same-sized slices, with first bin
     always starting from (1,0), and going CCW.
     INPUTS:
@@ -155,12 +174,15 @@ def bin_angle_by_direction(angles_all, num_angle_bins=4, binnames = {1: 0, 2:1, 
     - bins start from 1...
     - nans will be 
     """
+    
     from math import pi
     if not num_angle_bins==4:
         assert False, "bin_names will not be accurate. code this"
 
+    assert starting_angle<=0 and starting_angle>=-2*pi, "starting_angle is not between [-2pi,0]"
+
     # bin angles
-    bins = np.linspace(0, 2*pi, num_angle_bins+1)
+    bins = np.linspace(starting_angle, starting_angle+2*pi, num_angle_bins+1)
     angles_all_binned = [np.digitize(a, bins) for a in angles_all]
 
 #     plt.figure()
