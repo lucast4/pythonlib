@@ -43,8 +43,7 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
 
     for ind in range(len(D.Dat)):
         Beh = D.Dat.iloc[ind]["BehClass"]
-        
-        primlist, datsegs_behlength, datsegs_tasklength = D.behclass_extract_beh_and_task(ind)
+        primlist, datsegs_behlength, datsegs_tasklength = D.behclass_extract_beh_and_task(ind)[:3]
         if WHICH_DATSEGS=="task":
             datsegs = datsegs_tasklength
         elif WHICH_DATSEGS=="beh":
@@ -100,6 +99,18 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
     sorted(list(motifs_all_dict.keys()))
     print("This many instances per motif: ", [len(v) for k, v in motifs_all_dict.items()])
     return motifs_all_dict
+
+def extract_shapes_in_motif(motif):
+    """
+    Get list of shapes (unique, sorted) in this motif
+    """
+    shapes = []
+    for token in motif:
+        # loc = token[1]
+        shape = token[0]
+        shapes.append(shape)
+    return shapes
+
 
 def extract_list_shapes_loc(motifs_all_dict):
     """ get the list of all unqiue shapes and locations
@@ -380,8 +391,219 @@ def get_inds_this_motifgroup(DatGroups, which_group, motifs_all_dict, motifgroup
     for motif in list_motifs:
         inds_idxs = get_inds_this_motif(motifs_all_dict, motif, 
             random_subset=ntrials_per_motif)
+        # print(inds_idxs)
+        # print(ntrials_per_motif)
+        # assert False
         inds_idxs_all.extend(inds_idxs)
         for _ in inds_idxs:
             list_motifs_all.append(motif)
 
+    assert len(inds_idxs_all)==len(list_motifs_all)
     return inds_idxs_all, list_motifs_all, motifgroup
+
+
+###################### GETTING SETS OF TRIALS, FOR GENERATING EXPT
+
+
+def expt_extract_motifgroups_to_regenerate(which_group, DatGroups, motifs_all_dict):
+    """ Determine what are trials to generate for this motifgroup, collected from best to worst, 
+    and using criteria which loosen as you go thru and run out of groups to try.
+    PARAMS:
+    - which_group, string key into DatGroups, will get data only for this group.
+    """
+    import random
+    n_trials_get = 50 # how many unqiue trials to pull out. will stop at or slightly higher than this
+    ntrials_per_motif = 2 # for each motif, how many unique trials to get that have this motif
+    ntrials_max_per_motifgroup = 6 # useful, since diff_prims can have too many motifs per motifgroup...
+    # ntrials_per_motif = 2 
+    # ntrials_max_per_motifgroup = 5 # useful, since diff_prims can have too many motifs per motifgroup...
+
+    def list_intersect(list1, list2):
+        """ Returns True if any items intersect.
+        otehrwies False
+        """
+        for x in list1:
+            if x in list2:
+                return True
+        return False
+
+    ALREADY_USED_MOTIFGROUPS = []
+    ALREADY_USED_SHAPES = []
+    ALREADY_USED_MOTIFGROUPS_INDS = []
+    def get_best_motifgroup(which_group, list_criteria_inorder_THIS):
+        for motifgroup_ind in range(len(DatGroups[which_group])):
+            inds_idxs_all, list_motifs_all, motifgroup = get_inds_this_motifgroup(DatGroups, which_group, 
+                                                                        motifs_all_dict, motifgroup_ind, 
+                                                                      ntrials_per_motif=ntrials_per_motif)
+            
+            ### Take subset here before doing tests below.
+            if len(inds_idxs_all)>ntrials_max_per_motifgroup:
+                # Take a random subset
+                # NOTE: this must be taken in order, to make sure gets distribution of motifs
+                assert ntrials_max_per_motifgroup > 2*ntrials_per_motif, "otherwise wil not necessaril;y get multiple motifs"
+                if False:
+                    n = len(inds_idxs_all)
+                    inds_sub = random.sample(range(n), ntrials_max_per_motifgroup)
+                    inds_idxs_all = [inds_idxs_all[i] for i in inds_sub]
+                    list_motifs_all = [list_motifs_all[i] for i in inds_sub]
+                else:
+                    inds_idxs_all = inds_idxs_all[:ntrials_max_per_motifgroup]
+                    list_motifs_all = list_motifs_all[:ntrials_max_per_motifgroup]
+            # print(list_motifs_all)
+            # assert False
+
+
+            #### Check constraints
+            # 1) already gotten this group?
+            if motifgroup in ALREADY_USED_MOTIFGROUPS:
+                continue
+                
+            # 1b) Don't take this if only one trial found. i.e., need at least two to make a set
+            if len(list(set(list_motifs_all)))<2:
+                continue
+                
+            # 1c) Dont take this if the motifs are same for all trials. ingore this if your
+            # goal is _actually_ to get same across trials
+            if which_group!='same':
+                if len(list(set(list_motifs_all)))==1:
+                    for m in list_motifs_all:
+                        print(m)
+                    print("Confirm that indeed these are identical motifs")
+                    assert False
+
+            # 2) Other criteria
+            # -- some Criteria that prune the motifs/indices
+            # -- others that fail outright
+            FAIL = False
+            for crit in list_criteria_inorder_THIS:
+                if crit=="dont_reuse_shape_complete":
+                    # then throw out =motifs if it resuses ANY shape
+                    inds_sub = []
+                    for i, motif in enumerate(list_motifs_all):
+                        shapes_in_motif = extract_shapes_in_motif(motif)
+                        if not list_intersect(shapes_in_motif, ALREADY_USED_SHAPES):
+                            # then keep
+                            inds_sub.append(i)
+                    # print(motifgroup_ind, crit, len(list_motifs_all), inds_sub)
+                    inds_idxs_all = [inds_idxs_all[i] for i in inds_sub]
+                    list_motifs_all = [list_motifs_all[i] for i in inds_sub]
+                    # print(len(inds_idxs_all))
+
+                elif crit=="dont_reuse_shape":
+                    # Then throw out motif if it uses only shapes that are all arleady used (weaker constraint that above).
+                    inds_sub = []
+                    for i, motif in enumerate(list_motifs_all):
+                        shapes_in_motif = extract_shapes_in_motif(motif)
+                        if all([sh in ALREADY_USED_SHAPES for sh in shapes_in_motif]):
+                            # Then continue, since both shapes are already used.
+                            pass
+                        else:
+                            inds_sub.append(i)
+                    # print(motifgroup_ind, crit, len(list_motifs_all), inds_sub)
+                    inds_idxs_all = [inds_idxs_all[i] for i in inds_sub]
+                    list_motifs_all = [list_motifs_all[i] for i in inds_sub]
+                    # print(len(inds_idxs_all))
+                elif crit=="within_motif_diff_shapes":
+                    # Prune motifs that are (shape1, shape1), eg.., circle to circle.
+                    inds_sub = []
+                    for i, motif in enumerate(list_motifs_all):
+                        shapes_in_motif = extract_shapes_in_motif(motif)
+                        if len(list(set(shapes_in_motif)))==1:
+                            continue
+                        else:
+                            # then keep
+                            inds_sub.append(i)
+                    # print(motifgroup_ind, crit, len(list_motifs_all), inds_sub)
+
+                    inds_idxs_all = [inds_idxs_all[i] for i in inds_sub]
+                    list_motifs_all = [list_motifs_all[i] for i in inds_sub]
+                elif crit=="mult_trials_exist_for_at_least_two_motifs":
+                    # Then check that at leat 2 of the motif is associated with at least 2 trials
+                    n_good = 0
+                    for motif in set(list_motifs_all): # [motif1,, ..., motif2, ...]
+                        n = len([m for m in list_motifs_all if m==motif]) # num instances (trials) for this motif
+                        if n>1:
+                            n_good+=1
+                    if n_good<2:
+                        FAIL = True
+                else:
+                    print(crit)
+                    assert False
+            if FAIL:
+                continue
+            
+            # 1b) Don't take this if only one trial found. i.e., need at least two to make a set
+            if len(inds_idxs_all)<2:
+                continue
+                
+            # 1c) Dont take this if the motifs are same for all trials. ingore this if your
+            # goal is _actually_ to get same across trials
+            if which_group!='same':
+                if len(list(set(list_motifs_all)))==1:
+                    for m in list_motifs_all:
+                        print(m)
+                    print("Confirm that indeed these are identical motifs")
+                    assert False
+
+            ### Success! Keep this.
+            print("Success! taking motifgroup with index: ", motifgroup_ind)
+            if len(inds_idxs_all)>ntrials_max_per_motifgroup:
+                # Take a random subset
+                n = len(inds_idxs_all)
+                inds_sub = random.sample(range(n), ntrials_max_per_motifgroup)
+                inds_idxs_all = [inds_idxs_all[i] for i in inds_sub]
+                list_motifs_all = [list_motifs_all[i] for i in inds_sub]
+            
+            return inds_idxs_all, list_motifs_all, motifgroup, motifgroup_ind
+        
+        # If got here, then failed to find anything
+        return None, None, None, None
+
+
+    ################### 
+    # - put most important to the right.
+    # list_criteria_inorder = ["mult_trials_exist_per_motif", "dont_reuse_shape", "within_motif_diff_shapes"] # order: will prune from left to right
+    list_criteria_inorder = ["dont_reuse_shape_complete", "mult_trials_exist_for_at_least_two_motifs", "dont_reuse_shape", "within_motif_diff_shapes"] # order: will prune from left to right
+    # list_criteria_inorder = [ "dont_reuse_shape", "within_motif_diff_shapes"] # order: will prune from left to right
+
+    DatTrials = {}
+    DatGroupsUsedSimple = {which_group:[]} # keep track of which motifgroups are used
+
+    for i in range(len(list_criteria_inorder)+1): # +1 so runs last time with no constraints
+        list_criteria_inorder_THIS = list_criteria_inorder[i:]
+        print("Criteria: ", list_criteria_inorder_THIS)
+        
+        inds_idxs_all, list_motifs_all, motifgroup, motifgroup_ind = get_best_motifgroup(which_group, 
+            list_criteria_inorder_THIS)
+        while inds_idxs_all is not None:
+            
+            ### For each trial, save this iformation
+            inds_trials_all = [x[0] for x in inds_idxs_all]
+            inds_strokenums_all = [x[1] for x in inds_idxs_all]
+            for trial, strokenum, motif in zip(inds_trials_all, inds_strokenums_all, list_motifs_all):
+                item = (which_group, motifgroup, motif, strokenum)
+                if trial in DatTrials.keys():
+                    DatTrials[trial].append(item)
+                else:
+                    DatTrials[trial] = [item]
+
+            # Track which groups are used
+            ntrials = len(inds_idxs_all)
+            DatGroupsUsedSimple[which_group].append({"motifgroup":motifgroup, "ntrials":ntrials, "inds_idxs_all":inds_idxs_all, "list_motifs_all":list_motifs_all})
+            
+            # Track what already used
+            ALREADY_USED_MOTIFGROUPS.append(motifgroup)
+            ALREADY_USED_MOTIFGROUPS_INDS.append(motifgroup_ind)
+
+            for motif in list_motifs_all:
+                shapesthis = extract_shapes_in_motif(motif)
+                ALREADY_USED_SHAPES.extend(shapesthis)
+
+            ### Try to get another motifgroup
+            inds_idxs_all, list_motifs_all, motifgroup, motifgroup_ind = get_best_motifgroup(which_group, 
+                list_criteria_inorder_THIS)
+        print("Got this many motifgorups so far: ", len(ALREADY_USED_MOTIFGROUPS))
+    
+    return DatTrials, DatGroupsUsedSimple, ALREADY_USED_MOTIFGROUPS_INDS
+        
+            

@@ -193,3 +193,18 @@ def powerset(iterable):
     from itertools import chain, combinations
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+def extract_novel_unique_items_in_order(listin):
+    """ 
+    e.g, listin=[0,2,2,1,3, 3, 2], returns [0,2,1,3,2]
+    """
+    list_new_items =[]
+    curr_item = None
+    for x in listin:
+        if x==curr_item:
+            continue
+        else:
+            list_new_items.append(x)
+            curr_item = x
+
+    return list_new_items

@@ -110,6 +110,25 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
+def color_make_pallete_categories(df, category_name):
+    """ 
+    Make colors for categorical variables.
+    PARAMS;
+    - df, will use levels for df[category_name] (assumes is categorical)
+    - category_name, string key in to df
+    RETURNS:
+    - pallete dict, where key:val is
+    key is level in this categgory
+    val is (4,) np array, rgba
+    """
+    levels = sorted(df[category_name].unique().tolist())
+    cols_arrays = makeColors(len(levels), cmap="turbo")
+    pallete = {}
+    for lev, col in zip(levels, cols_arrays):
+        pallete[lev] = col
+    return pallete
+
+
 def makeColors(numcol, alpha=1, cmap="plasma"):
     """ gets evensly spaced colors. currntly uses plasma map"""
     import matplotlib.pylab as pl
@@ -555,8 +574,12 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         for i in range(n):
             cols.append(i%ncols)
             rows.append(int(np.floor(i/ncols)))
+
+    if isinstance(cols, list):
         cols = np.array(cols)
+    if isinstance(rows, list):
         rows = np.array(rows)
+
 
     # if lost row=0, then shift all values down. this could happen if removed datapts becuase of 
     # column pruning. subsequent code needs first row to be 0.
@@ -690,7 +713,8 @@ def get_ylim(vals, pertile=[1.5, 98.5]):
     YLIM[1]+=0.1*ydelt
     return YLIM
 
-def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, sharex=True, sharey=True, ylim=None):
+def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, ASPECTWH = 1, 
+        sharex=True, sharey=True, ylim=None, xlim=None):
     """
     Makes multiple figures, each with same num of subplots, for cases with too many supblots for a single figure
     function that returns subplots axes.
@@ -698,14 +722,15 @@ def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, sharex=True, sharey=True, ylim
     - ncols, int
     - nrowsmax, int, resets and starts ne figure if get psat this.
     - SIZE, sides of each subplot
+    - ASPECTWH, aspect ratio w/h
     - sharex, share, bool.
     - ylim, (2,) array or list.
     RETURNS:
     - getax, a function, called ax = getax(n) where n is the index to subplot.
     - figholder, list of (fig, axes)), length of num plots.
-    
     - nplots, int.
-
+    EXAMPLE:
+    - getax, figholder, nplots = subplot_helper(3, 8, 20)
     """
     
     nrows = int(np.ceil(ndat/ncols))
@@ -720,15 +745,21 @@ def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, sharex=True, sharey=True, ylim
     figholder = []
     for _ in range(nplots):
         fig, axes = plt.subplots(nrows_per_plot, ncols, sharex=sharex, sharey=sharey, 
-                                 figsize=(ncols*SIZE, nrows_per_plot*SIZE))
+                                 figsize=(ncols*SIZE*ASPECTWH, nrows_per_plot*SIZE))
         if ylim is not None:
             for ax in axes.flatten():
                 ax.set_ylim(ylim)
+        if xlim is not None:
+            for ax in axes.flatten():
+                ax.set_xlim(xlim)
         figholder.append((fig, axes))
     
-    def getax(n):
+    def getax(n, return_fig=False):
         """given the datapoint (n), return the fig
         and axis handle
+        RETURNS:
+        - ax
+        --- or fig, ax if return_fig==True
         """
         
         fignum = int(np.ceil((n+1)/ndats_per_plot))-1
@@ -736,7 +767,14 @@ def subplot_helper(ncols, nrowsmax, ndat, SIZE=2, sharex=True, sharey=True, ylim
         
         fig, axes =  figholder[fignum]
         ax = axes.flatten()[subplotnum]
-        
-        return fig, ax
+        if return_fig:
+            return fig, ax
+        else:
+            return ax
     return getax, figholder, nplots
         
+def move_legend_outside_axes(ax):
+    """ 
+    - ax, already should hav elegend defiened
+    """
+    ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
