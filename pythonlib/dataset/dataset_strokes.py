@@ -701,8 +701,6 @@ class DatStrokes(object):
 
         return Cl
 
->>>>>>> c52eb08fafd0fdc056b400505d7eeb196ef44c79
-
     ############################### DISTANCES (scoring)
     def _dist_strok_pair(self, strok1, strok2):
         """ compute doistance between strok1 and 2
