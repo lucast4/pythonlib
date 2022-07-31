@@ -223,11 +223,12 @@ def modPathFname(path, prefix=None, suffix=None, do_move=True):
     pathout = pathdir + pathname + ext
 
     # Only do this if the source exists and the target doesnt exist.
-    if os.path.exists(path) and not os.path.exists(pathout) and do_move==True
-        Path(path).rename(pathout)
-        print("Renamed:")
-        print("from: ", path)
-        print("to: ", pathout)
+    if do_move:
+        if os.path.exists(path) and not os.path.exists(pathout):
+            Path(path).rename(pathout)
+            print("Renamed:")
+            print("from: ", path)
+            print("to: ", pathout)
     return pathout
 
 
