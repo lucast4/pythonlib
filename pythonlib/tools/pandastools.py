@@ -537,7 +537,8 @@ def printOverview(df, MAX=50):
             else:
                 print(df[col].value_counts())
 
-
+# @param grp: [col1 col2 col3]
+# @return: new column with index for category (based on col1/2/3 perm)
 def append_col_with_grp_index(df, grp, new_col_name, use_strings=True):
     """ for each col, gets its grp index (based on grp list),
     and appends as new column. first converts to string by str(list)
