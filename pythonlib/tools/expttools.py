@@ -203,11 +203,13 @@ def deconstruct_filename(filename):
 
 
     
-def modPathFname(path, prefix=None, suffix=None):
+def modPathFname(path, prefix=None, suffix=None, do_move=True):
     """ moves file in path, to nbew filename either
     {prefix}-{path} or {path, without ext}-{suffix}-{ext}
+    Only moves if source exists and target doesnt. eitehr way wioll return the target path.
     NOTES:
     - ok to entire full path, this code will pick out the lowest level filename.
+    - only moves if both do_move==True and the above
     RETURNS:
     - new pathname
     """
@@ -220,10 +222,12 @@ def modPathFname(path, prefix=None, suffix=None):
         pathname = pathname + "-" + suffix
     pathout = pathdir + pathname + ext
 
-    Path(path).rename(pathout)
-    print("Renamed path1 to path2:")
-    print(path)
-    print(pathout)
+    # Only do this if the source exists and the target doesnt exist.
+    if os.path.exists(path) and not os.path.exists(pathout) and do_move==True
+        Path(path).rename(pathout)
+        print("Renamed:")
+        print("from: ", path)
+        print("to: ", pathout)
     return pathout
 
 
