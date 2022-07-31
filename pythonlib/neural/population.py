@@ -910,7 +910,6 @@ def pca_make_space(PA, DF, trial_agg_method, trial_agg_grouping, time_agg_method
     - trial_agg_grouping, list of str defining how to group trials, e.g,
     ["shape_oriented", "gridloc"]
     """
-        
     # First, decide whether to take mean over some way of grouping trials
     if trial_agg_method==None:
         # Then dont aggregate by trials
@@ -1062,6 +1061,7 @@ def datgrp_flatten_to_dattrials(DatGrp, DATAPLOT_GROUPING_VARS):
     and returns as DataFrame
     PARAMS;
     - DatGrp, output of compute_data_projections
+    - DATAPLOT_GROUPING_VARS, used for breaking out each variable into its own column.
     """
     out = []
     for Dat in DatGrp:
@@ -1087,3 +1087,34 @@ def datgrp_flatten_to_dattrials(DatGrp, DATAPLOT_GROUPING_VARS):
     DfTrials = pd.DataFrame(out)
     return DfTrials
 
+def dftrials_centerize_by_group_mean(DfTrials, grouping_for_mean):
+    """ 
+    For each row, subtract the group mean for mean neural activiy;
+    PARAMS:
+    - DfTrials, df, each row a trial
+    - grouping_for_mean, list of str, conjunction is a group, e..g, 
+    ["shape_oriented", "gridsize"]
+    RETURNS:
+    - novel dataframe, same size as input, but with extra column with 
+    name "x_mean"
+    """
+    from pythonlib.tools.pandastools import aggregThenReassignToNewColumn, append_col_with_grp_index, applyFunctionToAllRows
+
+    # 1) Get grouping, then get mean, then place back into each row.
+    def F(x):
+        """ get mean activity across trials
+        """
+        import numpy as np
+        return np.mean(x["x"])
+    NEWCOL = "x_grp_mean"
+    dfnew = aggregThenReassignToNewColumn(DfTrials, F, grouping_for_mean, NEWCOL)
+
+    # 2) Append group index as tuple
+    dfnew = append_col_with_grp_index(dfnew, grouping_for_mean, "grp", False)
+
+    # 3) For each row, subtract its group's mean.
+    def F(x):
+        return x["x"] - x[NEWCOL]
+    print("**********", dfnew.columns)
+    dfnew = applyFunctionToAllRows(dfnew, F, "x_centered")
+    return dfnew

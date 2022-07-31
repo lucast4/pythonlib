@@ -20,6 +20,8 @@ def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     """
     df1["index_copy"] = df1.index # save old indices.
     dfout = df1.merge(df2, how=how, on=on) # 
+    # dfout = df1.merge(df2, how=how, on=on, validate="one_to_one") # 
+    assert len(dfout)==len(df1)
     dfout = dfout.set_index("index_copy", drop=True)
     dfout.index.names = ["index"]
     return dfout
@@ -285,7 +287,7 @@ def binColumn(df, col_to_bin, nbins, bin_ver = "percentile"):
     return new_col_name
 
 def aggregThenReassignToNewColumn(df, F, groupby, new_col_name, 
-    return_grouped_df=False):
+    return_grouped_df=False, overwrite_col=True):
     """ groups, then applies aggreg function, then reassigns that output
     back to df, placing into each row for each item int he group.
     e.g., if all rows split into two groups (0, 1), then apply function, then 
@@ -296,6 +298,9 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     output will be same size as df, but with extra column.
     - If groupby is [], then will apply to all rows
     """
+
+    if new_col_name in df.columns:
+        del df[new_col_name]
 
     if len(groupby)==0:
         # then add dummy column
@@ -308,8 +313,10 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     else:
         remove_dummy=False
 
-
-    dfthis = df.groupby(groupby).apply(F).reset_index().rename(columns={0:new_col_name})
+    assert 0 not in df.columns, "the new coliumn is expected to be called 0"
+    dfthis = df.groupby(groupby).apply(F).reset_index()
+    assert 0 in dfthis.columns
+    dfthis = dfthis.rename(columns={0:new_col_name})
     # dfthis will be smaller than df. but merge will expand dfthis.
 
     # NOTE: sanity check, mking sure that merge does correctly repopulate:
@@ -724,13 +731,16 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
                           func = lambda x: np.nanmean(x), return_dfpivot=False, 
                           do_normalize=False, normalize_grouping = ["animal", "expt"]
                          ):
-    """ High level summary, for each task, get its difference (for eg)
+    """ High level summary, for each task (or grouping), get its difference 
     across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
     by INDEX (usually, animal/expt/character).
     INPUTS:
-    - GROUPING, dictates which levels will be split into separate columns
-    - FEATURE_NAMES, will only keep these features (columns)
-    - INDEX, how to split up into unique columns, based on unique indices.
+    - GROUPING, str, will take the difference of each item in FEATURE_NAMES between the two 
+    levels in GROUPING. e.g., GROUPING = "epoch", then takes differfence between two epochs.
+    - GROUPING_LEVELS, list of two str, the two levels to take difference of
+    - FEATURE_NAMES, list of str, column names for numerical values that you wish to take
+    difference of. e..g, FEATURE_NAMES = ["score"]. if len >1 then rtake difference separtely for each item.
+    - INDEX, list of str, each a column, the conjunction defines the new row levels
     - func, how to aggregate across multipel rows.
     - do_normalize, if True, then dfsummaryflat will have normalized values.
     i.e., for each (animal, expt, variable), take frac change relative to GROUPING_LEVEL[0]
@@ -747,7 +757,35 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
     rows in input dataframe, e.g., short is a value that plantimecat can take
     --- FEATURE_NAMES = ["total_time", "distance", ...] (must be columns in 
     input datafrane)
+    # EXAMPLE:
+    (levels for align_to are "stroke_onset" and "go_cue")
+    dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF = 
+                    summarize_featurediff(dfmodels, GROUPING="align_to", GROUPING_LEVELS=["go_cue", "stroke_onset"], 
+                      FEATURE_NAMES=["score_test_mean"], INDEX=["regions_str", "yfeat"])
+        
+score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-ABS   ntrain-stroke_onsetmingo_cue    ntrain-stroke_onsetmingo_cue-ABS    regions_str     yfeat
+0   -0.001340   0.001340    0   0   ALL     gridloc
+1   0.160566    0.160566    0   0   ALL     shape_oriented
+2   -0.107563   0.107563    0   0   FP_p-FP_a   gridloc
+3   0.017268    0.017268    0   0   FP_p-FP_a   shape_oriented
+4   0.175209    0.175209    0   0   M1_m-M1_l   gridloc
+5   0.284695    0.284695    0   0   M1_m-M1_l   shape_oriented
+6   -0.094072   0.094072    0   0   PMd_a-PMd_p     gridloc
+7   0.287808    0.287808    0   0   PMd_a-PMd_p     shape_oriented
+8   0.069778    0.069778    0   0   PMv_m-PMv_l     gridloc
+9   0.004547    0.004547    0   0   PMv_m-PMv_l     shape_oriented
+10  -0.034416   0.034416    0   0   SMA_p-SMA_a     gridloc
+11  0.244854    0.244854    0   0   SMA_p-SMA_a     shape_oriented
+12  -0.073975   0.073975    0   0   dlPFC_p-dlPFC_a     gridloc
+13  0.234116    0.234116    0   0   dlPFC_p-dlPFC_a     shape_oriented
+14  -0.178012   0.178012    0   0   preSMA_p-preSMA_a   gridloc
+15  0.158417    0.158417    0   0   preSMA_p-preSMA_a   shape_oriented
+16  -0.094409   0.094409    0   0   vlPFC_p-vlPFC_a     gridloc
+17  0.107170    0.107170    0   0   vlPFC_p-vlPFC_a     shape_oriented    
     """
+
+    assert len(GROUPING_LEVELS)==2
+    assert isinstance(GROUPING, str), "see docs for pivot_table"
     
     # 1) Aggregate and split by grouping
     dfpivot = pivot_table(df, index=INDEX, columns=[GROUPING], values=FEATURE_NAMES, 
