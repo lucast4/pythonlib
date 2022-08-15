@@ -167,6 +167,55 @@ def _groupingParams(D, expt):
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, features_to_remove_outliers
 
+def epoch_grouping_reassign_by_tasksequencer(D):
+    """ Decide what is the epoch and level for each trial, based on the tasksequencer rule
+    that was applied, using the objectclass version.
+    - Looks into blockparams, so this assumes all tasks in a block are givent he same rule. 
+    - Also uses the default blockparams (not hotkey updated).
+    """
+
+    assert False, 'clean it up, make general below'
+
+    # Alternative version, look into object, but this doesnt have the category infomation
+    # T = D.Dat.iloc[100]["Task"]
+    # TT = T.Params["input_params"]
+    # TT.get_tasknew()["Objects"]["ChunkList"]
+
+    # Map from tasksequencer to epoch rule
+    map_tasksequencer_to_rule = {}
+    map_tasksequencer_to_rule[(None, None)] = "baseline"
+    map_tasksequencer_to_rule[("directionv2", "lr")] = "rightward"
+    map_tasksequencer_to_rule[("directionv2", "rl")] = "leftward"
+    map_tasksequencer_to_rule[("directionv2", "ud")] = "downward"
+    map_tasksequencer_to_rule[("directionv2", "du")] = "upward"
+
+    # Based on the tasksequencer rule
+    def _index_to_rule(ind):
+        bp = D.blockparams_extract_single(ind)
+        
+        ver = bp["task_objectclass"]["tasksequencer_ver"]
+        prms = bp["task_objectclass"]["tasksequencer_params"]
+        
+        if len(ver)==0 and len(prms)==0:
+            # Then no supervision
+            ver = None
+            p = None
+        else:
+            p = prms[0] # list
+            assert isinstance(p, list)
+            p = p[0]
+        return map_tasksequencer_to_rule[(ver, p)]
+
+    # For each trial, get its rule
+    list_rule =[]
+    for ind in range(len(D.Dat)):
+        list_rule.append(_index_to_rule(ind))
+        
+    # Assign rule back into D.Dat
+    D.Dat["epoch"] = list_rule
+    # print(list_rule)
+
+
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
