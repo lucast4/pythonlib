@@ -144,3 +144,8 @@ def print_save_task_information(D, SDIR_MAIN):
     # Separate for each date
     for date in D.Dat["date"].unique():
         _print_save_task_information(D, SDIR_MAIN, date)
+
+    # Overrivew of each trial-block-epoch
+    D.print_trial_block_epoch_summary(savedir=SDIR_MAIN)
+
+
