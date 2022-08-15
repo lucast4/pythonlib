@@ -23,6 +23,8 @@ def makeTimeStamp(exptID="", datefirst=True):
 
 def getDateList(sdate=None, edate=None):
     """    sdate = 200226, for Feb 26 2020
+    RETURNS:
+    - dates in str
     """
     
     from datetime import date, timedelta, datetime
