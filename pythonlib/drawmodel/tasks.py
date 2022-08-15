@@ -511,8 +511,8 @@ class TaskClass(object):
             out = self.program_interpret_subprog(i, fail_if_no_match=fail_if_no_match)
             if out["obj"] is None:
                 # replace it with the saved name
-                out["obj"] = shapes1[i]
                 if shapes1 is not None:
+                    out["obj"] = shapes1[i]
                     assert len(shapes1)==len(self.Program), "Objects and Program don't match, not sure why"
             Objects.append(out)
         self.Objects = Objects
@@ -562,6 +562,15 @@ class TaskClass(object):
         if True:
             # use recursive function
             program_list = self._program_line_dict2list(program)
+            if isinstance(program_list[0][0], list):
+                # program = [subprog1, subprog2]
+                # subprog = [['line', array(0.), array(0.), array(0.), array(1.2), array(1.2), 'trs'], ['line', array(1.5), array(0.), array(1.57079633), array(1.54285714), array(1.54285714), 'trs'], ['line', array(1.5), array(1.5), array(3.14159265), array(1.2), array(1.2), 'trs'], ['line', array(-1.5), array(1.5), array(0.), array(1.42857143), array(1.42857143), 'trs']]
+                # good
+                pass
+            else:
+                # program is actually a subprogram...
+                # convert it to program..
+                program_list = [program_list]
         else:
             # OLD, 
             # convert to nested lists.
@@ -877,8 +886,16 @@ class TaskClass(object):
         nlines = len(program[ind_subprog])
         lines_good = []
         for i in range(nlines):
-            line = self.program_get_line(ind_subprog, i)
-            line_good = self.program_interpret_line(line)
+            line = self.program_get_line(ind_subprog, i) 
+            try:
+                line_good = self.program_interpret_line(line)
+            except:
+                print(ind_subprog)
+                print(i)
+                print(self.Program)
+                print(line)
+                assert False, "why empty?"
+
             if line_good is not None:
                 lines_good.append(line_good)
 
