@@ -148,7 +148,7 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
 
 
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
-    plotfuncbeh=None, max_n_per_grid=1, max_n_trials=50):
+    plotfuncbeh=None, max_n_per_grid=1, max_n_trials=50, max_cols=150):
     """
     Helper (USEFUL) for plotting 2d grid of beh (strokes), with columns as unique tasks, and
     rows as flexible grouping variable.
@@ -202,6 +202,7 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
     # Plot
     figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, 
         col_labels = tasklist_titles, row_labels=row_levels, plotfuncbeh=plotfuncbeh, 
+        max_cols = max_cols,
         **plotkwargs)
 
     return figbeh, figtask

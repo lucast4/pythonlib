@@ -51,18 +51,19 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
             else:
                 n=1
             
-            # Plots Iterate, since is single plots.
+            # Plots Iterate, since is single plots. 
             for i in range(n):
                 figb, figt = plot_beh_grid_grouping_vs_task(Dthis.Dat, yaxis_ver, 
                                                             tasklist, 
                                                             max_n_per_grid=max_n_per_grid, 
+                                                            max_n_trials=200,
                                                             plotkwargs={"strokes_by_order":strokes_by_order})
                 figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-beh.pdf");
                 figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
             plt.close("all")
             
 
-def plot_all_drawings_in_grid(Dthis, SAVEDIR_FIGS, MAX_COLS = 66, MAX_ROWS = 5, strokes_by_order = True):
+def plot_all_drawings_in_grid(Dthis, SAVEDIR_FIGS, MAX_COLS = 150, MAX_ROWS = 5, strokes_by_order = True):
     """ Plot beh and task in separate grids, where y axis is examples and x is unique tasks, where
     each plot is a specific task group (e.g., task set).
     """
