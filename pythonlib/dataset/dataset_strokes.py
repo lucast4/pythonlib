@@ -429,6 +429,16 @@ class DatStrokes(object):
         print(DF_PRIMS["task_kind"].value_counts())
         DF_PRIMS.iloc[0]
 
+    def print_n_samples_per_combo(self, list_grouping = ["shape_oriented", "gridloc", "gridsize"], Nmin=0, savepath=None):
+        """ 
+        print n samples for combo of goruping vars
+        """
+        from pythonlib.tools.pandastools import grouping_print_n_samples
+        outdict = grouping_print_n_samples(self.Dat, list_grouping, Nmin, savepath)
+        for k, v in outdict.items():
+            print(k, ':  ', v)
+
+
 
     ####################### PLOTS
     def plot_single_strok(self, strok, ax=None):

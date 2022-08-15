@@ -971,6 +971,42 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     
     return groupdict
 
+def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None):
+    """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
+    e.g., if goruping is [shape, location, size]: prints:
+    ('Lcentered-3-0', (-1, -1), 'rig3_3x3_small') 58
+    ('Lcentered-3-0', (-1, 1), 'rig3_3x3_small') 42
+    ('Lcentered-3-0', (1, -1), 'rig3_3x3_small') 58
+    ('Lcentered-3-0', (1, 1), 'rig3_3x3_small') 66
+    ('Lcentered-4-0', (-1, -1), 'rig3_3x3_small') 52
+    ('Lcentered-4-0', (-1, 1), 'rig3_3x3_small') 53
+    ('Lcentered-4-0', (1, -1), 'rig3_3x3_small') 59
+    ('Lcentered-4-0', (1, 1), 'rig3_3x3_small') 44
+    ('V-2-0', (-1, -1), 'rig3_3x3_small') 73, 
+    ... and so on.
+    PARAMS;
+    - list_groupouter_grouping_vars, list of str
+    - savepath, include extension, saves as yaml
+    - Nmin, int, skips any cases that have fewer than Nmin samples.
+    RETURNS:
+    - outdict, dict[level]=n
+    """
+    outdict = {}
+    out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
+    for k in sorted(out.keys()):
+        n = len(out[k])
+        if n>Nmin:
+            outdict[k] = n
+
+    if savepath is not None:
+        from .expttools import writeDictToYaml
+        writeDictToYaml(outdict, savepath)
+        print("Saved to: ", savepath)
+        
+    return outdict
+
+
+
 
 def replaceNone(dfthis, column, replace_with):
     """ replace Nones in this column with... 
