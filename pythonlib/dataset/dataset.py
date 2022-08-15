@@ -902,6 +902,11 @@ class Dataset(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, "insummarydates")
         print("Updated columns: insummarydates, using Metadats")
 
+        # Assigning a new column: date_sess, which is date-sess
+        def F(x):
+            return f"{x['date']}-{x['session']}"
+        self.Dat = applyFunctionToAllRows(self.Dat, F, 'date_sess')
+
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -4832,20 +4837,11 @@ class Dataset(object):
         #     row="date", col="epoch")
         # rotateLabel(fig)
 
-        # import seaborn as sns
-        # import matplotlib.pyplot as plt
-        nrow = 1
-        fig, axes = plt.subplots(nrow,1, sharex=True, figsize=(15,nrow*6), squeeze=False)
-        ax=axes.flatten()[0]
-        sns.lineplot(data=self.Dat, x="trial", y="block", estimator=None, ax=ax)
-        sns.scatterplot(data=self.Dat, x="trial", y="block",ax=ax)
-        ax.grid()
+        # One supblot for each date-session, block vs. trial (colored by epoch)
+        fig = sns.FacetGrid(self.Dat, col="date_sess", hue="epoch", col_wrap=2, sharey=True, sharex=True, aspect=2, height=4)
+        fig.map(sns.scatterplot, "trial", "block")
+        fig.add_legend()
         figlist.append(fig)
-
-        # ax=axes.flatten()[1]
-        # sns.lineplot(data=D.Dat, x="trial", y="blokk", estimator=None, ax=ax)
-        # ax=axes.flatten()[2]
-        # sns.lineplot(data=D.Dat, x="trial", y="bloque", estimator=None, ax=ax)
 
         return figlist
 
@@ -4853,6 +4849,35 @@ class Dataset(object):
     def printOverview(self):
         from pythonlib.tools.pandastools import printOverview
         printOverview(self.Dat)
+
+    def print_trial_block_epoch_summary(self, savedir=None):
+        """ each line is trial-block-epoch, split by date-session
+        Useful overview of all trials
+        PARAMS:
+        - savedir, if not None, then give path to directory will save file:
+        savedir/trial_block_epoch.yaml
+        RETURNS:
+        - dict
+        """
+
+        from pythonlib.tools.expttools import writeDictToYaml
+
+        outdict = {}
+        list_sess_dict = sorted(self.Dat["date_sess"].unique())
+        for ds in list_sess_dict:
+            t= self.Dat[self.Dat["date_sess"]==ds]["trial"]
+            b=self.Dat[self.Dat["date_sess"]==ds]["block"]
+            e =self.Dat[self.Dat["date_sess"]==ds]["epoch"]
+            
+            tmp = [f"{tt}-{bb}-{ee}" for tt, bb, ee in zip(t, b, e)]
+            outdict[ds] = tmp
+        
+        if savedir is not None:
+            path = f"{savedir}/date_sess-trial_block_epoch.yaml"
+            print("Saving to: ", path)
+            writeDictToYaml(outdict, path)
+
+        return outdict
 
 
     ################ ANALYSIS HELPERS
