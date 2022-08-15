@@ -124,6 +124,9 @@ class Dataset(object):
                         aer_list.append((a,e,r))
             self._main_loader(pathlist, None, animal_expt_rule=aer_list)
 
+        # By default, try to load tasks
+        self.load_tasks_helper()
+
 
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
         """ MAIN loading function, use this for all loading purposes
@@ -198,6 +201,8 @@ class Dataset(object):
 
         dat_list = []
         metadats = {}
+        blockparams_defaults = {} # each datsaet, its default blockparams, a dict. None otherwise
+        # indexed by (date, sess, blocknum)
 
         for i, (path, aer) in enumerate(zip(path_list, animal_expt_rule)):
             
@@ -225,14 +230,36 @@ class Dataset(object):
             metadats[i] = m
             print("Loaded metadat:")
             print(m)
-
             metadats[i]["path"] = path
             metadats[i]["animal"] = aer[0]
             metadats[i]["expt"] = aer[1]
             metadats[i]["rule"] = aer[2]
 
+            # Try loading blockparamds dict
+            # (only started saving this 8/13/22)
+            path_bp = f"{path}/BlockParamsByDateSessBlock.pkl"
+            if os.path.exists(path_bp):
+                # Then load
+                print("Loading BlockParamsByDateSessBlock!")
+                with open(path_bp, "rb") as f:
+                    BlockParamsByDateSessBlock = pickle.load(f)
+
+                # clean it up (the monkeylogic dicts have numbers as keys, should be lists)
+                from pythonlib.tools.monkeylogictools import dict2list2
+                tmp = {}
+                for k, v in BlockParamsByDateSessBlock.items():
+                    # have to iterate becuase k is int, this would be converetd to list.
+                    tmp[k] = dict2list2(v)
+                BlockParamsByDateSessBlock = tmp
+
+            else:
+                print("[Skipping loading] Did not find BlockParamsByDateSessBlock")
+                BlockParamsByDateSessBlock = None
+            blockparams_defaults[i] = BlockParamsByDateSessBlock
+
         self.Dat = pd.concat(dat_list, axis=0)
         self.Metadats = metadats
+        self.BlockParamsDefaults = blockparams_defaults
 
         # reset index
         print("----")
@@ -527,6 +554,24 @@ class Dataset(object):
             print("Removing outliers")
             print(inds_outliers)
             self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
+
+    ################# BLOCKPARAMS
+    # (NOTE: default blockaprams, not hotkey updated)
+    def blockparams_extract_single(self, ind):
+        """ get the blockparams for this datapt
+        Also cleans up the dict (monkeylogic issues)
+        """
+        idx_bp = self.Dat.iloc[ind]["which_metadat_idx"]
+        date = self.Dat.iloc[ind]["date"]
+        sess = self.Dat.iloc[ind]["session"]
+        block = self.Dat.iloc[ind]["block"]
+        trialcode = self.Dat.iloc[ind]["trialcode"]
+
+        trialcodes_included = self.BlockParamsDefaults[idx_bp][(date, sess, block)]["trialcodes_included"]
+        blockparams = self.BlockParamsDefaults[idx_bp][(date, sess, block)]["blockparams"]
+
+        assert trialcode in trialcodes_included
+        return blockparams
 
     ############### TASKS
     def load_tasks_helper(self, reinitialize_taskobjgeneral=True, 
