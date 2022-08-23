@@ -132,7 +132,7 @@ def concatDatasets(Dlist):
 
     # do cleanup?
     Dnew._cleanup()
-    
+
     return Dnew
 
 
