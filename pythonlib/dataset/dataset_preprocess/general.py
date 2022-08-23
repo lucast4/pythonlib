@@ -195,6 +195,16 @@ def _groupingParams(D, expt):
         print("*** Rules/epochs reassigning using the following rules:")
         print(grouping_map_tasksequencer_to_rule)
         epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
+    else:
+        # By fedefault, replace epochs with rules used in metadat
+        # Replace epoch with rule, if that exists
+        def F(x):
+            idx = x["which_metadat_idx"]
+            if D.Metadats[idx]["rule"]:
+                return D.Metadats[idx]["rule"]
+            else:
+                return idx+1
+        D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers
