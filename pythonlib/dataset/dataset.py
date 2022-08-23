@@ -100,6 +100,7 @@ class Dataset(object):
             D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist), where rulelist is 
             list of strings.
         """
+        from pythonlib.dataset.dataset_preprocess.general import preprocessDat
 
         if rule is None:
             rule = ""
@@ -127,6 +128,8 @@ class Dataset(object):
         # By default, try to load tasks
         self.load_tasks_helper()
 
+        # By default, do preprocess
+        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
 
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
         """ MAIN loading function, use this for all loading purposes
@@ -722,6 +725,28 @@ class Dataset(object):
 
         return SDIR, idstring
 
+
+    def taskcharacter_find(self, setname, setnum, index):
+        """ Get all indices that have this fixed task name
+        <setname>-<setnum>-<index>-<hash>
+        PARAMS:
+        - setname, str
+        - setnum, int
+        - index, int
+        RETURNS;
+        - inds, indices into self.Dat
+        - characters, list of string names
+        """
+        assert not isinstance(index, list)
+        keyword = f"{setname}-{setnum}-{index}"
+        
+        inds = [i for i, char in enumerate(self.Dat["character"]) if keyword in char]
+        characters = self.Dat.iloc[inds]["character"]
+
+        return inds, characters
+
+
+
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
         """ True if single, False, if you 
@@ -749,6 +774,8 @@ class Dataset(object):
     def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True): 
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
+        - This should be run BEFORE preprocessDat, or else this might overwrite changes 
+        from that.
         """
         print("=== CLEANING UP self.Dat ===== ")
         from pythonlib.tools.pandastools import applyFunctionToAllRows
@@ -807,8 +834,6 @@ class Dataset(object):
                 strokeslist[i] = strokes
             self.Dat["strokes_beh"] = strokeslist
 
-
-
         ####### Remove columns of useless info.
         cols_to_remove = ["probe", "feedback_ver_prms", "feedback_ver",
             "constraints_to_skip", "prototype", "saved_setnum", "tasknum", 
@@ -856,13 +881,14 @@ class Dataset(object):
             self.Dat = self.Dat.drop("trial_day", axis=1)
 
         # Replace epoch with rule, if that exists
-        def F(x):
-            idx = x["which_metadat_idx"]
-            if self.Metadats[idx]["rule"]:
-                return self.Metadats[idx]["rule"]
-            else:
-                return idx+1
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+        # 8/17/22 - now done in preprocessDat, because here would overwrite preprocessDat.
+        # def F(x):
+        #     idx = x["which_metadat_idx"]
+        #     if self.Metadats[idx]["rule"]:
+        #         return self.Metadats[idx]["rule"]
+        #     else:
+        #         return idx+1
+        # self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
 
         # Add new column where abort is now True or False (since None was hjard to wrok with)
         def F(x):
