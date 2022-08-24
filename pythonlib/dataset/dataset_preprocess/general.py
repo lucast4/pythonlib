@@ -10,6 +10,17 @@ def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
     Dataset"""
 
+    # Reassign epochs/rules
+    # By fedefault, replace epochs with rules used in metadat
+    # Replace epoch with rule, if that exists
+    def F(x):
+        idx = x["which_metadat_idx"]
+        if D.Metadats[idx]["rule"]:
+            return D.Metadats[idx]["rule"]
+        else:
+            return idx+1
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
+
     grouping_levels = ["short", "long"]
     vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
         "dist_raise2firsttouch", "sdur", "isi", 
@@ -189,22 +200,12 @@ def _groupingParams(D, expt):
         print(plantime_cats)
         F = lambda x: plantime_cats[x["plan_time"]]
         D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
-
-    # Reassign epochs/rules
+    
     if grouping_reassign:
         print("*** Rules/epochs reassigning using the following rules:")
         print(grouping_map_tasksequencer_to_rule)
+        assert len(grouping_map_tasksequencer_to_rule)>0, "need to define how to remap rules."
         epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
-    else:
-        # By fedefault, replace epochs with rules used in metadat
-        # Replace epoch with rule, if that exists
-        def F(x):
-            idx = x["which_metadat_idx"]
-            if D.Metadats[idx]["rule"]:
-                return D.Metadats[idx]["rule"]
-            else:
-                return idx+1
-        D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers
@@ -291,7 +292,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     if hasattr(D, "_analy_preprocess_done"):
         if D._analy_preprocess_done:
-            assert False, "already done preprocess!!"
+            assert False, "already done preprocess!! You probably ran this in Dataset(). You can just skip this current call to preprocessDat()"
 
     # (1) Warnings
     if expt=="neuralprep4":

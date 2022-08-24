@@ -130,6 +130,14 @@ class Dataset(object):
 
         # By default, do preprocess
         self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
+        # self._analy_preprocess_done = False
+        # self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
+        # print(GROUPING_LEVELS)
+        self.MetadatPreprocess = {
+             "GROUPING":GROUPING,
+             "GROUPING_LEVELS":GROUPING_LEVELS, 
+             "FEATURE_NAMES":FEATURE_NAMES, 
+             "SCORE_COL_NAMES":SCORE_COL_NAMES}
 
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
         """ MAIN loading function, use this for all loading purposes
