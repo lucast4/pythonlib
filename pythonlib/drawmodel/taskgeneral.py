@@ -622,7 +622,8 @@ class TaskClass(object):
         --- 'on_grid', meaning that all objects are centered on a global grid location
         --- 'on_rel', meaning that all objects are anchored to other obejcts, not to
         global grid
-
+        NOTE: if old version (before around 3/2022) then returns None, since gridclass is not
+        defined
         """
         from pythonlib.tools.nptools import isin_array
 
@@ -638,26 +639,31 @@ class TaskClass(object):
         Ch = CLC.ListChunksClass[0]
         centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
 
-        grid_x = self.get_grid_params()["grid_x"]
-        grid_y = self.get_grid_params()["grid_x"]
-        grid_centers = []
-        for x in grid_x:
-            for y in grid_y:
-                grid_centers.append(np.asarray([x, y]))
-
-        if all([isin_array(c, grid_centers) for c in centers]):
-            # print("centers are on grid:")
-            # print(centers)
-            # print(grid_centers)
-            # Then each stroke center matches a grid center
-            grid_ver = "on_grid"
+        gridparams = self.get_grid_params()
+        if gridparams is None:
+            # Then this is old version, grid is not defined/
+            grid_ver = "undefined"
         else:
-            # print("---")
-            # print(centers)
-            # print(grid_centers)
-            # print([isin_array(c, grid_centers) for c in centers])
-            # Then at least one stroke is off grid.
-            grid_ver = "on_rel"
+            grid_x = gridparams["grid_x"]
+            grid_y = gridparams["grid_x"]
+            grid_centers = []
+            for x in grid_x:
+                for y in grid_y:
+                    grid_centers.append(np.asarray([x, y]))
+
+            if all([isin_array(c, grid_centers) for c in centers]):
+                # print("centers are on grid:")
+                # print(centers)
+                # print(grid_centers)
+                # Then each stroke center matches a grid center
+                grid_ver = "on_grid"
+            else:
+                # print("---")
+                # print(centers)
+                # print(grid_centers)
+                # print([isin_array(c, grid_centers) for c in centers])
+                # Then at least one stroke is off grid.
+                grid_ver = "on_rel"
 
         return grid_ver
 
@@ -668,9 +674,18 @@ class TaskClass(object):
         This is saved now (3/2022) in PlanClass in matlab.
         RETURNS:
         - gridparams, dict holding things like {grid_x, grid_y, ...}, with np array values
+        - or None, if this before 3/2022 (grid not defined)
         """
         T = self.extract_as('ml2')
-        return T.PlanDat["TaskGridClass"]["GridParams"]
+        # print(T.PlanDat.keys())
+        # print("---")
+        # for k, v in T.PlanDat.items():
+        #     print('-', k)
+        #     print(v)
+        if "TaskGridClass" not in T.PlanDat.keys():
+            return None
+        else:
+            return T.PlanDat["TaskGridClass"]["GridParams"]
 
 
 
@@ -907,21 +922,26 @@ class TaskClass(object):
         - SIMPLE< bool, if True, then only lmits to "prims_on_grid" and "character". If false, 
         thena lso include "prims_in_rel", motifs_in_grid. But tod o this, ened to extract and parse
         reelations.
-
+        NOTE: if this is older version (before around 3/2022) then taskkind is not defined, so 
+        returns "undefined"
         """
 
         if SIMPLE:
             grid_ver = self.get_grid_ver()
-            if grid_ver=="on_grid":
-                if len(self.Strokes)==1:
-                    return "prims_single"
-                else:
-                    return "prims_on_grid"
-            elif grid_ver=="on_rel":
-                return "character"
+            if grid_ver=="undefined":
+                # Then this is old code, not defined
+                return "undefined"
             else:
-                print(grid_ver)
-                assert False
+                if grid_ver=="on_grid":
+                    if len(self.Strokes)==1:
+                        return "prims_single"
+                    else:
+                        return "prims_on_grid"
+                elif grid_ver=="on_rel":
+                    return "character"
+                else:
+                    print(grid_ver)
+                    assert False
         else:
             # self.PlanDat["RelsBeforeRescaleToGrid"] Look in here for thetarelations,
             # if they are small, then this is prims in rel
