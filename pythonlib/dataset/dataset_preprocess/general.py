@@ -6,9 +6,30 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 from ..analy_dlist import extract_strokes_monkey_vs_self
 from pythonlib.globals import PATH_DRAWMONKEY_DIR
 
+
+def _get_default_grouping_map_tasksequencer_to_rule():
+    """ Dict that maps tasksequencer params (which in matlab
+    dictates the sequencing rule for each block) to a string name for the 
+    rule. Hard code these, but they are general across expts
+    """
+    grouping_map_tasksequencer_to_rule = {}
+    grouping_map_tasksequencer_to_rule[(None, None)] = "baseline"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "rightward"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "leftward"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "downward"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "upward"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "order_lVL_1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "order_LVl_1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "order_VlL_1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
+    grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
+    return grouping_map_tasksequencer_to_rule
+
 def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
     Dataset"""
+
+    assert isinstance(expt, str)
 
     # Reassign epochs/rules
     # By fedefault, replace epochs with rules used in metadat
@@ -21,17 +42,17 @@ def _groupingParams(D, expt):
             return idx+1
     D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
 
-    grouping_levels = ["short", "long"]
-    vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
-        "dist_raise2firsttouch", "sdur", "isi", 
-        "time_touchdone", "dist_touchdone", "dist_strokes", 
-        "dist_gaps", "sdur_std", "gdur_std", "hdoffline", "alignment"]
+    # grouping_levels = ["short", "long"]
+    # vals = ["nstrokes", "hausdorff", "time_go2raise", "time_raise2firsttouch", 
+    #     "dist_raise2firsttouch", "sdur", "isi", 
+    #     "time_touchdone", "dist_touchdone", "dist_strokes", 
+    #     "dist_gaps", "sdur_std", "gdur_std", "hdoffline", "alignment"]
 
-    feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
-                    "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
+    # feature_names = vals + ["stroke_speed", "gap_speed", "onset_speed", "offset_speed", "total_distance",
+    #                 "total_time", "total_speed", "dist_per_gap", "dist_per_stroke"]
 
-    features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
-    features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
+    # features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
+    # features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
 
     def _get_defaults(D):
         F = {}
@@ -39,7 +60,7 @@ def _groupingParams(D, expt):
         plantime_cats = {}
         features_to_remove_nan =  []
         features_to_remove_outliers = []
-        grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
+        grouping_levels = None
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
         grouping_reassign = False
         grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
@@ -50,7 +71,7 @@ def _groupingParams(D, expt):
     ### FILTER BLOCKS
     # 1) Get defaults
     F, grouping, plantime_cats, features_to_remove_nan, \
-     features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
+    features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
             grouping_map_tasksequencer_to_rule = _get_defaults(D)
     
     # 2) Overwrite defaults    
@@ -173,16 +194,9 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
-    elif expt=="neuralbiasdir3":
-        
+    elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
-        grouping_map_tasksequencer_to_rule = {}
-        grouping_map_tasksequencer_to_rule[(None, None)] = "baseline"
-        grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "rightward"
-        grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "leftward"
-        grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "downward"
-        grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "upward"
     else:
         # pass, just use defaults
         pass
@@ -203,9 +217,14 @@ def _groupingParams(D, expt):
     
     if grouping_reassign:
         print("*** Rules/epochs reassigning using the following rules:")
+        grouping_map_tasksequencer_to_rule = _get_default_grouping_map_tasksequencer_to_rule()
         print(grouping_map_tasksequencer_to_rule)
         assert len(grouping_map_tasksequencer_to_rule)>0, "need to define how to remap rules."
         epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
+
+    if grouping_levels is None:
+        # Then you did not enter it manually. extract it
+        grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers
@@ -253,8 +272,32 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # Then no supervision
             ver = None
             p = None
-        else:
+        elif ver=="directionv2":
             p = tuple(prms[0])
+        elif ver in ["prot_prims_in_order", "prot_prims_chunks_in_order"]:
+            # convert to sequence of prims.
+            # e..g, p = ('line-8-3', 'V-2-4', 'Lcentered-4-3')
+
+            def _convert_to_prim(x):
+                """
+                PARAMS:
+                - x, [str, nparray, nparay], represnting [shape, leve, rot]
+                RETURNS:
+                - <shape>-<level>-<rot>, e.g. # line-8-3
+                """
+                return '-'.join([x[0], str(int(x[1])), str(int(x[2]))])
+
+            list_prims = prms[0]
+            list_prims_str = [_convert_to_prim(x) for x in list_prims]
+            p = tuple(list_prims_str)
+        elif ver=="hack_220829":
+            # (AB)(n), like lollipop, but hacked for today, hard coded for specific prims today.
+            # 8/29/22
+            p = tuple(["hack_220829"])
+        else:
+            print(ver)
+            print(prms)
+            assert False
 
         return map_tasksequencer_to_rule[(ver, p)]
 
@@ -387,7 +430,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if get_sequence_rank:
         sequence_get_rank_vs_task_permutations_quick(D)
         FEATURE_NAMES = sorted(set(FEATURE_NAMES + ["effic_rank", "effic_summary", "effic_confid"]))
-
     # print("pruning by confidence of rank")
     # print(len(D.Dat))
     # print(D.Dat["effic_confid"])
