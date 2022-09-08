@@ -106,6 +106,9 @@ class Dataset(object):
         """
         from pythonlib.dataset.dataset_preprocess.general import preprocessDat
 
+        assert isinstance(expt, str), "if multiple expeirments, then not sure what to do for preprocess below."
+        expt_orig = expt
+
         if rule is None:
             rule = ""
 
@@ -133,7 +136,7 @@ class Dataset(object):
         self.load_tasks_helper()
 
         # By default, do preprocess
-        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
+        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt_orig)
         # self._analy_preprocess_done = False
         # self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
         # print(GROUPING_LEVELS)
