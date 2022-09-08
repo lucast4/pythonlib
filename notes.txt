@@ -1,1 +1,21 @@
 # pip install -e .
+
+# TO set password in jupyter
+
+# To set autoreload auto in jupyter:
+Add these lines to ~/.ipython/profile_default/ipython_config.py:
+c.InteractiveShellApp.exec_lines = []
+c.InteractiveShellApp.exec_lines.append('%load_ext autoreload')
+c.InteractiveShellApp.exec_lines.append('%autoreload 2')
+# c.InteractiveShellApp.exec_lines.append()
+
+If you don't have that file, first run:
+ipython profile create
+
+# Benchmarking tools
+1. timing
+%%timeit in jupyter notebook top of cell.
+
+2. system
+sysbench.
+

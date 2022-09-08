@@ -1,6 +1,10 @@
 """ stores and operates on datasets"""
 import pandas as pd
-import pickle5 as pickle
+import sys
+if sys.version_info[1]<8:
+    import pickle5 as pickle
+else:
+    import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.pandastools import applyFunctionToAllRows
@@ -218,7 +222,7 @@ class Dataset(object):
         for i, (path, aer) in enumerate(zip(path_list, animal_expt_rule)):
             
             print("----------------")
-            print(f"Currently loading: {path}")
+            print(f"Currently loading dataset pkl: {path}")
             # Open dataset
 
             try:            
@@ -229,7 +233,7 @@ class Dataset(object):
                     dat = pickle.load(f)
             dat["which_metadat_idx"] = i
             dat_list.append(dat)
-
+            print(".. Done!")
 
             # Open metadat
             try:
@@ -633,6 +637,7 @@ class Dataset(object):
                 print(pathlist)
                 assert False
             # assert len(pathlist)==1
+            print("--- Loading tasks pkl file: ", pathlist[0])
             with open(pathlist[0], "rb") as f:
                 Tasks = pickle.load(f)
 
@@ -1054,7 +1059,7 @@ class Dataset(object):
         SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH"]
 
         def _find(SDIR):
-            pathlist = findPath(SDIR, [[animal, expt, rule]], "dat", ".pkl", True)
+            pathlist = findPath(SDIR, [[f"{animal}-", f"{expt}-", f"{rule}-"]], "dat", ".pkl", True)
             return pathlist
 
         pathlist = []
