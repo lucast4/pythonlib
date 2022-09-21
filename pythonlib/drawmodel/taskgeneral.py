@@ -3,7 +3,7 @@
 """
 from . import primitives as Prim
 import numpy as np
-
+from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
 
 class TaskClass(object):
     """ Abstract class for all tasks.
@@ -1009,7 +1009,7 @@ class TaskClass(object):
         print(f"Saved to: {path}")
 
 
-    def save_task_for_dragmonkey(self, subdirname, fname, SDIR = "/data2/analyses/main/resaved_tasks_for_matlab"):
+    def save_task_for_dragmonkey(self, subdirname, fname, SDIR = f"{PATH_ANALYSIS_OUTCOMES}/main/resaved_tasks_for_matlab"):
         """ Save the task in a format that can be loaded in dragmonkey (matlab)
         to generate tasks for experiments
         PARAMS:

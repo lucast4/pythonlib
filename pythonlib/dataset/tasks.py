@@ -3,6 +3,7 @@ Here tasks are saved task class objects
 """
 
 import pickle
+from pythonlib.globals import PATH_DATASET_BEH
 
 def load_presaved_tasks(animal, expt):
     """ helper, to load pre-saved tasks for animal/expt
@@ -12,7 +13,7 @@ def load_presaved_tasks(animal, expt):
     from pythonlib.tools.expttools import findPath
 
     #  LOAD PRESAVED MONKEY TASKS
-    sdir = f"/data2/analyses/database/TASKS_GENERAL/{animal}-{expt}-all"
+    sdir = f"{PATH_DATASET_BEH}/TASKS_GENERAL/{animal}-{expt}-all"
     pathlist = findPath(sdir, [], "Tasks", "pkl")
     assert len(pathlist)==1
     with open(pathlist[0], "rb") as f:

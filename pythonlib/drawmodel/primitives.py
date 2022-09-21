@@ -5,7 +5,7 @@ import sys
 import math
 import numpy as np
 import matplotlib
-import torch
+# import torch
 from scipy.ndimage import gaussian_filter as gf
 #import cairo
 from math import tan
@@ -586,6 +586,8 @@ def drawLine_torch(p0, p1, img, mx, inkval):
         img    : uint8
              batchsize x WH x WH
         """
+        import torch
+
         p = p0
         dp = (p1 - p0)
         sp = (dp > 0)

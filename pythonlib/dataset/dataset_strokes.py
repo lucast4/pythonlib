@@ -496,6 +496,7 @@ class DatStrokes(object):
         key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
         n_examples = 2, color_by="order", ver_behtask=None):
         """
+        Subplots, organized at multipel levels.
         PARAMS:
         - task_kind, string, indexes into the task_kind column. Leave None to keep any
         --- e..g, {"character", "prims_on_grid"}
@@ -543,7 +544,7 @@ class DatStrokes(object):
                 # 1) get all unique values for a given key
                 def bad(x):
                     # Return True is this value is a nan
-                    if isinstance(x, (tuple, list)):
+                    if isinstance(x, (tuple, list, str)):
                         return False
                     else:
                         return np.isnan(x)
