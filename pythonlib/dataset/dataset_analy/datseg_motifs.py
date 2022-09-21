@@ -28,7 +28,6 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
     list of indices, where and index is (trial, starting strokenum)
     """
 
-    assert nprims==2, "not coded for other yet"
     motifs_all_dict = {}
     def prune_token_variables(token, variables_keep):
         """
@@ -51,9 +50,9 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
         else:
             assert False
         
-        for i in range(len(datsegs)-1):
-            motif = datsegs[i:i+2]
-            
+        for i in range(len(datsegs)-(nprims-1)):
+            motif = datsegs[i:i+nprims]
+                
     #         # MOtifs that should obviously not keep
     #         if motif[0][1]
             
@@ -400,6 +399,8 @@ def get_inds_this_motifgroup(DatGroups, which_group, motifs_all_dict, motifgroup
 
     assert len(inds_idxs_all)==len(list_motifs_all)
     return inds_idxs_all, list_motifs_all, motifgroup
+
+
 
 
 ###################### GETTING SETS OF TRIALS, FOR GENERATING EXPT
