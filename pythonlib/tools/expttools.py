@@ -118,7 +118,6 @@ def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
             return path[idxs[pos]+1:idxs[pos+1]]
 
         else:
-            print("this pos otu of bounds (returning None)")
             return None
 
 def checkIfDirExistsAndHasFiles(dirname):
@@ -202,6 +201,29 @@ def deconstruct_filename(filename):
 
     return path_parts
 
+def get_filename_most_recent_by_date(pathlist):
+    """ Given paths with datestrings, extract the most recent.
+    PARAMS:
+    - pathlist, list of str, paths with format <stuff>-YYMMDD_HHMMSS.<ext>, (Note the hyphen!!)
+    RETURNS:
+    - path, single path, the most recent.
+    """
+    import numpy as np
+    
+    # 1) get list of dates machine the filenames
+    dates = []
+    for path in pathlist:
+        fileparts = deconstruct_filename(path)["filename_components_hyphened"]
+        datethis = fileparts[-1]
+        if len(datethis)!=13:
+            print(datethis)
+            print(path)
+            assert False, "should be YYMMDD_HHMMSS"
+        dates.append(datethis)
+    # 2) sort
+    indices = np.argsort(dates) # string sorting sorts the digits (starting from leftmost)
+    
+    return pathlist[indices[-1]]
 
 
     

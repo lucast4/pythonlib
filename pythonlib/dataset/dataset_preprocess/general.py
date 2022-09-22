@@ -18,10 +18,13 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "leftward"
     grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "downward"
     grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "upward"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "toprightward"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "order_lVL_1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "order_LVl_1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "order_VlL_1"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
+
     grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
     return grouping_map_tasksequencer_to_rule
 
@@ -194,7 +197,7 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
-    elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b"]:
+    elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
     else:
@@ -267,7 +270,6 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         
         ver = bp["task_objectclass"]["tasksequencer_ver"]
         prms = bp["task_objectclass"]["tasksequencer_params"] # list.
-        
         if len(ver)==0 and len(prms)==0:
             # Then no supervision
             ver = None
@@ -277,7 +279,7 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         elif ver in ["prot_prims_in_order", "prot_prims_chunks_in_order"]:
             # convert to sequence of prims.
             # e..g, p = ('line-8-3', 'V-2-4', 'Lcentered-4-3')
-
+            
             def _convert_to_prim(x):
                 """
                 PARAMS:
@@ -305,7 +307,6 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     list_rule =[]
     for ind in range(len(D.Dat)):
         list_rule.append(_index_to_rule(ind))
-        
     # Assign rule back into D.Dat
     D.Dat["epoch"] = list_rule
     print("Modified D.Dat[epoch]")

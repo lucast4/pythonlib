@@ -12,8 +12,10 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
+from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
 
-base_dir = os.path.expanduser("~/data2/analyses")
+base_dir = PATH_ANALYSIS_OUTCOMES
+# base_dir = os.path.expanduser("~/data2/analyses")
 
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1.
@@ -1049,10 +1051,12 @@ class Dataset(object):
 
 
 
-    def find_dataset(self, animal, expt, assert_only_one=True, rule=""):
+    def find_dataset(self, animal, expt, assert_only_one=True, rule="", take_most_recent=True):
         """ helper to locate path for presaved (from Probedat) dataset
         can then use this toload  it
         - assert_only_one, then asserts that one and only one path found.
+        PARAMS:
+        - take_most_recent, bool, applies before assert_only_one applies.h
         RETURNS:
         - list of strings, paths.
         """
@@ -1070,7 +1074,12 @@ class Dataset(object):
             pathlist.extend(_find(SDIR))
 
         # pathlist = findPath(SDIR, [[animal, expt]], "dat", ".pkl", True)
-        
+            
+        if take_most_recent:
+            # look at filename for the date.
+            from pythonlib.tools.expttools import get_filename_most_recent_by_date
+            pathlist = [get_filename_most_recent_by_date(pathlist)]
+
         if assert_only_one:
             assert len(pathlist)==1
             

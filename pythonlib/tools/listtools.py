@@ -1,7 +1,7 @@
 """stuff to dow with lists"""
 from operator import itemgetter
 import numpy as np
-import torch
+# import torch
 
 def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
     """gets N random permutations from muylist, no
@@ -104,7 +104,7 @@ def get_counts(vals):
     return counts_dict
 
 
-def counts_to_pdist(counts_dict, cats_in_order, dtype=torch.float32, 
+def counts_to_pdist(counts_dict, cats_in_order, dtype=None, 
     prior_counts=0., print_stuff=True):
     """
     Get an array of probabilities, where the
@@ -120,6 +120,9 @@ def counts_to_pdist(counts_dict, cats_in_order, dtype=torch.float32,
     RETURNS:
     - pdist, torch tensor, len of cats_in_order.
     """
+    import torch
+    if dtype is None:
+        dtype = torch.float32
     probs = []
     for c in cats_in_order:
         if c not in counts_dict:
