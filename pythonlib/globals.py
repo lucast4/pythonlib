@@ -18,6 +18,7 @@ elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan":
 	PATH_DRAWMONKEY_DIR = "/Users/kdu/Desktop/rockefeller/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/Users/kdu/data2/animals"
 	PATH_MATLAB = "/Users/kdu/data1/programs/MATLAB/R2022a/bin/matlab"
+	PATH_ANALYSIS_OUTCOMES = "/Volumes/kdot/analyses"
 elif MACHINE == "bonobo":
 	PATH_NEURALMONKEY = "/data1/code/python/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = "/mnt/hopfield_data01/ltian/recordings"
