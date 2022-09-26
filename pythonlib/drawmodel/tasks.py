@@ -971,6 +971,132 @@ class TaskClass(object):
     # Supercedes previous code on programs extract.
     # Here looks directly into "Plan" representation, which is the latest way that tasks
     # are defined in matlab side.
+    def objectclass_extract_all(self):
+        """ Extract TaskNew.Objects
+        into self.ObjectClass
+        """
+        from pythonlib.tools.monkeylogictools import dict2list2, dict2list
+        
+        if self.get_tasknew() is None:
+            self.ObjectClass = None
+            return 
+
+        if "Objects" not in self.get_tasknew().keys():
+            self.ObjectClass = None
+            return
+
+        Objects = self.get_tasknew()["Objects"]
+
+        # print(Objects.keys())
+        # for k, v in Objects.items():
+        #     print("   ")
+        #     print("----", k)
+        #     print(v)
+        # assert False
+        # get all keys, except explicitly ignored
+        _list_keys_to_ignore = ['StrokesFinalNorm_', 'StrokesFinalNorm_Active', 'RuleStates', 
+            'StrokesFinalSketchpadPix']
+        _list_keys = [k for k in Objects.keys() if k not in _list_keys_to_ignore]
+
+        dat = {}
+        # Extract things
+        for k in _list_keys:
+            dat[k] = dict2list2(Objects[k])
+        # print(dat["ChunkList"])
+        # print(len(dat["ChunkList"]))
+        # print(Objects["ChunkList"].keys())
+        # assert False
+        # Extract useful summaries
+        # - (Base) prims and their locations
+        # - Chunks
+        # from pythonlib.chunks import ChunksClassList
+        # CL = ChunksClassList():
+        # dat["ChunksList"]
+        # for chunk in dat["ChunksList"]:
+
+        # Extract shapes and their params
+        # from pythonlib.primitives.primitiveclass import PrimitiveClass
+        # dat["shapes"] = [x[0] for x in dat["Prims"]]
+        # dat["primitives"] = []
+        # for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
+        #     shape = prim[0]
+        #     params = prim[1]
+
+        #     primkind = params[0] # e.g., prot, abstract, motif
+        #     scale = params[1]
+        #     rotation = params[2]
+        #     if len(params)>=4:
+        #         col = params[3] # not using here... (color)
+        #     else:
+        #         col = np.nan
+        #     if len(params)>=5:
+        #         reflect = params[4] # 1 means reflect.
+        #     else:
+        #         reflect = np.array(0.)
+        #     traj = self.Strokes[i]
+
+        #     assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
+        #     # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
+
+        #     Prim = PrimitiveClass()
+        #     Prim.input_prim("prototype_prim_abstract", {
+        #             "shape":shape,
+        #             "scale":scale,
+        #             "rotation":rotation,
+        #             "reflect":reflect,
+        #             "x":loc[0],
+        #             "y":loc[1]}, traj = traj)
+        #     dat["primitives"].append(Prim)
+
+        assert False, "here, shoudl extrac tthe chunks_ as indices 0-indexed"
+        # ChunksList should be indexed from 0
+        for this in dat["ChunkList"]:
+            print(this)
+            print(this["chunks_"])
+
+            chunks = this[1]
+
+            print(chunks)
+            assert False
+            this[1] = [ch-1 for ch in chunks]
+
+        # Sanity checks
+        # - Base prims should correspond to objects
+        # if self.Objects is not None:
+        #     for o, p in zip(self.Objects, dat["primitives"]):
+        #         if False:
+        #             # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
+        #             assert o["obj"] == p.Shape
+        #         assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
+        #         assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
+
+        # - nstrokes here should match nstrokes extracted elsewhere
+        # _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]
+        # for k in _list_keys_check_nstrokes:
+        #     assert len(dat[k]) == len(self.Strokes)
+
+        # Get chunks in ChunksListClass format
+        # print("*** GETTING CHUNKS")
+        from pythonlib.chunks.chunksclass import ChunksClassList
+        nstrokes = len(self.Strokes)
+
+        # ChunksClassList
+        CL = ChunksClassList("chunkslist_entry", 
+            {"chunkslist":dat["ChunkList"], "nstrokes":nstrokes, 
+            "shapes":dat["shapes"]})
+
+        # CL.print_summary()
+        dat["ChunksListClass"] = CL
+
+        
+        # Remove strokes, only needed above
+        if "Strokes" in dat.keys():
+            del dat["Strokes"]
+
+        # store
+        self.PlanDat = dat
+
+        return dat        
 
     def planclass_extract_all(self):
         """ Wrapper to extract all planclass info.
@@ -1002,6 +1128,8 @@ class TaskClass(object):
             # get all keys, except explicitly ignored
             _list_keys_to_ignore = ['PlanSpatial', 'StrokesBasePrims', 'CentersBasePrims', 
                 'PrimsAsTasks', 'PrimsAsTasksNoMods', 'TaskClass', 'InputGridname', 'TaskGridname']
+                # note: removing ChunksList since the updated one on each trial is actually
+                # in Objects
             _list_keys = [k for k in Plan.keys() if k not in _list_keys_to_ignore]
         else:
             # tell what keys to get. this doesnt keep up with new versions
@@ -1014,7 +1142,6 @@ class TaskClass(object):
         # _list_keys = {'Plan', 'CentersActual', 'Rels', 'TaskGridClass', 'Prims', 'ChunksList', 'Strokes'}
         for k in _list_keys:
             dat[k] = dict2list2(Plan[k])
-
         # Extract useful summaries
         # - (Base) prims and their locations
         # - Chunks
