@@ -19,3 +19,18 @@ ipython profile create
 2. system
 sysbench.
 
+Sublimerge
+[
+	{"keys":["ctrl+alt+s"], "command":"sublimerge"}
+]
+
+3. setting up ubuntu to allow ssh
+if doesnt work off the bat:
+sudo apt-get purge openssh-server
+sudo apt-get install openssh-server
+
+# To make sure dock only shows windows of current workspace
+https://askubuntu.com/questions/1068097/separate-workspaces-in-ubuntu-18-04-desktop?noredirect=1&lq=1
+https://askubuntu.com/questions/992558/how-can-i-configure-the-ubuntu-dock-to-show-windows-only-from-the-current-worksp
+gsettings set org.gnome.shell.app-switcher current-workspace-only true
+gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true
