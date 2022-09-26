@@ -14,10 +14,11 @@ if MACHINE == "lucast4-MS-7B98":
 	PATH_ANALYSIS_OUTCOMES = "/gorilla1/analyses"
 	PATH_DATASET_BEH = "/gorilla1/analyses/database"
 	PATH_MATLAB = "/gorilla1/programs/MATLAB/R2021a/bin/matlab"
-elif MACHINE == "kggs-macbook.rockefeller.edu":
+elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan":
 	PATH_DRAWMONKEY_DIR = "/Users/kdu/Desktop/rockefeller/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/Users/kdu/data2/animals"
 	PATH_MATLAB = "/Users/kdu/data1/programs/MATLAB/R2022a/bin/matlab"
+	PATH_ANALYSIS_OUTCOMES = "/Volumes/kdot/analyses"
 elif MACHINE == "bonobo":
 	PATH_NEURALMONKEY = "/data1/code/python/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = "/mnt/hopfield_data01/ltian/recordings"
