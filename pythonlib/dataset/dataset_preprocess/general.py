@@ -26,6 +26,13 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
 
     grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBm_topright"
+
+    grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "randomize_strokes"
+
     return grouping_map_tasksequencer_to_rule
 
 def _groupingParams(D, expt):
@@ -200,6 +207,9 @@ def _groupingParams(D, expt):
     elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
+    elif "grammar" in expt:
+        # Assume that if grammar in name, it has rules.
+        grouping_reassign = True
     else:
         # pass, just use defaults
         pass
@@ -265,11 +275,21 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             assert isinstance(k[1], tuple)
 
     # Based on the tasksequencer rule
+    def _convert_to_prim(x):
+        """
+        PARAMS:
+        - x, [str, nparray, nparay], represnting [shape, leve, rot]
+        RETURNS:
+        - <shape>-<level>-<rot>, e.g. # line-8-3
+        """
+        return '-'.join([x[0], str(int(x[1])), str(int(x[2]))])
+
     def _index_to_rule(ind):
-        bp = D.blockparams_extract_single(ind)
-        
-        ver = bp["task_objectclass"]["tasksequencer_ver"]
-        prms = bp["task_objectclass"]["tasksequencer_params"] # list.
+        tp = D.blockparams_extract_single_taskparams(ind)
+        # new, post 9/19/22 - using taskparams
+        ver = tp["task_objectclass"]["tasksequencer_ver"]
+        prms = tp["task_objectclass"]["tasksequencer_params"] # list.
+
         if len(ver)==0 and len(prms)==0:
             # Then no supervision
             ver = None
@@ -279,16 +299,6 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         elif ver in ["prot_prims_in_order", "prot_prims_chunks_in_order"]:
             # convert to sequence of prims.
             # e..g, p = ('line-8-3', 'V-2-4', 'Lcentered-4-3')
-            
-            def _convert_to_prim(x):
-                """
-                PARAMS:
-                - x, [str, nparray, nparay], represnting [shape, leve, rot]
-                RETURNS:
-                - <shape>-<level>-<rot>, e.g. # line-8-3
-                """
-                return '-'.join([x[0], str(int(x[1])), str(int(x[2]))])
-
             list_prims = prms[0]
             list_prims_str = [_convert_to_prim(x) for x in list_prims]
             p = tuple(list_prims_str)
@@ -296,6 +306,15 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # (AB)(n), like lollipop, but hacked for today, hard coded for specific prims today.
             # 8/29/22
             p = tuple(["hack_220829"])
+        elif ver=="prot_prims_in_order_AND_directionv2":
+            # TYhen is hierarchcayl, first order by shape, then within shapes order by direction
+            list_prims = prms[0]
+            list_prims_str = [_convert_to_prim(x) for x in list_prims] # list of strings
+            direction = prms[1][0] # topright
+            p = tuple(list_prims_str + [direction])
+        elif ver=="randomize_strokes":
+            assert len(prms)==0
+            p = tuple([ver])
         else:
             print(ver)
             print(prms)
