@@ -114,6 +114,15 @@ class Dataset(object):
         if rule is None:
             rule = ""
 
+        if isinstance(rule, str):
+            pass
+        elif isinstance(rule, list):
+            for r in rule:
+                assert isinstance(r, str)
+        else:
+            print(rule, type(rule))
+            assert False, "wrong type"
+
         if ver=="single":
             pathlist = self.find_dataset(animal, expt, assert_only_one=True, rule=rule)
             self._main_loader(pathlist, None, animal_expt_rule=[(animal, expt, rule)])
@@ -592,6 +601,37 @@ class Dataset(object):
 
         assert trialcode in trialcodes_included
         return blockparams
+
+    def blockparams_extract_single_taskparams(self, ind):
+        """ Extract the taskparams fro this trail, only after
+        ~9/19/22, when moved task params from BlockPrams to TaskParams
+        RETURNS:
+        - TaskParams, [or BlockParams, if before this date], dict
+        """
+        import numpy as np
+
+        fields_in_taskparams = ['probes', 'TaskSet', 'tasks', 'task', 'sketchpad', 'task_objectclass']
+
+        BP = self.blockparams_extract_single(ind)
+        taskml = self.Dat.iloc[ind]["Task"].extract_as("ml2")
+
+        taskstruct = taskml.Task # matlab struct, as dict
+        if "taskparams_index" in taskstruct.keys():
+            # Then is new version, extract taskparams
+            index = taskstruct["taskparams_index"]
+            if isinstance(index, np.ndarray): # [[1.]]
+                index = int(index[0][0])
+            # if index>1:
+            #     print("lenght: ", len(BP["TaskParams"]))
+            #     assert False, "confirm length >1"
+            return BP["TaskParams"][index-1] # index is 1-index
+        else:
+            # Then is old version, just extract blockparams in entirety
+
+            # prune to just those fields that are in TaskParams.
+            BP = {k:v for k,v in BP.items() if k in fields_in_taskparams}
+            return BP
+
 
     ############### TASKS
     def load_tasks_helper(self, reinitialize_taskobjgeneral=True, 
