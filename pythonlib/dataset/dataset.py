@@ -18,8 +18,18 @@ base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
 
 def _checkPandasIndices(df):
-    """ make sure indices are monotonic incresaing by 1.
+    """ make sure indices are monotonic incresaing by 1, starting from 0
     """
+    if len(df)==0:
+        # empty is fine.
+        return
+
+    assert df.index[0]==0
+
+    if len(df)==1:
+        # is fine.
+        return
+
     tmp =  np.unique(np.diff(df.index))
     assert len(tmp)==1
     assert np.unique(np.diff(df.index)) ==1 
@@ -4184,16 +4194,19 @@ class Dataset(object):
         return strokes_beh_list, strokes_task_list, Dthis    
 
     ############# DAT dataframe manipualtions
-    def grouping_append_col(self, grp_by, new_col_name):
+    def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
         """ append column with index after applying grp_by, 
         as in df.groupby, where the new val is  string, from
         str(list), where list is the grp_by levels for that
         row.
+        PARAMS:
+        - strings_compact, if True, then tries to make shorter strings (without losing info)
         RETURNS:
         - modified self.Dat
         """
         from pythonlib.tools.pandastools import append_col_with_grp_index
-        self.Dat = append_col_with_grp_index(self.Dat, grp_by, new_col_name)
+        self.Dat = append_col_with_grp_index(self.Dat, grp_by, 
+            new_col_name, use_strings=use_strings, strings_compact=strings_compact)
         print("appended col to self.Dat:")
         print(new_col_name)
 
@@ -4360,6 +4373,145 @@ class Dataset(object):
         print(trials_bad)
         self.subsetDataframe(trials_good)
 
+
+    ################# Supervision params
+    # ie params that online guide supervision
+    def supervision_extract_params(self, ind):
+        """ Extract dict of supervision params for this tryial
+        """
+        from .dataset_preprocess.supervision import extract_supervision_params
+        return extract_supervision_params(self, ind)
+
+    def supervision_extract_params_as_columns(self, list_keys):
+        """ Extract params as columns in self.Dat
+        PARAMS:
+        - list_keys, list of string keys into superviison params, each will become  anew col
+        """
+
+        # Initialize
+        outdict = {key:[] for key in list_keys}
+
+        # Iterate over all trials, and extract
+        for ind in range(len(self.Dat)):
+            prms = self.supervision_extract_params(ind)
+            for key in list_keys:
+                outdict[key].append(prms[key])
+
+        # Add as columns
+        for key in list_keys:
+            self.Dat[f"superv_{key}"] = outdict[key]
+            print(f"Appended self.Dat[superv_{key}]")
+
+
+    def supervision_check_is_online_instruction(self, ind, color_is_considered_instruction=False):
+        """ Returns True if this trial used any form of online supervision
+        PARAMS;
+        - color_is_considered_instruction, bool(False), whether to consider color cues as supervision.
+        By default is no, because it is very weak supervision that must be learned, which constrast with 
+        strong supervision (sequence)
+        """
+
+        prms = self.supervision_extract_params(ind)
+        
+        sup_seq = prms["SEQUENCE_SUP"]!="off" 
+        sup_col = prms["COLOR_ON"]
+        sup_guidedyn = prms["GUIDEDYN_ON"]
+
+        if not color_is_considered_instruction:
+            # Then ignore color
+            sup_col = False
+
+        if sup_seq or sup_col or sup_guidedyn:
+            # Then at least one kind of supervision
+            return True
+        else:
+            return False
+
+    def supervision_check_is_instruction_using_color(self, ind, 
+        list_methods_instructive = ["rank"]):
+        """ Check whethre this trial was using color as instruction
+        (e.g., color encoding rank of each stroke)
+        PARAMS:
+        - list_methods_instructive, if COLOR_METHOD is in this list, then this trial
+        is True
+        """       
+
+        # 1) Get supervision params 
+        prms = self.supervision_extract_params(ind)
+
+        # 2) Check if is color instructions
+        if prms["COLOR_ON"] and prms['COLOR_METHOD'] in list_methods_instructive:
+            return True
+        else:
+            return False
+
+
+    def supervision_reassign_epoch_rule_by_color_instruction(self, new_col_name="epoch", overwrite=False):
+        """ Replaces epoch column with conjunction of (i) current value in epoch and
+        (ii) whether trial is color-based supervision. Idea is that if using color,
+        then this is an entirely different kind of "rule"
+        RETURNS:
+        - modifies self.Dat["epoch"] (moves old version to self.Dat["epoch_old"]). 
+        NOTE: fails to run if detects that epoch_old exists.
+        NOTE: also adds a column called INSTRUCTION_COLOR
+        """
+
+        if not overwrite:
+            if f"{new_col_name}_old" in self.Dat.columns:
+                assert False, "avoid running this multpel times."
+            else:
+                self.Dat[f"{new_col_name}_old"] = self.Dat[f"{new_col_name}"]
+
+        # 1) indicate for each trial whether it is using color instruction
+        # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
+        list_issup = []
+        for ind in range(len(self.Dat)):
+            list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
+        self.Dat["INSTRUCTION_COLOR"] = list_issup
+
+        # 2) get conjuction of epoch and instruction
+        grouping_vars = [new_col_name, "INSTRUCTION_COLOR"]
+        self.grouping_append_col(grouping_vars, new_col_name, use_strings=True, strings_compact=True)
+
+        print("Reassigned rules taking conjucntion of old rules x color instruction")
+        print("New epochs")
+        print(self.Dat[new_col_name].value_counts())
+
+
+    def supervision_summarize_into_tuple(self):
+        """ Summarize those supervision params that potnetially provide online instruction
+        , these can define distinct stages of blocks
+        RETURNS:
+        - new col in self.Dat, "supervision_stage_new"
+        """
+
+        # - grouping keys which can potentially influence online behavior (instructive).
+        # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "SOUNDS_STROKES_DONE", "GUIDEDYN_ON"]
+        grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "GUIDEDYN_ON", "VISUALFB_METH"]
+        grouping_keys_prefix = [f"superv_{key}" for key in grouping_keys]
+
+        # 1) Extract each param to a column
+        self.supervision_extract_params_as_columns(grouping_keys)
+
+        # 2) get their conjunction.
+        self.grouping_append_col(grouping_keys_prefix, "supervision_stage_new", use_strings=True, strings_compact=True)
+
+        # 3) prin summary
+        print("*** SUMMARY of new column, after making supervision tuple (column: supervision_stage_new):")
+        print(self.Dat["supervision_stage_new"].value_counts())
+    
+
+    def supervision_summarize_whether_is_instruction(self, color_is_considered_instruction=False):
+        """ For each trial, determine True/False whether this had online 
+        supervision, based on key parameters like color, sequence presentation, etc
+        """
+
+        list_issup = []
+        for ind in range(len(self.Dat)):
+            list_issup.append(self.supervision_check_is_online_instruction(ind, 
+                color_is_considered_instruction=color_is_considered_instruction))            
+        self.Dat["supervision_online"] = list_issup
+        print("ADded new column: supervision_online")
 
     ################ SAVE
     def make_fig_savedir_suffix(self, filterDict):
@@ -5324,6 +5476,12 @@ class Dataset(object):
                 assert False
 
         self.Dat = applyFunctionToAllRows(self.Dat, func, "monkey_train_or_test")
+        print("Reassigned train/test, using key:", key)
+        print("and values:")
+        print("Train = ", list_train)
+        print("Test = ", list_test)
+        print(" ")
+        print("New distribution of train/test:")
         print(self.Dat["monkey_train_or_test"].value_counts())
 
 

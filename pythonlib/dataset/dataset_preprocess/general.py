@@ -13,15 +13,15 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     rule. Hard code these, but they are general across expts
     """
     grouping_map_tasksequencer_to_rule = {}
-    grouping_map_tasksequencer_to_rule[(None, None)] = "baseline"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "rightward"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "leftward"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "downward"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "upward"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "toprightward"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "order_lVL_1"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "order_LVl_1"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "order_VlL_1"
+    grouping_map_tasksequencer_to_rule[(None, None)] = "base"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "R"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "L"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "D"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "U"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "TR"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "VlL1"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
 
@@ -29,9 +29,9 @@ def _get_default_grouping_map_tasksequencer_to_rule():
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
-        ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBm_topright"
+        ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBmTR"
 
-    grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "randomize_strokes"
+    grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
 
     return grouping_map_tasksequencer_to_rule
 
@@ -64,26 +64,32 @@ def _groupingParams(D, expt):
     # features_to_remove_nan =  ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch", "nstrokes"]
     # features_to_remove_outliers = ["dist_strokes", "sdur", "dist_gaps" , "isi", "dist_raise2firsttouch", "time_raise2firsttouch"] # distnaces and times.
 
-    def _get_defaults(D):
-        F = {}
-        grouping = "epoch"
-        plantime_cats = {}
-        features_to_remove_nan =  []
-        features_to_remove_outliers = []
-        grouping_levels = None
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
-        grouping_reassign = False
-        grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
-        return F, grouping, plantime_cats, features_to_remove_nan, \
-            features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
-            grouping_map_tasksequencer_to_rule
+    #### DEFAULTS
+    # def _get_defaults(D):
+    F = {}
+    grouping = "epoch"
+    plantime_cats = {}
+    features_to_remove_nan =  []
+    features_to_remove_outliers = []
+    grouping_levels = None
+    feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
+    grouping_reassign = False
+    grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
+    # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+    grouping_reassign_methods_in_order = ["tasksequencer"]
+    traintest_reassign_method = "probes"
+        # return F, grouping, plantime_cats, features_to_remove_nan, \
+        #     features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
+        #     grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order, \
+        #     traintest_reassign_method
 
-    ### FILTER BLOCKS
-    # 1) Get defaults
-    F, grouping, plantime_cats, features_to_remove_nan, \
-    features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
-            grouping_map_tasksequencer_to_rule = _get_defaults(D)
-    
+    # ### FILTER BLOCKS
+    # # 1) Get defaults
+    # F, grouping, plantime_cats, features_to_remove_nan, \
+    # features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
+    #         grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order \
+    #         traintest_reassign_method = _get_defaults(D)
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -207,6 +213,11 @@ def _groupingParams(D, expt):
     elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
+    elif "grammardircolor" in expt:
+        # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True
@@ -229,18 +240,30 @@ def _groupingParams(D, expt):
         D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
     
     if grouping_reassign:
-        print("*** Rules/epochs reassigning using the following rules:")
-        grouping_map_tasksequencer_to_rule = _get_default_grouping_map_tasksequencer_to_rule()
-        print(grouping_map_tasksequencer_to_rule)
-        assert len(grouping_map_tasksequencer_to_rule)>0, "need to define how to remap rules."
-        epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
+        # Apply reassignment methods in order
+        for grmeth in grouping_reassign_methods_in_order:
+            if grmeth=="tasksequencer":
+                # Look into objectclass tasksequencer.
+                print(" ")
+                print("*** Rules/epochs reassigning using the following rules:")
+                grouping_map_tasksequencer_to_rule = _get_default_grouping_map_tasksequencer_to_rule()
+                print(grouping_map_tasksequencer_to_rule)
+                assert len(grouping_map_tasksequencer_to_rule)>0, "need to define how to remap rules."
+                epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
+            elif grmeth=="color_instruction":
+                print(" ")
+                D.supervision_reassign_epoch_rule_by_color_instruction()
+            else:
+                print(grmeth)
+                assert False
+
 
     if grouping_levels is None:
         # Then you did not enter it manually. extract it
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
-        features_to_remove_outliers
+        features_to_remove_outliers, traintest_reassign_method
 
 def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     """ Decide what is the epoch and level for each trial, based on the tasksequencer rule
@@ -372,10 +395,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # (3) Apply grouping variabples + prune dataset
     print("- starting/ending len (grouping params):")
     print(len(D.Dat))
-    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, features_to_remove_outliers \
+    D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
+        features_to_remove_outliers, traintest_reassign_method \
         = _groupingParams(D, expt)
     print(len(D.Dat))
-
 
     # Only keep characters that have at lesat one trial across all grouping levels.
     if only_keep_trials_across_groupings:
@@ -483,11 +506,24 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if remove_outliers:
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
+    # FIgure out task probes (0 and 1)
+    probe_list = []
+    for i in range(len(D.Dat)):
+        t_p = D.Dat.iloc[i]["Task"].Params["input_params"]
+        probe_val = t_p.info_summarize_task()["probe"]["probe"]
+        probe_list.append(probe_val)
+    D.Dat["probe"] = probe_list
+
     ### Rename things as monkey train test depenidng on expt
-    preprocess_task_train_test(D, expt)
+    if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:
+        assert traintest_reassign_method=="fixed", "I had previously hard coded as such"
+    preprocess_task_train_test(D, expt, method=traintest_reassign_method)
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
+
+    #### SUPERVISION - get supervision stages, i.e, tuples
+    D.supervision_summarize_into_tuple()
 
     # Print outcomes
     print("GROUPING", GROUPING)
@@ -495,34 +531,57 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("FEATURE_NAMES", FEATURE_NAMES)
     print("SCORE_COL_NAMES", SCORE_COL_NAMES)
 
+    # Get new column: date_epoch
+    x = []
+    for ind in range(len(D.Dat)):
+        x.append(D.Dat.iloc[ind]["date"][2:])
+    D.Dat["date_MMDD"] = x
+
+    D.grouping_append_col(["date_MMDD", "epoch"], "date_epoch", use_strings=True, strings_compact=True)
+
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 
-def preprocess_task_train_test(D, expt):
+def preprocess_task_train_test(D, expt, method="probes"):
     """ Clean up naming of tasks as train or test
     in the monkey_train_or_test key of D.Dat. Makes sure that all rows have either
     "train" or "test" for this column.
+    PARAMS:
+    - method, str, how to define train/test... This may depend on expt, etc. and may
+    need to be hand-tuned.
     RETURNS:
     - modifies D.Dat
-    """
+    """ 
 
-    probe_list = []
-    for i in range(0, len(D.Dat["Task"])):
-        t = D.Dat.iloc[i]["Task"]
-        t_p = t.Params["input_params"]
-        probe_val = t_p.info_summarize_task()["probe"]["probe"]
-        probe_list.append(probe_val)
-    D.Dat["probe"] = probe_list
-
-    if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:
+    if method=="fixed":
+        # randoom = train, fixed = test
         # train were all random tasks, test were all fixed.
         key = "random_task"
         list_train = [True]
         list_test = [False]
-        D.analy_reassign_monkeytraintest(key, list_train, list_test)
+    elif method=="probes":
+        # probes==1 --> test, ... probes==0 --> train
+        key = "probe"
+        list_train = [0]
+        list_test = [1]
+    elif method=="supervision_except_color":
+        # online supervision (dont care about color) --> train
+        # no online supervision --> test
+        if "supervision_online" not in D.Dat.columns:
+            # Extract it
+            D.supervision_summarize_whether_is_instruction()
+        key = "supervision_online"
+        list_train = [True]
+        list_test = [False]
+    elif method=="probe_and_supervision":
+        # Test, if probe==1 and supervision is off
+        assert False, "code it, take conjuntion of two things above"
     else:
-        D.analy_reassign_monkeytraintest("probe", [0], [1])
+        print(method)
+        assert False
 
+    # Do reassignment
+    D.analy_reassign_monkeytraintest(key, list_train, list_test)
 
 def preprocess_dates(D, groupby, animal, expt, nmin = 5, return_filtered_dataset=False,
     SAVEDIR=None):
@@ -663,3 +722,6 @@ def get_rulelist(animal, expt):
     assert len(rulelist)>0
     assert len(set(rulelist))==len(rulelist), "some redundant?"
     return rulelist
+
+
+
