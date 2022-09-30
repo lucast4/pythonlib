@@ -539,7 +539,8 @@ def printOverview(df, MAX=50):
 
 # @param grp: [col1 col2 col3]
 # @return: new column with index for category (based on col1/2/3 perm)
-def append_col_with_grp_index(df, grp, new_col_name, use_strings=True):
+def append_col_with_grp_index(df, grp, new_col_name, use_strings=True, 
+        strings_compact=False):
     """ for each col, gets its grp index (based on grp list),
     and appends as new column. first converts to string by str(list)
     INPUTS:
@@ -554,7 +555,19 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True):
     def F(x):
         tmp = [x[g] for g in grp]
         if use_strings:
-            return str(tmp) 
+            if strings_compact:
+                tmp_compact = []
+                for t in tmp:
+                    if isinstance(t, bool):
+                        if t:
+                            tmp_compact.append("1")
+                        else:
+                            tmp_compact.append("0")
+                    else:
+                        tmp_compact.append(str(t))
+                return "|".join(tmp_compact)
+            else:
+                return str(tmp) 
         else:
             return tuple(tmp)
     
