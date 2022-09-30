@@ -36,34 +36,48 @@ class ChunksClassList(object):
             print(params)
             assert False, "code it"
 
-    def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None, check_matches_nstrokes=True):
+    def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None, 
+            check_matches_nstrokes=True):
         """ Enter list of chunks, inputed in chunkslist format.
         PARAMS:
-        - chunkslist, chunkslist[0] = [name, hier, flips, color],
+        - chunkslist, chunkslist[0] = [name, hier, flips, index, color],
         --- name, string
         --- hier, list of list of ints (or like)
          e.g.,, [['default',
               [array([1., 2.]), array([3., 4.])],
               [array([0., 0.]), array([0., 0.])],
-              {'color': [array([0.44048823, 0.47708101, 0.44188513]),
-                array([0.47163037, 0.65416502, 0.40344111])]}]]
+              0, 
+              colorlist_hier
+              ]]
+            - colorlist_hier,optional, currently not functioning, but list of array:
+            --- e,.g., [array([0.44048823, 0.47708101, 0.44188513]),
+                    array([0.47163037, 0.65416502, 0.40344111])], len of hier
+
         - nstrokes, int, need this since needs to make chunks all single strokes.
         - shapes, list of string or ints, categories for these shapes, same len as nstrokes
         - check_matches_nstrokes, bool, then asserts that got all and only these storkes. helpful for 
         catching 1-indexing from matlab.
+        NOTE:  does Confirm that each model/index is unique
         """
 
         assert len(list_shapes)==nstrokes
 
+        already_entered = {}
+
         self.ListChunksClass = []
         chunks = [i for i in range(nstrokes)] # assume that no stroke chunking
         for chunkthis in chunkslist:
+            name = chunkthis[0]
             hier = chunkthis[1]
             flips = chunkthis[2]
+            index = chunkthis[3]
+            if len(chunkthis)>4:
+                color = chunkthis[4]
+            else:
+                color = None
             fixed_order = None # uses default.
-            name = chunkthis[0]
             C = ChunksClass(chunks, hier, fixed_order=fixed_order, 
-                task_stroke_labels=list_shapes, name=name, flips=flips)
+                task_stroke_labels=list_shapes, name=name, flips=flips, index=index, colorlist_hier=color)
             if check_matches_nstrokes:
                 from .chunks import check_all_strokes_used
                 all_used = check_all_strokes_used(C.Hier, nstrokes)
@@ -71,6 +85,15 @@ class ChunksClassList(object):
                     print(nstrokes)
                     C.print_summary()
                     assert False, "maybe iyou entered using 1-indexing"
+
+            # Confirm that each model/index is unique
+            if name in already_entered.keys():
+                assert index not in already_entered[name]
+                already_entered[name].append(index)
+            else:
+                already_entered[name] = [index]
+
+            # Add it
             self.ListChunksClass.append(C)
 
 
@@ -123,6 +146,25 @@ class ChunksClassList(object):
 
         self.ListChunksClass = [C for C in self.ListChunksClass if not _does_concat(C)]
 
+    def find_chunk(self, chunkname, chunkindex=None):
+        """ Retunr the single "chunks" out of the list of chunks, based on matching the name 
+        and (optionally) the index
+        PARAMS;
+        - chunkname, indexs Chunk.Name
+        - chunkindex, indexes Chunk.Index. by defualt is None, but this allows for multiple indixes
+        under a given name/model.
+        RETURNS:
+        - Chunk
+        """
+        for C in self.ListChunksClass:
+            if C.Name==chunkname and C.Index==chunkindex:
+                return C
+        print("HERE")
+        print(chunkname, chunkindex)
+        self.print_summary()
+        assert False, "diud not find this chunk"
+
+
     def print_summary(self):
         """
         """
@@ -131,11 +173,10 @@ class ChunksClassList(object):
             C.print_summary()
 
 
-
 class ChunksClass(object):
     """ Represents a single way of chunking a specific task"""
     def __init__(self, chunks, hier, fixed_order=None, task_stroke_labels = None,
-        assume_all_strokes_used=True, name=None, flips=None):
+        assume_all_strokes_used=True, name=None, flips=None, index=None, colorlist_hier=None):
         """
         PARAMS:
         - chunks, list of list, like [[1 2], [0 3], [5]], meaing chunk 0 uses strokes 1 and 2...
@@ -155,6 +196,7 @@ class ChunksClass(object):
         strokes there were in the task.
         - name, string name (useful if correspnd to a model, for eg)
         - flips, same type as hier, says for each chunkstroke in hier, whether to flip (might not be used).
+        - colorlist, list of (3,) asrrays, each a rgb color for a hier chunk, mathces len hier
         """
 
         self.Chunks = chunks
@@ -167,7 +209,12 @@ class ChunksClass(object):
             self.FixedOrder = fixed_order
         self.Labels = task_stroke_labels
         self.Name = name
+        self.Index = index # canhave multiple indices within name
         self.Flips = flips
+
+        if colorlist_hier is not None:
+            assert len(colorlist_hier)==len(hier)
+        self.ColorlistHier = colorlist_hier
 
         self._preprocess()
 
@@ -320,8 +367,6 @@ class ChunksClass(object):
             assert False
 
 
-
-
     ########################### WORKING WITH LABELS
 
 
@@ -330,10 +375,12 @@ class ChunksClass(object):
         """ quick printing of chunks, etc
         """
         print("Name:", self.Name)
+        print("Index:", self.Index)
         print("Chunks:", self.Chunks)
         print("Hier:" , self.Hier)
         print("Fixed Order:", self.FixedOrder)
         print("list labels/shapes:", self.Labels)
+        print("colorlist_hier:", self.ColorlistHier)
         if self.Flips is not None:
             print("Flips:", self.Flips)
 

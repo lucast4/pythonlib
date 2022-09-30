@@ -813,6 +813,92 @@ class Dataset(object):
 
         return inds, characters
 
+    ############ WORKING WITH TASKS
+    def taskclass_extract_ml2(self, ind):
+        """ Extract drawmodel (ml2) taskclass, which is lower level 
+        than TaskGeneral class
+        """
+        T = self.Dat.iloc[ind]["Task"]
+        TT = T.Params["input_params"]
+        return TT
+
+    def taskclass_extract_objectclass(self, ind):
+        """ Return the Objectclass for this trial ind
+        """
+        TT = self.taskclass_extract_ml2(ind)
+        TT.objectclass_extract_all()
+        return TT.ObjectClass
+
+    def objectclass_get_active_chunk(self, ind):
+        """ Get the active chunk thbat was used online, 
+        from ObjectClass
+        """
+        O = self.taskclass_extract_objectclass(ind)
+
+        # which are active chunk
+        model = O["ChunkState"]["active_chunk_model"]
+        index = O["ChunkState"]["active_chunk_ind"]
+
+        # find it
+        CLC = O["ChunksListClass"]
+        C = CLC.find_chunk(model, index)
+        return C
+
+    def objectclass_wrapper_extract_sequence_chunk_color(self, ind, plot_summary=False):
+        """ Helps to extract all relevant info this trial regarding online 
+        supervision of chunking and sequencing, looking mainly into ObjectClass
+        PARAMS;
+        - ind, index into self.Dat
+        - plot_summary, bool, to print and plot summary
+        """
+
+        # 1) Was color supervision on?
+        color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"]
+
+        # 2) objectclass info
+        O = self.taskclass_extract_objectclass(ind)
+        ChunkActive = self.objectclass_get_active_chunk(ind)
+
+        # 3) Color of strokes actually presented (during task)
+        if color_on:
+            stroke_colors = O["Features_Active"]["color"]
+        else:
+            # default colors
+            bp = self.blockparams_extract_single(ind)
+            col = bp["sizes"]["InkColor_untouched"]
+            nstrokes = len(O["Features_Active"]["shapes"])
+            stroke_colors = [col for _ in range(nstrokes)]
+
+            # sanity check that did not fade. if faded, then InkColor_untouched is not accurate. ahve to look into bb.
+            for k, v in bp["fade"].items():
+                # e.g, k, v is 'guide': array([], shape=(0, 0), dtype=float64),
+                if k=="guidelight":
+                    assert(np.all(v==1))
+                else:
+                    assert(len(v)==0)
+
+        # TT.ObjectClass["ChunksListClass"].print_summary()
+        if plot_summary:
+            # 1) plot the beh and task, numbered.
+            self.plotSingleTrial(ind, task_add_num=True);
+
+            print("\n--- Was color sueprvision on?:")
+            print(color_on)
+
+            # 2) print colors
+            print("\n--- Colors (orig stroke order):")
+            for col in stroke_colors:
+                print(' ', col)
+
+            print('\n--- Active chunk:')
+            ChunkActive.print_summary()
+
+        out = {
+            "color_supervision_on": color_on,
+            "active_chunk": ChunkActive,
+            "stroke_colors_orig_order": stroke_colors,
+        }
+        return out
 
 
     ############# ASSERTIONS

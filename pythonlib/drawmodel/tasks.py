@@ -972,10 +972,12 @@ class TaskClass(object):
     # Here looks directly into "Plan" representation, which is the latest way that tasks
     # are defined in matlab side.
     def objectclass_extract_all(self):
-        """ Extract TaskNew.Objects
-        into self.ObjectClass
+        """ Extract TaskNew.Objects into self.ObjectClass. Preprocesses to corerctly extract
+        chunks, etc.
+        RETURNS:
+        - modifies self.ObjectClass
         """
-        from pythonlib.tools.monkeylogictools import dict2list2, dict2list
+        from pythonlib.tools.monkeylogictools import dict2list2
         
         if self.get_tasknew() is None:
             self.ObjectClass = None
@@ -987,116 +989,39 @@ class TaskClass(object):
 
         Objects = self.get_tasknew()["Objects"]
 
-        # print(Objects.keys())
-        # for k, v in Objects.items():
-        #     print("   ")
-        #     print("----", k)
-        #     print(v)
-        # assert False
         # get all keys, except explicitly ignored
         _list_keys_to_ignore = ['StrokesFinalNorm_', 'StrokesFinalNorm_Active', 'RuleStates', 
-            'StrokesFinalSketchpadPix']
+            'StrokesFinalSketchpadPix'] # ignore since redundant with elsewhere.
         _list_keys = [k for k in Objects.keys() if k not in _list_keys_to_ignore]
 
-        dat = {}
         # Extract things
+        dat = {}
         for k in _list_keys:
             dat[k] = dict2list2(Objects[k])
-        # print(dat["ChunkList"])
-        # print(len(dat["ChunkList"]))
-        # print(Objects["ChunkList"].keys())
-        # assert False
-        # Extract useful summaries
-        # - (Base) prims and their locations
-        # - Chunks
-        # from pythonlib.chunks import ChunksClassList
-        # CL = ChunksClassList():
-        # dat["ChunksList"]
-        # for chunk in dat["ChunksList"]:
 
-        # Extract shapes and their params
-        # from pythonlib.primitives.primitiveclass import PrimitiveClass
-        # dat["shapes"] = [x[0] for x in dat["Prims"]]
-        # dat["primitives"] = []
-        # for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
-        #     shape = prim[0]
-        #     params = prim[1]
-
-        #     primkind = params[0] # e.g., prot, abstract, motif
-        #     scale = params[1]
-        #     rotation = params[2]
-        #     if len(params)>=4:
-        #         col = params[3] # not using here... (color)
-        #     else:
-        #         col = np.nan
-        #     if len(params)>=5:
-        #         reflect = params[4] # 1 means reflect.
-        #     else:
-        #         reflect = np.array(0.)
-        #     traj = self.Strokes[i]
-
-        #     assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
-        #     # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
-
-        #     Prim = PrimitiveClass()
-        #     Prim.input_prim("prototype_prim_abstract", {
-        #             "shape":shape,
-        #             "scale":scale,
-        #             "rotation":rotation,
-        #             "reflect":reflect,
-        #             "x":loc[0],
-        #             "y":loc[1]}, traj = traj)
-        #     dat["primitives"].append(Prim)
-
-        assert False, "here, shoudl extrac tthe chunks_ as indices 0-indexed"
-        # ChunksList should be indexed from 0
-        for this in dat["ChunkList"]:
-            print(this)
-            print(this["chunks_"])
-
-            chunks = this[1]
-
-            print(chunks)
-            assert False
-            this[1] = [ch-1 for ch in chunks]
-
-        # Sanity checks
-        # - Base prims should correspond to objects
-        # if self.Objects is not None:
-        #     for o, p in zip(self.Objects, dat["primitives"]):
-        #         if False:
-        #             # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
-        #             assert o["obj"] == p.Shape
-        #         assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
-        #         assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
-
-        # - nstrokes here should match nstrokes extracted elsewhere
-        # _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]
-        # for k in _list_keys_check_nstrokes:
-        #     assert len(dat[k]) == len(self.Strokes)
-
-        # Get chunks in ChunksListClass format
-        # print("*** GETTING CHUNKS")
+        # Process chunks into ChunksClassList
         from pythonlib.chunks.chunksclass import ChunksClassList
-        nstrokes = len(self.Strokes)
+        nstrokes = len(dat['StrokindsDone'])
+        chunkslist = []
+        for this in dat["ChunkList"]:
+            # convert this item into the proper format
+            flips = [x["Flipped"] for x in this["StrokeSequence"]]
+            hier = [x-1 for x in this["chunks_"]] # convert to 0-index
+            index = int(this["ind"])
+            chunkslist.append([this["modelname"], hier, flips, index, this["color"]])
 
-        # ChunksClassList
+        shapes = dat["Features_Active"]["shapes"]
         CL = ChunksClassList("chunkslist_entry", 
-            {"chunkslist":dat["ChunkList"], "nstrokes":nstrokes, 
-            "shapes":dat["shapes"]})
-
-        # CL.print_summary()
+            {"chunkslist":chunkslist, "nstrokes":nstrokes, 
+            "shapes":shapes})
         dat["ChunksListClass"] = CL
-
         
         # Remove strokes, only needed above
         if "Strokes" in dat.keys():
             del dat["Strokes"]
 
         # store
-        self.PlanDat = dat
-
-        return dat        
+        self.ObjectClass = dat
 
     def planclass_extract_all(self):
         """ Wrapper to extract all planclass info.
@@ -1184,10 +1109,7 @@ class TaskClass(object):
                     "y":loc[1]}, traj = traj)
             dat["primitives"].append(Prim)
 
-        # ChunksList should be indexed from 0
-        for this in dat["ChunksList"]:
-            chunks = this[1]
-            this[1] = [ch-1 for ch in chunks]
+        
 
         # Sanity checks
         # - Base prims should correspond to objects
@@ -1205,16 +1127,40 @@ class TaskClass(object):
             assert len(dat[k]) == len(self.Strokes)
 
         # Get chunks in ChunksListClass format
-        # print("*** GETTING CHUNKS")
         from pythonlib.chunks.chunksclass import ChunksClassList
+        chunkslist = []
+        for this in dat["ChunksList"]:
+            
+            ch = []
+
+            # just giving variables here note-taking purpose
+
+            # 1) name of model
+            ch.append(this[0]) 
+
+            # 2) hier (chunks)
+            hier = list(this[1])
+            ch.append([ch-1 for ch in hier]) # - change to 0-index
+
+            # 3) flips
+            ch.append(this[2]) # usually [0, 0, ...]
+
+            # 4) index
+            ch.append(None) # give it an index... (None, since only one. objectclass uses ints)
+            
+            # 5) color
+            ch.append(this[3]["color"]) 
+            # Note: color is actually better in objectclass, acurate online)
+
+            chunkslist.append(ch)
+        del dat["ChunksList"]
+
         nstrokes = len(self.Strokes)
         # ChunksClassList
         CL = ChunksClassList("chunkslist_entry", 
-            {"chunkslist":dat["ChunksList"], "nstrokes":nstrokes, 
+            {"chunkslist":chunkslist, "nstrokes":nstrokes, 
             "shapes":dat["shapes"]})
-        # CL.print_summary()
         dat["ChunksListClass"] = CL
-
         
         # Remove strokes, only needed above
         if "Strokes" in dat.keys():
