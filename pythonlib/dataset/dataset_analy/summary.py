@@ -90,71 +90,75 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     SCORE_COL_NAMES = D.MetadatPreprocess["SCORE_COL_NAMES"]
     
     # 1) extract supervision params to Dat
-    from pythonlib.tools.pandastools import applyFunctionToAllRows
-    def F(x, abbrev = True):
-        S = x["supervision_params"]
+    if False:
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x, abbrev = True):
+            S = x["supervision_params"]
 
-        # sequence
-        if S["sequence_on"]==False:
-            seq = "off"
-        else:
-            seq = S["sequence_ver"]
+            # sequence
+            if S["sequence_on"]==False:
+                seq = "off"
+            else:
+                seq = S["sequence_ver"]
 
-        # dynamic
-        dyna = S["guide_dynamic_strokes"]
-        if dyna:
-            d = 1
-        else:
-            d=0
+            # dynamic
+            dyna = S["guide_dynamic_strokes"]
+            if dyna:
+                d = 1
+            else:
+                d=0
 
-        # color
-        colo = S["guide_colored_strokes"]
-        if colo:
-            c=1
-        else:
-            c=0
+            # color
+            colo = S["guide_colored_strokes"]
+            if colo:
+                c=1
+            else:
+                c=0
 
-        # give a condensed name
-        if seq=="off":
-            s = 0
-        elif seq=="v3_remove_and_show":
-            s = 3
-        elif seq=="v3_remove_and_fadein":
-            s = 4
-        elif seq=="v3_noremove_and_show":
-            s = 5
-        elif seq=="v3_noremove_and_fadein":
-            s = 6
-        elif seq=="v4_fade_when_touch":
-            s=1
-        elif seq=="v4_remove_when_touch":
-            s=2
-        elif seq=="unknown":
-            s=7
-        elif seq=="objectclass_active_chunk":
-            s=8
-        else:
-            print(seq)
-            print("what is this?")
-            assert False
+            # give a condensed name
+            if seq=="off":
+                s = 0
+            elif seq=="v3_remove_and_show":
+                s = 3
+            elif seq=="v3_remove_and_fadein":
+                s = 4
+            elif seq=="v3_noremove_and_show":
+                s = 5
+            elif seq=="v3_noremove_and_fadein":
+                s = 6
+            elif seq=="v4_fade_when_touch":
+                s=1
+            elif seq=="v4_remove_when_touch":
+                s=2
+            elif seq=="unknown":
+                s=7
+            elif seq=="objectclass_active_chunk":
+                s=8
+            else:
+                print(seq)
+                print("what is this?")
+                assert False
 
-        if abbrev:
-            return (s,d,c)
+            if abbrev:
+                return (s,d,c)
+            else:
+                return seq, dyna, colo
+        if expt in ["chunkbyshape1"]:
+            # TODO: define supervision stage using ObjectCalss only
+            if False:
+                # Start from here
+                TT = T.Params["input_params"]
+                Tnew = TT.get_tasknew()
+                Tnew["Objects"]["Params"]
+            else:
+                # For now, just hack it 
+                Fthis = lambda x: (0,0,0)
         else:
-            return seq, dyna, colo
-    if expt in ["chunkbyshape1"]:
-        # TODO: define supervision stage using ObjectCalss only
-        if False:
-            # Start from here
-            TT = T.Params["input_params"]
-            Tnew = TT.get_tasknew()
-            Tnew["Objects"]["Params"]
-        else:
-            # For now, just hack it 
-            Fthis = lambda x: (0,0,0)
+            Fthis = F
+        D.Dat = applyFunctionToAllRows(D.Dat, Fthis, "supervision_stage")
     else:
-        Fthis = F
-    D.Dat = applyFunctionToAllRows(D.Dat, Fthis, "supervision_stage")
+        # Use new version (9/28/22)
+        D.Dat["supervision_stage"] = D.Dat["supervision_stage_new"]
 
     
     ##### THINGS THAT SHOULD ALWAYS DO, SINCE IS QUICK (PRINTING THINGS)
@@ -209,47 +213,45 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     ##### Plot drawing behavior over entire experiment.
     ############ 1) Fixed tasks (train and test), plot mult trials per task, in structured way (GOOD)
     # sort based on supervision stage
-    stages = D.Dat["supervision_stage"].unique()
-    for s in stages:
-        for traintest in ["test", "train"]:
+    if False:
+        # Skip separating by supervision stage for now, since below does separate by train/test
+        stages = D.Dat["supervision_stage"].unique()
+        for s in stages:
+            for traintest in ["test", "train"]:
+                print("supervision_stage", s, "traintest", traintest)
+                Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest], "supervision_stage":[s]}, "dataset")
+                subfolder = f"{traintest}/stage_{s}"
+                if len(Dthis.Dat)>0:
+                    #### 2) A single category, over all time
+                    if PLOT_EXAMPLE_DATEVTASK:
+                        from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
+                        # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
+                        #                  "date")
+                        # # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
+                        # #                  "epoch")
+                        plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
+                                         yaxis_ver="date_epoch")
+                    #### 1) A single task, over time.
+                    if PLOT_ALL_EACHTRIAL:
+                        plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
 
-            Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest], "supervision_stage":[s]}, "dataset")
-            if len(Dthis.Dat)>0:
-
-                #### 2) A single category, over all time
-                if PLOT_EXAMPLE_DATEVTASK:
-                    from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
-                    plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
-                                     "date")
-                    plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
-                                     "epoch")
-
-                #### 1) A single task, over time.
-                if PLOT_ALL_EACHTRIAL:
-
-                    sdirthis = f"{SAVEDIR_FIGS}/each_task_all_trials/{traintest}/stage_{s}"
-                    os.makedirs(sdirthis, exist_ok=True)
-
-                    tasklist = Dthis.Dat["character"].unique()
-
-                    from pythonlib.dataset.plots import plot_beh_grid_singletask_alltrials, plot_beh_grid_flexible_helper
-                    for task in tasklist:
-                    #     task = "mixture2_1-savedset-50-39276"
-                        row_variable = "date"
-                        if False:
-                            # Old version
-                            figb, figt = plot_beh_grid_singletask_alltrials(D, task, row_variable, max_cols = MAX_COLS)
-                        else:
-                            # New version, plotting trialcode, and coloring by order
-                            Dthisthis = Dthis.filterPandas({"character":task}, "dataset")
-#                             # if too many trials, split this into multiple datasets
-#                             ntot = len(Dthis.Dat)
-                            figb, figt = plot_beh_grid_flexible_helper(Dthisthis, "date", "trial", 
-                                                                       plotkwargs={"strokes_by_order":True}, 
-                                                                       max_cols=150)
-                        figb.savefig(f"{sdirthis}/{task}-beh.pdf");
-                        figt.savefig(f"{sdirthis}/{task}-task.pdf");
-                        plt.close("all")
+    ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
+    for traintest in ["test", "train"]:
+        Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest]}, "dataset")
+        if len(Dthis.Dat)>0:
+            subfolder = f"{traintest}"
+            #### 2) A single category, over all time
+            if PLOT_EXAMPLE_DATEVTASK:
+                from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
+                # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
+                #                  "date")
+                # # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
+                # #                  "epoch")
+                plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
+                                 yaxis_ver="date_epoch")
+            #### 1) A single task, over time.
+            if PLOT_ALL_EACHTRIAL:
+                plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
 
 
     ######### PLOT RANDOM EXAMPLES IN GRID, EACH PLOT A SEPARATE TASK SET.
@@ -393,6 +395,30 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
             figtask.savefig(f"{sdirthis_raw}/task{i}-task.pdf");
 
             plt.close("all")    
+
+
+def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable = "date_epoch"):
+    """ Plot all trials for each characater, sorterd in chron orde, with row_variables
+    separating them by rows.
+    """
+
+    from pythonlib.dataset.plots import plot_beh_grid_singletask_alltrials, plot_beh_grid_flexible_helper
+    sdirthis = f"{SAVEDIR_FIGS}/each_task_all_trials/{subfolder}"
+    os.makedirs(sdirthis, exist_ok=True)
+    tasklist = Dthis.Dat["character"].unique()
+    for task in tasklist:
+    #     task = "mixture2_1-savedset-50-39276"
+        print("task", task)
+        
+        # New version, plotting trialcode, and coloring by order
+        Dthisthis = Dthis.filterPandas({"character":task}, "dataset")
+        figb, figt = plot_beh_grid_flexible_helper(Dthisthis, row_variable, "trial", 
+                                                   plotkwargs={"strokes_by_order":True}, 
+                                                   max_cols=150)
+        figb.savefig(f"{sdirthis}/{task}-beh.pdf");
+        figt.savefig(f"{sdirthis}/{task}-task.pdf");
+        plt.close("all")
+
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
         LIST_N_PER_GRID = [1], strokes_by_order=True, how_to_split_files = "task_stagecategory"):
