@@ -74,7 +74,7 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     else:
         datethis = rulelist[0]
         assert len(rulelist)==1, "if daily, then this must be a single date"
-        SDIR_MAIN = f"{PATH_DATA_BEHAVIOR_RAW}/Pancho/{datethis}/figures/dataset"
+        SDIR_MAIN = f"{PATH_DATA_BEHAVIOR_RAW}/Pancho/{datethis}/figures/dataset/{expt}"
     # SDIR_MAIN = f"{base_dir}/analyses/main/simple_summary/{animal}-{expt}-{'_'.join(rulelist)}"
     os.makedirs(SDIR_MAIN, exist_ok=True)
     SAVEDIR_FIGS = f"{SDIR_MAIN}/FIGS/drawfigs"
