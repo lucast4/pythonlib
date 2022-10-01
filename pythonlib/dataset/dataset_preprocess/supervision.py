@@ -38,17 +38,19 @@ def extract_supervision_params(D, ind):
         assert "failed_rule" in ABORT_MODES
         
     elif seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'mask'] and taskparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="in_order":
-        SEQUENCE_SUP = "mask"
+        #SEQUENCE_SUP = "mask"
         assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
         SEQUENCE_ALPHA = taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
         
         # Sequence abort (in order) [usually with mask]
-        assert ['chunks_in_order', {}] in taskparams["task_objectclass"]["RuleList"]
-        assert "failed_rule" in ABORT_MODES
+        if ['chunks_in_order', {}] in taskparams["task_objectclass"]["RuleList"] and "failed_rule" in ABORT_MODES:
+            SEQUENCE_SUP = "mask"
+        else:
+            SEQUENCE_SUP = "char_strokes"
 
     elif seq["on"]==0:
         SEQUENCE_SUP = "off"
-        assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+        #assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
         SEQUENCE_ALPHA = taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
     else:
         print(seq)
@@ -185,12 +187,20 @@ def extract_supervision_params(D, ind):
     # print(bpthis.ke)
     # print(spd["ver"])
     if spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'all_strokes']:
-        SCREENPOST_DYNAMIC_VER = "flash_missed_taskstrokes"
+        SCREENPOST_DYNAMIC_VER = "all_strokes"
     elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'active_chunk']:
         SCREENPOST_DYNAMIC_VER = "flash_active_chunk"
+    elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'strokes_notdone']:
+        SCREENPOST_DYNAMIC_VER = "flash_missed_taskstrokes"
     elif spd["on"]==0:
         SCREENPOST_DYNAMIC_VER = "off"
     else:
+        print(1)
+        print(spd)
+        print(2)        
+        print(spd_ver)
+        print(3)
+        print(bpthis["dynamic_params"])
         assert False
         
 
