@@ -60,6 +60,7 @@ def extract_supervision_params(D, ind):
 
     ############# COLOR
     ### COLOR
+    #print(blockparams["columns"])
     COLOR_ON = blockparams["colormod"]["strokes"]["on"]==1
 
     if "color_method" not in blockparams["colormod"]["strokes"].keys():
