@@ -642,6 +642,25 @@ class Dataset(object):
             BP = {k:v for k,v in BP.items() if k in fields_in_taskparams}
             return BP
 
+    def blockparams_extract_single_combined_task_and_block(self, ind):
+        """ Extracts a single dict combining taskparams and blockparams.
+        Makes sure that there are no overlapping keys
+        """
+
+        bp = self.blockparams_extract_single(ind)
+        tp = self.blockparams_extract_single_taskparams(ind)
+
+        combined_params = {}
+
+        for key, val in bp.items():
+            assert key not in tp.keys() # check no overlapping keys
+            combined_params[key] = val
+
+        for key, val in tp.items():
+            combined_params[key] = val
+
+        return combined_params
+
 
     ############### TASKS
     def load_tasks_helper(self, reinitialize_taskobjgeneral=True, 

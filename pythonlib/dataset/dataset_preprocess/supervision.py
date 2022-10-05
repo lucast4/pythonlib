@@ -9,67 +9,74 @@ def extract_supervision_params(D, ind):
     NOTE: some of these requires objectclass version of tasks, and so may break. 
     """
 
-    # Get the blockparams and taskparams
-    taskparams = D.blockparams_extract_single_taskparams(ind)
-    blockparams = D.blockparams_extract_single(ind)
+    # Get the allparams and allparams
+    # taskparams = D.blockparams_extract_single_blockparams(ind)
+    # blockparams = D.blockparams_extract_single(ind)
+    allparams = D.blockparams_extract_single_combined_task_and_block(ind)
 
 
     ########### ABORT MODES
     ABORT_ON = D.Dat.iloc[ind]["abort_params"]["on"]
     ABORT_MODES = list(D.Dat.iloc[ind]["abort_params"]["modes"])
-    ABORT_PUNISH = blockparams["params_task"]["enableAbort_punish_if_abort"]==1
+    ABORT_PUNISH = allparams["params_task"]["enableAbort_punish_if_abort"]==1
     if "failed_rule" in ABORT_MODES:
         # Then also include aborts due to failing ObjectClass rules
-        for rule in taskparams["task_objectclass"]["RuleList"]:
+        for rule in allparams["task_objectclass"]["RuleList"]:
             assert len(rule[1])==0, "this rule has a param, have to incorportae this info into ABORT_MODES somehow"
             ABORT_MODES.append(rule[0])
 
 
     ############## SEQUENCE SUPERVISION
-    seq = blockparams["sequence"]
+    seq = allparams["sequence"]
 
-    if seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'active_chunk'] and taskparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="any_order":
+    if seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'active_chunk'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="any_order":
         SEQUENCE_SUP = "active_chunk"
-        assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+        assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
         
         # chunk active abort [usually with chunk active]
-        assert ['chunks_any_order', {}] in taskparams["task_objectclass"]["RuleList"]
+        assert ['chunks_any_order', {}] in allparams["task_objectclass"]["RuleList"]
         assert "failed_rule" in ABORT_MODES
         
-    elif seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'mask'] and taskparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="in_order":
+    elif seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'mask'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="in_order":
         #SEQUENCE_SUP = "mask"
-        assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+        assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
         
         # Sequence abort (in order) [usually with mask]
-        if ['chunks_in_order', {}] in taskparams["task_objectclass"]["RuleList"] and "failed_rule" in ABORT_MODES:
+        if ['chunks_in_order', {}] in allparams["task_objectclass"]["RuleList"] and "failed_rule" in ABORT_MODES:
             SEQUENCE_SUP = "mask"
         else:
             SEQUENCE_SUP = "char_strokes"
 
     elif seq["on"]==0:
         SEQUENCE_SUP = "off"
-        #assert taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = taskparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+        #assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
     else:
         print(seq)
-        print(taskparams["task_objectclass"]["Params"])
+        print(allparams["task_objectclass"]["Params"])
         assert False
 
 
     ############# COLOR
     ### COLOR
-    COLOR_ON = blockparams["colormod"]["strokes"]["on"]==1
+    # for k in allparams.keys():
+    #     print(k in allparams.keys())
+    # assert False
+    # # if "colormod" in allparams
+    # print(allparams.keys())
+    # print(allparams.keys())
+    COLOR_ON = allparams["colormod"]["strokes"]["on"]==1
 
-    if "color_method" not in blockparams["colormod"]["strokes"].keys():
-        if blockparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
+    if "color_method" not in allparams["colormod"]["strokes"].keys():
+        if allparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
             COLOR_METHOD = 'randomize_each_stroke'
         else:
             COLOR_METHOD = ''
-    elif len(blockparams["colormod"]["strokes"]["color_method"])>0:
-        COLOR_METHOD = blockparams["colormod"]["strokes"]["color_method"]
-    elif blockparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
+    elif len(allparams["colormod"]["strokes"]["color_method"])>0:
+        COLOR_METHOD = allparams["colormod"]["strokes"]["color_method"]
+    elif allparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
         COLOR_METHOD = 'randomize_each_stroke'
     else:
         COLOR_METHOD = ''
@@ -77,8 +84,8 @@ def extract_supervision_params(D, ind):
 
 
     ################ ONLINE VISUAL FB
-    p = taskparams["task_objectclass"]["AllPtsVisCriteria"]
-    c = taskparams["task_objectclass"]["CtrlPtsVisCriteria"]
+    p = allparams["task_objectclass"]["AllPtsVisCriteria"]
+    c = allparams["task_objectclass"]["CtrlPtsVisCriteria"]
 
     if p == [['always_vis', {}, 'and', 0]] and c == [['always_vis', {}, 'and', 0]]:
         VISUALFB_METH = "none"
@@ -94,73 +101,73 @@ def extract_supervision_params(D, ind):
 
 
     ################# guide dynamic
-    GUIDEDYN_ON = blockparams["guide_dynamic"]["on"]==1
-    GUIDEDYN_VER = blockparams["guide_dynamic"]["version"]
-    GUIDEDYN_CHUNKSFLY = blockparams["guide_dynamic"]["chunks_fly_in_together"] ==1;
-    GUIDEDYN_DURATION = blockparams["guide_dynamic"]["duration"] ==1;
+    GUIDEDYN_ON = allparams["guide_dynamic"]["on"]==1
+    GUIDEDYN_VER = allparams["guide_dynamic"]["version"]
+    GUIDEDYN_CHUNKSFLY = allparams["guide_dynamic"]["chunks_fly_in_together"] ==1;
+    GUIDEDYN_DURATION = allparams["guide_dynamic"]["duration"] ==1;
 
 
 
     ############### suonds
 
-    assert blockparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
+    assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
 
-    SOUNDS_HIT_VER = taskparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
-    if taskparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
-        SOUNDS_CHUNK_CHANGE = taskparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_ver"]
+    SOUNDS_HIT_VER = allparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
+    if allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
+        SOUNDS_CHUNK_CHANGE = allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_ver"]
     else:
         SOUNDS_CHUNK_CHANGE = "none"
 
-    SOUNDS_STROKES_DONE = taskparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
-    SOUNDS_TRIAL_ONSET = blockparams["sounds"]["play_sound_trial_onset"]==1
-    SOUNDS_ALLPTSDONE = blockparams["sounds"]["play_done_sound_on"]==1
+    SOUNDS_STROKES_DONE = allparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
+    SOUNDS_TRIAL_ONSET = allparams["sounds"]["play_sound_trial_onset"]==1
+    SOUNDS_ALLPTSDONE = allparams["sounds"]["play_done_sound_on"]==1
 
 
     ############# CONTROL PTS
-    CONTROL_SIZE = blockparams["control_pts"]["size_mult"]
-    CONTROL_COLOR_DIFF = blockparams["control_pts"]["color_diff"]
+    CONTROL_SIZE = allparams["control_pts"]["size_mult"]
+    CONTROL_COLOR_DIFF = allparams["control_pts"]["color_diff"]
     CONTROL_VISIBLE = CONTROL_SIZE>1 or np.any(CONTROL_COLOR_DIFF!=0)
-    CONTROL_GEN_METHOD = taskparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
+    CONTROL_GEN_METHOD = allparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
 
     ################ PEANUT
-    PEANUT_ALPHA = blockparams["sizes"]["PeanutAlpha"]
+    PEANUT_ALPHA = allparams["sizes"]["PeanutAlpha"]
 
 
 
     ############## REPORT DONE KMETHOD
-    def extract_taskdone_criteria(taskparams):
-        # BlockParams(ind).task_objectclass.TaskDoneCriteria = struct;
-        # BlockParams(ind).task_objectclass.TaskDoneCriteria(1).ver = 'ctrl_pts_all';
-        # BlockParams(ind).task_objectclass.TaskDoneCriteria(1).params = {};
-        # BlockParams(ind).task_objectclass.TaskDoneBool = 'and';
+    def extract_taskdone_criteria(allparams):
+        # allparams(ind).task_objectclass.TaskDoneCriteria = struct;
+        # allparams(ind).task_objectclass.TaskDoneCriteria(1).ver = 'ctrl_pts_all';
+        # allparams(ind).task_objectclass.TaskDoneCriteria(1).params = {};
+        # allparams(ind).task_objectclass.TaskDoneBool = 'and';
         
-        if isinstance(taskparams["task_objectclass"]["TaskDoneCriteria"], dict):
-            ver = taskparams["task_objectclass"]["TaskDoneCriteria"]["ver"]
-            assert len(taskparams["task_objectclass"]["TaskDoneCriteria"]["params"])==0, "incorproate this info into ver..."
+        if isinstance(allparams["task_objectclass"]["TaskDoneCriteria"], dict):
+            ver = allparams["task_objectclass"]["TaskDoneCriteria"]["ver"]
+            assert len(allparams["task_objectclass"]["TaskDoneCriteria"]["params"])==0, "incorproate this info into ver..."
         else:
-            print(taskparams["task_objectclass"])
+            print(allparams["task_objectclass"])
             assert False, "is this multiple criteria?"
         return ver
 
-    if blockparams["params_task"]["donebutton_criterion"]:
+    if allparams["params_task"]["donebutton_criterion"]:
         # Used done button
-        meth = blockparams["params_task"]["donebutton_criterion"]
+        meth = allparams["params_task"]["donebutton_criterion"]
         DONE_METHOD = f"donebutton-{meth}"
     #     DONE_PARAMS = meth
     else:
-    #     BlockParams(ind).params_task.reportDoneMethod = ...
+    #     allparams(ind).params_task.reportDoneMethod = ...
     #     {'taskobject', 'numstrokes_rel_task'}; % nstrokes, so that can end if keeps trying and failing.
-    #     BlockParams(ind).params_task.reportDoneParam= ...
+    #     allparams(ind).params_task.reportDoneParam= ...
     #         {{}, 4};
 
         DONE_METHOD = []
     #     DONE_PARAMS = []
-        rdm = blockparams["params_task"]["reportDoneMethod"]
-        rdp = blockparams["params_task"]["reportDoneParam"]
+        rdm = allparams["params_task"]["reportDoneMethod"]
+        rdp = allparams["params_task"]["reportDoneParam"]
         for meth, par in zip(rdm, rdp):
             if meth=="taskobject":
-                # then look into taskparams to figure out
-                methodthis = extract_taskdone_criteria(taskparams)
+                # then look into allparams to figure out
+                methodthis = extract_taskdone_criteria(allparams)
                 assert len(par)==0
             else:
                 print(meth)
@@ -171,8 +178,8 @@ def extract_supervision_params(D, ind):
 
     
     ##### SCREEN POST VER
-    SCREENPOST_ON = blockparams["scenes"]["sceneSchedule"]["samp1"][3]==1
-    bpthis = blockparams["postscene"]
+    SCREENPOST_ON = allparams["scenes"]["sceneSchedule"]["samp1"][3]==1
+    bpthis = allparams["postscene"]
     spd = bpthis["dynamic"]
     spd_ver = bpthis["dynamic_ver"]
 
