@@ -240,3 +240,125 @@ def getChangePoints(vals):
     return idx_of_bloque_onsets
 
 
+
+def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expected_direction_of_first_crossing=None, 
+    force_single_output=False, ploton=False, take_first_crossing_in_expected_direction=False,
+    force_must_find_crossings=False):
+    """ Get threshold crossings
+    PARAMS;
+    - times, array of timebin values
+    - vals, array of values at each time
+    - threshold, scalar, to detect crossings of this.
+    - cross_dir_to_take, str, in {'up', 'down', 'both', 'mean'}, which times to extract as crossings.
+    if both, then get both. if mean then for each pair of up and down take ther mean time.
+    - expected_direction_of_first_crossing, str in {'up, 'down'}, for sanity check, the expected
+    direction of the first threshold crossing. fails if this not true. None to ignore.
+    - force_single_output, bool, if True, then fails if there is anything other than a single crossing foud.
+    - ploton, to plot the crossings on the data
+    - take_first_crossing_in_expected_direction, bool, if True, then will look only at the first crossing in
+    cross_dir_to_take. if False, then asserts that the first crossing is that direction. [IN PROGRESS]
+    """
+    import matplotlib.pyplot as plt
+
+    # Get all threshold crossings
+    indscross = np.where(np.diff(vals>threshold))[0]
+    
+    # - take mean of the immediately preceding and following time bins for each
+    # crossing
+    timecross = (times[indscross] + times[indscross+1])/2
+    valscross = (vals[indscross] + vals[indscross+1])/2
+
+    # Remove indices that occur too closely together (just keep the first case)
+    # if remove, must remove two... (or else lose the down, up, down, structure)
+    # i;.e. if t1, t2 t3 and t2-t1 and t3-t2 are small, then removes t2 and t3. 
+    # this happens if there quick zigzag adding an up and down crossing. rare.
+    REFRACT_DUR = 0.008 # crossings closer than this in time are considered erorrs.
+    inds_remove = np.argwhere(np.diff(timecross)<REFRACT_DUR)+1
+    if len(inds_remove)%2==0 and len(inds_remove)>0:
+        # then remove them
+        timecross = np.delete(timecross, inds_remove)
+        valscross = np.delete(valscross, inds_remove)
+
+    if take_first_crossing_in_expected_direction:
+        assert cross_dir_to_take not in ["mean"], "doesnt make sense"
+
+    # sanity check
+    if len(indscross)>0 and expected_direction_of_first_crossing is not None:
+        if expected_direction_of_first_crossing=="up":
+            # the first time bin (in entire window) is lower than thresh
+            assert vals[0]<threshold
+        elif expected_direction_of_first_crossing=="down":
+            assert vals[0]>threshold
+        else:
+            print(expected_direction_of_first_crossing)
+            assert False
+
+    # What directions are crossings?
+    if vals[0]<threshold:
+        # this will be [positive-going, neg-going, etc...]
+        timecross_up = timecross[0::2]
+        timecross_dn = timecross[1::2]
+        valscross_up = valscross[0::2]
+        valscross_dn = valscross[1::2]
+    else:
+        # other direction
+        timecross_up = timecross[1::2]
+        timecross_dn = timecross[0::2]
+        valscross_up = valscross[1::2]
+        valscross_dn = valscross[0::2]
+
+    ncross = len(timecross)
+
+    if ploton:
+        fig, axes = plt.subplots(1,2, figsize=(15,5))
+
+        ax = axes.flatten()[0]
+        ax.plot(times, vals)
+        ax.plot(timecross, valscross, 'xk')
+        ax.plot(timecross_up, valscross_up, 'ob')
+        ax.plot(timecross_dn, valscross_dn, 'or')
+        ax.axhline(threshold, color="k")
+        ax = axes.flatten()[1]
+        ax.set_title('b=upcross, r=dncross')
+
+        # edges = np.linspace(np.min(vals_sm), np.max(vals_sm), 50)
+        # ax.hist(vals_sm, bins=edges, density=True, histtype="step")
+        # ax.hist(vals, bins=edges, density=True, histtype="step")
+        # ax.set_title("values in window and entire trial")
+
+        edges = np.linspace(np.min(vals), np.max(vals), 50)
+        ax.hist(vals, bins=edges, density=True, histtype="step")
+        ax.set_title("values in window")
+
+    # Time of first cross relative to behcode
+    if cross_dir_to_take=="both":
+        TCROSS = timecross
+        VCROSS = valscross
+    elif cross_dir_to_take=="up":
+        TCROSS = timecross_up
+        VCROSS = valscross_up
+    elif cross_dir_to_take in ["dn", "down"]:
+        TCROSS = timecross_dn
+        VCROSS = valscross_dn
+    elif cross_dir_to_take=="mean":
+        assert force_single_output==True, "hard to take mean unless you are sure there is identical and matched crossing."
+        assert len(timecross_dn)
+        TCROSS = (timecross_dn + timecross_up)/2
+        VCROSS = (valscross_dn + valscross_up)/2
+    else:
+        assert False
+    if force_must_find_crossings:
+        assert len(TCROSS)>0
+        assert len(VCROSS)>0
+
+
+    if force_single_output:
+        if len(TCROSS)!=1 or len(VCROSS)!=1:
+            print("t", TCROSS)
+            print("v", VCROSS)
+            assert False
+        TCROSS = TCROSS[0]
+        VCROSS = VCROSS[0]
+        
+
+    return TCROSS, VCROSS
