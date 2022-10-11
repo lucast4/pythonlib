@@ -34,6 +34,106 @@ def addTextLabelToPoints(ax, df, x, y, name):
                  horizontalalignment='left', size='medium', color='black',
                 alpha=0.6)
 
+def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
+    color_single=None, 
+    lines_add_ci=False,
+    rowvar=None, colvar=None, col_wrap=None, 
+    height=4, aspect=1,
+    relplot_kw = {}):
+    """ Flexible plotter for lineplots, where x is categorical (or small num of
+    discrete vals) and y is scalar. Overlays lines on the same plot, and does summaries
+    across lines. Can also overlay scatter of each datrapt.
+    Common use: for each character draw a line representing its value across n epochs (x values).
+    THen overlay the mean over characters.
+    NOTE: This supercedes relPlotOverlayLineScatter and relplotOverlaid, which vbasically do the
+    same thing, but the latter makes all lines the same color.
+    PARAMS:
+    - data, dataframe
+    - xval, string, name of x var.
+    - yval, string,
+    - line_grouping, string, each unique level of this var gets its own line.
+    - include_scatter, bool, if True, then lines are overlaid on scatters of each datapt.
+    - color_single, either None (lines are each diff color) or string color (e..g, "k") applied to
+    all lines. Scatter pts are always colored.
+    - 
+    NOTE: see https://stackoverflow.com/questions/46598371/overlay-a-line-function-on-a-scatter-plot-seaborn
+    for overlaying scatter and line.
+    RETURNS:
+    - handle to figure
+    """
+
+    assert line_grouping!=xval, 'a mistake sometimes made...'
+
+    if color_single:
+        # then turn off legend
+        legend=False
+    else:
+        legend = True
+
+    # METHOD 1 - 
+    # g = sns.FacetGrid(data, row=rowvar, hue=line_grouping, col=colvar,
+    #                 sharex=True, sharey=True, height=height, aspect=aspect,
+    #                 legend_out=True)
+
+    # catlist = set(data[line_grouping])
+    # if color_single is not None:
+    #     palette = {cat:color_single for cat in catlist}
+    # else:
+    #     palette = None
+    # # g = g.map(sns.scatterplot, xval, yval, palette=palette)
+    # g = g.map(sns.lineplot, xval, yval,  ["k"], palette=palette, legend="full")
+
+    # METHOD 2
+    # catlist = set(data[line_grouping])
+    # palette = {cat:color_single for cat in catlist}
+    # g = sns.relplot(kind='scatter', x=xval, y=yval, data=data, 
+    #     hue = line_grouping,
+    #     height=height, aspect=aspect)
+    # # g.map_dataframe(sns.lineplot, xval, yval, color='g')
+
+    # if color_single is not None:
+    #     palette = {cat:color_single for cat in catlist}
+    # else:
+    #     palette = None
+    # g.map_dataframe(sns.lineplot, xval, yval, hue=line_grouping, palette=palette)
+
+    # METHOD 3 - use axes and pass ax into axes level plotting functions.
+
+    # METHOD 4
+    catlist = set(data[line_grouping])
+    if color_single is not None:
+        palette = {cat:color_single for cat in catlist}
+    else:
+        palette = None
+    
+    if lines_add_ci:
+        ci = 68
+    else:
+        ci = None
+
+    if rowvar:
+        relplot_kw["row"] = rowvar
+    if colvar:
+        relplot_kw["col"] = colvar
+    if col_wrap:
+        relplot_kw["col_wrap"] = col_wrap
+
+    g = sns.relplot(data=data, kind='line', x=xval, y=yval,
+        hue = line_grouping, 
+        height=height, aspect=aspect,
+        palette=palette, ci=ci,
+        legend=legend,
+        **relplot_kw)
+
+    if include_scatter:
+        # usually the dots you want to allow their orig color
+        # g.map_dataframe(sns.scatterplot, xval, yval, hue=line_grouping, palette=palette)
+        g.map_dataframe(sns.scatterplot, xval, yval, 
+            hue=line_grouping, alpha=0.5, legend=legend)
+
+    return g
+
+
 def relplotOverlaid(df, line_category, color, **relplotkwargs):
     """ if want to plot single lines for each cataegory in 
     line_category, and all the same color. sns I think forces you to 
@@ -43,8 +143,9 @@ def relplotOverlaid(df, line_category, color, **relplotkwargs):
     """
     # print(relplotkwargs)
     # assert False
+    assert False, "superceded by plotgood_lineplot"
     catlist = set(df[line_category])
-    palette = {n:color for n in catlist}
+    palette = {cat:color for cat in catlist}
     relplotkwargs["legend"]= False # since all same color, legend is useulse..
     relplotkwargs["palette"]= palette
     relplotkwargs["data"] = df
@@ -54,8 +155,10 @@ def relplotOverlaid(df, line_category, color, **relplotkwargs):
 def relPlotOverlayLineScatter(data, x, y, hue=None, row=None, col=None, palette=None,
     height=3, aspect=3):
     """
+    Overlay line and scatterplot.
     row="block"
     """
+    assert False, "superceded by plotgood_lineplot"
 
     # g = sns.FacetGrid(data, row=row, sharex=True, sharey=True, height=3, aspect=3,
     #                  legend_out=True)
@@ -116,7 +219,7 @@ def map_function_tofacet(fig, func):
 
 
 def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None, grouping=None,
-    ALPHA = 0.5, doscatter=True, domean=True, squeeze_ylim=True):
+    ALPHA = 0.5, doscatter=True, domean=True, squeeze_ylim=True, col_wrap=4):
     """ plot timecourse, both scatter of pts and overlay means"""
     
     if grouping:
@@ -134,7 +237,7 @@ def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None
         YLIM = get_ylim(df[feat])
 
     g = sns.FacetGrid(df, row=row, col=col, height=4, aspect=2, 
-                      sharex=True, sharey=True, ylim=YLIM)
+                      sharex=True, sharey=True, ylim=YLIM, col_wrap=col_wrap)
 
     # Different plots, depening on if timecourse, or summaries.
     if xval=="tvalfake":

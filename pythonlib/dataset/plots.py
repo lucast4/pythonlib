@@ -286,10 +286,10 @@ def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=No
     # plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, ax=ax, ylabels=labels)
     plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, strokes_ypos_list=strokespeed_list, ax=ax, ylabels=labels)
     return fig
-
+    
 
 def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True,
-        grouping_each_panel = ["task_stagecategory", "taskgroup"], colwrap = 4):
+        grouping_each_panel = ["task_stagecategory", "taskgroup"], col_wrap = 4):
     """
     Plot timecourse, (feature vs. tval) to summarize an expt. Separate 
     columns (character) and rows (taskgroup) and colors (epochs).
@@ -324,7 +324,7 @@ def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, d
         # feat = f"FEAT_{f}"
         feat = f
         fig = timecourse_overlaid(DF, feat, xval=xval, row=row, col=col, grouping=grouping,
-         doscatter=doscatter, domean=domean)
+         doscatter=doscatter, domean=domean, col_wrap=col_wrap)
         figlist.append(fig)
     return figlist
 
