@@ -38,7 +38,7 @@ class Dataset(object):
     """ 
     """
     def __init__(self, inputs, append_list=None, reloading_saved_state=False,
-            remove_dot_strokes=True, remove_online_abort=True):
+            remove_dot_strokes=True, remove_online_abort=False):
         """
         Load saved datasets. 
         - inputs, is either:
@@ -5202,7 +5202,7 @@ class Dataset(object):
 
     def print_trial_block_epoch_summary(self, savedir=None):
         """ each line is trial-block-epoch, split by date-session
-        Useful overview of all trials
+        Useful overview of all trials (where trial is actual beh trial)
         PARAMS:
         - savedir, if not None, then give path to directory will save file:
         savedir/trial_block_epoch.yaml
