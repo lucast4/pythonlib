@@ -55,11 +55,12 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
     - include_scatter, bool, if True, then lines are overlaid on scatters of each datapt.
     - color_single, either None (lines are each diff color) or string color (e..g, "k") applied to
     all lines. Scatter pts are always colored.
-    - 
-    NOTE: see https://stackoverflow.com/questions/46598371/overlay-a-line-function-on-a-scatter-plot-seaborn
-    for overlaying scatter and line.
+    - lines_add_ci, bool, if True, then each line includes shaded error bar. (default is 68% ci)
+    - rowvar, colvar, str, variables that define subplots
     RETURNS:
     - handle to figure
+    NOTE: see https://stackoverflow.com/questions/46598371/overlay-a-line-function-on-a-scatter-plot-seaborn
+    for overlaying scatter and line.
     """
 
     assert line_grouping!=xval, 'a mistake sometimes made...'
@@ -124,6 +125,12 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
         palette=palette, ci=ci,
         legend=legend,
         **relplot_kw)
+    # g = sns.relplot(data=data, kind='line', x=xval, y=yval,
+    #     hue = line_grouping, 
+    #     height=height, aspect=aspect,
+    #     palette=palette, errorbar="se", 
+    #     legend=legend,
+    #     **relplot_kw)
 
     if include_scatter:
         # usually the dots you want to allow their orig color
@@ -218,7 +225,8 @@ def map_function_tofacet(fig, func):
     fig.map(F)
 
 
-def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None, grouping=None,
+def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None, 
+    grouping=None,
     ALPHA = 0.5, doscatter=True, domean=True, squeeze_ylim=True, col_wrap=4):
     """ plot timecourse, both scatter of pts and overlay means"""
     
@@ -236,8 +244,12 @@ def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None
         from .plottools import get_ylim
         YLIM = get_ylim(df[feat])
 
-    g = sns.FacetGrid(df, row=row, col=col, height=4, aspect=2, 
-                      sharex=True, sharey=True, ylim=YLIM, col_wrap=col_wrap)
+    if row is None and col is None:
+        g = sns.FacetGrid(df, height=4, aspect=2, 
+                          sharex=True, sharey=True, ylim=YLIM)
+    else:
+        g = sns.FacetGrid(df, row=row, col=col, height=4, aspect=2, 
+                          sharex=True, sharey=True, ylim=YLIM, col_wrap=col_wrap)
 
     # Different plots, depening on if timecourse, or summaries.
     if xval=="tvalfake":
@@ -256,12 +268,13 @@ def timecourse_overlaid(df, feat, xval="tvalfake", YLIM=None, row=None, col=None
         g.map(meanplot, xvalmean, feat, **{"err_style":"bars", "ci":68, "color":"k", "linewidth":2})
     if doscatter:
         if xval=="tvalfake":
-            g.map(sns.scatterplot, xval, feat, "epoch", **{"marker":"x", 
+            g.map(sns.scatterplot, xval, feat, **{"hue":grouping,
+                                                            "marker":"x", 
                                                           "alpha":ALPHA,
                                                                   "s":40, 
                                                                   "palette":PALLETE})
         elif xval=="epoch":
-            g.map(sns.swarmplot, xval, feat, "epoch", **{"alpha":ALPHA,
+            g.map(sns.swarmplot, xval, feat, **{"hue":grouping, "alpha":ALPHA,
                                                                   "s":4, 
                                                                   "palette":PALLETE})
     g.map(plt.axhline, **{"color":[0.7, 0.7, 0.7]})

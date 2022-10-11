@@ -4204,7 +4204,8 @@ class Dataset(object):
             self.Dat = applyFunctionToAllRows(self.Dat, F, "hdoffline")
 
 
-    def extract_beh_features(self, feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
+    def extract_beh_features(self, 
+        feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
         """ extract features, one val per row, 
         INPUT:
         - feature_list, list of strings. instead of string, if pass in function, then will use that.
@@ -4241,8 +4242,9 @@ class Dataset(object):
             print(f"Num nan/total, for {f}")
             print(sum(np.isnan(x)), "/", len(x))
             # self.Dat[f"FEAT_{f}"] = x
-            self.Dat[f] = x
+            self.Dat[f"FEAT_{f}"] = x
             feature_list_names.append(f"FEAT_{f}")
+
 
         print("Added these features:")
         print(feature_list_names)

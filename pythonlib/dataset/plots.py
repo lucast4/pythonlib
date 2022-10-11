@@ -286,7 +286,7 @@ def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=No
     # plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, ax=ax, ylabels=labels)
     plotDatWaterfallWrapper(strokes_list, onset_time_list=onsets_list, strokes_ypos_list=strokespeed_list, ax=ax, ylabels=labels)
     return fig
-    
+
 
 def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True,
         grouping_each_panel = ["task_stagecategory", "taskgroup"], col_wrap = 4):
@@ -316,6 +316,9 @@ def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, d
     elif len(grouping_each_panel)==1:
         col = grouping_each_panel[0]
         row = None
+    elif len(grouping_each_panel)==0:
+        row=None
+        col=None
     else:
         assert False
         
