@@ -68,6 +68,14 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
         from pythonlib.dataset.dataset_preprocess.general import get_rulelist
         rulelist = get_rulelist(animal, expt)
 
+
+    D = Dataset([])
+    D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
+    GROUPING = D.MetadatPreprocess["GROUPING"]
+    GROUPING_LEVELS = D.MetadatPreprocess["GROUPING_LEVELS"]
+    FEATURE_NAMES = D.MetadatPreprocess["FEATURE_NAMES"]
+    SCORE_COL_NAMES = D.MetadatPreprocess["SCORE_COL_NAMES"]
+    
     # Saving location
     if savelocation=="main":
         SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/simple_summary/{animal}-{expt}-{'_'.join(rulelist)}"
@@ -81,13 +89,6 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     SDIR_FIGS = SAVEDIR_FIGS
     os.makedirs(SAVEDIR_FIGS, exist_ok=True)
     MAX_COLS = 20
-
-    D = Dataset([])
-    D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
-    GROUPING = D.MetadatPreprocess["GROUPING"]
-    GROUPING_LEVELS = D.MetadatPreprocess["GROUPING_LEVELS"]
-    FEATURE_NAMES = D.MetadatPreprocess["FEATURE_NAMES"]
-    SCORE_COL_NAMES = D.MetadatPreprocess["SCORE_COL_NAMES"]
     
     # 1) extract supervision params to Dat
     if False:
