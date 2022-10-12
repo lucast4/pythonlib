@@ -659,6 +659,9 @@ class Dataset(object):
         for key, val in tp.items():
             combined_params[key] = val
 
+        # remove taskparams from blockparams (since contents of taskparams are now flattened into blockaprams)
+        combined_params = {k:v for k, v in combined_params.items() if k!="TaskParams"}
+
         return combined_params
 
 
@@ -848,6 +851,49 @@ class Dataset(object):
         TT.objectclass_extract_all()
         return TT.ObjectClass
 
+    def taskclass_extract_tstruct_index(self, ind):
+        """ Return the tstruct index, where the tstruct is 
+        the cell array of task sets defined in trainGetterv2 in matlab 
+        code. Only works after 10/11/22, when I started saving this in 
+        matlab dragmonkey.
+        RETURNS:
+        - [FILL IN]
+        """
+        assert False, "Check outputs type, see if working"
+        TT = self.taskclass_extract_ml2(ind)
+        if "tstruct_index" in TT.get_tasknew()["Task"]["info"].keys():
+            return TT.get_tasknew()["Task"]["info"]["tstruct_index"]
+        else:
+            return None
+
+    def taskclass_extract_los_info(self, ind):
+        """
+        REturn the "load_old_set" information, i.e,, the fixed tasks info
+        RETURNS:
+        - (setname, setid, taskind_within_set)
+        """
+
+        T = self.Dat.iloc[ind]["Task"]
+        return T.get_los_id()
+
+    def taskclass_extract_los_info_append_col(self):
+        """ For each trial, extract its los info and append as 
+        new col in D.Dat, called "los_info"
+        """
+        tmp = []
+        for ind in range(len(self.Dat)):
+            tmp.append(self.taskclass_extract_los_info(ind))
+        self.Dat["los_info"] = tmp
+        print("Appended column: los_info")
+
+        # i
+
+        # tmp_sorted = sorted(set(tmp))
+        # for x in tmp_sorted:
+        #     print(x)        
+
+
+
     def objectclass_get_active_chunk(self, ind):
         """ Get the active chunk thbat was used online, 
         from ObjectClass
@@ -873,6 +919,7 @@ class Dataset(object):
 
         # 1) Was color supervision on?
         color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"]
+        color_method = self.supervision_extract_params(ind)["COLOR_METHOD"]
 
         # 2) objectclass info
         O = self.taskclass_extract_objectclass(ind)
@@ -899,7 +946,7 @@ class Dataset(object):
         # TT.ObjectClass["ChunksListClass"].print_summary()
         if plot_summary:
             # 1) plot the beh and task, numbered.
-            self.plotSingleTrial(ind, task_add_num=True);
+            self.plotSingleTrial(ind, task_add_num=True, number_from_zero=True);
 
             print("\n--- Was color sueprvision on?:")
             print(color_on)
@@ -914,6 +961,7 @@ class Dataset(object):
 
         out = {
             "color_supervision_on": color_on,
+            "color_supervision_method": color_method,
             "active_chunk": ChunkActive,
             "stroke_colors_orig_order": stroke_colors,
         }
@@ -1324,17 +1372,26 @@ class Dataset(object):
             assert len(x)==1, " multipel rules"
         return x
 
-    def trial_tuple(self, indtrial):        
+    def trial_tuple(self, indtrial, concise=False):        
         """ identifier unique over all data (a, e, r, trialcode)
         trialcode = self.Dat.iloc[indtrial]["trialcode"]
+        PARAMS:
+        - concise, bool (False), if true, uses only (a, trialcode), which
+        is still a unique id for this trial.
         """
         trialcode = self.Dat.iloc[indtrial]["trialcode"]
-        tp = (
-            self.animals(force_single=True)[0],
-            self.expts(force_single=True)[0],
-            self.rules(force_single=True)[0],
-            trialcode
-            )
+        if concise:
+            tp = (
+                self.animals(force_single=True)[0],
+                trialcode
+                )
+        else:            
+            tp = (
+                self.animals(force_single=True)[0],
+                self.expts(force_single=True)[0],
+                self.rules(force_single=True)[0],
+                trialcode
+                )
 
         return tp
         
@@ -4341,6 +4398,12 @@ class Dataset(object):
         return grouping_get_inner_items(self.Dat, groupouter, groupinner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
+    def behclass_preprocess_wrapper(self):
+        """ Wrapper of general preprocess steps for entire datset
+        """
+        self.behclass_generate_alltrials()
+        self.behclass_alignsim_compute()        
+
     def behclass_generate(self, indtrial, expt=None):
         """ Generate the BehaviorClass object for this trial
         PARAMS:
@@ -4434,6 +4497,20 @@ class Dataset(object):
         else:
             assert False
 
+    def behclass_extract_taskstroke_inds_in_beh_order(self, indtrial):
+        """ Return indices into taskstrokes (the default indices) in order
+        best aligned to beh strokes. By defualt excludes taskstrokes that were not "gotten"
+        at all
+        RETURNS:
+        - list of ints, e.g,, [0 4 2] means got taskstrokes 0, 4, and 2 in that order, and
+        missed strokes 3 and 1.
+        """
+
+        Beh = self.Dat.iloc[indtrial]["BehClass"]
+        return Beh.Alignsim_taskstrokeinds_sorted
+
+
+
     def behclass_extract_beh_and_task(self, indtrial):
         """ Extract both beh (oist of PrimitiveClass) and task
         (List of datsegs) for this trial, they will be length of 
@@ -4487,7 +4564,19 @@ class Dataset(object):
         """ Extract dict of supervision params for this tryial
         """
         from .dataset_preprocess.supervision import extract_supervision_params
-        return extract_supervision_params(self, ind)
+
+        if not hasattr(self, 'SupervisionParamsDict'):
+            self.SupervisionParamsDict = {}
+
+        trialtuple = self.trial_tuple(ind, concise=True)
+
+        # if already extracted...
+        if trialtuple in self.SupervisionParamsDict.keys():
+            return self.SupervisionParamsDict[trialtuple]
+        
+        # else extract it, save it, and return it.
+        self.SupervisionParamsDict[trialtuple] = extract_supervision_params(self, ind)
+        return self.SupervisionParamsDict[trialtuple]
 
     def supervision_extract_params_as_columns(self, list_keys):
         """ Extract params as columns in self.Dat
@@ -4585,27 +4674,44 @@ class Dataset(object):
         print(self.Dat[new_col_name].value_counts())
 
 
-    def supervision_summarize_into_tuple(self):
+    def supervision_summarize_into_tuple(self, method="verbose", print_summary=False):
         """ Summarize those supervision params that potnetially provide online instruction
         , these can define distinct stages of blocks
+        PARAMS:
+        - method, str in {'concise', 'verbose'}, how detailed to make fields in tuple. concise
+        groups all alphas together (for sequence training). 
         RETURNS:
         - new col in self.Dat, "supervision_stage_new"
         """
 
         # - grouping keys which can potentially influence online behavior (instructive).
         # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "SOUNDS_STROKES_DONE", "GUIDEDYN_ON"]
-        grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "GUIDEDYN_ON", "VISUALFB_METH"]
+
+        if method=="concise":
+            grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
+        elif method=="verbose":
+            grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
+        else:
+            assert False
         grouping_keys_prefix = [f"superv_{key}" for key in grouping_keys]
 
         # 1) Extract each param to a column
         self.supervision_extract_params_as_columns(grouping_keys)
 
         # 2) get their conjunction.
-        self.grouping_append_col(grouping_keys_prefix, "supervision_stage_new", use_strings=True, strings_compact=True)
+        self.grouping_append_col(grouping_keys_prefix, "supervision_stage_new", use_strings=True, 
+            strings_compact=True)
 
         # 3) prin summary
-        print("*** SUMMARY of new column, after making supervision tuple (column: supervision_stage_new):")
-        print(self.Dat["supervision_stage_new"].value_counts())
+        if print_summary:
+            print("*** SUMMARY of new column, after making supervision tuple (column: supervision_stage_new):")
+            print(self.Dat["supervision_stage_new"].value_counts())
+            from pythonlib.tools.pandastools import grouping_get_inner_items
+            tmp = grouping_get_inner_items(self.Dat, "supervision_stage_new", "block")
+            print("**** SUMMARY: Levels of supervision_stage_new : blocks")
+            for k, v in tmp.items():
+                print("--", k, ":", v)
+
     
 
     def supervision_summarize_whether_is_instruction(self, color_is_considered_instruction=False):
@@ -4620,7 +4726,63 @@ class Dataset(object):
         self.Dat["supervision_online"] = list_issup
         print("ADded new column: supervision_online")
 
+
+    ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
+    def sequence_extract_beh_and_task(self, ind, ploton=False):
+        """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
+        task (e.g., taskstroke inds ordered by chunk, and whether there is color
+        supervision)
+        NOTE: 
+        - if you havent yet run: supervision_summarize_into_tuple, then this runs automatically.
+        """
+
+        # 1) Get beh sequence (i.e., sequence of taskstroke inds, based on order gotten by beh)
+        # Beh.alignsim_compute(remove_bad_taskstrokes=True)
+        taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
+        if ploton:
+            Beh = self.Dat.iloc[ind]["BehClass"]
+            Beh.alignsim_extract_datsegs(plot_print_on=True);
+
+            print("*** Behavior order: ", taskstroke_inds_beh_order)
+            # print(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
+
+        # 2) Get target sequence
+        out = self.objectclass_wrapper_extract_sequence_chunk_color(ind, ploton)
+        C = out["active_chunk"]
+        taskstroke_inds_correct_order = C.extract_strokeinds_as("flat")
+        if ploton:
+            print("*** Correct order: ", taskstroke_inds_correct_order)
+
+
+        # 3) What there sequence supervision?
+        if "supervision_stage_new" not in self.Dat.columns:
+            self.supervision_summarize_into_tuple("concise")
+        supervision_tuple = self.Dat.iloc[ind]["supervision_stage_new"]
+
+        # COLLECT all
+        gramdict = {}
+        gramdict["taskstroke_inds_beh_order"] = taskstroke_inds_beh_order
+        gramdict["taskstroke_inds_correct_order"] = taskstroke_inds_correct_order
+        gramdict["active_chunk"] = C
+        gramdict["supervision_tuple"] = supervision_tuple
+        gramdict["epoch"] = self.Dat.iloc[ind]["epoch"]
+
+        return gramdict
+
+
+
     ################ SAVE
+    def make_savedir_for_analysis_figures(self, analysis_name):
+        from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
+        animal = self.animals()
+        expt = self.expts()
+        rulelist = self.rules()
+        SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/{analysis_name}/{'_'.join(animal)}-{'_'.join(expt)}-{'_'.join(rulelist)}"
+        print("SAVING at: ", SDIR_MAIN)
+        os.makedirs(SDIR_MAIN, exist_ok=True)
+        return SDIR_MAIN
+
+
     def make_fig_savedir_suffix(self, filterDict):
         """ wrapper to help make suffix for saving, encoding
         animal, expt, and filter params in filterDict (which assumed
