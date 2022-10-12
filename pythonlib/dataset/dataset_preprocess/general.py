@@ -78,6 +78,7 @@ def _groupingParams(D, expt):
     # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
     grouping_reassign_methods_in_order = ["tasksequencer"]
     traintest_reassign_method = "probes"
+    mapper_taskset_to_category = {}
         # return F, grouping, plantime_cats, features_to_remove_nan, \
         #     features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
         #     grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order, \
@@ -213,6 +214,15 @@ def _groupingParams(D, expt):
     elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
+    elif expt=="grammardircolor3c":
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
+            ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
+            ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
+
     elif "grammardircolor" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
         grouping_reassign = True
@@ -263,7 +273,74 @@ def _groupingParams(D, expt):
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
-        features_to_remove_outliers, traintest_reassign_method
+        features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category
+
+def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category):
+    """ Reassign values to D.Dat["taskgroup"], which represent meaningful group[s of
+    tasks (e..g, task sets meant to test different kinds of generalization behavior), which
+    can be given human-readable names.
+    PARAMS
+    - mapper_taskset_to_category, dict, mapping from set of tasks to string name of category.
+    set of tasks defined by los (setname, setnum, taskinds), i.e, fixed tasks. 
+    e.g., mapper_taskset_to_category = {
+    ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
+    ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
+    ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
+    means that tasks with setname grammar, setnum 41, and in {15, 19, 25} will be 
+    mapped to name "same_beh"
+    RETURNS:
+    - for each ind, renames its taskgroup column, one of the following:
+    --- the value in task_stagecategory, if this is random task.
+    --- the value in task_stagecategory, if los info not in mapper_taskset_to_category
+    --- the string category in mapper_taskset_to_category (see above).
+    """
+
+    if False:
+        # {TODO}
+        # Method 1, use tstruct index saved in dragmonkey. This is quick and auto., should do this always.
+        # -- if 10/11/22 onwards
+        D.taskclass_extract_tstruct_index()
+        # -- if before (in progress)
+        bp = D.blockparams_extract_single_combined_task_and_block(ind)
+        bp["TaskSet"]
+        print("todo: extract it from TaskSet by findind taskset that matches a given task's los")
+    else:
+        # Method 2: enter by hand, based on los.
+        def taskgroup_rename(D, ind):
+            isrand = D.Dat.iloc[ind]["random_task"]
+            if isrand:
+                # use the current random tasksetclass
+                return D.Dat.iloc[ind]["task_stagecategory"]
+            else:
+                setname, setnum, taskind = D.taskclass_extract_los_info(ind)
+
+                # try to find this set entered by hand
+                for k, v in mapper_taskset_to_category.items():
+                    setname_mapper = k[0]
+                    setnum_mapper = k[1]
+        #             setind1_mapper = k[2]
+        #             setind2_mapper = k[3]
+                    taskinds_mapper = k[2] # list
+
+        #             if setname==setname_mapper and setnum==setnum_mapper and setind>=setind1_mapper and setind<=setind2_mapper:
+                    if setname==setname_mapper and setnum==setnum_mapper and taskind in taskinds_mapper:
+                        # found this trial's category
+                        return v
+                # if got to here, then you did not include this task in the mapper. use its taskset
+                # e..g, grammar-ss-41
+                return D.Dat.iloc[ind]["task_stagecategory"]
+
+
+        list_taskgroup = []
+        for ind in range(len(D.Dat)):
+            list_taskgroup.append(taskgroup_rename(D, ind))
+
+        # replace the column
+        D.Dat["taskgroup"] = list_taskgroup
+        print("[taskgroup_reassign_by_mapper], reassigned values in column: taskgroup")
+
+    
+
 
 def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     """ Decide what is the epoch and level for each trial, based on the tasksequencer rule
@@ -396,7 +473,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("- starting/ending len (grouping params):")
     print(len(D.Dat))
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
-        features_to_remove_outliers, traintest_reassign_method \
+        features_to_remove_outliers, traintest_reassign_method, \
+        mapper_taskset_to_category \
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
@@ -522,8 +600,14 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # () Note that preprocess done
     D._analy_preprocess_done=True
 
+    # Append fixed taks setds information
+    D.taskclass_extract_los_info_append_col()
+
     #### SUPERVISION - get supervision stages, i.e, tuples
     D.supervision_summarize_into_tuple()
+
+    # Reassign taskgroup. by default uses value in task_stagecategory.
+    taskgroup_reassign_by_mapper(D, mapper_taskset_to_category)
 
     # Print outcomes
     print("GROUPING", GROUPING)
