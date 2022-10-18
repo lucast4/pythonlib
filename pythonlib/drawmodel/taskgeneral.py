@@ -717,17 +717,20 @@ class TaskClass(object):
         assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
-        if inds_taskstrokes is not None:
-            try:
-                objects = [objects[i] for i in inds_taskstrokes]
-                Prims = [Prims[i] for i in inds_taskstrokes]
-            except Exception as err:
-                print(objects)
-                print(len(objects))
-                print(inds_taskstrokes)
-                print(len(self.Strokes))
-                self.plotStrokes()
-                raise err
+        if inds_taskstrokes is None:
+            inds_taskstrokes = list(range(len(objects)))
+            assert len(objects)==len(Prims)
+
+        try:
+            objects = [objects[i] for i in inds_taskstrokes]
+            Prims = [Prims[i] for i in inds_taskstrokes]
+        except Exception as err:
+            print(objects)
+            print(len(objects))
+            print(inds_taskstrokes)
+            print(len(self.Strokes))
+            self.plotStrokes()
+            raise err
 
         ############# Some grid params for this task
         # - was this on grid?
@@ -887,7 +890,8 @@ class TaskClass(object):
                 "height":_height(i),
                 "diag":_diag(i),
                 "max_wh":_max_wh(i),
-                "Prim":Prims[i]
+                "Prim":Prims[i],
+                "ind_taskstroke_orig":inds_taskstrokes[i]
                 })
             
             # 2) Things that depend on grid

@@ -211,3 +211,22 @@ def extract_novel_unique_items_in_order(listin):
             curr_item = x
 
     return list_new_items
+
+def remove_values_refrac_period(times_in_order, refrac_period):
+    """ Given list of times, return indices to slice, to remove times that
+    occur too close in time to preceding (i.e. interval less than refrac_period)
+    PARAMS:
+    - times_in_order, list-like of times, assumed to be in order. will not check
+    - refrac_period, duration.
+    RETURNS:
+    - inds_keep, list of ints indices to keep.
+    - inds_remove, complement of inds_keep
+    EXAMPLE:
+        values_in_order = [0.1, 0.11, 0.2]
+        refrac_period = 0.1
+        --> ([0], [1, 2])
+    """
+    inds_remove = np.argwhere(np.diff(times_in_order)<refrac_period)+1
+    inds_remove = [x[0].astype(int) for x in inds_remove]
+    inds_keep = [i for i in range(len(times_in_order)) if i not in inds_remove]
+    return inds_keep, inds_remove

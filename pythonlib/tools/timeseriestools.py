@@ -241,9 +241,11 @@ def getChangePoints(vals):
 
 
 
-def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expected_direction_of_first_crossing=None, 
+
+def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", 
+    expected_direction_of_first_crossing=None, 
     force_single_output=False, ploton=False, take_first_crossing_in_expected_direction=False,
-    force_must_find_crossings=False):
+    force_must_find_crossings=False, take_first_crossing=False):
     """ Get threshold crossings
     PARAMS;
     - times, array of timebin values
@@ -257,8 +259,21 @@ def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expe
     - ploton, to plot the crossings on the data
     - take_first_crossing_in_expected_direction, bool, if True, then will look only at the first crossing in
     cross_dir_to_take. if False, then asserts that the first crossing is that direction. [IN PROGRESS]
+    - take_first_crossing, then takes first if any crossings exist.
     """
     import matplotlib.pyplot as plt
+    from .listtools import remove_values_refrac_period
+    assert take_first_crossing_in_expected_direction==False, "in progress!!"
+
+    if ploton:
+        fig, axes = plt.subplots(1,2, figsize=(15,5))
+
+        ax = axes.flatten()[0]
+        ax.plot(times, vals)
+        ax.axhline(threshold, color="k")
+        ax = axes.flatten()[1]
+        ax.set_title('b=upcross, r=dncross')
+
 
     # Get all threshold crossings
     indscross = np.where(np.diff(vals>threshold))[0]
@@ -273,17 +288,20 @@ def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expe
     # i;.e. if t1, t2 t3 and t2-t1 and t3-t2 are small, then removes t2 and t3. 
     # this happens if there quick zigzag adding an up and down crossing. rare.
     REFRACT_DUR = 0.008 # crossings closer than this in time are considered erorrs.
-    inds_remove = np.argwhere(np.diff(timecross)<REFRACT_DUR)+1
-    if len(inds_remove)%2==0 and len(inds_remove)>0:
+    inds_keep, inds_remove =remove_values_refrac_period(timecross, REFRACT_DUR)
+    if len(inds_remove)%2==0:
         # then remove them
-        timecross = np.delete(timecross, inds_remove)
-        valscross = np.delete(valscross, inds_remove)
+        timecross = timecross[inds_keep]
+        valscross = valscross[inds_keep]
 
     if take_first_crossing_in_expected_direction:
         assert cross_dir_to_take not in ["mean"], "doesnt make sense"
 
     # sanity check
     if len(indscross)>0 and expected_direction_of_first_crossing is not None:
+        # print(indscross)
+        # print(inds_keep, inds_remove)
+        # print(vals, threshold)
         if expected_direction_of_first_crossing=="up":
             # the first time bin (in entire window) is lower than thresh
             assert vals[0]<threshold
@@ -294,30 +312,34 @@ def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expe
             assert False
 
     # What directions are crossings?
-    if vals[0]<threshold:
-        # this will be [positive-going, neg-going, etc...]
-        timecross_up = timecross[0::2]
-        timecross_dn = timecross[1::2]
-        valscross_up = valscross[0::2]
-        valscross_dn = valscross[1::2]
-    else:
-        # other direction
-        timecross_up = timecross[1::2]
-        timecross_dn = timecross[0::2]
-        valscross_up = valscross[1::2]
-        valscross_dn = valscross[0::2]
-
     ncross = len(timecross)
 
-    if ploton:
-        fig, axes = plt.subplots(1,2, figsize=(15,5))
+    if ncross==0:
+        timecross_up = timecross
+        timecross_dn = timecross
+        valscross_up = valscross
+        valscross_dn = valscross
+    else:
+        if vals[0]<threshold:
+            # this will be [positive-going, neg-going, etc...]
+            timecross_up = timecross[0::2]
+            timecross_dn = timecross[1::2]
+            valscross_up = valscross[0::2]
+            valscross_dn = valscross[1::2]
+        else:
+            # other direction
+            timecross_up = timecross[1::2]
+            timecross_dn = timecross[0::2]
+            valscross_up = valscross[1::2]
+            valscross_dn = valscross[0::2]
 
+
+    if ploton:
         ax = axes.flatten()[0]
-        ax.plot(times, vals)
         ax.plot(timecross, valscross, 'xk')
         ax.plot(timecross_up, valscross_up, 'ob')
         ax.plot(timecross_dn, valscross_dn, 'or')
-        ax.axhline(threshold, color="k")
+
         ax = axes.flatten()[1]
         ax.set_title('b=upcross, r=dncross')
 
@@ -354,11 +376,18 @@ def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", expe
 
     if force_single_output:
         if len(TCROSS)!=1 or len(VCROSS)!=1:
+            print(min(times), max(times))
+            print(cross_dir_to_take)
             print("t", TCROSS)
             print("v", VCROSS)
+            # print(VCROSS)
+            # print(VCROSS)
             assert False
-        TCROSS = TCROSS[0]
-        VCROSS = VCROSS[0]
+        TCROSS = TCROSS[0:1]
+        VCROSS = VCROSS[0:1]
         
+    if take_first_crossing:
+        TCROSS = TCROSS[0:1]
+        VCROSS = VCROSS[0:1]
 
     return TCROSS, VCROSS

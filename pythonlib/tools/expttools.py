@@ -136,7 +136,7 @@ def checkIfDirExistsAndHasFiles(dirname):
         exists = False
         hasfiles = False
 
-    return (exists, hasfiles)
+    return exists, hasfiles
 
 def fileparts(path, return_up=False, append_slash=True):
     """ breaks down path into dir, path, ext. always works regaridless of whether give 

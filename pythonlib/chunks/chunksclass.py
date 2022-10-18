@@ -369,6 +369,30 @@ class ChunksClass(object):
 
     ########################### WORKING WITH LABELS
 
+    ######################## EXTRACTION
+    def extract_strokeinds_as(self, how, which="hier"):
+        """ WRapper to extract strokes indices for this chunks, in vairous formats
+        PARAMS:
+        - how, str, in {'chunks', 'flat'}, either as chunks list of list of ints, or flat (list of ints)
+        - which, str, in {'hier', 'chunks'}, which one to extract
+        RETURNS:
+        - list, depends on "how"
+        """
+
+        if which=="hier":
+            chunks = self.Hier
+        elif which=="chunks":
+            chunks = self.Chunks
+        else:
+            print(which)
+            assert False
+
+        if how=="chunks":
+            return chunks    
+        elif how=="flat":
+            return [c for ch in chunks for c in ch]
+        else:
+            assert False
 
     ############################
     def print_summary(self):
