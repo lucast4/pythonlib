@@ -9,6 +9,7 @@ def extract_supervision_params(D, ind):
     NOTE: some of these requires objectclass version of tasks, and so may break. 
     """
 
+
     # Get the allparams and allparams
     # taskparams = D.blockparams_extract_single_blockparams(ind)
     # blockparams = D.blockparams_extract_single(ind)
@@ -81,7 +82,17 @@ def extract_supervision_params(D, ind):
     else:
         COLOR_METHOD = ''
 
-
+    ##### what phase in trial is color shown?
+    if "Pancho" in D.animals():
+        assert False, "see this note TODO"
+        # Need separate parameters for color method during:
+        # - fixation cue
+        # - guide
+        # - samp
+        # - post.
+        # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
+        # drag.m, but is saved in bb or guide ink colors.
+        
 
     ################ ONLINE VISUAL FB
     p = allparams["task_objectclass"]["AllPtsVisCriteria"]
