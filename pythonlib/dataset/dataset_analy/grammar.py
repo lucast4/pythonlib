@@ -6,11 +6,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
+import pandas as pd
 
 
 def preprocess_dataset(D):
-
-    import pandas as pd
+    """ Preprocess Dataset as basis for all subsetquence grammar/learning analyses.
+    RETURNS:
+    - dfGramScore, dataframe holding each trial, whether is success (beh sequence matches task sequebce,
+    where latter is from the active chunk, and alignemnet is done with alignment matrix.
+    - list_blocksets_with_contiguous_probes, list of list of ints, where inner lists hold
+    blocks that are continusous and which all have probe tasks. these are useful for making
+    separate plots for each. 
+    - SDIR, string path to directory for all saving of grammar.
+    """
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
 
     ################## Create save directiory
     SDIR = D.make_savedir_for_analysis_figures("grammar")
@@ -78,10 +87,8 @@ def preprocess_dataset(D):
         })
     dfGramScore = pd.DataFrame(gramscoredict)
 
-
     ##### 1) Extract blocksets (contiguous blocks with probe tasks)
     blocks = sorted(D.probes_extract_blocks_with_probe_tasks())
-
     list_blockset = []
     current_blockset = []
     for i, bk in enumerate(blocks):
@@ -103,21 +110,19 @@ def preprocess_dataset(D):
     print("Got these sets of blocks: ", list_blockset)
 
     # assign each ind to a blockset (if exists)
-    from pythonlib.tools.pandastools import applyFunctionToAllRows
-
+    # if doesnt exist, assign -1.
     mapper = {} # bk --> bkset
     for i, bkset in enumerate(list_blockset):
         for bk in bkset:
             mapper[bk] = i
-        
     def F(x):
         if x["block"] in mapper.keys():
             return mapper[x["block"]]
         else:
             return -1
     dfGramScore = applyFunctionToAllRows(dfGramScore, F, "which_probe_blockset")
-
     list_blocksets_with_contiguous_probes = list_blockset
+
     return dfGramScore, list_blocksets_with_contiguous_probes, SDIR
 
 
@@ -134,13 +139,19 @@ def print_useful_things(dfGramScore):
     display(grouping_get_inner_items(dfGramScore, "block", "epoch_superv"))    
 
 
-
 def plot_performance_all(dfGramScore, list_blockset, SDIR):
+    """ Standard plots summarizing perforamnce, slicing in different ways, includiong
+    aggragating to characters (or sticking with trials). Saves automatically.
+    """
+    from pythonlib.tools.pandastools import aggregGeneral
 
+    # Make save dir
     savedir= f"{SDIR}/summary"
     os.makedirs(savedir, exist_ok=True) 
 
+
     def plot_(dfthis):
+        """ Helper to make all plots """
         
         listfigs = []
         
@@ -195,7 +206,7 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         
         return listfigs
 
-
+    # How many trial ssuccess/failure?
     fig = sns.catplot(data=dfGramScore, x="success_binary", y="beh_sequence_wrong", 
                 hue="beh_too_short", col="exclude_because_online_abort", kind="strip", alpha=0.2)
     fig.savefig(f"{savedir}/distribution_success.pdf")
@@ -221,7 +232,6 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
 
 
     ## The same, but datapt=char (aggregate over trials)
-    from pythonlib.tools.pandastools import aggregGeneral
     dfthis = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
     dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=["success_binary"])
 
@@ -240,6 +250,8 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
             f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_char-{i}.pdf")
 
 def plot_performance_timecourse(dfGramScore, list_blockset, SDIR):
+    """ Plot perforamcne as function of blocks (not bloques!)
+    """
     sdirthis = f"{SDIR}/summary"
     dfthis = dfGramScore[
         (dfGramScore["exclude_because_online_abort"]==False)
@@ -255,6 +267,7 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
     """ Bar plots of "static" performance, avberaged within
     blocksets (each a contigous set of plots containing probe tasks)
     """
+
     from pythonlib.tools.expttools import writeStringsToFile
     sdirthis = f"{SDIR}/summary"
     # Exract only no online abort
@@ -262,11 +275,11 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
         (dfGramScore["exclude_because_online_abort"]==False)
     ]
 
-    # 1) Print summary
+    # 1) Print summary and save it (perforamnce, as function of hierarhcal params)
     N_MIN = 5 # skip printing for cases with fewer trials
     list_taskgroups = sorted(dfthis["taskgroup"].unique())
     list_epochsuperv = sorted(dfthis["epoch_superv"].unique())
-    list_textstrings = []
+    list_textstrings = [] # for saving
     for i, blockset in enumerate(list_blockset):
         s = f"Blockset #{i}: [{_blocks_to_str(blockset)}]"
         list_textstrings.append(s)
@@ -286,17 +299,17 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
                     s = f"   {epoch_superv}: --> {100 * np.mean(dfthis[inds]['success_binary']):.0f}% (N={nthis})"
                     list_textstrings.append(s)
                     print(s)
-    
-    # 2) Plot bar plot
+    # SAVE
+    path = f"{sdirthis}/staticsummary.txt"
+    writeStringsToFile(path, list_textstrings)
+
+    # 2) Plot bar plot (same infor as in list_textstrings)
     fig = sns.catplot(data = dfthis, x="taskgroup", y="success_binary", hue = "epoch_superv", kind="bar", ci=68,
                row="which_probe_blockset", aspect=2, height=3)
     rotateLabel(fig)
     fig.savefig(f"{sdirthis}/staticsummary.pdf")
 
-    # SAVE
-    path = f"{sdirthis}/staticsummary.txt"
-    writeStringsToFile(path, list_textstrings)
-
 
 def _blocks_to_str(blocks):
+    """ Helper to conver tlist of ints (blocks) to a signle string"""
     return "|".join([str(b) for b in blocks])
