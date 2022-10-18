@@ -644,7 +644,10 @@ class Dataset(object):
 
     def blockparams_extract_single_combined_task_and_block(self, ind):
         """ Extracts a single dict combining taskparams and blockparams.
-        Makes sure that there are no overlapping keys
+        [obsolete: Makes sure that there are no overlapping keys. stopped
+        doing this becuase blockparams_extract_single_taskparams actually extract
+        bp if tp doesnt exist (before ~9/19/22), so then would definitely have 
+        overlapping keys. and this is not an issue]
         """
 
         bp = self.blockparams_extract_single(ind)
@@ -653,7 +656,7 @@ class Dataset(object):
         combined_params = {}
 
         for key, val in bp.items():
-            assert key not in tp.keys() # check no overlapping keys
+            # assert key not in tp.keys() # check no overlapping keys
             combined_params[key] = val
 
         for key, val in tp.items():
@@ -918,6 +921,9 @@ class Dataset(object):
         """
 
         # 1) Was color supervision on?
+        if "INSTRUCTION_COLOR" not in self.Dat.columns:
+            assert False, "you prob need to reassign grouping in preprocess. see preprocess for grammardircolor (note, this is currently default in preproces...)"
+            
         color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"]
         color_method = self.supervision_extract_params(ind)["COLOR_METHOD"]
 
@@ -1275,6 +1281,12 @@ class Dataset(object):
         pathlist = []
         for SDIR in SDIR_LIST:
             pathlist.extend(_find(SDIR))
+
+        if len(pathlist)==0:
+            print("HErE")
+            print(SDIR_LIST)
+            print(animal, expt, rule)
+            assert False
 
         # pathlist = findPath(SDIR, [[animal, expt]], "dat", ".pkl", True)
             
@@ -4653,10 +4665,11 @@ class Dataset(object):
         """
 
         if not overwrite:
-            if f"{new_col_name}_old" in self.Dat.columns:
-                assert False, "avoid running this multpel times."
-            else:
-                self.Dat[f"{new_col_name}_old"] = self.Dat[f"{new_col_name}"]
+            if new_col_name in self.Dat.columns:
+                if f"{new_col_name}_old" in self.Dat.columns:
+                    assert False, "avoid running this multpel times."
+                else:
+                    self.Dat[f"{new_col_name}_old"] = self.Dat[f"{new_col_name}"]
 
         # 1) indicate for each trial whether it is using color instruction
         # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
@@ -4674,7 +4687,8 @@ class Dataset(object):
         print(self.Dat[new_col_name].value_counts())
 
 
-    def supervision_summarize_into_tuple(self, method="verbose", print_summary=False):
+    def supervision_summarize_into_tuple(self, method="verbose", print_summary=False,
+            new_col_name = "supervision_stage_new"):
         """ Summarize those supervision params that potnetially provide online instruction
         , these can define distinct stages of blocks
         PARAMS:
@@ -4699,7 +4713,7 @@ class Dataset(object):
         self.supervision_extract_params_as_columns(grouping_keys)
 
         # 2) get their conjunction.
-        self.grouping_append_col(grouping_keys_prefix, "supervision_stage_new", use_strings=True, 
+        self.grouping_append_col(grouping_keys_prefix, new_col_name, use_strings=True, 
             strings_compact=True)
 
         # 3) prin summary
@@ -4726,6 +4740,14 @@ class Dataset(object):
         self.Dat["supervision_online"] = list_issup
         print("ADded new column: supervision_online")
 
+    ############### PROBES stuff
+    def probes_extract_blocks_with_probe_tasks(self):
+        """ Return list of blocks which include data, and which
+        include probe tasks (looks at data, not at blockparams)
+        RETURNS:
+        - list of sorted ints (blocks)
+        """
+        return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
     def sequence_extract_beh_and_task(self, ind, ploton=False):
@@ -4755,9 +4777,9 @@ class Dataset(object):
 
 
         # 3) What there sequence supervision?
-        if "supervision_stage_new" not in self.Dat.columns:
-            self.supervision_summarize_into_tuple("concise")
-        supervision_tuple = self.Dat.iloc[ind]["supervision_stage_new"]
+        if "supervision_stage_concise" not in self.Dat.columns:
+            self.supervision_summarize_into_tuple("concise", new_col_name = "supervision_stage_concise")
+        supervision_tuple = self.Dat.iloc[ind]["supervision_stage_concise"]
 
         # COLLECT all
         gramdict = {}
@@ -5354,6 +5376,37 @@ class Dataset(object):
         fig.map(sns.scatterplot, "trial", "block")
         fig.add_legend()
         figlist.append(fig)
+        figlist.append(fig)
+
+        fig = sns.FacetGrid(self.Dat, row = "monkey_train_or_test", col="date_sess", hue="epoch", sharey=True, sharex=True, aspect=2, height=4)
+        fig.map(sns.scatterplot, "trial", "supervision_stage_new")
+        fig.add_legend()
+        figlist.append(fig)
+
+        fig = sns.FacetGrid(self.Dat, row = "monkey_train_or_test", col="date_sess", hue="epoch", sharey=True, sharex=True, aspect=2, height=4)
+        fig.map(sns.scatterplot, "trial", "supervision_stage_new")
+        fig.add_legend()
+        figlist.append(fig)
+
+        fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="date_sess", hue="supervision_stage_new", sharey=True, sharex=True, aspect=2, height=4)
+        fig.map(sns.scatterplot, "trial", "block")
+        fig.add_legend()
+        figlist.append(fig)
+
+        nchar = len(self.Dat["character"].unique())
+        fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="supervision_stage_new", 
+                            sharey=True, sharex=True, aspect=1, height=nchar/10)
+        fig.map(sns.scatterplot, "trial", "character")
+        fig.add_legend()
+        figlist.append(fig)
+
+
+        fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="task_stagecategory", 
+                    sharey=True, sharex=True, aspect=1, height=nchar/10)
+        fig.map(sns.scatterplot, "trial", "character")
+        fig.add_legend()
+        figlist.append(fig)
+
 
         return figlist
 

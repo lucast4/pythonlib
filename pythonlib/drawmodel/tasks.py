@@ -1003,9 +1003,32 @@ class TaskClass(object):
         from pythonlib.chunks.chunksclass import ChunksClassList
         nstrokes = len(dat['StrokindsDone'])
         chunkslist = []
+
+        if isinstance(dat["ChunkList"], dict):
+            # shoudl be list of dicts...
+            dat["ChunkList"] = [dat["ChunkList"]]
+
         for this in dat["ChunkList"]:
             # convert this item into the proper format
-            flips = [x["Flipped"] for x in this["StrokeSequence"]]
+            # print(type(this))
+            # print(type(dat["ChunkList"]))
+            # print("adsad")
+            # print(dat["ChunkList"])
+
+            try:
+                flips = [x["Flipped"] for x in this["StrokeSequence"]]
+            except Exception as err:
+                print(1)
+                print(dat)
+                print(2)
+                print(dat["ChunkList"])
+                print(3)
+                print(this)
+                print(4)
+                print(type(this))
+                print(this.keys)
+                raise err
+
             hier = [x-1 for x in this["chunks_"]] # convert to 0-index
             index = int(this["ind"])
             chunkslist.append([this["modelname"], hier, flips, index, this["color"]])

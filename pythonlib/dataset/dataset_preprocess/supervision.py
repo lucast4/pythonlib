@@ -70,10 +70,15 @@ def extract_supervision_params(D, ind):
     COLOR_ON = allparams["colormod"]["strokes"]["on"]==1
 
     if "color_method" not in allparams["colormod"]["strokes"].keys():
-        if allparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
-            COLOR_METHOD = 'randomize_each_stroke'
+        if "randomize_each_stroke" in allparams["colormod"]["strokes"].keys():
+            if allparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
+                COLOR_METHOD = 'randomize_each_stroke'
+            else:
+                COLOR_METHOD = ''
         else:
+            # before added this feature
             COLOR_METHOD = ''
+            
     elif len(allparams["colormod"]["strokes"]["color_method"])>0:
         COLOR_METHOD = allparams["colormod"]["strokes"]["color_method"]
     elif allparams["colormod"]["strokes"]["randomize_each_stroke"]==1:
