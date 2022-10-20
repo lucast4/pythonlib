@@ -4712,7 +4712,9 @@ class Dataset(object):
         # - grouping keys which can potentially influence online behavior (instructive).
         # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "SOUNDS_STROKES_DONE", "GUIDEDYN_ON"]
 
-        if not D.taskclass_is_new_version():
+        IND_TO_CHECK = 0 # skip if the first trial is not new tasks. assumes that
+        # your dataset doesnt mix trials qith new and old tasks...
+        if not D.taskclass_is_new_version(IND_TO_CHECK):
             # Old task version, ignore this.
             return None
 
