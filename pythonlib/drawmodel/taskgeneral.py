@@ -629,6 +629,12 @@ class TaskClass(object):
 
         # Latest version, this is saved as a meta param
 
+        # Old task versions...
+        if not hasattr(self, 'PlanDat'):
+            return "undefined"
+        if len(self.PlanDat)==0:
+            return "undefined"
+
         # Older version, infer it from the saved centers.
         # if all centers are aligned with grid centers, then this is on grid.
         centers = self.PlanDat["CentersActual"]
