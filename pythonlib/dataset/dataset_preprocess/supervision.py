@@ -7,14 +7,18 @@ import numpy as np
 def extract_supervision_params(D, ind):
     """ Extract the supervision params for this trial index in this dataset
     NOTE: some of these requires objectclass version of tasks, and so may break. 
+    RETURNS:
+    - params, dict of features. or None (if this is old task version)
     """
 
+    if not D.taskclass_is_new_version():
+        # Then this is old task version, many things are not defined. just return None./
+        return None
 
     # Get the allparams and allparams
     # taskparams = D.blockparams_extract_single_blockparams(ind)
     # blockparams = D.blockparams_extract_single(ind)
     allparams = D.blockparams_extract_single_combined_task_and_block(ind)
-
 
     ########### ABORT MODES
     ABORT_ON = D.Dat.iloc[ind]["abort_params"]["on"]

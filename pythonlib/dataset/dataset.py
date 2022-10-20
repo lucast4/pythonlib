@@ -839,6 +839,17 @@ class Dataset(object):
         return inds, characters
 
     ############ WORKING WITH TASKS
+    def taskclass_is_new_version(self, ind):
+        """ Returns True if this trial; uses the new "PLanclass"
+        versipn of tasks
+        PARAMS:
+        - ind, index into self.Dat
+        RETURNS:
+        - bool.
+        """
+        T = self.Dat.iloc[ind]["Task"]
+        return T.get_is_new_version()
+
     def taskclass_extract_ml2(self, ind):
         """ Extract drawmodel (ml2) taskclass, which is lower level 
         than TaskGeneral class
@@ -4700,6 +4711,10 @@ class Dataset(object):
 
         # - grouping keys which can potentially influence online behavior (instructive).
         # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "SOUNDS_STROKES_DONE", "GUIDEDYN_ON"]
+
+        if not D.taskclass_is_new_version():
+            # Old task version, ignore this.
+            return None
 
         if method=="concise":
             grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
