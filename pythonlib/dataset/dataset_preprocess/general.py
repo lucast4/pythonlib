@@ -32,6 +32,8 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "VlL1"
     
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1"
+
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
@@ -85,7 +87,7 @@ def _groupingParams(D, expt):
     features_to_remove_outliers = []
     grouping_levels = None
     feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
-    grouping_reassign = False
+    grouping_reassign = True
     grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
     # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
     grouping_reassign_methods_in_order = ["tasksequencer"]
@@ -240,7 +242,7 @@ def _groupingParams(D, expt):
             ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
             ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
             ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
-    elif "dircolor" in expt:
+    elif "grammardircolor" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -250,6 +252,29 @@ def _groupingParams(D, expt):
             ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
             ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
             ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
+
+    elif "dircolor" in expt:
+        # 10/17/22 - e..g, dircolro3b    
+        # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("neuralbiasdir", 31, tuple([1,3,6])): "heldout_I", # novel shape order x spatial config
+            ("neuralbiasdir", 31, tuple([8,9])): "heldout_E_config"} # novel spatial config.
+
+    elif "dirshapecolor" in expt:
+        # 10/17/22 - e..g, dircolro3b    
+        # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("neuralbiasdir", 30, tuple([5, 15, 20, 25, 30])): "train_test_same", # same beh, test blocks only (fb on)
+            ("neuralbiasdir", 31, tuple([2, 12])): "train_test_same", # 
+            ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
+            ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
+
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True

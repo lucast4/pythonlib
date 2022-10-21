@@ -924,7 +924,7 @@ class Dataset(object):
         if "INSTRUCTION_COLOR" not in self.Dat.columns:
             assert False, "you prob need to reassign grouping in preprocess. see preprocess for grammardircolor (note, this is currently default in preproces...)"
             
-        color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"]
+        color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"] 
         color_method = self.supervision_extract_params(ind)["COLOR_METHOD"]
 
         # 2) objectclass info

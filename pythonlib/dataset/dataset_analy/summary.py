@@ -249,7 +249,9 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
                 # # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
                 # #                  "epoch")
                 plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
-                                 yaxis_ver="date_epoch")
+                                 yaxis_ver="date_epoch", how_to_split_files = "task_stagecategory")
+                plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
+                                 yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
             #### 1) A single task, over time.
             if PLOT_ALL_EACHTRIAL:
                 plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
@@ -422,7 +424,8 @@ def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable 
 
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
-        LIST_N_PER_GRID = [1], strokes_by_order=True, how_to_split_files = "task_stagecategory"):
+        LIST_N_PER_GRID = [1], strokes_by_order=True, 
+        how_to_split_files = "task_stagecategory"):
     """ 
     Plot grid, where y axis is usually date (or epoch) and x axis are each unique task.
     Plots one (or n) examples per grid cell. Plots multiple iterations to get many random examples, 

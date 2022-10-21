@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 import pandas as pd
+from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 
 
 def preprocess_dataset(D):
@@ -148,6 +149,9 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
     # Make save dir
     savedir= f"{SDIR}/summary"
     os.makedirs(savedir, exist_ok=True) 
+    if checkIfDirExistsAndHasFiles(savedir)[1]:
+        print("[SKIPPING, since SDIR exists and has contents: ", savedir)
+        return
 
 
     def plot_(dfthis):
@@ -218,7 +222,7 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
     figs = plot_(dfthis)
     for i, f in enumerate(figs):
         f.savefig(f"{savedir}/successrate-summary-blocks_all-datapt_trial-{i}.pdf")
-
+    plt.close("all")
 
     ## [Blocks of interest (blocks with interleaved trials), datapt=trial]  Prune to specific set of blocks
     for blocks_keep in list_blockset:
@@ -229,7 +233,7 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         figs = plot_(dfthis)
         for i, f in enumerate(figs):
             f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_trial-{i}.pdf")
-
+    plt.close("all")
 
     ## The same, but datapt=char (aggregate over trials)
     dfthis = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
@@ -248,6 +252,8 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         figs = plot_(dfthisAgg)
         for i, f in enumerate(figs):
             f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_char-{i}.pdf")
+    plt.close("all")
+
 
 def plot_performance_timecourse(dfGramScore, list_blockset, SDIR):
     """ Plot perforamcne as function of blocks (not bloques!)
