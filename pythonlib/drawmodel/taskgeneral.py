@@ -629,6 +629,10 @@ class TaskClass(object):
 
         # Latest version, this is saved as a meta param
 
+        # Old task versions...
+        if not self.get_is_new_version():
+            return "undefined"
+
         # Older version, infer it from the saved centers.
         # if all centers are aligned with grid centers, then this is on grid.
         centers = self.PlanDat["CentersActual"]
@@ -915,6 +919,21 @@ class TaskClass(object):
         return datsegs
 
     #############
+    def get_is_new_version(self):
+        """ Returns True if this trial; uses the new "PLanclass"
+        versipn of tasks
+        PARAMS:
+        - ind, index into self.Dat
+        RETURNS:
+        - bool.
+        """
+        if not hasattr(self, 'PlanDat'):
+            return False
+        elif len(self.PlanDat)==0:
+            return False    
+        else:
+            return True
+
     def get_task_kind(self, SIMPLE = True):
         """ Get the kind for this task, things like prims_in_grid, chars, etc.
         This only after like early 2022, when created this distinction between 

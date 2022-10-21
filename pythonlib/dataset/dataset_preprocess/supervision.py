@@ -7,13 +7,18 @@ import numpy as np
 def extract_supervision_params(D, ind):
     """ Extract the supervision params for this trial index in this dataset
     NOTE: some of these requires objectclass version of tasks, and so may break. 
+    RETURNS:
+    - params, dict of features. or None (if this is old task version)
     """
+
+    if not D.taskclass_is_new_version():
+        # Then this is old task version, many things are not defined. just return None./
+        return None
 
     # Get the allparams and allparams
     # taskparams = D.blockparams_extract_single_blockparams(ind)
     # blockparams = D.blockparams_extract_single(ind)
     allparams = D.blockparams_extract_single_combined_task_and_block(ind)
-
 
     ########### ABORT MODES
     ABORT_ON = D.Dat.iloc[ind]["abort_params"]["on"]
@@ -86,7 +91,17 @@ def extract_supervision_params(D, ind):
     else:
         COLOR_METHOD = ''
 
-
+    ##### what phase in trial is color shown?
+    if "Pancho" in D.animals():
+        assert False, "see this note TODO"
+        # Need separate parameters for color method during:
+        # - fixation cue
+        # - guide
+        # - samp
+        # - post.
+        # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
+        # drag.m, but is saved in bb or guide ink colors.
+        
 
     ################ ONLINE VISUAL FB
     p = allparams["task_objectclass"]["AllPtsVisCriteria"]
