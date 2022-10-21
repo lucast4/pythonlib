@@ -10,10 +10,11 @@ def extract_supervision_params(D, ind):
     RETURNS:
     - params, dict of features. or None (if this is old task version)
     """
-
-    if not D.taskclass_is_new_version():
-        # Then this is old task version, many things are not defined. just return None./
-        return None
+    
+    IS_NEW_TASK_VER = D.taskclass_is_new_version(ind)
+    # if not D.taskclass_is_new_version(ind):
+    #     # Then this is old task version, many things are not defined. just return None./
+    #     return None
 
     # Get the allparams and allparams
     # taskparams = D.blockparams_extract_single_blockparams(ind)
@@ -129,8 +130,9 @@ def extract_supervision_params(D, ind):
 
 
     ############### suonds
-
-    assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
+    # print(allparams["DonenessTracker"])
+    if IS_NEW_TASK_VER:
+        assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
 
     SOUNDS_HIT_VER = allparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
     if allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
@@ -203,7 +205,8 @@ def extract_supervision_params(D, ind):
     spd = bpthis["dynamic"]
     spd_ver = bpthis["dynamic_ver"]
 
-    assert bpthis["samp1_only_show_untouched"]==0
+    if IS_NEW_TASK_VER:
+        assert bpthis["samp1_only_show_untouched"]==0
     SCREENPOST_ALPHA = bpthis["samp1_force_alpha_to"]
     SCREENPOST_SIZE = bpthis["samp1_force_size_to"]
 

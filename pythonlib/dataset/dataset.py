@@ -4712,11 +4712,11 @@ class Dataset(object):
         # - grouping keys which can potentially influence online behavior (instructive).
         # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "SOUNDS_STROKES_DONE", "GUIDEDYN_ON"]
 
-        IND_TO_CHECK = 0 # skip if the first trial is not new tasks. assumes that
-        # your dataset doesnt mix trials qith new and old tasks...
-        if not D.taskclass_is_new_version(IND_TO_CHECK):
-            # Old task version, ignore this.
-            return None
+        # IND_TO_CHECK = 0 # skip if the first trial is not new tasks. assumes that
+        # # your dataset doesnt mix trials qith new and old tasks...
+        # if not D.taskclass_is_new_version(IND_TO_CHECK):
+        #     # Old task version, ignore this.
+        #     return None
 
         if method=="concise":
             grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
@@ -5414,14 +5414,24 @@ class Dataset(object):
         fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="supervision_stage_new", 
                             sharey=True, sharex=True, aspect=1, height=nchar/10)
         fig.map(sns.scatterplot, "trial", "character")
-        fig.add_legend()
+        try:
+            fig.add_legend()
+        except ValueError as err:
+            # this means facet titles are too large?
+            # raise ValueError('left cannot be >= right')
+            pass
         figlist.append(fig)
 
 
         fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="task_stagecategory", 
                     sharey=True, sharex=True, aspect=1, height=nchar/10)
         fig.map(sns.scatterplot, "trial", "character")
-        fig.add_legend()
+        try:
+            fig.add_legend()
+        except ValueError as err:
+            # this means facet titles are too large?
+            # raise ValueError('left cannot be >= right')
+            pass
         figlist.append(fig)
 
 
