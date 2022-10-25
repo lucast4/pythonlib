@@ -8,7 +8,8 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 import pandas as pd
 from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
-
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
 
 def preprocess_dataset(D):
     """ Preprocess Dataset as basis for all subsetquence grammar/learning analyses.
@@ -314,6 +315,47 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
                row="which_probe_blockset", aspect=2, height=3)
     rotateLabel(fig)
     fig.savefig(f"{sdirthis}/staticsummary.pdf")
+
+def plot_counts_heatmap(dfGramScore, SDIR):
+    """ Heatmap for n trials for each combo of conditions (e.g., epoch|supervsion, and taskgroup)
+    i.e. rows are epoch/sup and cols are taskgroup. plots and saves figures.
+    """
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe, aggregGeneral
+    sdirthis = f"{SDIR}/summary"
+
+    def _plot_counts_heatmat(dfGramScore, col1, col2, ax=None):
+        
+        if col2=="taskgroup":
+            # then datapt is characters (not trials)
+            dfGramScoreAgg = aggregGeneral(dfGramScore, group=[col1, col2, "character"], values=["success_binary"])
+            df = dfGramScoreAgg
+        else:
+            df = dfGramScore
+
+        dfthis, fig, ax = convert_to_2d_dataframe(df, col1, col2, True)
+            
+        return dfthis, fig, ax
+
+    fig, axes = plt.subplots(3,3)
+
+    col1 = "epoch_superv"
+    col2 = "taskgroup"
+    dfthis, fig, ax = _plot_counts_heatmat(dfGramScore, col1, col2)
+    path = f"{sdirthis}/staticsummary.txt"
+    fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
+
+    col1 = "epoch_superv"
+    col2 = "character"
+    dfthis, fig, ax = _plot_counts_heatmat(dfGramScore, col1, col2)
+    fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
+
+    taskgroups = dfGramScore["taskgroup"].unique()
+    for tg in taskgroups:
+        dfthis = dfGramScore[(dfGramScore["taskgroup"] == tg)]
+        col1 = "epoch_superv"
+        col2 = "character"
+        dfthis, fig, ax = _plot_counts_heatmat(dfthis, col1, col2)
+        fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-taskgroup_{tg}.pdf")
 
 
 def _blocks_to_str(blocks):

@@ -627,6 +627,61 @@ def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", random
 
     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
+def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False, 
+        agg_method = "counts", ax=None):
+    """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
+    plotting heatmap. Eech element is unique combo of item for col1 and col2, 
+    with a particular aggregation function (by default is counts). 
+    PARAMS:
+    - col1, string name of col whose values will become row indices
+    - col2, string name of col whose values wil become column indices.
+    - plot_heatmap, bool
+    RETURNS:
+    - 2d dataframne
+    """
+
+    list_cat_1 = sorted(df[col1].unique())
+    list_cat_2 = sorted(df[col2].unique())
+
+    arr = np.zeros((len(list_cat_1), len(list_cat_2)))
+    for i, val1 in enumerate(list_cat_1):
+        for j, val2 in enumerate(list_cat_2):
+            
+            if agg_method:
+                # get counts
+                dfsub = df[(df[col1] == val1) & (df[col2] == val2)]
+                n = len(dfsub)
+            else:
+                print(agg_method)
+                assert False
+            arr[i, j] = n
+    
+    dfthis = pd.DataFrame(arr, index=list_cat_1, columns=list_cat_2)
+
+    if plot_heatmap:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots(1,1)
+        # sns.heatmap(dfthis, annot=True, ax=ax)        
+        if len(list_cat_2)>10:
+            w = len(list_cat_2)/15*5
+        else:
+            w = 5
+        if ax is None:
+            fig, ax = plt.subplots(1,1, figsize=(w, 5))
+        else:
+            fig = None
+        sns.heatmap(dfthis, annot=True, ax=ax)
+        ax.set_xlabel(col2)
+        ax.set_ylabel(col1)
+        ax.set_title(agg_method)
+    else:
+        fig, ax = None, None
+
+    return dfthis, fig, ax
+            
+
+
 
 def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False):
     """

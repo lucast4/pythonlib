@@ -226,14 +226,36 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
+
+    elif expt in ["neuralbiasdir3", "neuralbiasdir3b"]:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("neuralbiasdir", 4, tuple([13,14,15,16,17,18])): "heldout_E_spatial", # novel spatial config
+            ("neuralbiasdir", 4, tuple([1,3,5,7,9,11,13])): "heldout_E_shapes"} # novel shapes order
+
+    elif expt in ["neuralbiasdir3c", "neuralbiasdir3d", "neuralbiasdir3e"]:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("neuralbiasdir", 6, tuple([6, 7, 8, 9, 10, 11])): "heldout_E_spatial",  # novel spatial config
+            ("neuralbiasdir", 5, tuple([5,6,7,8,9])): "heldin_same_RD_LU",  # samebeh, right and down.
+            ("neuralbiasdir", 6, tuple([3])): "heldin_same_RD_LU", # samebeh, 
+            ("neuralbiasdir", 5, tuple([14,15,16,17,18])): "heldin_same_RU_LD", # samebeh, 
+            ("neuralbiasdir", 6, tuple([12])): "heldin_same_RU_LD"} # samebeh, 
+
+
+    elif expt in ["shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
+        # Reassign rules: each epoch is based on tasksequencer rule
+        grouping_reassign = True
+
     elif 'neuralbiasdir' in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
 
-    elif expt in ["neuralbiasdir3", "shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
-        # Reassign rules: each epoch is based on tasksequencer rule
-        grouping_reassign = True
     elif "grammardircolor1" in expt or "grammardircolor2" in expt or "grammardircolor3" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
         grouping_reassign = True
@@ -712,6 +734,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     D.grouping_append_col(["date_MMDD", "epoch"], "date_epoch", use_strings=True, strings_compact=True)
 
+    # Extract concise supervision stage
+    D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
+    
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 

@@ -236,26 +236,45 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
                     if PLOT_ALL_EACHTRIAL:
                         plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
 
-    ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
-    for traintest in ["test", "train"]:
-        Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest]}, "dataset")
-        if len(Dthis.Dat)>0:
-            subfolder = f"{traintest}"
-            #### 2) A single category, over all time
-            if PLOT_EXAMPLE_DATEVTASK:
-                from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
-                # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
-                #                  "date")
-                # # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, f"{traintest}/stage{s}", 
-                # #                  "epoch")
-                plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
-                                 yaxis_ver="date_epoch", how_to_split_files = "task_stagecategory")
-                plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
-                                 yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
-            #### 1) A single task, over time.
-            if PLOT_ALL_EACHTRIAL:
-                plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
 
+    if PLOT_EXAMPLE_DATEVTASK:
+        from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
+        # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
+        #                  yaxis_ver="date_epoch", how_to_split_files = "task_stagecategory")
+        # for traintest in ["test", "train"]:
+        list_supstage = D.Dat["supervision_stage_concise"].unique().tolist()
+        for supstage in list_supstage:
+            Dthis = D.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
+            plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder=f"{supstage}", 
+                             yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
+
+    if False:
+        ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
+        # for traintest in ["test", "train"]:
+        if PLOT_ALL_EACHTRIAL:
+            taskcats = D.Dat["taskgroup"].unique()
+            for taskgroup in taskcats:
+                # Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest]}, "dataset")
+                Dthis = D.filterPandas({"random_task":[False], "taskgroup":[taskgroup]}, "dataset")
+                if len(Dthis.Dat)>0:
+                    # subfolder = f"{traintest}"
+                    subfolder = f"{taskgroup}"
+                    #### 2) A single category, over all time
+                    #### 1) A single task, over time.
+                    plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
+
+    ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
+    # for traintest in ["test", "train"]:
+    if PLOT_ALL_EACHTRIAL:
+        list_supstage = D.Dat["supervision_stage_concise"].unique().tolist()
+        for supstage in list_supstage:
+            Dthis = D.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
+            if len(Dthis.Dat)>0:
+                # subfolder = f"{traintest}"
+                subfolder = f"{supstage}"
+                #### 2) A single category, over all time
+                #### 1) A single task, over time.
+                plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
 
     ######### PLOT RANDOM EXAMPLES IN GRID, EACH PLOT A SEPARATE TASK SET.
     if PLOT_RANDOM_GRID_EXAMPLES:
