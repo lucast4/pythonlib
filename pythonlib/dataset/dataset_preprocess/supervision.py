@@ -92,17 +92,21 @@ def extract_supervision_params(D, ind):
     else:
         COLOR_METHOD = ''
 
-    ##### what phase in trial is color shown?
-    if "Pancho" in D.animals():
-        assert False, "see this note TODO"
-        # Need separate parameters for color method during:
-        # - fixation cue
-        # - guide
-        # - samp
-        # - post.
-        # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
-        # drag.m, but is saved in bb or guide ink colors.
-        
+    if "extra_methods" in allparams["colormod"].keys():
+        if len(allparams["colormod"]["extra_methods"])>0:
+            print(allparams["colormod"]["extra_methods"])
+            print(allparams["colormod"]["extra_methods_params"])
+            print(allparams["colormod"]["extra_methods_applyto"])
+            assert False, "see this note TODO"
+            ##### what phase in trial is color shown?
+            # Need separate parameters for color method during:
+            # - fixation cue
+            # - guide
+            # - samp
+            # - post.
+            # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
+            # drag.m, but is saved in bb or guide ink colors.
+
 
     ################ ONLINE VISUAL FB
     p = allparams["task_objectclass"]["AllPtsVisCriteria"]

@@ -37,6 +37,7 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-11-1', 'line-11-2'))] = "AnBmHV"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('squiggle3-3-1', 'V-2-4'))] = "AnBm"
 
     grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
@@ -262,6 +263,18 @@ def _groupingParams(D, expt):
         mapper_taskset_to_category = {
             ("neuralbiasdir", 31, tuple([1,3,6])): "heldout_I", # novel shape order x spatial config
             ("neuralbiasdir", 31, tuple([8,9])): "heldout_E_config"} # novel spatial config.
+
+    elif "dirshapecolor2" in expt:
+        # 10/21/22 - 3 rules.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_taskset_to_category = {
+            ("neuralbiasdir", 30, tuple([1, 6, 11, 16, 21, 26])):"train_test_same_RShape", 
+            ("neuralbiasdir", 31, tuple([7])):"train_test_same_RShape", 
+            ("neuralbiasdir", 30, tuple([5, 15, 20, 25, 30])):"train_test_same_LShape", 
+            ("neuralbiasdir", 31, tuple([2, 12])):"train_test_same_LShape", 
+            ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # heldout, diff across all 3 rules.
 
     elif "dirshapecolor" in expt:
         # 10/17/22 - e..g, dircolro3b    

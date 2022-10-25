@@ -1031,6 +1031,10 @@ class TaskClass(object):
 
             hier = [x-1 for x in this["chunks_"]] # convert to 0-index
             index = int(this["ind"])
+
+            if len(flips)!=len(hier):
+                print(this)
+                assert False
             chunkslist.append([this["modelname"], hier, flips, index, this["color"]])
 
         shapes = dat["Features_Active"]["shapes"]

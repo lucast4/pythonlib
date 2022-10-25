@@ -216,6 +216,7 @@ class ChunksClass(object):
             assert len(colorlist_hier)==len(hier)
         self.ColorlistHier = colorlist_hier
 
+        # print("HERE", [self.Hier, self.Flips])
         self._preprocess()
 
 
@@ -247,8 +248,13 @@ class ChunksClass(object):
         self.Hier = _clean(self.Hier)
         if self.Flips is not None:
             self.Flips = _clean(self.Flips)
-            for h,f in zip(self.Hier, self.Flips):
-                assert len(h)==len(f)
+            # I used to assert that h and f were same len. but this 
+            # doesnt have to be the case, if h is mult strokes...
+            # for h,f in zip(self.Hier, self.Flips):
+            #     if len(h)!=len(f):
+            #         print("hier", h)
+            #         print("flips", f)
+            #         assert False
 
         # N task strokes
         chunks_flat = [c for C in self.Chunks for c in C]
