@@ -34,3 +34,14 @@ https://askubuntu.com/questions/1068097/separate-workspaces-in-ubuntu-18-04-desk
 https://askubuntu.com/questions/992558/how-can-i-configure-the-ubuntu-dock-to-show-windows-only-from-the-current-worksp
 gsettings set org.gnome.shell.app-switcher current-workspace-only true
 gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true
+
+4. matplotlib, so that saving figures doesnt cut off axis labels
+https://stackoverflow.com/questions/6774086/how-to-adjust-padding-with-cutoff-or-overlapping-labels
+
+a. find this file:
+import matplotlib
+print(matplotlib.matplotlib_fname())
+
+b. make this mod in that file:
+figure.autolayout : True
+

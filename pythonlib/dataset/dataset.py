@@ -1096,8 +1096,8 @@ class Dataset(object):
                 # Not sure yet. Modify this later in postprocessing
                 return "undefined"
             else:
-                print(x)
-                assert False, "huh"
+                # Just use whatever is there
+                return x["taskgroup"]
         print("applying monkey train test names")
         self.Dat = applyFunctionToAllRows(self.Dat, F, "monkey_train_or_test")
 
@@ -1150,7 +1150,7 @@ class Dataset(object):
         # print(sum(self.Dat["trialcode"] == "220608-1-132"))
         # assert False
         if "Task" in self.Dat.columns:
-            self._cleanup_using_tasks()
+            self._cleanup_using_tasks() 
 
         # assign a "character" name to each task.
         self._cleanup_rename_characters()

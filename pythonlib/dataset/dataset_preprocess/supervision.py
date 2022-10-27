@@ -92,20 +92,84 @@ def extract_supervision_params(D, ind):
     else:
         COLOR_METHOD = ''
 
+    # SOmetimes colors can be selectgibely applied to any combination of {fixation, strokes_guide, strokes_draw, post}. Assumes
+    # colors applied to all, unless specified otherwise
+    # COLORS_OBJECTS_APPLIED_TO = 'fgdp' 
+    # f = fixation cue
+    # g = taskstroke (stim) during fixation(guide)
+    # d = taskstrokes (stim) during drawing (after go)
+    # p = taskstrokes (stim) during post scene (after done).
+
+    def _get_fade_for_each_item(applyto, fade_val):
+        """
+        PARAMS;
+        - applyto, list of str, which items to apply this to
+        - fade_val, np scalar, the fade value nbeing applied. 
+        0 means fully fade to defualt
+        RETURNS:
+        - dict, i.e.,mg out[item] = num
+        """
+        out = {}
+        for item in ["fixcue", "strokes_guide", "strokes_draw", "strokes_post"]:
+            if item in applyto:
+                # then the fade is being applied
+                out[item] = fade_val
+            else:
+                # then no fade. 
+                out[item] = np.array(1.)
+        return out
+
+    COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT = {
+        "fixcue":np.array(1.),
+        "strokes_guide":np.array(1.),
+        "strokes_draw":np.array(1.),
+        "strokes_post":np.array(1.)
+    }
+
     if "extra_methods" in allparams["colormod"].keys():
         if len(allparams["colormod"]["extra_methods"])>0:
-            print(allparams["colormod"]["extra_methods"])
-            print(allparams["colormod"]["extra_methods_params"])
-            print(allparams["colormod"]["extra_methods_applyto"])
-            assert False, "see this note TODO"
-            ##### what phase in trial is color shown?
-            # Need separate parameters for color method during:
-            # - fixation cue
-            # - guide
-            # - samp
-            # - post.
-            # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
-            # drag.m, but is saved in bb or guide ink colors.
+            for i in range(len(allparams["colormod"]["extra_methods"])):
+                meth = allparams["colormod"]["extra_methods"][i]
+                prms = allparams["colormod"]["extra_methods_params"][i]
+                applyto = allparams["colormod"]["extra_methods_applyto"][i]
+
+                if meth=="fade_to_default_unless_ranked_colormethod":
+                    # then fade out color, unless COLOR_METHOD=='rank'
+                    fade_val = prms[0]
+                    if COLOR_METHOD=='rank':
+                        items_to_check = ["strokes_draw", "strokes_post"] # this method never modifies fix cue or strokes guide.
+                        applyto = [item for item in applyto if item in items_to_check]
+                    COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT = _get_fade_for_each_item(applyto, fade_val)
+                elif meth =="fade_to_default":
+                    # fade out
+                    fade_val = prms[0]
+                    COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT = _get_fade_for_each_item(applyto, fade_val)
+                else:
+                    print(meth, prms, applyto)
+                    assert False, "dont know this"
+
+    ##### what phase in trial is color shown?
+    # Need separate parameters for color method during:
+    # - fixation cue
+    # - guide
+    # - samp
+    # - post.
+    # on 10/18/22, hacked so that guide and samp were faded out over sets of blocks. see gslides for details. this was hakced in 
+    # drag.m, but is saved in bb or guide ink colors.
+
+    COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST = []    
+    COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST_BINARY = '' # 1001 means fixation and post have color. strokes guide and strokes draw are faded fully to defualt.
+    for item in ["fixcue", "strokes_guide", "strokes_draw", "strokes_post"]:
+        fadeval = COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT[item] # 0 means faded fully to default
+
+        # 1) list of fade values
+        COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST.append(fadeval)
+    
+        # 2) Encode this as binary string (either color visible (val>0) or fully faded (val=0))
+        if np.isclose(fadeval, 0.):
+            COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST_BINARY += '0'
+        else:
+            COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST_BINARY += '1'
 
 
     ################ ONLINE VISUAL FB
@@ -248,7 +312,11 @@ def extract_supervision_params(D, ind):
         
         "COLOR_ON":COLOR_ON,
         "COLOR_METHOD":COLOR_METHOD,
-        
+                
+        "COLOR_ITEMS_FADE_TO_DEFAULT": COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT,  # 0 means default.
+        "COLOR_ITEMS_FADE_TO_DEFAULT_LIST": COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST,  # 0 means default.
+        "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR": COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT_LIST_BINARY,  #
+
         "VISUALFB_METH":VISUALFB_METH,
         
         "GUIDEDYN_ON":GUIDEDYN_ON,

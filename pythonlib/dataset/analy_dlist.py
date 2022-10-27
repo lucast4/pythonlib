@@ -80,7 +80,7 @@ def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS, remove_bad_
         
 
 
-def concatDatasets(Dlist):
+def concatDatasets(Dlist, do_cleanup=False):
     """ concatenates datasets in Dlist into a single dataset.
     Main goal is to concatenate D.Dat. WIll attempt to keep track of 
     Metadats, but have not confirmed that this is reliable yet.
@@ -128,10 +128,18 @@ def concatDatasets(Dlist):
         # Dnew.Metadats = copy.deepcopy(self.Metadats)
 
     # Check consisitency
-    Dnew._check_consistency()
+    Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+    Dnew._check_consistency() 
 
     # do cleanup?
-    Dnew._cleanup()
+    if do_cleanup:
+        # Usually already cleaned up before concatting..
+        # but run if you want
+        Dnew._cleanup()
+    else:
+        # Sort so is in increasing by date. THis is done in cleanup, the one thing
+        # that is global in a way that would wnat to run even if you have already cleaned up.
+        Dnew.Dat = Dnew.Dat.sort_values("tvalfake", axis=0).reset_index(drop=True)
 
     return Dnew
 
