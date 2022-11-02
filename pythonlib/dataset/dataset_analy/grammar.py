@@ -231,9 +231,10 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
             (dfGramScore["block"].isin(blocks_keep)) & 
             (dfGramScore["exclude_because_online_abort"]==False)
         ]
-        figs = plot_(dfthis)
-        for i, f in enumerate(figs):
-            f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_trial-{i}.pdf")
+        if len(dfthis)>0:
+            figs = plot_(dfthis)
+            for i, f in enumerate(figs):
+                f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_trial-{i}.pdf")
     plt.close("all")
 
     ## The same, but datapt=char (aggregate over trials)
@@ -249,10 +250,11 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         dfthis = dfGramScore[
             (dfGramScore["block"].isin(blocks_keep)) & 
             (dfGramScore["exclude_because_online_abort"]==False)]
-        dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=["success_binary"])
-        figs = plot_(dfthisAgg)
-        for i, f in enumerate(figs):
-            f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_char-{i}.pdf")
+        if len(dfthis)>0:
+            dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=["success_binary"])
+            figs = plot_(dfthisAgg)
+            for i, f in enumerate(figs):
+                f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_char-{i}.pdf")
     plt.close("all")
 
 
