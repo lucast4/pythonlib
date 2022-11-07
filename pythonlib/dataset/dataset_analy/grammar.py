@@ -125,6 +125,22 @@ def preprocess_dataset(D):
     dfGramScore = applyFunctionToAllRows(dfGramScore, F, "which_probe_blockset")
     list_blocksets_with_contiguous_probes = list_blockset
 
+    # Append things to dfgramscore
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
+    cols_to_copy = ["success_binary", "beh_sequence_wrong", "beh_too_short", "exclude_because_online_abort", "epoch_superv", 
+                    "which_probe_blockset"]
+    for col in cols_to_copy:
+        list_vals = []
+        for i in range(len(D.Dat)):
+            vals = dfGramScore[dfGramScore["datind"] == i][col].tolist()
+            assert len(vals)==1
+            list_vals.append(vals[0])
+        if col in D.Dat.columns:
+            assert list_vals==D.Dat[col].tolist()
+        else:
+            D.Dat[col] = list_vals
+        print("Added this columnt to D.Dat: ", col)
+
     return dfGramScore, list_blocksets_with_contiguous_probes, SDIR
 
 
@@ -359,6 +375,72 @@ def plot_counts_heatmap(dfGramScore, SDIR):
         dfthis, fig, ax = _plot_counts_heatmat(dfthis, col1, col2)
         fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-taskgroup_{tg}.pdf")
 
+def plot_performance_each_char(dfGramScore, D, SDIR):
+    """ Plot separate fro each characters, organized in different ways
+    """
+
+    from pythonlib.tools.snstools import rotateLabel
+
+    sdirthis = f"{SDIR}/summary"
+    dfthis = dfGramScore[
+        (dfGramScore["exclude_because_online_abort"]==False)
+    ]
+
+    fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="epoch_superv", 
+                col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
+    rotateLabel(fig)
+    path = f"{sdirthis}/eachchar-overview-1.pdf"
+    fig.savefig(path)
+
+    fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="block", 
+                col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
+    rotateLabel(fig)
+    path = f"{sdirthis}/eachchar-overview-2.pdf"
+    fig.savefig(path)
+
+    fig = sns.catplot(data = dfthis, x="block", y="success_binary", hue="character", 
+                col="taskgroup", row="epoch_superv", kind="bar", aspect=2)
+    rotateLabel(fig)
+    path = f"{sdirthis}/eachchar-overview-3.pdf"
+    fig.savefig(path)
+
+
+
+def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
+    """ Plots of timecourse of performance, such as trial by trial
+    """
+
+    dfthis = D.Dat[
+        (D.Dat["exclude_because_online_abort"]==False)
+    ]
+
+    fig, axes = plt.subplots(4,1, figsize=(35,9))
+
+    # 1) info, plot blocks and etc.
+    ax = axes.flatten()[0]
+    sns.scatterplot(data=dfthis, x="trial", y="block", hue="which_probe_blockset", style="epoch", ax=ax, alpha = 0.75)
+    ax.grid(True)
+
+    # 2) trial by trial performance
+    ax = axes.flatten()[1]
+    ax.grid(True)
+    sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch_superv", ax=ax, 
+                   alpha = 0.75)
+
+    ax = axes.flatten()[2]
+    ax.grid(True)
+    sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch", style="epoch_superv", ax=ax, 
+                   alpha = 0.75)
+
+    ax = axes.flatten()[3]
+    ax.grid(True)
+    ax.set_title('NOT excluding abort trials')
+    sns.scatterplot(data=D.Dat, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
+                   alpha = 0.75)
+
+    sdirthis = f"{SDIR}/summary"
+    path = f"{sdirthis}/timecourse-trials-overview.pdf"
+    fig.savefig(path)
 
 def _blocks_to_str(blocks):
     """ Helper to conver tlist of ints (blocks) to a signle string"""

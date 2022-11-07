@@ -210,7 +210,11 @@ def extract_supervision_params(D, ind):
 
     SOUNDS_STROKES_DONE = allparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
     SOUNDS_TRIAL_ONSET = allparams["sounds"]["play_sound_trial_onset"]==1
-    SOUNDS_ALLPTSDONE = allparams["sounds"]["play_done_sound_on"]==1
+    if "play_done_sound_on" in allparams["sounds"].keys():
+        SOUNDS_ALLPTSDONE = allparams["sounds"]["play_done_sound_on"]==1
+    else:
+        # Before around Jun 2022 - was default on.
+        SOUNDS_ALLPTSDONE = True
 
 
     ############# CONTROL PTS
