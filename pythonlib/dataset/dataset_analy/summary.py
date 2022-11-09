@@ -542,32 +542,33 @@ def print_save_task_information(D, SDIR_MAIN):
         os.makedirs(sdir, exist_ok=True)
         
         # get task categories    
-        taskcats = df["task_stagecategory"].unique()
+        for col in ["task_stagecategory", "taskgroup"]:
+            taskcats = df[col].unique()
 
-        catdict = {}
-        catndict = {}
-        for cat in taskcats:
-            dfthis = df[df["task_stagecategory"] == cat]
+            catdict = {}
+            catndict = {}
+            for cat in taskcats:
+                dfthis = df[df[col] == cat]
 
-            taskdict = {}
-            tasks = sorted(dfthis["unique_task_name"].unique())
-            for t in tasks:
-                n = sum(dfthis["unique_task_name"]==t)
-                taskdict[t] = n
+                taskdict = {}
+                tasks = sorted(dfthis["unique_task_name"].unique())
+                for t in tasks:
+                    n = sum(dfthis["unique_task_name"]==t)
+                    taskdict[t] = n
 
-            catdict[cat] = taskdict
+                catdict[cat] = taskdict
 
-            # Information about this category
+                # Information about this category
 
-            catndict[cat] = {
-                "n_trials":len(dfthis),
-                "n_unique_tasks":len(tasks),
-                "min_ntrials_across_tasks":min(taskdict.values()),
-                "max_ntrials_across_tasks":max(taskdict.values()),
-            }
+                catndict[cat] = {
+                    "n_trials":len(dfthis),
+                    "n_unique_tasks":len(tasks),
+                    "min_ntrials_across_tasks":min(taskdict.values()),
+                    "max_ntrials_across_tasks":max(taskdict.values()),
+                }
 
-        writeDictToYaml(catdict, f"{sdir}/all_tasks_bycategory{suffix}.yaml")
-        writeDictToYaml(catndict, f"{sdir}/all_categories{suffix}.yaml")
+            writeDictToYaml(catdict, f"{sdir}/all_tasks_by-{col}{suffix}.yaml")
+            writeDictToYaml(catndict, f"{sdir}/all-{col}{suffix}.yaml")
 
     # Across all dates
     _print_save_task_information(D, SDIR_MAIN)

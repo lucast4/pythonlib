@@ -614,6 +614,48 @@ class TaskClass(object):
             assert False, "not coded"
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
+    def compare_on_same_grid(self, TaskOther):
+        """ Returns True if other task is on same grid
+        PARAMS:
+        - TaskOther, taskclass object
+        """
+
+        # fail if iether is not on grid
+        if not self.get_grid_ver()=="on_grid" or not TaskOther.get_grid_ver()=="on_grid":
+            return False
+
+        # Fail if any of these key params are not the same
+        gp1 = self.get_grid_params()
+        gp2 = TaskOther.get_grid_params()
+        for key in ["grid_x", "cell_width", "cell_height", "center"]:
+            if not np.all(np.isclose(gp1[key], gp2[key])):
+                return False
+            # if not gp1[key] == gp2[key]:
+            #     return False
+
+        return True
+
+
+    def compare_prims_on_same_grid_location(self, TaskOther):
+        """ Returns True if other task has (i) same grid and (ii) prims
+        on identical location. Doesnt care whteher they are in same tempora order,.
+        or what those prims are.
+        - NOTE: ok if num prims different, as long as locations identical (which means 
+        one must have overlapoing prims)
+        """
+
+        if not self.compare_on_same_grid(TaskOther):
+            return False
+
+        datseg1 = self.tokens_generate()
+        locations1 = sorted(set([d["gridloc"] for d in datseg1]))
+
+        datseg2 = TaskOther.tokens_generate()
+        locations2 = sorted(set([d["gridloc"] for d in datseg2]))
+
+        return locations1 == locations2
+
+
     def get_grid_ver(self):
         """ Each task is either on a grid or off a grid, based on locations of centers of the primitves.
 

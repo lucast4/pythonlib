@@ -1,0 +1,219 @@
+""" To classify probes, etc
+"""
+
+import numpy as np
+
+
+
+def _extract_concurrent_train_tasks(task_probe, D):
+    """ for a given probe task, get list of all non-probe tasks presented in each epoch
+    RETURNS:
+    - tasks_per_epoch, dict[epoch] = list_character_nbames
+    """
+    
+#     blocks = D.Dat[D.Dat["character"]==task_probe]["block"] # blocks that has this 
+    epochs = D.Dat[D.Dat["character"]==task_probe]["epoch"] # epochs that this task is in
+    
+    tasks_per_epoch = {}
+    for ep in epochs:
+        inds = (D.Dat["epoch"]==ep) & (D.Dat["probe"]==0)
+        tasks_per_epoch[ep] = sorted(D.Dat[inds]["character"].unique())
+    return tasks_per_epoch    
+    
+def _check_same_spatial_config(task1, task2, D):
+    """ given a pair of tasks, test whether has same spatial config.
+    - i..e, have prims in the same grid locations
+    PARAMS:
+    - task1 and task2 are string names.
+    RETURNS:
+    - bool, True if prims are in same locaiton (disregarding order)
+    """
+    
+    # 1) get taskclass objects 
+    Task1 = _extract_taskclass_from_taskname(task1, D)
+    Task2 = _extract_taskclass_from_taskname(task2, D)
+    
+    return Task1.compare_prims_on_same_grid_location(Task2)
+
+    
+def _extract_taskclass_from_taskname(taskname, D):
+    return D.Dat[D.Dat["character"]==taskname]["Task"].values[0]
+    
+# def _check_equidistant_from_first_stroke(taskname, epoch):
+#     """ Returns True if strokes 2 and 3 are the same distance (euclidain)
+#     from stroke 1. looks at centers on grid.
+#     """
+#     asdsad
+#     Task = _extract_taskclass_from_taskname(taskname)
+
+def _check_equidistant_from_first_stroke(ind, D):
+    """ Returns True if strokes 2 and 3 are the same distance (euclidain)
+    from stroke 1. looks at centers on grid.
+    PARAMS:
+    - ind, index into D.Dat
+    """
+    
+    # 1) get ground truth sequencing order (using tasksequencer)
+    sdict = D.sequence_extract_beh_and_task(ind)
+#     {'taskstroke_inds_beh_order': [2, 0, 1],
+#          'taskstroke_inds_correct_order': [2, 0, 1],
+#          'active_chunk': <pythonlib.chunks.chunksclass.ChunksClass at 0x7f2c5f9b1cd0>,
+#          'supervision_tuple': 'off|0||0',
+#          'epoch': 'D|0'}
+
+    taskstroke_inds_correct_order = sdict["taskstroke_inds_correct_order"]
+    
+    # 2) get locations of taskinds
+    T = D.Dat.iloc[ind]["Task"]
+    dseg = T.tokens_generate()
+    locations = [d["gridloc"] for d in dseg]
+    
+    # 3) get distances between pairs of stropkes.
+    def _distance_between_strokes(ind1, ind2):
+        """Euclidian dist from center of taskstroke ind1 to ind2, where
+        inds are default indices into strokes
+        """
+        loc1 = np.array(locations[ind1])
+        loc2 = np.array(locations[ind2])
+        return np.linalg.norm(loc2 - loc1)
+    def _distance_between_strokes_using_tasksequencer_rank(rank1, rank2):
+        """ same, but using indices after ordering using
+        tasksequenccer """
+        
+        ind1 = taskstroke_inds_correct_order[rank1]
+        ind2 = taskstroke_inds_correct_order[rank2]
+        return _distance_between_strokes(ind1, ind2)
+    
+    dist1 = _distance_between_strokes_using_tasksequencer_rank(0, 1)
+    dist2 = _distance_between_strokes_using_tasksequencer_rank(0, 2)
+    
+    return np.isclose(dist1, dist2)
+        
+
+def _classify_probe_task(novel_location_config, equidistant):
+    """ map from params to name that describes this probe task.
+    Can use name as taskgroup
+    """
+    
+    if novel_location_config and equidistant:
+        return "E_cfig_eq"
+    elif novel_location_config and not equidistant:
+        return "E_cfig"
+    elif not novel_location_config and equidistant:
+        return "I_eq"
+    else:
+        return "I"
+    
+
+def compute_features_each_probe(D):
+    """ For each probe task, compute its "features" which indicate ways that it is 
+    different from train tasks. This is compuited spearately for each epoch, becuase
+    features will depend on what sequence rule is being trained 
+    RETURNS:
+    - dict_probe_features, dict, with keys (epoch, probe_task_name), mapping to tuple of
+    features.
+    - dict_probe_kind, dict, with keys (epoch, probe_task_name), mapping to string name
+    defining this kind of probe.
+    NOTE: only includes probes actually present in that epoch.
+    NOTE: generally uses tasks taht were actually poresented, nopt what is in blockparams
+    """
+
+    # 1) get names of all probes
+    list_tasks_probe = sorted(D.Dat[D.Dat["probe"]==1]["character"].unique())
+
+    # 2) For each probe, collect its features
+    dict_probe_features = {}
+    dict_probe_kind = {}
+    for task_probe in list_tasks_probe:
+        tasks_per_epoch = _extract_concurrent_train_tasks(task_probe, D)
+
+        for ep, tasks_this_epoch in tasks_per_epoch.items():
+            
+            ### COLLECT FEATURES
+            # 1) probe is a unique location config?
+            list_same_config = []
+            for task_train in tasks_this_epoch:
+                same_config = _check_same_spatial_config(task_probe, task_train, D)
+                list_same_config.append(same_config)
+            novel_location_config = not any(list_same_config)
+            
+            # 2) taskstrokes 2 and 3 (in sequence) are same distance from 1?
+            # get inds that have this task and epoch
+            list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
+            list_equidistant = [] # check all inds, and confirm they are identical
+            for ind in list_inds:
+                eq = _check_equidistant_from_first_stroke(ind, D)
+                list_equidistant.append(eq)
+            assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
+            equidistant = list_equidistant[0]
+            
+            ### GIVE PROBE TASK CATEGORY A NAME
+            c = _classify_probe_task(novel_location_config, equidistant)
+
+            ### SAVE
+            dict_probe_features[(ep, task_probe)] = {
+                "novel_location_config":novel_location_config, 
+                "equidistant_from_first_stroke":equidistant
+                }
+            dict_probe_kind[(ep, task_probe)] = c
+    if False:
+        # Sort by name of (epoch, probe).
+        keys = sorted(dict_probe_kind.keys())
+        tmp = {}
+        for k in keys:
+            tmp[k] = dict_probe_kind[k]
+        dict_probe_kind = tmp
+
+    return dict_probe_features, dict_probe_kind, list_tasks_probe
+
+def taskgroups_assign_each_probe(D):
+    """ Rename each probe's taskgroup based on autoamtically detecting what is
+    special about each probe task. Does this in clever fashion by comparing
+    to the actual training tasks presaented in each epoch.
+    NOTE: takes into account that probe might have different features and thus be
+    different category across epochs. will name it based on conjuction of those categoryse.
+    RETURNS:
+    - map_task_to_taskgroup, dict mapping from character name of probe --> category.
+    """
+
+    if "BehClass" not in D.Dat.columns:
+        # Then extract. need this to know what is ground truth tasksequencer sequence
+        D.behclass_preprocess_wrapper()
+
+    # 1) compute_features_each_probe
+    dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D)
+
+    # 2) map from probe_task to categeroy. main point of this step is to combine catgegory names
+    # across epochs if they are different names.
+    epochs = D.Dat["epoch"].unique().tolist()
+    map_task_to_taskgroup = {}
+    for task_probe in list_tasks_probe:
+        
+        # a) collect names across epochs
+        epochs_used = []
+        probe_kind_used = []
+        for ep in epochs:
+            key = (ep, task_probe)
+            if key in dict_probe_kind.keys():
+                epochs_used.append(ep)
+                probe_kind_used.append(dict_probe_kind[key])
+        
+        # b) combine names across epochs   
+        # - if a given probe task has same cartegoryt acropss all epochs, give it that name
+        # - if has different categories across epochs, then give it long name that combines all that info
+        if len(set(probe_kind_used))>1:
+            # Then diff name under diff epochs.
+            taskgroup = ""
+            for ep, probe_kind in zip(epochs_used, probe_kind_used):
+                if len(taskgroup)>0:
+                    taskgroup += "+"    
+                taskgroup += ep + ":"
+                taskgroup += probe_kind            
+        else:
+            # same probe kind across all epochs.
+            taskgroup = probe_kind_used[0]
+        
+        # c) save
+        map_task_to_taskgroup[task_probe] = taskgroup
+
+    return map_task_to_taskgroup

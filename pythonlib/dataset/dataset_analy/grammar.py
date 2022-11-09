@@ -59,7 +59,11 @@ def preprocess_dataset(D):
             return True
         beh_sequence_wrong = not beh_good_ignore_length(order_beh, order_correct)
         beh_too_short = len(order_beh) < len(order_correct)
-        
+        beh_got_first_stroke = False # whether the first beh stroke was correct.
+        if len(order_beh)>0:
+            if order_beh[0]==order_correct[0]:
+                beh_got_first_stroke = True
+
         # exclude cases where beh was too short, but order was correct
         exclude_because_online_abort = beh_too_short and not beh_sequence_wrong
         
@@ -80,6 +84,7 @@ def preprocess_dataset(D):
             "success_binary":success_binary,
             "beh_sequence_wrong":beh_sequence_wrong,
             "beh_too_short":beh_too_short,
+            "beh_got_first_stroke":beh_got_first_stroke,
             "exclude_because_online_abort":exclude_because_online_abort,
             "epoch_superv":epoch_superv,
             "block": block,
@@ -288,7 +293,8 @@ def plot_performance_timecourse(dfGramScore, list_blockset, SDIR):
     rotateLabel(fig)
 
 
-def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
+def plot_performance_static_summary(dfGramScore, list_blockset, SDIR, 
+        only_cases_got_first_stroke=False):
     """ Bar plots of "static" performance, avberaged within
     blocksets (each a contigous set of plots containing probe tasks)
     """
@@ -296,9 +302,16 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
     from pythonlib.tools.expttools import writeStringsToFile
     sdirthis = f"{SDIR}/summary"
     # Exract only no online abort
-    dfthis = dfGramScore[
-        (dfGramScore["exclude_because_online_abort"]==False)
-    ]
+
+    if only_cases_got_first_stroke:
+        dfthis = dfGramScore[
+            (dfGramScore["exclude_because_online_abort"]==False) &
+            (dfGramScore["beh_got_first_stroke"]==True)
+        ]
+    else:
+        dfthis = dfGramScore[
+            (dfGramScore["exclude_because_online_abort"]==False)
+        ]
 
     # 1) Print summary and save it (perforamnce, as function of hierarhcal params)
     N_MIN = 5 # skip printing for cases with fewer trials
@@ -325,14 +338,21 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR):
                     list_textstrings.append(s)
                     print(s)
     # SAVE
-    path = f"{sdirthis}/staticsummary.txt"
+    path = f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}.txt"
     writeStringsToFile(path, list_textstrings)
 
     # 2) Plot bar plot (same infor as in list_textstrings)
     fig = sns.catplot(data = dfthis, x="taskgroup", y="success_binary", hue = "epoch_superv", kind="bar", ci=68,
                row="which_probe_blockset", aspect=2, height=3)
     rotateLabel(fig)
-    fig.savefig(f"{sdirthis}/staticsummary.pdf")
+    fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-1.pdf")
+
+    # 2) More compact bar plot
+    fig = sns.catplot(data = dfthis, x="which_probe_blockset", y="success_binary", 
+                hue = "epoch_superv", kind="bar", ci=68,
+               col="taskgroup", col_wrap=3, aspect=2, height=3)
+    rotateLabel(fig)
+    fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-2.pdf")
 
 def plot_counts_heatmap(dfGramScore, SDIR):
     """ Heatmap for n trials for each combo of conditions (e.g., epoch|supervsion, and taskgroup)
@@ -381,28 +401,30 @@ def plot_performance_each_char(dfGramScore, D, SDIR):
 
     from pythonlib.tools.snstools import rotateLabel
 
-    sdirthis = f"{SDIR}/summary"
-    dfthis = dfGramScore[
-        (dfGramScore["exclude_because_online_abort"]==False)
-    ]
+    # skip for now, since if many chars the plots are huge. should fix this somethow.
+    if False:
+        sdirthis = f"{SDIR}/summary"
+        dfthis = dfGramScore[
+            (dfGramScore["exclude_because_online_abort"]==False)
+        ]
 
-    fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="epoch_superv", 
-                col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
-    rotateLabel(fig)
-    path = f"{sdirthis}/eachchar-overview-1.pdf"
-    fig.savefig(path)
+        fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="epoch_superv", 
+                    col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
+        rotateLabel(fig)
+        path = f"{sdirthis}/eachchar-overview-1.pdf"
+        fig.savefig(path)
 
-    fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="block", 
-                col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
-    rotateLabel(fig)
-    path = f"{sdirthis}/eachchar-overview-2.pdf"
-    fig.savefig(path)
+        fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="block", 
+                    col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
+        rotateLabel(fig)
+        path = f"{sdirthis}/eachchar-overview-2.pdf"
+        fig.savefig(path)
 
-    fig = sns.catplot(data = dfthis, x="block", y="success_binary", hue="character", 
-                col="taskgroup", row="epoch_superv", kind="bar", aspect=2)
-    rotateLabel(fig)
-    path = f"{sdirthis}/eachchar-overview-3.pdf"
-    fig.savefig(path)
+        fig = sns.catplot(data = dfthis, x="block", y="success_binary", hue="character", 
+                    col="taskgroup", row="epoch_superv", kind="bar", aspect=2)
+        rotateLabel(fig)
+        path = f"{sdirthis}/eachchar-overview-3.pdf"
+        fig.savefig(path)
 
 
 

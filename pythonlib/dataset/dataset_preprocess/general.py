@@ -229,34 +229,39 @@ def _groupingParams(D, expt):
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
 
-    elif expt in ["neuralbiasdir3", "neuralbiasdir3b"]:
+    elif "neuralbiasdir" in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
-        mapper_taskset_to_category = {
-            ("neuralbiasdir", 4, tuple([13,14,15,16,17,18])): "heldout_E_spatial", # novel spatial config
-            ("neuralbiasdir", 4, tuple([1,3,5,7,9,11,13])): "heldout_E_shapes"} # novel shapes order
 
-    elif expt in ["neuralbiasdir3c", "neuralbiasdir3d", "neuralbiasdir3e"]:
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
-        traintest_reassign_method = "supervision_except_color"
-        mapper_taskset_to_category = {
-            ("neuralbiasdir", 6, tuple([6, 7, 8, 9, 10, 11])): "heldout_E_spatial",  # novel spatial config
-            ("neuralbiasdir", 5, tuple([5,6,7,8,9])): "heldin_same_RD_LU",  # samebeh, right and down.
-            ("neuralbiasdir", 6, tuple([3])): "heldin_same_RD_LU", # samebeh, 
-            ("neuralbiasdir", 5, tuple([14,15,16,17,18])): "heldin_same_RU_LD", # samebeh, 
-            ("neuralbiasdir", 6, tuple([12])): "heldin_same_RU_LD"} # samebeh, 
+    # elif expt in ["neuralbiasdir3", "neuralbiasdir3b"]:
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+    #     traintest_reassign_method = "supervision_except_color"
+    #     mapper_taskset_to_category = {
+    #         ("neuralbiasdir", 4, tuple([13,14,15,16,17,18])): "heldout_E_spatial", # novel spatial config
+    #         ("neuralbiasdir", 4, tuple([1,3,5,7,9,11,13])): "heldout_E_shapes"} # novel shapes order
 
+    # elif expt in ["neuralbiasdir3c", "neuralbiasdir3d", "neuralbiasdir3e"]:
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+    #     traintest_reassign_method = "supervision_except_color"
+    #     mapper_taskset_to_category = {
+    #         ("neuralbiasdir", 6, tuple([6, 7, 8, 9, 10, 11])): "heldout_E_spatial",  # novel spatial config
+    #         ("neuralbiasdir", 5, tuple([5,6,7,8,9])): "heldin_same_RD_LU",  # samebeh, right and down.
+    #         ("neuralbiasdir", 6, tuple([3])): "heldin_same_RD_LU", # samebeh, 
+    #         ("neuralbiasdir", 5, tuple([14,15,16,17,18])): "heldin_same_RU_LD", # samebeh, 
+    #         ("neuralbiasdir", 6, tuple([12])): "heldin_same_RU_LD"} # samebeh, 
+
+    # elif 'neuralbiasdir' in expt:
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+    #     traintest_reassign_method = "supervision_except_color"
 
     elif expt in ["shapesequence1", "shapedirsequence1", "grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
 
-    elif 'neuralbiasdir' in expt:
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
-        traintest_reassign_method = "supervision_except_color"
 
     elif "grammardircolor1" in expt or "grammardircolor2" in expt or "grammardircolor3" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
@@ -339,7 +344,7 @@ def _groupingParams(D, expt):
         D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
     
     if grouping_reassign:
-        # Apply reassignment methods in order
+        # Rename epochs, applying reassignment methods in order
         for grmeth in grouping_reassign_methods_in_order:
             if grmeth=="tasksequencer":
                 # Look into objectclass tasksequencer.
@@ -364,7 +369,9 @@ def _groupingParams(D, expt):
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category
 
-def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True):
+def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
+        mapper_character_to_category=None, append_probe_status=True,
+        what_use_for_default = "task_stagecategory"):
     """ Reassign values to D.Dat["taskgroup"], which represent meaningful group[s of
     tasks (e..g, task sets meant to test different kinds of generalization behavior), which
     can be given human-readable names.
@@ -377,13 +384,23 @@ def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_sta
     ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
     means that tasks with setname grammar, setnum 41, and in {15, 19, 25} will be 
     mapped to name "same_beh"
+    - mapper_character_to_category, dict mapping from character name to category. 
+    If using this, then mapper_taskset_to_category must be None. If character not included,
+    then will default to taskset
     - append_probe_status, then appends string "-P", if this is probe
+    - what_use_for_default, string, name of col in D.Dat, what to use if cant find a task
+    in the inputed mapper.
     RETURNS:
     - for each ind, renames its taskgroup column, one of the following:
     --- the value in task_stagecategory, if this is random task.
     --- the value in task_stagecategory, if los info not in mapper_taskset_to_category
     --- the string category in mapper_taskset_to_category (see above).
     """
+
+    if mapper_character_to_category is not None:
+        assert mapper_taskset_to_category is None, "can only use one or the other"
+    else:
+        assert mapper_character_to_category is None, "can only use one or the other"
 
     if False:
         # {TODO}
@@ -414,24 +431,32 @@ def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_sta
                 # use the current random tasksetclass
                 return _final_name(D.Dat.iloc[ind]["task_stagecategory"])
             else:
-                setname, setnum, taskind = D.taskclass_extract_los_info(ind)
 
-                # try to find this set entered by hand
-                for k, v in mapper_taskset_to_category.items():
-                    setname_mapper = k[0]
-                    setnum_mapper = k[1]
-        #             setind1_mapper = k[2]
-        #             setind2_mapper = k[3]
-                    taskinds_mapper = k[2] # list
+                if mapper_taskset_to_category is not None:
+                    # OPTION 1 - use taskset
+                    setname, setnum, taskind = D.taskclass_extract_los_info(ind)
 
-        #             if setname==setname_mapper and setnum==setnum_mapper and setind>=setind1_mapper and setind<=setind2_mapper:
-                    if setname==setname_mapper and setnum==setnum_mapper and taskind in taskinds_mapper:
-                        # found this trial's category
-                        return _final_name(v)
-                # if got to here, then you did not include this task in the mapper. use its taskset
-                # e..g, grammar-ss-41
-                return _final_name(D.Dat.iloc[ind]["task_stagecategory"])
+                    # try to find this set entered by hand
+                    for k, v in mapper_taskset_to_category.items():
+                        setname_mapper = k[0]
+                        setnum_mapper = k[1]
+                        taskinds_mapper = k[2] # list
 
+                        if setname==setname_mapper and setnum==setnum_mapper and taskind in taskinds_mapper:
+                            # found this trial's category
+                            return _final_name(v)
+                    # if got to here, then you did not include this task in the mapper. use its taskset
+                    # e..g, grammar-ss-41
+                    return _final_name(D.Dat.iloc[ind][what_use_for_default])
+                else:
+                    # OPTION 2 - use character
+                    charname = D.Dat.iloc[ind]["character"]
+                    if charname in mapper_character_to_category.keys():
+                        tg = mapper_character_to_category[charname]
+                    else:
+                        # use default, the taskset
+                        tg = D.Dat.iloc[ind][what_use_for_default]
+                    return _final_name(tg)
 
         list_taskgroup = []
         for ind in range(len(D.Dat)):
@@ -564,6 +589,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     """
     from pythonlib.tools.pandastools import filterPandas, aggregGeneral, applyFunctionToAllRows
     from pythonlib.drawmodel.strokedists import distscalarStrokes
+    from pythonlib.dataset.dataset_preprocess.probes import taskgroups_assign_each_probe
 
     if hasattr(D, "_analy_preprocess_done"):
         if D._analy_preprocess_done:
@@ -719,7 +745,15 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.supervision_summarize_into_tuple()
 
     # Reassign taskgroup. by default uses value in task_stagecategory.
-    taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True)
+    # i) first, do automatic detection of probe categories for each character
+    map_task_to_taskgroup = taskgroups_assign_each_probe(D)
+    # append_probe_status = False, so that only appends 1x (the last call)
+    taskgroup_reassign_by_mapper(D, None, map_task_to_taskgroup, append_probe_status=False,
+        what_use_for_default="task_stagecategory")
+    # ii) second, update using hand-entered, overwriting anything detected auto 
+    # (not doing any auto, therefore what_use_for_default = taskgroup)
+    taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True,
+        what_use_for_default="taskgroup")
 
 
     # Print outcomes
