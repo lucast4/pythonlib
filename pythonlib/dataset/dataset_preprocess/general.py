@@ -240,7 +240,7 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
-        
+
     # elif expt in ["neuralbiasdir3", "neuralbiasdir3b"]:
     #     grouping_reassign = True
     #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -374,7 +374,8 @@ def _groupingParams(D, expt):
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
-        features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category
+        features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
+        mapper_auto_rename_probe_taskgroups
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
         mapper_character_to_category=None, append_probe_status=True,
@@ -619,7 +620,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print(len(D.Dat))
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
-        mapper_taskset_to_category \
+        mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups\
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
