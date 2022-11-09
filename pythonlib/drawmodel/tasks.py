@@ -1016,7 +1016,18 @@ class TaskClass(object):
 
         # Process chunks into ChunksClassList
         from pythonlib.chunks.chunksclass import ChunksClassList
+        for k in dat:
+            if "Strokinds" in k:
+                if type(dat[k]) == np.ndarray:
+                    # print(dat[k])
+                    # print(dat[k].shape)
+                    if len(dat[k].shape) == 0:
+                        dat[k] = [dat[k]]
+                    else:
+                        dat[k] = list(dat[k])
+                        
         nstrokes = len(dat['StrokindsDone'])
+
         chunkslist = []
 
         if isinstance(dat["ChunkList"], dict):
