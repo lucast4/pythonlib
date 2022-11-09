@@ -95,27 +95,30 @@ def _check_equidistant_from_first_stroke(ind, D):
     dseg = T.tokens_generate()
     locations = [d["gridloc"] for d in dseg]
 
-    
-    # 3) get distances between pairs of stropkes.
-    def _distance_between_strokes(ind1, ind2):
-        """Euclidian dist from center of taskstroke ind1 to ind2, where
-        inds are default indices into strokes
-        """
-        loc1 = np.array(locations[ind1])
-        loc2 = np.array(locations[ind2])
-        return np.linalg.norm(loc2 - loc1)
-    def _distance_between_strokes_using_tasksequencer_rank(rank1, rank2):
-        """ same, but using indices after ordering using
-        tasksequenccer """
+    if len(locations)<3:
+        # then cant compute
+        return False
+    else:
+        # 3) get distances between pairs of stropkes.
+        def _distance_between_strokes(ind1, ind2):
+            """Euclidian dist from center of taskstroke ind1 to ind2, where
+            inds are default indices into strokes
+            """
+            loc1 = np.array(locations[ind1])
+            loc2 = np.array(locations[ind2])
+            return np.linalg.norm(loc2 - loc1)
+        def _distance_between_strokes_using_tasksequencer_rank(rank1, rank2):
+            """ same, but using indices after ordering using
+            tasksequenccer """
+            
+            ind1 = taskstroke_inds_correct_order[rank1]
+            ind2 = taskstroke_inds_correct_order[rank2]
+            return _distance_between_strokes(ind1, ind2)
         
-        ind1 = taskstroke_inds_correct_order[rank1]
-        ind2 = taskstroke_inds_correct_order[rank2]
-        return _distance_between_strokes(ind1, ind2)
-    
-    dist1 = _distance_between_strokes_using_tasksequencer_rank(0, 1)
-    dist2 = _distance_between_strokes_using_tasksequencer_rank(0, 2)
-    
-    return np.isclose(dist1, dist2)
+        dist1 = _distance_between_strokes_using_tasksequencer_rank(0, 1)
+        dist2 = _distance_between_strokes_using_tasksequencer_rank(0, 2)
+        
+        return np.isclose(dist1, dist2)
         
 
 def _classify_probe_task(novel_location_config, equidistant):

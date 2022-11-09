@@ -39,28 +39,49 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     from pythonlib.dataset.dataset import Dataset
     from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
 
-    # --------------- INPUT PARAMS
-    PLOT_OVERVIEW = True
+    if savelocation=="daily":
+        # --------------- INPUT PARAMS
+        PLOT_OVERVIEW = True
+        PLOT_OVERVIEW_IGNORE_LARGE_PLOTS = False
 
-    # - related to fixed test tasks:
-    PLOT_EXAMPLE_DATEVTASK = True
-    PLOT_ALL_EACHTRIAL = True
-    PLOT_TEST_TASK_IMAGES = False
-    PLOT_ALL_DRAWINGS_IN_GRID = False # example trials x unique tasks, one plot for each task set. [may take a while]
+        # - related to fixed test tasks:
+        PLOT_EXAMPLE_DATEVTASK = True
+        PLOT_ALL_EACHTRIAL = True
+        PLOT_TEST_TASK_IMAGES = False
+        PLOT_ALL_DRAWINGS_IN_GRID = False # example trials x unique tasks, one plot for each task set. [may take a while]
 
-    # - related to train tasks
-    PLOT_TRAIN_GRID = True
-    PLOT_TRAIN_REPEATED = False # things repeated even though random.
+        # - related to train tasks
+        PLOT_TRAIN_GRID = True
+        PLOT_TRAIN_REPEATED = False # things repeated even though random.
 
-    # - other stuff
-    PLOT_RANDOM_GRID_EXAMPLES= False
+        # - other stuff
+        PLOT_RANDOM_GRID_EXAMPLES= False
 
-    # base_dir = "/gorilla1"
-    # drawmonkey_dir = "/home/lucast4/drawmonkey"
+        FILT_ONLY_TEST = False
+    elif savelocation=="main":
+        # To avoid making large plots.
 
-    # EXPT PARAMS
-    # expt = "concrete1" #run for chunkbyshape1, chunkbyshape2
-    # RULELIST = []
+        # --------------- INPUT PARAMS
+        PLOT_OVERVIEW = True
+        PLOT_OVERVIEW_IGNORE_LARGE_PLOTS = True
+
+        # - related to fixed test tasks:
+        PLOT_EXAMPLE_DATEVTASK = True
+        PLOT_ALL_EACHTRIAL = False
+        PLOT_TEST_TASK_IMAGES = False
+        PLOT_ALL_DRAWINGS_IN_GRID = False # example trials x unique tasks, one plot for each task set. [may take a while]
+
+        # - related to train tasks
+        PLOT_TRAIN_GRID = False
+        PLOT_TRAIN_REPEATED = False # things repeated even though random.
+
+        # - other stuff
+        PLOT_RANDOM_GRID_EXAMPLES= False
+
+        FILT_ONLY_TEST = True # only test tasks, train leads to huge plots.
+    else:
+        print(savelocation)
+        assert False
 
 
     if rulelist is None:
@@ -164,11 +185,13 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     
     ##### THINGS THAT SHOULD ALWAYS DO, SINCE IS QUICK (PRINTING THINGS)
     from pythonlib.dataset.dataset_analy.summary import print_save_task_information
+    print("DOING: print_save_task_information")
     print_save_task_information(D, SDIR_MAIN)
 
     #### PLOT OVERVIEW OF EXPERIMENT
     if PLOT_OVERVIEW:
-        figlist = D.plotOverview()
+        print("DOING: PLOT_OVERVIEW")
+        figlist = D.plotOverview(ignore_large_plots=PLOT_OVERVIEW_IGNORE_LARGE_PLOTS)
         for i, fig in enumerate(figlist):
             fig.savefig(f"{SDIR_MAIN}/overview_{i}.pdf")
 
@@ -183,6 +206,7 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     ## Plot all test tasks stimuli
     # Get all uique test tasks
     if PLOT_TEST_TASK_IMAGES:
+        print("DOING: PLOT_TEST_TASK_IMAGES")
         # TODO: split by set category, and features.
         # get list of unique tasks
         df = D.filterPandas({"monkey_train_or_test":["test"]}, "dataframe")
@@ -207,6 +231,7 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
         plt.close("all")
 
     if PLOT_ALL_DRAWINGS_IN_GRID:
+        print("DOING: PLOT_ALL_DRAWINGS_IN_GRID")
         from pythonlib.dataset.dataset_analy.summary import plot_all_drawings_in_grid
         plot_all_drawings_in_grid(D, SAVEDIR_FIGS, MAX_ROWS=10)
         plt.close("all")
@@ -238,65 +263,74 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
 
 
     if PLOT_EXAMPLE_DATEVTASK:
+        print("DOING: PLOT_EXAMPLE_DATEVTASK")
+
         from pythonlib.dataset.dataset_analy.summary import plot_summary_drawing_examplegrid
         # plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, 
         #                  yaxis_ver="date_epoch", how_to_split_files = "task_stagecategory")
         # for traintest in ["test", "train"]:
-        list_supstage = D.Dat["supervision_stage_concise"].unique().tolist()
-        for supstage in list_supstage:
-            Dthis = D.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
-            plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder=f"{supstage}", 
-                             yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
+        if FILT_ONLY_TEST:
+            Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":["test"]}, "dataset")
+        else:
+            Dthis = D
 
-    if False:
-        ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
-        # for traintest in ["test", "train"]:
-        if PLOT_ALL_EACHTRIAL:
-            taskcats = D.Dat["taskgroup"].unique()
-            for taskgroup in taskcats:
-                # Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":[traintest]}, "dataset")
-                Dthis = D.filterPandas({"random_task":[False], "taskgroup":[taskgroup]}, "dataset")
-                if len(Dthis.Dat)>0:
-                    # subfolder = f"{traintest}"
-                    subfolder = f"{taskgroup}"
-                    #### 2) A single category, over all time
-                    #### 1) A single task, over time.
-                    plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
+        list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        for supstage in list_supstage:
+            Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
+
+            # Check if plot is large. if so, split into multiple plots.
+            
+            plot_summary_drawing_examplegrid(Dthisplot, SAVEDIR_FIGS, subfolder=f"{supstage}", 
+                             yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
 
     ############ SAME AS ABOVE, but ignore supervision stages, just split to train/test
     # for traintest in ["test", "train"]:
     if PLOT_ALL_EACHTRIAL:
-        list_supstage = D.Dat["supervision_stage_concise"].unique().tolist()
+        print("DOING: PLOT_ALL_EACHTRIAL")
+
+        if FILT_ONLY_TEST:
+            Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":["test"]}, "dataset")
+        else:
+            Dthis = D
+
+        list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
         for supstage in list_supstage:
-            Dthis = D.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
-            if len(Dthis.Dat)>0:
+            Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
+            if len(Dthisplot.Dat)>0:
                 # subfolder = f"{traintest}"
                 subfolder = f"{supstage}"
                 #### 2) A single category, over all time
                 #### 1) A single task, over time.
-                plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder)
+                plot_summary_drawing_eachtrial(Dthisplot, SAVEDIR_FIGS, subfolder)
 
     ######### PLOT RANDOM EXAMPLES IN GRID, EACH PLOT A SEPARATE TASK SET.
     if PLOT_RANDOM_GRID_EXAMPLES:
+        print("DOING: PLOT_RANDOM_GRID_EXAMPLES")
         sdirthis = f"{SAVEDIR_FIGS}/random_grid_examples"
         os.makedirs(sdirthis, exist_ok=True)
         import random
         nplot = 20 # per grid
         niter = 3
+        if FILT_ONLY_TEST:
+            Dthis = D.filterPandas({"random_task":[False], "monkey_train_or_test":["test"]}, "dataset")
+        else:
+            Dthis = D
         for i in range(niter):
-            for taskset, inds in D.grouping_get_inner_items("task_stagecategory", "index").items():
+            for taskset, inds in Dthis.grouping_get_inner_items("task_stagecategory", "index").items():
                 # get subset of inds
                 if len(inds)>nplot:
                     inds = random.sample(inds, nplot)
                 inds = sorted(inds)
-                fig1 = D.plotMultTrials(inds, "strokes_task", titles=inds);
-                fig2 = D.plotMultTrials(inds, color_by="order", add_stroke_number=False);
+                fig1 = Dthis.plotMultTrials(inds, "strokes_task", titles=inds);
+                fig2 = Dthis.plotMultTrials(inds, color_by="order", add_stroke_number=False);
 
                 fig1.savefig(f"{sdirthis}/{taskset}-iter_{i}-task.pdf")
                 fig2[0].savefig(f"{sdirthis}/{taskset}-iter_{i}-beh.pdf")
 
     ######### 2) Plot all training tasks (lumps random and fixed) into random grids.
     if PLOT_TRAIN_GRID:
+        print("DOING: PLOT_TRAIN_GRID")
+
         Dtrain = D.filterPandas({"monkey_train_or_test":["train"]}, "dataset")
 
         # 1) plot random train tasks (beh + test)
@@ -347,6 +381,8 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
 
     ####### Random train tasks that were repeated.
     if PLOT_TRAIN_REPEATED:
+        print("DOING: PLOT_TRAIN_GRID")
+
         nmin_trials= 6 # min num repeated trials.
         nmin_tasksplot = 100 # take top 100 tasks.
         Dtrain = D.filterPandas({"random_task":[True], "monkey_train_or_test":["train"]}, "dataset")
@@ -462,6 +498,8 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     RETURNS:
     - saves figures.
     """
+    MAX_SUBPLOTS = 50
+
     print("*** FIX - don't subsample trials. instead make mulitpel plots")
     from pythonlib.dataset.plots import plot_beh_grid_grouping_vs_task
     import os
@@ -475,26 +513,48 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     # 2) one plot for each task category
     taskcats = Dthis.Dat[how_to_split_files].unique()
     for tc in taskcats:
-        tasklist = Dthis.Dat[Dthis.Dat[how_to_split_files]==tc]["character"].unique()
-        for max_n_per_grid in LIST_N_PER_GRID:
-            
-            # How many iterations?
-            if max_n_per_grid==1:
-                n = 4
-            else:
-                n=1
-            
-            # Plots Iterate, since is single plots. 
-            for i in range(n):
-                figb, figt = plot_beh_grid_grouping_vs_task(Dthis.Dat, yaxis_ver, 
-                                                            tasklist, 
-                                                            max_n_per_grid=max_n_per_grid, 
-                                                            max_n_trials=200,
-                                                            plotkwargs={"strokes_by_order":strokes_by_order})
-                figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-beh.pdf");
-                figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-task.pdf");
-            plt.close("all")
-            
+        dfthis = Dthis.Dat[Dthis.Dat[how_to_split_files]==tc]
+        tasklist = dfthis["character"].unique()
+
+        # predict how large the plot will be
+        # - how many y-axis levels?
+        n_levels_yaxis = len(dfthis[yaxis_ver].unique().tolist())
+        n_levels_xaxis = len(tasklist)
+        nsubplots = n_levels_xaxis * n_levels_xaxis
+        # break it up
+        maxcols = int(np.floor(MAX_SUBPLOTS/n_levels_yaxis))
+        if maxcols==0:
+            maxcols = 1
+        imin = 0
+        imax = 0
+        ct = 0
+        while imax<len(tasklist):
+            imax = imin + maxcols
+            tasklist_this = tasklist[imin:imax]
+            ### RUN
+            for max_n_per_grid in LIST_N_PER_GRID:
+                
+                # How many iterations?
+                if max_n_per_grid==1:
+                    n = 3
+                else:
+                    n=1
+                
+                # Plots Iterate, since is single plots. 
+                for i in range(n):
+                    figb, figt = plot_beh_grid_grouping_vs_task(Dthis.Dat, yaxis_ver, 
+                                                                tasklist_this, 
+                                                                max_n_per_grid=max_n_per_grid, 
+                                                                max_n_trials=200,
+                                                                plotkwargs={"strokes_by_order":strokes_by_order})
+                    figb.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-sub{ct}-beh.pdf");
+                    figt.savefig(f"{sdirthis}/{tc}-npergrid{max_n_per_grid}-iter{i}-sub{ct}-task.pdf");
+                plt.close("all")
+
+            # update
+            imin = imax
+            ct+=1
+
 
 def plot_all_drawings_in_grid(Dthis, SAVEDIR_FIGS, MAX_COLS = 150, MAX_ROWS = 5, strokes_by_order = True):
     """ Plot beh and task in separate grids, where y axis is examples and x is unique tasks, where

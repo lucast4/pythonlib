@@ -95,7 +95,9 @@ def _groupingParams(D, expt):
     # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
     grouping_reassign_methods_in_order = ["tasksequencer"]
     traintest_reassign_method = "probes"
+    # -- for renaming taskgroups
     mapper_taskset_to_category = {}
+    mapper_auto_rename_probe_taskgroups = False
         # return F, grouping, plantime_cats, features_to_remove_nan, \
         #     features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
         #     grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order, \
@@ -199,6 +201,9 @@ def _groupingParams(D, expt):
         grouping_levels = ["straight", "bent"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]        
     elif expt == "gridlinecircle":
+        grouping_reassign = False
+        # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+
         animal = D.animals()
         if len(animal)>1:
             assert False, "params different for each animal.."
@@ -206,9 +211,9 @@ def _groupingParams(D, expt):
             animal = animal[0]
         F = {}
         grouping = "epoch"
-        plantime_cats = {}
-        features_to_remove_nan =  []
-        features_to_remove_outliers = []
+        # plantime_cats = {}
+        # features_to_remove_nan =  []
+        # features_to_remove_outliers = []
         if animal in ["Diego", "Pancho"]:
             grouping_levels = ["baseline", "linetocircle", "circletoline", "lolli"]
         elif animal in ["Red"]:
@@ -216,6 +221,7 @@ def _groupingParams(D, expt):
         else:
             assert False
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
+        traintest_reassign_method = "fixed"
     elif expt in ["chunkbyshape1", "chunkbyshape1b", "chunkbyshape2", "chunkbyshape2b"]:
         F = {}
         grouping = "epoch"
@@ -233,7 +239,8 @@ def _groupingParams(D, expt):
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
-
+        mapper_auto_rename_probe_taskgroups = True
+        
     # elif expt in ["neuralbiasdir3", "neuralbiasdir3b"]:
     #     grouping_reassign = True
     #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -746,14 +753,16 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # Reassign taskgroup. by default uses value in task_stagecategory.
     # i) first, do automatic detection of probe categories for each character
-    map_task_to_taskgroup = taskgroups_assign_each_probe(D)
-    # append_probe_status = False, so that only appends 1x (the last call)
-    taskgroup_reassign_by_mapper(D, None, map_task_to_taskgroup, append_probe_status=False,
-        what_use_for_default="task_stagecategory")
-    # ii) second, update using hand-entered, overwriting anything detected auto 
-    # (not doing any auto, therefore what_use_for_default = taskgroup)
-    taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True,
-        what_use_for_default="taskgroup")
+    if D.taskclass_is_new_version(-1):
+        if mapper_auto_rename_probe_taskgroups:
+            map_task_to_taskgroup = taskgroups_assign_each_probe(D)
+            # append_probe_status = False, so that only appends 1x (the last call)
+            taskgroup_reassign_by_mapper(D, None, map_task_to_taskgroup, append_probe_status=False,
+                what_use_for_default="task_stagecategory")
+        # ii) second, update using hand-entered, overwriting anything detected auto 
+        # (not doing any auto, therefore what_use_for_default = taskgroup)
+        taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True,
+            what_use_for_default="taskgroup")
 
 
     # Print outcomes

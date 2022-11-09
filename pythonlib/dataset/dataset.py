@@ -5350,7 +5350,7 @@ class Dataset(object):
 
 
 
-    def plotOverview(self):
+    def plotOverview(self, ignore_large_plots=False):
         """ quick plot of kinds of tasks present across days
         # To visualize the experimental structure:
         # notes:
@@ -5413,29 +5413,30 @@ class Dataset(object):
         fig.add_legend()
         figlist.append(fig)
 
-        nchar = len(self.Dat["character"].unique())
-        fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="supervision_stage_new", 
-                            sharey=True, sharex=True, aspect=1, height=nchar/10)
-        fig.map(sns.scatterplot, "trial", "character")
-        try:
-            fig.add_legend()
-        except ValueError as err:
-            # this means facet titles are too large?
-            # raise ValueError('left cannot be >= right')
-            pass
-        figlist.append(fig)
+        if ignore_large_plots==False:
+            nchar = len(self.Dat["character"].unique())
+            fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="supervision_stage_new", 
+                                sharey=True, sharex=True, aspect=1, height=nchar/10)
+            fig.map(sns.scatterplot, "trial", "character")
+            try:
+                fig.add_legend()
+            except ValueError as err:
+                # this means facet titles are too large?
+                # raise ValueError('left cannot be >= right')
+                pass
+            figlist.append(fig)
 
 
-        fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="task_stagecategory", 
-                    sharey=True, sharex=True, aspect=1, height=nchar/10)
-        fig.map(sns.scatterplot, "trial", "character")
-        try:
-            fig.add_legend()
-        except ValueError as err:
-            # this means facet titles are too large?
-            # raise ValueError('left cannot be >= right')
-            pass
-        figlist.append(fig)
+            fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="task_stagecategory", 
+                        sharey=True, sharex=True, aspect=1, height=nchar/10)
+            fig.map(sns.scatterplot, "trial", "character")
+            try:
+                fig.add_legend()
+            except ValueError as err:
+                # this means facet titles are too large?
+                # raise ValueError('left cannot be >= right')
+                pass
+            figlist.append(fig)
 
 
         return figlist
