@@ -80,6 +80,21 @@ class TaskClass(object):
                 isnew=True
         return isnew
 
+    def info_is_new_objectclass(self):
+        """ Is even newer, like early 2022, using ObjectClass 
+        to define tasks. Returns True if it is.
+        """
+
+        if not hasattr(self, "ObjectClass"):
+            # Try extracting...
+            self.objectclass_extract_all()
+
+        if self.ObjectClass is None:
+            # Try extracting...
+            self.objectclass_extract_all()
+
+        return self.ObjectClass is not None
+
     def info_is_fixed(self):
         """ if True, then fixed, False, then random
             [Copied from drawmonkey utils
@@ -1050,6 +1065,7 @@ class TaskClass(object):
         # store
         self.ObjectClass = dat
 
+
     def planclass_extract_all(self):
         """ Wrapper to extract all planclass info.
         Also extracts "Objects" based on plan (e.g,, motifs that are touching are 
@@ -1198,6 +1214,19 @@ class TaskClass(object):
 
         return dat
 
+    ############ TASKSETCLASS STUFF
+    def tasksetclass_summary(self):
+        """ Return summayr of the tasksetclass used in dragmonkey to generate this
+        task. only appliues for newer tasks. 
+        RETurns dict holding TSC params.
+        """
+
+        if self.info_is_new_objectclass():
+            # TSC = self.PlanDat["Info"]["TaskSetClass"]["tsc_params"]["quick_sketchpad_params"]
+            TSC = self.PlanDat["Info"]["TaskSetClass"]
+            return TSC
+        else:
+            return None
 
 ######################################## OTHER STUFF
 def task2chunklist(task):

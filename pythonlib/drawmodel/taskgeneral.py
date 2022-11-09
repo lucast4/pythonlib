@@ -5,6 +5,8 @@ from . import primitives as Prim
 import numpy as np
 from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
 
+ATOL = 0.05 # toelrace for saying a coord is close to another (for deciding if is on grid)
+
 class TaskClass(object):
     """ Abstract class for all tasks.
     All data exposed will have first already been converted to abstract cooridnates
@@ -627,7 +629,8 @@ class TaskClass(object):
         # Fail if any of these key params are not the same
         gp1 = self.get_grid_params()
         gp2 = TaskOther.get_grid_params()
-        for key in ["grid_x", "cell_width", "cell_height", "center"]:
+        # for key in ["grid_x", "cell_width", "cell_height", "center"]:
+        for key in ["grid_x_actual_after_rel", "grid_y_actual_after_rel", "cell_width", "cell_height", "center"]:
             if not np.all(np.isclose(gp1[key], gp2[key])):
                 return False
             # if not gp1[key] == gp2[key]:
@@ -655,7 +658,6 @@ class TaskClass(object):
 
         return locations1 == locations2
 
-
     def get_grid_ver(self):
         """ Each task is either on a grid or off a grid, based on locations of centers of the primitves.
 
@@ -671,53 +673,72 @@ class TaskClass(object):
 
         # Latest version, this is saved as a meta param
 
-        # Old task versions...
+        ######################## Old task versions...
         if not self.get_is_new_version():
             return "undefined"
-
-        # Older version, infer it from the saved centers.
-        # if all centers are aligned with grid centers, then this is on grid.
-        centers = self.PlanDat["CentersActual"]
-
-        # Only consider centers for the first prim in each chunk. This is concvention.
-        CLC = self.PlanDat["ChunksListClass"]
-        # Use the first chunk, by convnetion
-        Ch = CLC.ListChunksClass[0]
-        centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
-
         gridparams = self.get_grid_params()
         if gridparams is None:
-            # Then this is old version, grid is not defined/
-            grid_ver = "undefined"
-        else:
-            grid_x = gridparams["grid_x"]
-            grid_y = gridparams["grid_x"]
-            grid_centers = []
-            for x in grid_x:
-                for y in grid_y:
-                    grid_centers.append(np.asarray([x, y]))
+            return "undefined"
 
-            if all([isin_array(c, grid_centers) for c in centers]):
-                # print("centers are on grid:")
-                # print(centers)
-                # print(grid_centers)
-                # Then each stroke center matches a grid center
-                grid_ver = "on_grid"
+        ######################## 
+        # METHOD 1, TaskSetClass params. use the quick meta params originally used
+        # for genreating tsc
+        if "grid_or_char" in gridparams.keys():
+            if gridparams["grid_or_char"]=="grid":
+                return "on_grid"
+            elif gridparams["grid_or_char"]=="char":
+                return "on_rel"
             else:
-                # print("---")
-                # print(centers)
-                # print(grid_centers)
-                # print([isin_array(c, grid_centers) for c in centers])
-                # Then at least one stroke is off grid.
-                grid_ver = "on_rel"
+                print(gridparams)
+                assert False
+
+        #########################
+        # METHOD 2 - look at relations info in gridparams.
+        # NOT DONE! 
+
+        ######################## 
+        # METHOD 3
+        # Older version, infer it from the saved centers.
+        # if all centers are aligned with grid centers, then this is on grid.
+        if False:
+            centers = self.PlanDat["CentersActual"]
+        else:
+            # Only consider centers for the first prim in each chunk. This is concvention.
+            CLC = self.PlanDat["ChunksListClass"]
+            # Use the first chunk, by convnetion
+            Ch = CLC.ListChunksClass[0]
+            centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
+
+        grid_x = gridparams["grid_x_actual_after_rel"]
+        grid_y = gridparams["grid_y_actual_after_rel"]
+        # grid_x = gridparams["grid_x"]
+        # grid_y = gridparams["grid_y"]
+        grid_centers = []
+        for x in grid_x:
+            for y in grid_y:
+                grid_centers.append(np.asarray([x, y]))
+
+        if all([isin_array(c, grid_centers, atol=ATOL) for c in centers]):
+            # print("centers are on grid:")
+            # print(centers)
+            # print(grid_centers)
+            # Then each stroke center matches a grid center
+            grid_ver = "on_grid"
+        else:
+            print([isin_array(c, grid_centers, atol=ATOL) for c in centers])
+            # Then at least one stroke is off grid.
+            grid_ver = "on_rel"
 
         return grid_ver
 
 
 
-    def get_grid_params(self):
+    def get_grid_params(self, also_return_each_kind_of_params=False):
         """ What is the grid structure (if any) for this task?
         This is saved now (3/2022) in PlanClass in matlab.
+        - also_return_each_kind_of_params, bool, if true, then terurned nested dict
+        dict[params_ver_1, ...], where params_ver_1 is a dict of params. each inner
+        dict is different kidn fparams (se ebelow)).
         RETURNS:
         - gridparams, dict holding things like {grid_x, grid_y, ...}, with np array values
         - or None, if this before 3/2022 (grid not defined)
@@ -731,11 +752,145 @@ class TaskClass(object):
         if "TaskGridClass" not in T.PlanDat.keys():
             return None
         else:
-            return T.PlanDat["TaskGridClass"]["GridParams"]
+            ###############
+            # 1. the grid params in gridclass. these are usually default (e.g., gridpts)
+            # but sometimes can chose to use this grid but not use the grid pts, in which
+            # case the code below is the actual grid pts
+            gridparams_background = T.PlanDat["TaskGridClass"]["GridParams"]
+
+            #################
+            # 2. grid params based on relations explicitly used (and sampled) to get 
+            # location coords.
+            T = self.extract_monkeylogic_ml2_task()
+            tsc = T.tasksetclass_summary()
+
+            # a) the "metaparams" used in Tasksetclass, to autoamticlaly generate relationsa nd grd.
+            # tsc["tsc_params"]["quick_sketchpad_params"] =
+            # ['grid', ['3.35_all', ['prims', 'grid_indexed_4_by_4', array(0, dtype=uint8), {}]]]
+            grid_or_char = tsc["tsc_params"]["quick_sketchpad_params"][0] # "grid", "char"
+            grid_scale = tsc["tsc_params"]["quick_sketchpad_params"][1][0] # e.g, 3.2
+            center_on = tsc["tsc_params"]["quick_sketchpad_params"][1][1][0] # "prims", "chunks"
+            rel_kind = tsc["tsc_params"]["quick_sketchpad_params"][1][1][1] # str: "<>...5_by_5"
+            if False:
+                # these may not always be avialble.. (len too short)
+                center_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][2]
+                tforms_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][3]
+            assert grid_or_char in ["grid", "char"], "I assumed so, made a mistake.. prob fine, but now im confused. tasksetclass_helper() in dragmonkey defines this."
+            
+            gridparams_tsc = {
+                "grid_or_char": grid_or_char,
+                "grid_scale": grid_scale,
+                "center_on": center_on,
+                "rel_kind": rel_kind,               
+            }
 
 
+            ##################
+            # 3. Extract the actual relations used
+            # - if grid, then these are the centers
+            # - if char, then these are the delta relations (usualyl [0,0])
+            rel_xy_values = []
+            rels_list_of_dict = []
+            for relation_struct in tsc["tsc_params"]["relations"]:
+                if "xy_pairs" in relation_struct.keys():
+                    # Then this method was active, list of paris.
+                    print(relation_struct["xy_pairs"])
+                    print(relation_struct)
+                    assert False, "extract each coordinate "
+                else:
+                    # xy provides x and y separately, then takes cross-product
+                    xs = relation_struct["xy"][0]
+                    ys = relation_struct["xy"][1]
+                    attachpt1_locations = relation_struct["attachpt1"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
+                    attachpt1_weights = relation_struct["attachpt1"][1] # list of num, weights during sampleing.
+                    attachpt2_locations = relation_struct["attachpt2"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
+                    attachpt2_weights = relation_struct["attachpt2"][1] # list of num, weights during sampleing.
+                    fromprim_indices = relation_struct["fromprim"][0] # list of ints, indices of prims to attach to
+                    fromprim_weights = relation_struct["fromprim"][1] # list of num, weights during sampleing.
+
+                    # collect all xy in a bag
+                    if len(xs.shape)==0:
+                        xs = [xs]
+                    if len(ys.shape)==0:
+                        ys = [ys]
+                    for x in xs:
+                        for y in ys:
+                            pt = np.array([x, y])
+                            rel_xy_values.append(pt)
+
+                    # save this rel
+                    rels_list_of_dict.append(relation_struct)
+
+            gridparams_rels = {
+                "rel_xy_values": rel_xy_values,
+                "rels_list_of_dict":rels_list_of_dict
+            }
+
+            # compute the actual grid locaitons, which is the produce of the baseline grid 
+            # and the relations. usually relations are integers, which puts prims on the grid.
+            # but if not integer, then is produce of rel and grid.
+            # - get all possible x and y locations (just to define grid, even if
+            # takss were only on seubset of loations)
+            xyall = np.stack(rel_xy_values) # (npts, 2)
+            xs = np.sort(np.unique(xyall[:,0])) 
+            ys = np.sort(np.unique(xyall[:,1]))
+            # for k, v in gridparams_background.items():
+            #     print('---', k, v)
+            gridcell_width = gridparams_background["cell_width"] # num
+            gridcell_height = gridparams_background["cell_height"] # num
+            grid_center = gridparams_background["center"] # 2-list
+
+            grid_x_actual = xs * gridcell_width + grid_center[0] # (n,) array
+            grid_y_actual = xs * gridcell_height + grid_center[1]
+
+            gridparams_rels = {
+                "rel_xy_values": rel_xy_values,
+                "rels_list_of_dict":rels_list_of_dict,
+                "grid_x_actual_after_rel":grid_x_actual,
+                "grid_y_actual_after_rel":grid_y_actual
+            }
+
+            ################# COMBINE
+            # 1) flat
+            gridparams = {}
+            for k, v in gridparams_background.items():
+                gridparams[k] = v
+            for k, v in gridparams_tsc.items():
+                assert k not in gridparams.keys()
+                gridparams[k] = v
+            for k, v in gridparams_rels.items():
+                assert k not in gridparams.keys()
+                gridparams[k] = v
+
+            # 2) hierarchial
+            gridparams_each = {
+                "baseline":gridparams_background,
+                "tsc_quick":gridparams_tsc,
+                "rels":gridparams_rels,
+            }
+
+            if also_return_each_kind_of_params:
+                return gridparams, gridparams_each
+            else:
+                return gridparams
 
     def tokens_generate(self, params = {}, inds_taskstrokes=None, track_order=True):
+        """ Wrapper to eitehr create new or to return cached. see 
+        _tokens_generate for more
+        """
+
+        # Check if it already exists.
+        if hasattr(self, 'DatSegs'):
+            if len(self.DatSegs)>0:
+                return self.DatSegs
+
+        # Generate from scratch
+        datsegs = self._tokens_generate(params, inds_taskstrokes, track_order)
+        self.DatSegs = datsegs
+        return self.DatSegs
+
+
+    def _tokens_generate(self, params = {}, inds_taskstrokes=None, track_order=True):
         """
         Designed for grid tasks, where each prim is a distinct location on grid,
         so "relations" are well-defined based on adjacency and direction
@@ -759,17 +914,23 @@ class TaskClass(object):
         print("see: get_grid_ver")
         print("should be in self.PrimitivesObjects")
         # also extract as primitiveclasses (NOTE: this should also be changed to primitivechunk)
-        Prims = self.Primitives
-        assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
+        if not hasattr(self, "Primitives"):
+            # then old version
+            Prims = None
+        elif self.Primitives is None:
+            Prims = None
+        else:
+            Prims = self.Primitives
+            assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
         if inds_taskstrokes is None:
             inds_taskstrokes = list(range(len(objects)))
-            assert len(objects)==len(Prims)
 
         try:
             objects = [objects[i] for i in inds_taskstrokes]
-            Prims = [Prims[i] for i in inds_taskstrokes]
+            if Prims is not None:
+                Prims = [Prims[i] for i in inds_taskstrokes]
         except Exception as err:
             print(objects)
             print(len(objects))
@@ -790,11 +951,19 @@ class TaskClass(object):
                 xgrid = np.linspace(-1.7, 1.7, 3)
                 ygrid = np.linspace(-1.7, 1.7, 3)
                 get_grid = False
+                grid_ver = "on_grid"
         if get_grid:
             # Look for this saved
             gridparams = self.get_grid_params()
-            xgrid = gridparams["grid_x"]
-            ygrid = gridparams["grid_y"]
+            # xgrid = gridparams["grid_x"]
+            # ygrid = gridparams["grid_y"]
+            xgrid = gridparams["grid_x_actual_after_rel"]
+            ygrid = gridparams["grid_y_actual_after_rel"]
+
+            # for key, val in gridparams.items():
+            #     print('--', key, val)
+            # # print(gridparams)
+            # assert False
         nver = len(ygrid)
         nhor = len(xgrid)
 
@@ -815,13 +984,25 @@ class TaskClass(object):
 
         # Spatial scales.
         def _width(i):
-            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["width"]
+            if Prims is None:
+                return None
+            else:
+                return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["width"]
         def _height(i):
-            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["height"]
+            if Prims is None:
+                return None
+            else:
+                return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["height"]
         def _diag(i):
-            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["diag"]
+            if Prims is None:
+                return None
+            else:
+                return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["diag"]
         def _max_wh(i):
-            return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["max_wh"]
+            if Prims is None:
+                return None
+            else:
+                return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["max_wh"]
 
         def _shape(i):
             # return string
@@ -843,8 +1024,8 @@ class TaskClass(object):
             # Sanity check that the hard coded things are correct.
             from pythonlib.tools.nptools import isin_close
             for o in objects:
-                assert isin_close(o[1]["x"], xgrid)
-                assert isin_close(o[1]["y"], ygrid)
+                assert isin_close(o[1]["x"], xgrid, atol=ATOL)
+                assert isin_close(o[1]["y"], ygrid, atol=ATOL)
 
                 # assert np.any(xgrid == o[1]["x"])
                 # assert np.any(ygrid == o[1]["y"])
@@ -854,14 +1035,15 @@ class TaskClass(object):
             for o in objects:
                 xloc = o[1]["x"]
                 yloc = o[1]["y"]
+
+                # print(xloc, xgrid)
                 # print(yloc, ygrid)
                 # print(isin_close(yloc, ygrid))
                 # print(isin_close(yloc, ygrid)[1])
                 # print(isin_close(yloc, ygrid)[1].shape)
                 # print(isin_close(yloc, ygrid)[1][0])
-
-                xind = int(isin_close(xloc, xgrid)[1][0]) - int((nhor-1)/2)
-                yind = int(isin_close(yloc, ygrid)[1][0]) - int((nver-1)/2)
+                xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
+                yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
                 locations.append((xind, yind))
 
             def _posdiffs(i, j):
@@ -921,6 +1103,7 @@ class TaskClass(object):
                 else:
                     return _horizontal_or_vertical(i, i+1)   
         else:
+            print(grid_ver)
             assert grid_ver in ["on_rel"]
 
 
@@ -936,7 +1119,7 @@ class TaskClass(object):
                 "height":_height(i),
                 "diag":_diag(i),
                 "max_wh":_max_wh(i),
-                "Prim":Prims[i],
+                "Prim":Prims[i] if Prims is not None else None,
                 "ind_taskstroke_orig":inds_taskstrokes[i]
                 })
             
@@ -951,9 +1134,13 @@ class TaskClass(object):
                     datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
-                pass
-                # _get_rel_features(i)
-                # assert False, 'complete this'
+                # give none for params
+                datsegs[-1]["gridloc"] = None
+                if track_order:
+                    datsegs[-1]["rel_from_prev"] = None
+                    datsegs[-1]["rel_to_next"] = None
+                    datsegs[-1]["h_v_move_from_prev"] = None
+                    datsegs[-1]["h_v_move_to_next"] = None
             else:
                 print(grid_ver)
                 assert False, "code it"
@@ -961,6 +1148,7 @@ class TaskClass(object):
         return datsegs
 
     #############
+
     def get_is_new_version(self):
         """ Returns True if this trial; uses the new "PLanclass"
         versipn of tasks
@@ -1015,7 +1203,7 @@ class TaskClass(object):
             # based ojn hard coded map between names and motif/oprim
             assert False
 
-                        
+
     ############ PARSER
     def input_parser(self, Parser):
         """ Parser class, input, is fine even if Parser is already done
@@ -1029,6 +1217,9 @@ class TaskClass(object):
 
 
     ############ Extract in different formats
+    def extract_monkeylogic_ml2_task(self):
+        return self.extract_as("ml2")
+
     def extract_as(self, this):
         """ Extract this task in different fromats
         """

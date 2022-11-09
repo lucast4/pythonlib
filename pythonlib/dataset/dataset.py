@@ -606,6 +606,9 @@ class Dataset(object):
         block = self.Dat.iloc[ind]["block"]
         trialcode = self.Dat.iloc[ind]["trialcode"]
 
+        for _, bp in self.BlockParamsDefaults.items():
+            if bp is None: 
+                assert False, "you probably  need to regenerate the dataset (newer code saved Blockparams)"
         trialcodes_included = self.BlockParamsDefaults[idx_bp][(date, sess, block)]["trialcodes_included"]
         blockparams = self.BlockParamsDefaults[idx_bp][(date, sess, block)]["blockparams"]
 

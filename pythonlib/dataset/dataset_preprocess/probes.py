@@ -20,7 +20,7 @@ def _extract_concurrent_train_tasks(task_probe, D):
         tasks_per_epoch[ep] = sorted(D.Dat[inds]["character"].unique())
     return tasks_per_epoch    
     
-def _check_same_spatial_config(task1, task2, D):
+def _check_same_spatial_config(task1, task2, D, mapper_taskname_epoch_to_taskclass):
     """ given a pair of tasks, test whether has same spatial config.
     - i..e, have prims in the same grid locations
     PARAMS:
@@ -30,14 +30,41 @@ def _check_same_spatial_config(task1, task2, D):
     """
     
     # 1) get taskclass objects 
-    Task1 = _extract_taskclass_from_taskname(task1, D)
-    Task2 = _extract_taskclass_from_taskname(task2, D)
-    
-    return Task1.compare_prims_on_same_grid_location(Task2)
+    Task1 = _extract_taskclass_from_taskname(task1, mapper_taskname_epoch_to_taskclass)
+    Task2 = _extract_taskclass_from_taskname(task2, mapper_taskname_epoch_to_taskclass)
+    out = Task1.compare_prims_on_same_grid_location(Task2)
+    return out
 
-    
-def _extract_taskclass_from_taskname(taskname, D):
-    return D.Dat[D.Dat["character"]==taskname]["Task"].values[0]
+def _extract_n_prims(taskname, mapper_taskname_epoch_to_taskclass):
+    """ Return dict mapping from prims to number times they are present
+    """
+    Task = _extract_taskclass_from_taskname(taskname, mapper_taskname_epoch_to_taskclass,
+        epoch=None) 
+
+
+def _extract_taskclass_from_taskname(taskname, mapper_taskname_epoch_to_taskclass,
+        epoch=None):
+    """ Return a single taskclass for this taskname. by default doesnt care about epoch,
+    unless epoch is not None
+    """
+
+    if True:
+        for taskname_epoch, taskclass in mapper_taskname_epoch_to_taskclass.items():
+            if epoch is None:
+                # Then ignore epoch
+                if taskname_epoch[0]==taskname:
+                    return taskclass
+            else:
+                if taskname_epoch == (taskname, epoch):
+                    return taskclass
+
+        # fail if got here and didnt find
+        print(taskname)
+        print(epoch)
+        assert False, "didnt find it"
+    else:
+        # too slow?
+        return D.Dat[D.Dat["character"]==taskname]["Task"].values[0]
     
 # def _check_equidistant_from_first_stroke(taskname, epoch):
 #     """ Returns True if strokes 2 and 3 are the same distance (euclidain)
@@ -67,6 +94,7 @@ def _check_equidistant_from_first_stroke(ind, D):
     T = D.Dat.iloc[ind]["Task"]
     dseg = T.tokens_generate()
     locations = [d["gridloc"] for d in dseg]
+
     
     # 3) get distances between pairs of stropkes.
     def _distance_between_strokes(ind1, ind2):
@@ -104,6 +132,39 @@ def _classify_probe_task(novel_location_config, equidistant):
     else:
         return "I"
     
+    
+def _generate_map_taskclass(D):
+    """ Generate dict mapping from (taskname, epochname) [both strings] to 
+    TaskClass [a single example]. Useful for speeding up subsequent stuff
+    RETURNS:
+    - mapper_taskname_epoch_to_taskclass, dict,(see above
+    """
+    epochs = D.Dat["epoch"].unique().tolist()
+    tasks = D.Dat["character"].unique().tolist()
+    mapper_taskname_epoch_to_taskclass = {}
+    for ep in epochs:
+        for ta in tasks:
+
+            # find inds for this
+            list_tc = D.Dat[(D.Dat["epoch"]==ep) & (D.Dat["character"]==ta)]["Task"].values
+            if len(list_tc)>0:
+                # take the first
+                TaskClass = list_tc[0]
+                mapper_taskname_epoch_to_taskclass[(ta, ep)] = TaskClass
+
+    return mapper_taskname_epoch_to_taskclass
+
+
+
+
+# def preprocess_extract_features_all(D):
+#   """ First run this to save relevant features for all tasks. SPeeds up subsequent stuff 
+#   dramatically
+#   """
+
+#   for ind in range(len(D.Dat)):
+
+
 
 def compute_features_each_probe(D):
     """ For each probe task, compute its "features" which indicate ways that it is 
@@ -121,32 +182,45 @@ def compute_features_each_probe(D):
     # 1) get names of all probes
     list_tasks_probe = sorted(D.Dat[D.Dat["probe"]==1]["character"].unique())
 
+    mapper_taskname_epoch_to_taskclass = _generate_map_taskclass(D)
+
     # 2) For each probe, collect its features
     dict_probe_features = {}
     dict_probe_kind = {}
     for task_probe in list_tasks_probe:
-        tasks_per_epoch = _extract_concurrent_train_tasks(task_probe, D)
+        print(task_probe)
+        train_tasks_per_epoch = _extract_concurrent_train_tasks(task_probe, D)
 
-        for ep, tasks_this_epoch in tasks_per_epoch.items():
+        for ep, tasks_this_epoch in train_tasks_per_epoch.items():
             
             ### COLLECT FEATURES
             # 1) probe is a unique location config?
             list_same_config = []
             for task_train in tasks_this_epoch:
-                same_config = _check_same_spatial_config(task_probe, task_train, D)
+                same_config = _check_same_spatial_config(task_probe, task_train, 
+                    D, mapper_taskname_epoch_to_taskclass)
                 list_same_config.append(same_config)
             novel_location_config = not any(list_same_config)
-            
+                
             # 2) taskstrokes 2 and 3 (in sequence) are same distance from 1?
             # get inds that have this task and epoch
             list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
             list_equidistant = [] # check all inds, and confirm they are identical
             for ind in list_inds:
+
                 eq = _check_equidistant_from_first_stroke(ind, D)
                 list_equidistant.append(eq)
-            assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
-            equidistant = list_equidistant[0]
-            
+            if "rndstr" in ep:
+                # then there is no consistent sequence, it is randomiozed, so cant compute thisd
+                equidistant = False
+            else:
+                # all trials for this probe taskk shoudl have same seuqence.
+                assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
+                equidistant = list_equidistant[0]
+
+            # 3) How many instances of each prim? (n)
+            _extract_n_prims(task_probe, mapper_taskname_epoch_to_taskclass)
+
             ### GIVE PROBE TASK CATEGORY A NAME
             c = _classify_probe_task(novel_location_config, equidistant)
 
