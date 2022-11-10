@@ -277,9 +277,7 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
         list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
         for supstage in list_supstage:
             Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
-
             # Check if plot is large. if so, split into multiple plots.
-            
             plot_summary_drawing_examplegrid(Dthisplot, SAVEDIR_FIGS, subfolder=f"{supstage}", 
                              yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
 
@@ -294,14 +292,19 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
             Dthis = D
 
         list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        list_taskgroup = Dthis.Dat["taskgroup"].unique().tolist()
         for supstage in list_supstage:
-            Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
-            if len(Dthisplot.Dat)>0:
-                # subfolder = f"{traintest}"
-                subfolder = f"{supstage}"
-                #### 2) A single category, over all time
-                #### 1) A single task, over time.
-                plot_summary_drawing_eachtrial(Dthisplot, SAVEDIR_FIGS, subfolder)
+            # Further split by taskgroup
+            for taskgroup in  list_taskgroup:
+                Dthisplot = Dthis.filterPandas({"random_task":[False], 
+                    "supervision_stage_concise":[supstage],
+                    "taskgroup":[taskgroup]}, "dataset")
+                if len(Dthisplot.Dat)>0:
+                    # subfolder = f"{traintest}"
+                    subfolder = f"{supstage}/{taskgroup}"
+                    #### 2) A single category, over all time
+                    #### 1) A single task, over time.
+                    plot_summary_drawing_eachtrial(Dthisplot, SAVEDIR_FIGS, subfolder)
 
     ######### PLOT RANDOM EXAMPLES IN GRID, EACH PLOT A SEPARATE TASK SET.
     if PLOT_RANDOM_GRID_EXAMPLES:

@@ -90,25 +90,19 @@ def _groupingParams(D, expt):
     features_to_remove_outliers = []
     grouping_levels = None
     feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
+
+    # -- whether reassign "epoch"
     grouping_reassign = True
     grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
     # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
     grouping_reassign_methods_in_order = ["tasksequencer"]
+
+    # -- WHether reassign train/test 
     traintest_reassign_method = "probes"
-    # -- for renaming taskgroups
+
+    # -- WHether renaming taskgroups
     mapper_taskset_to_category = {}
     mapper_auto_rename_probe_taskgroups = False
-        # return F, grouping, plantime_cats, features_to_remove_nan, \
-        #     features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
-        #     grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order, \
-        #     traintest_reassign_method
-
-    # ### FILTER BLOCKS
-    # # 1) Get defaults
-    # F, grouping, plantime_cats, features_to_remove_nan, \
-    # features_to_remove_outliers, grouping_levels, feature_names, grouping_reassign, \
-    #         grouping_map_tasksequencer_to_rule, grouping_reassign_methods_in_order \
-    #         traintest_reassign_method = _get_defaults(D)
 
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
@@ -755,12 +749,25 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # Reassign taskgroup. by default uses value in task_stagecategory.
     # i) first, do automatic detection of probe categories for each character
     if D.taskclass_is_new_version(-1):
+        # 1) always start by redefining taskgroup using task_stagecategory
+        def F(x):
+            # Rename taskgroup if it is undefined.
+            if x["taskgroup"]=="undefined":
+                # Then replace 
+                return x["task_stagecategory"]
+            else:
+                # dont replace
+                return x["taskgroup"]
+        D.Dat = applyFunctionToAllRows(D.Dat, F, "taskgroup")
+
+        # 2) Autoamticlaly categorize probes based on task features?
         if mapper_auto_rename_probe_taskgroups:
             map_task_to_taskgroup = taskgroups_assign_each_probe(D)
             # append_probe_status = False, so that only appends 1x (the last call)
             taskgroup_reassign_by_mapper(D, None, map_task_to_taskgroup, append_probe_status=False,
-                what_use_for_default="task_stagecategory")
-        # ii) second, update using hand-entered, overwriting anything detected auto 
+                what_use_for_default="taskgroup")
+
+        # 3) Finally, use hand-entered if they exist, overwriting anything detected auto 
         # (not doing any auto, therefore what_use_for_default = taskgroup)
         taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, append_probe_status=True,
             what_use_for_default="taskgroup")

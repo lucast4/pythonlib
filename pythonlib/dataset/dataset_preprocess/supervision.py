@@ -27,43 +27,57 @@ def extract_supervision_params(D, ind):
     ABORT_PUNISH = allparams["params_task"]["enableAbort_punish_if_abort"]==1
     if "failed_rule" in ABORT_MODES:
         # Then also include aborts due to failing ObjectClass rules
-        for rule in allparams["task_objectclass"]["RuleList"]:
-            assert len(rule[1])==0, "this rule has a param, have to incorportae this info into ABORT_MODES somehow"
-            ABORT_MODES.append(rule[0])
-
+        if "RuleList" in allparams["task_objectclass"].keys():
+            for rule in allparams["task_objectclass"]["RuleList"]:
+                if False:
+                    assert len(rule[1])==0, "this rule has a param, have to incorportae this info into ABORT_MODES somehow"
+                    # Just take the first item (the kind of rule)
+                ABORT_MODES.append(rule[0])
+        else:
+            # skip.
+            ABORT_MODES.append("not_sure")
 
     ############## SEQUENCE SUPERVISION
-    seq = allparams["sequence"]
+    if IS_NEW_TASK_VER:
+        seq = allparams["sequence"]
 
-    if seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'active_chunk'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="any_order":
-        SEQUENCE_SUP = "active_chunk"
-        assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
-        
-        # chunk active abort [usually with chunk active]
-        assert ['chunks_any_order', {}] in allparams["task_objectclass"]["RuleList"]
-        assert "failed_rule" in ABORT_MODES
-        
-    elif seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'mask'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="in_order":
-        #SEQUENCE_SUP = "mask"
-        assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
-        
-        # Sequence abort (in order) [usually with mask]
-        if ['chunks_in_order', {}] in allparams["task_objectclass"]["RuleList"] and "failed_rule" in ABORT_MODES:
-            SEQUENCE_SUP = "mask"
+        if seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'active_chunk'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="any_order":
+            SEQUENCE_SUP = "active_chunk"
+            assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+            SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+            
+            # chunk active abort [usually with chunk active]
+            assert ['chunks_any_order', {}] in allparams["task_objectclass"]["RuleList"]
+            assert "failed_rule" in ABORT_MODES
+            
+        elif seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'mask'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="in_order":
+            #SEQUENCE_SUP = "mask"
+            assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+            SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+            
+            # Sequence abort (in order) [usually with mask]
+            if ['chunks_in_order', {}] in allparams["task_objectclass"]["RuleList"] and "failed_rule" in ABORT_MODES:
+                SEQUENCE_SUP = "mask"
+            else:
+                SEQUENCE_SUP = "char_strokes"
+
+        elif seq["on"]==0:
+            SEQUENCE_SUP = "off"
+            #assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
+            if "Params" in allparams["task_objectclass"].keys():
+                # Newer version using tasksequencer on objectlcass
+                SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+            else:
+                # older vesrion (e.g., gridlinecirlce).
+                SEQUENCE_ALPHA = "not_sure" # ignore
+
         else:
-            SEQUENCE_SUP = "char_strokes"
-
-    elif seq["on"]==0:
-        SEQUENCE_SUP = "off"
-        #assert allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer"]==1
-        SEQUENCE_ALPHA = allparams["task_objectclass"]["Params"]["UpdateVisibleChunks"]["show_lowalpha_layer_alpha"]
+            print(seq)
+            print(allparams["task_objectclass"]["Params"])
+            assert False
     else:
-        print(seq)
-        print(allparams["task_objectclass"]["Params"])
-        assert False
-
+        SEQUENCE_SUP = "not_sure"
+        SEQUENCE_ALPHA = "not_sure"
 
     ############# COLOR
     ### COLOR
@@ -173,55 +187,74 @@ def extract_supervision_params(D, ind):
 
 
     ################ ONLINE VISUAL FB
-    p = allparams["task_objectclass"]["AllPtsVisCriteria"]
-    c = allparams["task_objectclass"]["CtrlPtsVisCriteria"]
+    if IS_NEW_TASK_VER:
+        # Newere methods (2022)
+        p = allparams["task_objectclass"]["AllPtsVisCriteria"]
+        c = allparams["task_objectclass"]["CtrlPtsVisCriteria"]
 
-    if p == [['always_vis', {}, 'and', 0]] and c == [['always_vis', {}, 'and', 0]]:
-        VISUALFB_METH = "none"
-    elif p == [['not_touched', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
-        VISUALFB_METH = "all"
-    elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
-        VISUALFB_METH = "control_pts"
-    elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
-        VISUALFB_METH = "control_pts_norespawn"
+        if p == [['always_vis', {}, 'and', 0]] and c == [['always_vis', {}, 'and', 0]]:
+            VISUALFB_METH = "none"
+        elif p == [['not_touched', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
+            VISUALFB_METH = "all"
+        elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
+            VISUALFB_METH = "control_pts"
+        elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
+            VISUALFB_METH = "control_pts_norespawn"
+        else:
+            assert False
     else:
-        assert False
-
+        # Older., liolke gridlinecirlce.
+        VISUALFB_METH = "not_sure"
 
 
     ################# guide dynamic
     GUIDEDYN_ON = allparams["guide_dynamic"]["on"]==1
     GUIDEDYN_VER = allparams["guide_dynamic"]["version"]
-    GUIDEDYN_CHUNKSFLY = allparams["guide_dynamic"]["chunks_fly_in_together"] ==1;
     GUIDEDYN_DURATION = allparams["guide_dynamic"]["duration"] ==1;
-
+    if "chunks_fly_in_together" in allparams["guide_dynamic"].keys():
+        GUIDEDYN_CHUNKSFLY = allparams["guide_dynamic"]["chunks_fly_in_together"] ==1;
+    else:
+        GUIDEDYN_CHUNKSFLY = "not_sure"
 
 
     ############### suonds
     # print(allparams["DonenessTracker"])
     if IS_NEW_TASK_VER:
         assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
-
-    SOUNDS_HIT_VER = allparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
-    if allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
-        SOUNDS_CHUNK_CHANGE = allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_ver"]
-    else:
-        SOUNDS_CHUNK_CHANGE = "none"
-
-    SOUNDS_STROKES_DONE = allparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
+    
     SOUNDS_TRIAL_ONSET = allparams["sounds"]["play_sound_trial_onset"]==1
     if "play_done_sound_on" in allparams["sounds"].keys():
         SOUNDS_ALLPTSDONE = allparams["sounds"]["play_done_sound_on"]==1
     else:
         # Before around Jun 2022 - was default on.
         SOUNDS_ALLPTSDONE = True
+    if IS_NEW_TASK_VER:
+        SOUNDS_HIT_VER = allparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
+        if allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
+            SOUNDS_CHUNK_CHANGE = allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_ver"]
+        else:
+            SOUNDS_CHUNK_CHANGE = "none"
+
+        SOUNDS_STROKES_DONE = allparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
+    else:
+        SOUNDS_HIT_VER = "not_sure"
+        SOUNDS_CHUNK_CHANGE = "not_sure"
+        SOUNDS_STROKES_DONE = "not_sure"
+
 
 
     ############# CONTROL PTS
-    CONTROL_SIZE = allparams["control_pts"]["size_mult"]
-    CONTROL_COLOR_DIFF = allparams["control_pts"]["color_diff"]
-    CONTROL_VISIBLE = CONTROL_SIZE>1 or np.any(CONTROL_COLOR_DIFF!=0)
-    CONTROL_GEN_METHOD = allparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
+    if "control_pts" in allparams.keys():
+        CONTROL_SIZE = allparams["control_pts"]["size_mult"]
+        CONTROL_COLOR_DIFF = allparams["control_pts"]["color_diff"]
+        CONTROL_VISIBLE = CONTROL_SIZE>1 or np.any(CONTROL_COLOR_DIFF!=0)
+        CONTROL_GEN_METHOD = allparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
+    else:
+        CONTROL_SIZE = "not_sure"
+        CONTROL_COLOR_DIFF = "not_sure"
+        CONTROL_VISIBLE = "not_sure"
+        CONTROL_GEN_METHOD = "not_sure"
+
 
     ################ PEANUT
     PEANUT_ALPHA = allparams["sizes"]["PeanutAlpha"]
@@ -274,36 +307,39 @@ def extract_supervision_params(D, ind):
     ##### SCREEN POST VER
     SCREENPOST_ON = allparams["scenes"]["sceneSchedule"]["samp1"][3]==1
     bpthis = allparams["postscene"]
-    spd = bpthis["dynamic"]
-    spd_ver = bpthis["dynamic_ver"]
-
-    if IS_NEW_TASK_VER:
-        assert bpthis["samp1_only_show_untouched"]==0
     SCREENPOST_ALPHA = bpthis["samp1_force_alpha_to"]
     SCREENPOST_SIZE = bpthis["samp1_force_size_to"]
+    if "dynamic" in bpthis.keys():
+        spd = bpthis["dynamic"]
+        spd_ver = bpthis["dynamic_ver"]
 
-    assert bpthis["pnut1_interp"]["on"]==1
-    assert bpthis["pnut1_interp"]["params"] == ['upsample', 3.]
-    
-    # print(spd)
-    # print(bpthis.ke)
-    # print(spd["ver"])
-    if spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'all_strokes']:
-        SCREENPOST_DYNAMIC_VER = "all_strokes"
-    elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'active_chunk']:
-        SCREENPOST_DYNAMIC_VER = "flash_active_chunk"
-    elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'strokes_notdone']:
-        SCREENPOST_DYNAMIC_VER = "flash_missed_taskstrokes"
-    elif spd["on"]==0:
-        SCREENPOST_DYNAMIC_VER = "off"
+        if IS_NEW_TASK_VER:
+            assert bpthis["samp1_only_show_untouched"]==0
+
+        assert bpthis["pnut1_interp"]["on"]==1
+        assert bpthis["pnut1_interp"]["params"] == ['upsample', 3.]
+        
+        # print(spd)
+        # print(bpthis.ke)
+        # print(spd["ver"])
+        if spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'all_strokes']:
+            SCREENPOST_DYNAMIC_VER = "all_strokes"
+        elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'active_chunk']:
+            SCREENPOST_DYNAMIC_VER = "flash_active_chunk"
+        elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'strokes_notdone']:
+            SCREENPOST_DYNAMIC_VER = "flash_missed_taskstrokes"
+        elif spd["on"]==0:
+            SCREENPOST_DYNAMIC_VER = "off"
+        else:
+            print(1)
+            print(spd)
+            print(2)        
+            print(spd_ver)
+            print(3)
+            print(bpthis["dynamic_params"])
+            assert False
     else:
-        print(1)
-        print(spd)
-        print(2)        
-        print(spd_ver)
-        print(3)
-        print(bpthis["dynamic_params"])
-        assert False
+        SCREENPOST_DYNAMIC_VER = "not_sure"
         
 
     params = {
