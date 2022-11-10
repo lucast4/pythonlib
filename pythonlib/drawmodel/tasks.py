@@ -80,7 +80,7 @@ class TaskClass(object):
                 isnew=True
         return isnew
 
-    def info_is_new_objectclass(self):
+    def info_is_new_objectclass(self,strict=True):
         """ Is even newer, like early 2022, using ObjectClass 
         to define tasks. Returns True if it is.
         """
@@ -93,7 +93,21 @@ class TaskClass(object):
             # Try extracting...
             self.objectclass_extract_all()
 
-        return self.ObjectClass is not None
+        if len(self.PlanDat) == 0:
+            # Try extracting...
+            self.planclass_extract_all()
+
+        # now that you've extracted, do a second check
+        if self.ObjectClass is None:
+            return False
+        if len(self.PlanDat) == 0:
+            return False
+        if strict==True:
+            if "TaskSetClass" not in self.PlanDat["Info"].keys():
+                return False
+        
+        return True
+        #return self.ObjectClass is not None
 
     def info_is_fixed(self):
         """ if True, then fixed, False, then random
@@ -1016,7 +1030,18 @@ class TaskClass(object):
 
         # Process chunks into ChunksClassList
         from pythonlib.chunks.chunksclass import ChunksClassList
+        for k in dat:
+            if "Strokinds" in k:
+                if type(dat[k]) == np.ndarray:
+                    # print(dat[k])
+                    # print(dat[k].shape)
+                    if len(dat[k].shape) == 0:
+                        dat[k] = [dat[k]]
+                    else:
+                        dat[k] = list(dat[k])
+                        
         nstrokes = len(dat['StrokindsDone'])
+
         chunkslist = []
 
         if isinstance(dat["ChunkList"], dict):
@@ -1220,9 +1245,14 @@ class TaskClass(object):
         task. only appliues for newer tasks. 
         RETurns dict holding TSC params.
         """
-
         if self.info_is_new_objectclass():
             # TSC = self.PlanDat["Info"]["TaskSetClass"]["tsc_params"]["quick_sketchpad_params"]
+            if len(self.PlanDat) == 0:
+                return None
+            # print(self.PlanDat)
+            # print(self.PlanDat.keys())
+            #print(self.PlanDat["Info"])
+            #print(self.PlanDat["Info"].keys())
             TSC = self.PlanDat["Info"]["TaskSetClass"]
             return TSC
         else:

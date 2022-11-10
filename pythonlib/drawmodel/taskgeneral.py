@@ -688,6 +688,8 @@ class TaskClass(object):
                 return "on_grid"
             elif gridparams["grid_or_char"]=="char":
                 return "on_rel"
+            elif gridparams["grid_or_char"] is None:
+                return "undefined"
             else:
                 print(gridparams)
                 assert False
@@ -767,16 +769,19 @@ class TaskClass(object):
             # a) the "metaparams" used in Tasksetclass, to autoamticlaly generate relationsa nd grd.
             # tsc["tsc_params"]["quick_sketchpad_params"] =
             # ['grid', ['3.35_all', ['prims', 'grid_indexed_4_by_4', array(0, dtype=uint8), {}]]]
-            grid_or_char = tsc["tsc_params"]["quick_sketchpad_params"][0] # "grid", "char"
-            grid_scale = tsc["tsc_params"]["quick_sketchpad_params"][1][0] # e.g, 3.2
-            center_on = tsc["tsc_params"]["quick_sketchpad_params"][1][1][0] # "prims", "chunks"
-            rel_kind = tsc["tsc_params"]["quick_sketchpad_params"][1][1][1] # str: "<>...5_by_5"
-            if False:
-                # these may not always be avialble.. (len too short)
-                center_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][2]
-                tforms_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][3]
-            assert grid_or_char in ["grid", "char"], "I assumed so, made a mistake.. prob fine, but now im confused. tasksetclass_helper() in dragmonkey defines this."
-            
+            grid_or_char = grid_scale = center_on = rel_kind = None
+            if tsc is not None and tsc["tsc_params"] is not None:
+                if tsc["tsc_params"]["quick_sketchpad_params"] is not None:
+                    grid_or_char = tsc["tsc_params"]["quick_sketchpad_params"][0] # "grid", "char"
+                    grid_scale = tsc["tsc_params"]["quick_sketchpad_params"][1][0] # e.g, 3.2
+                    center_on = tsc["tsc_params"]["quick_sketchpad_params"][1][1][0] # "prims", "chunks"
+                    rel_kind = tsc["tsc_params"]["quick_sketchpad_params"][1][1][1] # str: "<>...5_by_5"
+                    if False:
+                        # these may not always be avialble.. (len too short)
+                        center_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][2]
+                        tforms_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][3]
+                    assert grid_or_char in ["grid", "char"], "I assumed so, made a mistake.. prob fine, but now im confused. tasksetclass_helper() in dragmonkey defines this."
+
             gridparams_tsc = {
                 "grid_or_char": grid_or_char,
                 "grid_scale": grid_scale,
@@ -791,58 +796,62 @@ class TaskClass(object):
             # - if char, then these are the delta relations (usualyl [0,0])
             rel_xy_values = []
             rels_list_of_dict = []
-            for relation_struct in tsc["tsc_params"]["relations"]:
-                if "xy_pairs" in relation_struct.keys():
-                    # Then this method was active, list of paris.
-                    print(relation_struct["xy_pairs"])
-                    print(relation_struct)
-                    assert False, "extract each coordinate "
-                else:
-                    # xy provides x and y separately, then takes cross-product
-                    xs = relation_struct["xy"][0]
-                    ys = relation_struct["xy"][1]
-                    attachpt1_locations = relation_struct["attachpt1"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
-                    attachpt1_weights = relation_struct["attachpt1"][1] # list of num, weights during sampleing.
-                    attachpt2_locations = relation_struct["attachpt2"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
-                    attachpt2_weights = relation_struct["attachpt2"][1] # list of num, weights during sampleing.
-                    fromprim_indices = relation_struct["fromprim"][0] # list of ints, indices of prims to attach to
-                    fromprim_weights = relation_struct["fromprim"][1] # list of num, weights during sampleing.
-
-                    # collect all xy in a bag
-                    if len(xs.shape)==0:
-                        xs = [xs]
-                    if len(ys.shape)==0:
-                        ys = [ys]
-                    for x in xs:
-                        for y in ys:
-                            pt = np.array([x, y])
+            if tsc is not None and tsc["tsc_params"] is not None:
+                for relation_struct in tsc["tsc_params"]["relations"]:
+                    if "xy_pairs" in relation_struct.keys():
+                        # Then this method was active, list of paris.
+                        print(relation_struct["xy_pairs"])
+                        print(relation_struct)
+                        # relation_struct["xy_pairs"][1] is an array of weights for each pt
+                        # # array([1., 1., 1., 1., 1.])
+                        for pt in relation_struct["xy_pairs"][0]:
                             rel_xy_values.append(pt)
+                        #assert False, "extract each coordinate "
+                    else:
+                        # xy provides x and y separately, then takes cross-product
+                        xs = relation_struct["xy"][0]
+                        ys = relation_struct["xy"][1]
+                        attachpt1_locations = relation_struct["attachpt1"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
+                        attachpt1_weights = relation_struct["attachpt1"][1] # list of num, weights during sampleing.
+                        attachpt2_locations = relation_struct["attachpt2"][0] # list of str, to sampel from,..e.g,  ['center_xylim', ...
+                        attachpt2_weights = relation_struct["attachpt2"][1] # list of num, weights during sampleing.
+                        fromprim_indices = relation_struct["fromprim"][0] # list of ints, indices of prims to attach to
+                        fromprim_weights = relation_struct["fromprim"][1] # list of num, weights during sampleing.
 
-                    # save this rel
-                    rels_list_of_dict.append(relation_struct)
+                        # collect all xy in a bag
+                        if len(xs.shape)==0:
+                            xs = [xs]
+                        if len(ys.shape)==0:
+                            ys = [ys]
+                        for x in xs:
+                            for y in ys:
+                                pt = np.array([x, y])
+                                rel_xy_values.append(pt)
 
-            gridparams_rels = {
-                "rel_xy_values": rel_xy_values,
-                "rels_list_of_dict":rels_list_of_dict
-            }
+                        # save this rel
+                        rels_list_of_dict.append(relation_struct)
+            
 
-            # compute the actual grid locaitons, which is the produce of the baseline grid 
-            # and the relations. usually relations are integers, which puts prims on the grid.
-            # but if not integer, then is produce of rel and grid.
-            # - get all possible x and y locations (just to define grid, even if
-            # takss were only on seubset of loations)
-            xyall = np.stack(rel_xy_values) # (npts, 2)
-            xs = np.sort(np.unique(xyall[:,0])) 
-            ys = np.sort(np.unique(xyall[:,1]))
-            # for k, v in gridparams_background.items():
-            #     print('---', k, v)
-            gridcell_width = gridparams_background["cell_width"] # num
-            gridcell_height = gridparams_background["cell_height"] # num
-            grid_center = gridparams_background["center"] # 2-list
+                # compute the actual grid locaitons, which is the produce of the baseline grid 
+                # and the relations. usually relations are integers, which puts prims on the grid.
+                # but if not integer, then is produce of rel and grid.
+                # - get all possible x and y locations (just to define grid, even if
+                # takss were only on seubset of loations)
+                xyall = np.stack(rel_xy_values) # (npts, 2)
+                xs = np.sort(np.unique(xyall[:,0])) 
+                ys = np.sort(np.unique(xyall[:,1]))
+                # for k, v in gridparams_background.items():
+                #     print('---', k, v)
+                gridcell_width = gridparams_background["cell_width"] # num
+                gridcell_height = gridparams_background["cell_height"] # num
+                grid_center = gridparams_background["center"] # 2-list
 
-            grid_x_actual = xs * gridcell_width + grid_center[0] # (n,) array
-            grid_y_actual = xs * gridcell_height + grid_center[1]
+                grid_x_actual = xs * gridcell_width + grid_center[0] # (n,) array
+                grid_y_actual = xs * gridcell_height + grid_center[1]
 
+            else:
+                rel_xy_values = rels_list_of_dict = grid_x_actual = grid_y_actual = None
+            
             gridparams_rels = {
                 "rel_xy_values": rel_xy_values,
                 "rels_list_of_dict":rels_list_of_dict,
