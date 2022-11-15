@@ -11,7 +11,11 @@ import numpy as np
 
 class ChunksClassList(object):
     """ A single ChunksClass instance represents all ways of chunking this Task given an
-    expt and rule."""
+    expt and rule.
+    Two methods exist for inputting chunks:
+    1. "task_entry", meaning input a Task and rule, and will automatically find chunks
+    2. "chunkslist_entry", input chunks directly. Useful if input chunks saved in monkeylogic code
+    """
 
     def __init__(self, method, params):
         """ Different ways of initializing this list of chunks
@@ -77,7 +81,8 @@ class ChunksClassList(object):
                 color = None
             fixed_order = None # uses default.
             C = ChunksClass(chunks, hier, fixed_order=fixed_order, 
-                task_stroke_labels=list_shapes, name=name, flips=flips, index=index, colorlist_hier=color)
+                task_stroke_labels=list_shapes, name=name, 
+                flips=flips, index=index, colorlist_hier=color)
             if check_matches_nstrokes:
                 from .chunks import check_all_strokes_used
                 all_used = check_all_strokes_used(C.Hier, nstrokes)
@@ -98,8 +103,12 @@ class ChunksClassList(object):
 
 
 
-    def _init_task_entry(self, Task, expt=None, rule=None):
+    def _init_task_entry(self, Task, expt, rule):
         """
+        Input a single Task.
+        If pass in expt and rule, then will generate chunks autoatmically, 
+        given a Task and rule (i.e., model).
+        Procedures for genreating usually should be hand-coded for each rule.
         PARAMS:
         - Task, TaskClass instnace
         - expt, str, the experiment name.
@@ -226,6 +235,7 @@ class ChunksClass(object):
         import numpy as np
 
         def _clean(input_list):
+            assert len(input_list)>0
             output_list = []
             for i, c in enumerate(input_list):
                 if isinstance(c, int):
@@ -239,13 +249,16 @@ class ChunksClass(object):
                     assert np.floor(c) == c
                     output_list.append([int(c)])
                 else:
-                    print(type(c))
+                    assert isinstance(c, list)
                     assert isinstance(c[0], int)
+                    output_list.append(c)
             return output_list
 
         # 1) no ints, make sure all items are lists.
         self.Chunks = _clean(self.Chunks)
+        # print("HERE1", self.Hier, len(self.Hier))
         self.Hier = _clean(self.Hier)
+        # print("HERE2", self.Hier, len(self.Hier))
         if self.Flips is not None:
             self.Flips = _clean(self.Flips)
             # I used to assert that h and f were same len. but this 

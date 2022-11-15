@@ -6,6 +6,8 @@ Assumes clean tasks (prims in grid)
 Works using datsegs (either aligned to beh or task strokes)
 
 See notebook: analy_spatial_prims_motifs_220707
+
+Is like "motifs in a bag"...
 """
 
 VARIABLES_KEEP = ["shape_oriented", "gridloc"]

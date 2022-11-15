@@ -170,14 +170,14 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
         def _fixed_order_for_this_hier(hier):
             if rule in ["baseline", "lolli"]:
                 # Order allows all reordering
-                fixed_order = fixed_order_for_this_hier(True, True)
+                fixed_order = fixed_order_for_this_hier(hier, True, True)
             elif rule in ["circletoline", "linetocircle"]:
                 # Order only allows for reordering both hier levels.
-                fixed_order = fixed_order_for_this_hier(False, True)
+                fixed_order = fixed_order_for_this_hier(hier, False, True)
             elif rule in ["alternate"]:
                 # becasue hier is a specific sequence for altenration
                 # e..g, hier = [0, 1, 2, 3]
-                fixed_order = fixed_order_for_this_hier(False, False)
+                fixed_order = fixed_order_for_this_hier(hier, False, False)
             else:
                 assert False
             return fixed_order
@@ -770,6 +770,7 @@ def fixed_order_for_this_hier(hier, top_level_allow_reorder=True,
     - top_level_allow_reorder, bottom_level_allow_reorder, bools, for whether
     allow reorder.
     """
+    # print(hier, top_level_allow_reorder, bottom_level_allow_reorder)
     fixed_order = {}
     fixed_order[0] = not top_level_allow_reorder
     fixed_order[1] = [not bottom_level_allow_reorder for _ in range(len(hier))]

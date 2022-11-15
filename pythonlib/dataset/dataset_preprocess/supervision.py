@@ -158,6 +158,11 @@ def extract_supervision_params(D, ind):
                     # fade out
                     fade_val = prms[0]
                     COLORS_ITEMS_FADE_ZERO_MEANS_DEFAULT = _get_fade_for_each_item(applyto, fade_val)
+                elif meth == "randomly_replace_with_probe_color":
+                    prob = prms[0] # array(0.08)
+                    color_to_replace_with = prms[1] # array([0.4, 0.4, 0.4])
+                    # SKIP THIS FOR NOW.
+                    # Should extract, for each trial, the actual color that was used (from TrialRecord.User.AdapterParams)
                 else:
                     print(meth, prms, applyto)
                     assert False, "dont know this"

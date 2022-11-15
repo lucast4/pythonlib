@@ -35,6 +35,8 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1"
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-9-3', 'line-9-4', 'Lcentered-6-8'))] = "llV1"
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('V2-2-2', 'V2-2-4', 'V-2-4', 'line-13-14', 'line-8-4', 'line-13-13', 'line-8-3'))] = "llV1R"
 
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
@@ -92,8 +94,7 @@ def _groupingParams(D, expt):
     feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
 
     # -- whether reassign "epoch"
-    grouping_reassign = True
-    grouping_map_tasksequencer_to_rule = {} # only needed if grouping_reassign
+    grouping_reassign = False
     # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
     grouping_reassign_methods_in_order = ["tasksequencer"]
 
@@ -321,12 +322,18 @@ def _groupingParams(D, expt):
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True
+
+    elif "dirdir" in expt:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
     else:
         # pass, just use defaults
         pass
 
     ### always reassign grouping by color instruction (even if not using it, doesnt do anythign)
     if "color_instruction" not in grouping_reassign_methods_in_order:
+        # grouping_reassign = Tr
         grouping_reassign_methods_in_order.append("color_instruction")
 
 
