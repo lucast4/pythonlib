@@ -318,6 +318,8 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 31, tuple([2, 12])): "train_test_same", # 
             ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
+    elif "charstrokeseq" in expt:
+        grouping_reassign = False
 
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.

@@ -62,7 +62,7 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
         # To avoid making large plots.
 
         # --------------- INPUT PARAMS
-        PLOT_OVERVIEW = True
+        PLOT_OVERVIEW = False
         PLOT_OVERVIEW_IGNORE_LARGE_PLOTS = True
 
         # - related to fixed test tasks:
@@ -525,7 +525,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
         n_levels_xaxis = len(tasklist)
         nsubplots = n_levels_xaxis * n_levels_xaxis
         # break it up
-        maxcols = int(np.floor(MAX_SUBPLOTS/n_levels_yaxis))
+        maxcols = 20 #int(np.floor(MAX_SUBPLOTS/n_levels_yaxis))
         if maxcols==0:
             maxcols = 1
         imin = 0
