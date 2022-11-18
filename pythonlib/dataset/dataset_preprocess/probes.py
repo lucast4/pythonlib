@@ -92,6 +92,10 @@ def _check_equidistant_from_first_stroke(ind, D):
     
     # 2) get locations of taskinds
     T = D.Dat.iloc[ind]["Task"]
+    if not T.get_grid_ver()=="on_grid":
+        # THen cannot compute this...
+        return False
+
     dseg = T.tokens_generate()
     locations = [d["gridloc"] for d in dseg]
 
@@ -115,6 +119,14 @@ def _check_equidistant_from_first_stroke(ind, D):
             ind2 = taskstroke_inds_correct_order[rank2]
             return _distance_between_strokes(ind1, ind2)
         
+        # Sanity check
+        for loc in locations:
+            if loc is None:
+                print("--", locations)
+                print("task ver:", T.get_grid_ver())
+                D.plotSingleTrial(ind)
+                assert False, "should not get to this point if this task is not on_grid"
+
         dist1 = _distance_between_strokes_using_tasksequencer_rank(0, 1)
         dist2 = _distance_between_strokes_using_tasksequencer_rank(0, 2)
         
