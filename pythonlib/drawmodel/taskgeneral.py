@@ -798,6 +798,8 @@ class TaskClass(object):
             rels_list_of_dict = []
             if tsc is not None and tsc["tsc_params"] is not None:
                 for relation_struct in tsc["tsc_params"]["relations"]:
+                    # print("RELATIONS:")
+                    # print(relation_struct)
                     if "xy_pairs" in relation_struct.keys():
                         # Then this method was active, list of paris.
                         print(relation_struct["xy_pairs"])
@@ -842,12 +844,22 @@ class TaskClass(object):
                 ys = np.sort(np.unique(xyall[:,1]))
                 # for k, v in gridparams_background.items():
                 #     print('---', k, v)
-                gridcell_width = gridparams_background["cell_width"] # num
-                gridcell_height = gridparams_background["cell_height"] # num
+                if False:
+                    # this was mistake. Grid cell sizes are used for
+                    # rescaling prim size, NOT for rescaling grid (i.e, relations).
+                    # For that, use the grid_diff...
+                    # (see PlanClass.interpret_relation())
+                    x_mult = gridparams_background["cell_width"] # num
+                    y_mult = gridparams_background["cell_height"] # num
+
+                else:
+                    x_mult = gridparams_background["grid_diff_x"]
+                    y_mult = gridparams_background["grid_diff_y"]
+
                 grid_center = gridparams_background["center"] # 2-list
 
-                grid_x_actual = xs * gridcell_width + grid_center[0] # (n,) array
-                grid_y_actual = xs * gridcell_height + grid_center[1]
+                grid_x_actual = xs * x_mult + grid_center[0] # (n,) array
+                grid_y_actual = ys * y_mult + grid_center[1]
 
             else:
                 rel_xy_values = rels_list_of_dict = grid_x_actual = grid_y_actual = None
@@ -858,6 +870,12 @@ class TaskClass(object):
                 "grid_x_actual_after_rel":grid_x_actual,
                 "grid_y_actual_after_rel":grid_y_actual
             }
+
+            # print("[GridParams]:")
+            # print("===", gridparams_background)
+            # print("===", gridparams_tsc)
+            # print("===", gridparams_rels)
+            # print("===", np.stack(gridparams_rels["rel_xy_values"]))
 
             ################# COMBINE
             # 1) flat
@@ -1033,11 +1051,19 @@ class TaskClass(object):
             # Sanity check that the hard coded things are correct.
             from pythonlib.tools.nptools import isin_close
             for o in objects:
-                assert isin_close(o[1]["x"], xgrid, atol=ATOL)
-                assert isin_close(o[1]["y"], ygrid, atol=ATOL)
+                if not isin_close(o[1]["x"], xgrid, atol=ATOL)[0] or not isin_close(o[1]["y"], ygrid, atol=ATOL)[0]:
+                    self.plotStrokes()
+                    print("---")
+                    print(o[1], xgrid, ygrid)
+                    print(isin_close(o[1]["x"], xgrid, atol=ATOL))
+                    print("---")
+                    assert False
 
                 # assert np.any(xgrid == o[1]["x"])
                 # assert np.any(ygrid == o[1]["y"])
+            # print("---")
+            # print(o[1]["x"], xgrid)
+            # print(o[1]["y"], ygrid)
 
             # 1) assign each object a grid location
             locations = []

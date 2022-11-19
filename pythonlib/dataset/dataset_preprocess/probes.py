@@ -30,9 +30,14 @@ def _check_same_spatial_config(task1, task2, D, mapper_taskname_epoch_to_taskcla
     """
     
     # 1) get taskclass objects 
-    Task1 = _extract_taskclass_from_taskname(task1, mapper_taskname_epoch_to_taskclass)
-    Task2 = _extract_taskclass_from_taskname(task2, mapper_taskname_epoch_to_taskclass)
-    out = Task1.compare_prims_on_same_grid_location(Task2)
+    try:
+        Task1 = _extract_taskclass_from_taskname(task1, mapper_taskname_epoch_to_taskclass)
+        Task2 = _extract_taskclass_from_taskname(task2, mapper_taskname_epoch_to_taskclass)
+        out = Task1.compare_prims_on_same_grid_location(Task2)
+    except Exception as err:
+        Task1.plotStrokes()
+        Task2.plotStrokes()
+        raise err
     return out
 
 def _extract_n_prims(taskname, mapper_taskname_epoch_to_taskclass):
