@@ -617,7 +617,8 @@ class TaskClass(object):
 
     ############ REPRESENT AS SEQUENCE OF DISCRETE TOKENS
     def compare_on_same_grid(self, TaskOther):
-        """ Returns True if other task is on same grid
+        """ Returns True if other task is on same grid. False if grid sizies diff 
+        ( e.g., 5x5 vs 3x3) or diff spacing.
         PARAMS:
         - TaskOther, taskclass object
         """
@@ -631,11 +632,13 @@ class TaskClass(object):
         gp2 = TaskOther.get_grid_params()
         # for key in ["grid_x", "cell_width", "cell_height", "center"]:
         for key in ["grid_x_actual_after_rel", "grid_y_actual_after_rel", "cell_width", "cell_height", "center"]:
-            if not np.all(np.isclose(gp1[key], gp2[key])):
+            if not len(gp1[key])==len(gp2[key]):
+                # diff num grid spacings
                 return False
-            # if not gp1[key] == gp2[key]:
-            #     return False
-
+            if not np.all(np.isclose(gp1[key], gp2[key])):
+                # diff valued grid spacings.
+                return False
+            
         return True
 
 
