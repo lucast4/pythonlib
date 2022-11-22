@@ -1091,3 +1091,26 @@ def replaceNone(dfthis, column, replace_with):
             tmp[i] = replace_with
     dfthis[column] = tmp
     return dfthis
+
+
+def slice_by_row_label(df, colname, rowvalues, reset_index=True):
+    """ Return a sliced dataframe, where rows are sliced
+    to match the list of labels (rowvalues) for a column
+    PARAMS:
+    - colname, str, the column in which to compare lables
+    - rowvalues, list of items (labels) to comapre. the 
+    returned df will have rows exactly matching these values.
+    NOTE: error if rowvalues contains value not in df
+    NOTE: if a value occurs in multipel rows, it extracts all rows.
+    EG:
+    df = pd.DataFrame({'A': [5,6,3,4, 5], 'B': [1,2,3,5, 6]})
+    list_of_values = [3, 6, 5]
+    df.set_index('A').loc[list_of_values].reset_index()
+    """
+
+    dfout = df.set_index(colname).loc[rowvalues]
+    if reset_index:
+        dfout = dfout.reset_index()
+    return dfout
+
+

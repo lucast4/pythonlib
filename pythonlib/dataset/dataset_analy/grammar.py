@@ -432,37 +432,57 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
     """ Plots of timecourse of performance, such as trial by trial
     """
 
-    dfthis = D.Dat[
-        (D.Dat["exclude_because_online_abort"]==False)
-    ]
+    list_sess = D.Dat["session"].unique().tolist()
+    for sess in list_sess:
 
-    fig, axes = plt.subplots(4,1, figsize=(35,9))
+        dfthis = D.Dat[
+            (D.Dat["exclude_because_online_abort"]==False) & 
+            (D.Dat["session"]==sess) 
+        ]
 
-    # 1) info, plot blocks and etc.
-    ax = axes.flatten()[0]
-    sns.scatterplot(data=dfthis, x="trial", y="block", hue="which_probe_blockset", style="epoch", ax=ax, alpha = 0.75)
-    ax.grid(True)
+        fig, axes = plt.subplots(4,1, figsize=(35,9))
 
-    # 2) trial by trial performance
-    ax = axes.flatten()[1]
-    ax.grid(True)
-    sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch_superv", ax=ax, 
-                   alpha = 0.75)
+        # 1) info, plot blocks and etc.
+        ax = axes.flatten()[0]
+        sns.scatterplot(data=dfthis, x="trial", y="block", hue="which_probe_blockset", style="epoch", ax=ax, alpha = 0.75)
+        ax.grid(True)
 
-    ax = axes.flatten()[2]
-    ax.grid(True)
-    sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch", style="epoch_superv", ax=ax, 
-                   alpha = 0.75)
+        # 2) trial by trial performance
+        ax = axes.flatten()[1]
+        ax.grid(True)
+        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch_superv", ax=ax, 
+                       alpha = 0.75)
+        smwin = 20
+        dfthis_rolling = dfthis.rolling(window=smwin, center=True).mean()
+        # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y="success_binary")
+        sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y="success_binary")
+        blockver = "block"
+        idx_of_bloque_onsets = []
+        for i in np.argwhere(dfthis[blockver].diff().values):
+            idx_of_bloque_onsets.append(i[0])
+        bloque_onsets = dfthis["trial"].values[idx_of_bloque_onsets]
+        # bloque_nums = df["bloque"].values[idx_of_bloque_onsets]
+        # blokk_nums = dfthis["blokk"].values[idx_of_bloque_onsets]
+        block_nums = dfthis["block"].values[idx_of_bloque_onsets]
+        for b, x in zip(block_nums, bloque_onsets):
+            ax.axvline(x)
+            ax.text(x, ax.get_ylim()[1], f"k{b}\nt{x}", size=8)
+        ax.grid(True)
 
-    ax = axes.flatten()[3]
-    ax.grid(True)
-    ax.set_title('NOT excluding abort trials')
-    sns.scatterplot(data=D.Dat, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
-                   alpha = 0.75)
+        ax = axes.flatten()[2]
+        ax.grid(True)
+        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch", style="epoch_superv", ax=ax, 
+                       alpha = 0.75)
 
-    sdirthis = f"{SDIR}/summary"
-    path = f"{sdirthis}/timecourse-trials-overview.pdf"
-    fig.savefig(path)
+        ax = axes.flatten()[3]
+        ax.grid(True)
+        ax.set_title('NOT excluding abort trials')
+        sns.scatterplot(data=D.Dat, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
+                       alpha = 0.75)
+
+        sdirthis = f"{SDIR}/summary"
+        path = f"{sdirthis}/timecourse-trials-overview-sess_{sess}.pdf"
+        fig.savefig(path)
 
 def _blocks_to_str(blocks):
     """ Helper to conver tlist of ints (blocks) to a signle string"""
