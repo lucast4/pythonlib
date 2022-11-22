@@ -632,7 +632,7 @@ class TaskClass(object):
         gp2 = TaskOther.get_grid_params()
         # for key in ["grid_x", "cell_width", "cell_height", "center"]:
         for key in ["grid_x_actual_after_rel", "grid_y_actual_after_rel", "cell_width", "cell_height", "center"]:
-            if not len(gp1[key])==len(gp2[key]):
+            if not gp1[key].size==gp2[key].size: # use a.size, not len(a), b/c is np.array, and 1-element was giving error
                 # diff num grid spacings
                 return False
             if not np.all(np.isclose(gp1[key], gp2[key])):
