@@ -440,7 +440,7 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
             (D.Dat["session"]==sess) 
         ]
 
-        fig, axes = plt.subplots(4,1, figsize=(35,9))
+        fig, axes = plt.subplots(5,1, figsize=(35,11))
 
         # 1) info, plot blocks and etc.
         ax = axes.flatten()[0]
@@ -474,11 +474,21 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
         sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch", style="epoch_superv", ax=ax, 
                        alpha = 0.75)
 
+        ## NOT EXCLUDING ONLINE ABORTS
+        dfthis = D.Dat[(D.Dat["session"]==sess)]
         ax = axes.flatten()[3]
         ax.grid(True)
         ax.set_title('NOT excluding abort trials')
-        sns.scatterplot(data=D.Dat, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
+        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
                        alpha = 0.75)
+
+        # Plotting reason for failure.
+        ax = axes.flatten()[4]
+        ax.grid(True)
+        ax.set_title('NOT excluding abort trials')
+        sns.scatterplot(data=dfthis, x="trial", y="exclude_because_online_abort", hue="success_binary", style="epoch", ax=ax, 
+                       alpha = 0.75)
+
 
         sdirthis = f"{SDIR}/summary"
         path = f"{sdirthis}/timecourse-trials-overview-sess_{sess}.pdf"
