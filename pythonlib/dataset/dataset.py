@@ -936,7 +936,8 @@ class Dataset(object):
 
         # 1) Was color supervision on?
         if "INSTRUCTION_COLOR" not in self.Dat.columns:
-            assert False, "you prob need to reassign grouping in preprocess. see preprocess for grammardircolor (note, this is currently default in preproces...)"
+            self.supervision_check_is_instruction_using_color_assign()
+            # assert False, "you prob need to reassign grouping in preprocess. see preprocess for grammardircolor (note, this is currently default in preproces...)"
             
         color_on = self.Dat.iloc[ind]["INSTRUCTION_COLOR"] 
         color_method = self.supervision_extract_params(ind)["COLOR_METHOD"]
@@ -959,7 +960,7 @@ class Dataset(object):
             for k, v in bp["fade"].items():
                 # e.g, k, v is 'guide': array([], shape=(0, 0), dtype=float64),
                 if k=="guidelight":
-                    assert(np.all(v==1))
+                    assert(np.all(v==1.))
                 else:
                     assert(len(v)==0)
 
@@ -4667,6 +4668,17 @@ class Dataset(object):
         else:
             return False
 
+    def supervision_check_is_instruction_using_color_assign(self, assign_to_column="INSTRUCTION_COLOR"):
+        """ assign_to_column, if str, then updates D.Dat[assign_to_column], otherwise does
+        not modify D.Dat
+        """
+        # 1) indicate for each trial whether it is using color instruction
+        # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
+        list_issup = []
+        for ind in range(len(self.Dat)):
+            list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
+        self.Dat["INSTRUCTION_COLOR"] = list_issup
+
 
     def supervision_reassign_epoch_rule_by_color_instruction(self, new_col_name="epoch", overwrite=False):
         """ Replaces epoch column with conjunction of (i) current value in epoch and
@@ -4687,10 +4699,12 @@ class Dataset(object):
 
         # 1) indicate for each trial whether it is using color instruction
         # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
-        list_issup = []
-        for ind in range(len(self.Dat)):
-            list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
-        self.Dat["INSTRUCTION_COLOR"] = list_issup
+        if "INSTRUCTION_COLOR" not in self.Dat.columns:
+            self.supervision_check_is_instruction_using_color_assign()
+        # list_issup = []
+        # for ind in range(len(self.Dat)):
+        #     list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
+        # self.Dat["INSTRUCTION_COLOR"] = list_issup
 
         # 2) get conjuction of epoch and instruction
         grouping_vars = [new_col_name, "INSTRUCTION_COLOR"]
