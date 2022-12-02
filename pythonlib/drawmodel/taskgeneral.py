@@ -772,8 +772,16 @@ class TaskClass(object):
             # a) the "metaparams" used in Tasksetclass, to autoamticlaly generate relationsa nd grd.
             # tsc["tsc_params"]["quick_sketchpad_params"] =
             # ['grid', ['3.35_all', ['prims', 'grid_indexed_4_by_4', array(0, dtype=uint8), {}]]]
-            grid_or_char = grid_scale = center_on = rel_kind = None
-            if tsc is not None and tsc["tsc_params"] is not None:
+            
+            grid_or_char = grid_scale = center_on = rel_kind = None # Defualts.
+
+            if tsc is not None and "tsc_params" in tsc.keys() and tsc["tsc_params"] is not None and "quick_sketchpad_params" in tsc["tsc_params"].keys():
+                # print("--------")
+                # print(tsc)
+                # print("--------")
+                # print(tsc["tsc_params"])
+                # print("--------")
+                # print(tsc["tsc_params"].keys())
                 if tsc["tsc_params"]["quick_sketchpad_params"] is not None:
                     grid_or_char = tsc["tsc_params"]["quick_sketchpad_params"][0] # "grid", "char"
                     grid_scale = tsc["tsc_params"]["quick_sketchpad_params"][1][0] # e.g, 3.2
@@ -797,9 +805,9 @@ class TaskClass(object):
             # 3. Extract the actual relations used
             # - if grid, then these are the centers
             # - if char, then these are the delta relations (usualyl [0,0])
-            rel_xy_values = []
-            rels_list_of_dict = []
-            if tsc is not None and tsc["tsc_params"] is not None:
+            if tsc is not None and "tsc_params" in tsc.keys() and tsc["tsc_params"] is not None:
+                rel_xy_values = []
+                rels_list_of_dict = []
                 for relation_struct in tsc["tsc_params"]["relations"]:
                     # print("RELATIONS:")
                     # print(relation_struct)
@@ -898,6 +906,12 @@ class TaskClass(object):
                 "tsc_quick":gridparams_tsc,
                 "rels":gridparams_rels,
             }
+
+            # for k, v in gridparams_each.items():
+            #     print("----")
+            #     print(k)
+            #     print(v)
+            # assert False
 
             if also_return_each_kind_of_params:
                 return gridparams, gridparams_each
