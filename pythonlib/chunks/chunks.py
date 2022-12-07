@@ -102,7 +102,6 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
             }
             list_lollis, left_over = find_object_groups_new(Task, paramsthis)
 
-
             if len(list_lollis)==0:
                 # then no lollis. then just skip this, since is same as baseline
                 list_hier = [chunks]
@@ -259,8 +258,11 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
     assert len(list_hier)==len(list_fixed_order)
     # _print(list_chunks)
     # _print(list_hier)
+    # print(list_chunks)
+    # print(list_hier)
     # print(list_fixed_order)
     # assert False
+
     return list_chunks, list_hier, list_fixed_order
     
 
@@ -284,7 +286,7 @@ def find_object_groups_new(Task, params):
     """
 
     # Generate tokens
-    tokens = Task.tokens_generate(params, track_order=False)
+    tokens = Task.tokens_generate(assert_computed=True)
     objects = tokens # naming convention change.
 
     # Methods for defining tokens or relations between tokens in a pair
@@ -343,6 +345,8 @@ def find_object_groups_new(Task, params):
 
         for i in range(len(objects)):
             for j in range(i+1, len(objects)):
+                # print(i, j)
+                # print(_oshape(i), _oshape(j), _direction_grid(i, j))
                 if _oshape(i)=="circle" and _oshape(j)=="hline":
                     if _direction_grid(i, j) in ["left", "right"]:
                         list_groups.append([i,j])
@@ -359,6 +363,8 @@ def find_object_groups_new(Task, params):
         list_groups_flat = [xx for x in list_groups for xx in x]
         left_over = [i for i in range(len(objects)) if i not in list_groups_flat]
 
+    # print(list_groups)
+    # assert False 
     return list_groups, left_over
 
 def find_object_groups(Task, params):
@@ -695,6 +701,22 @@ def search_permutations_chunks(chunks_hier, fixed_order, max_perms=1000):
     RETURNS:
     - list_out, list of chunks, each of which has same shape as chunks_hier,
     modulo permutations. is all the ways of permuiting chunks hier
+    EG:
+        chunks = [[1,2], [3], [4, 5]]
+        fo = {0:False, 1:[False, False, True]}
+        search_permutations_chunks(chunks, fo)    
+            [[[1, 2], [4, 5], [3]],
+             [[2, 1], [4, 5], [3]],
+             [[3], [4, 5], [1, 2]],
+             [[3], [4, 5], [2, 1]],
+             [[4, 5], [3], [1, 2]],
+             [[4, 5], [3], [2, 1]],
+             [[4, 5], [1, 2], [3]],
+             [[4, 5], [2, 1], [3]],
+             [[1, 2], [3], [4, 5]],
+             [[2, 1], [3], [4, 5]],
+             [[3], [1, 2], [4, 5]],
+             [[3], [2, 1], [4, 5]]]
     """
 
     from pythonlib.chunks.chunks import hier_is_flat

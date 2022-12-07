@@ -40,6 +40,7 @@ class ChunksClassList(object):
             print(params)
             assert False, "code it"
 
+
     def _init_chunkslist_entry(self, chunkslist, nstrokes, list_shapes=None, 
             check_matches_nstrokes=True):
         """ Enter list of chunks, inputed in chunkslist format.
@@ -136,7 +137,6 @@ class ChunksClassList(object):
             C = ChunksClass(chunks, hier, fixedorder, task_stroke_labels=list_shapes)
             self.ListChunksClass.append(C)
 
-
     def remove_chunks_that_concat_strokes(self):
         """ Remove chunks from ListChunksClass that concatenates strokes.
         i.e, wherever C.Chunks has a chunk with multiple strokes
@@ -180,6 +180,40 @@ class ChunksClassList(object):
         for i, C in enumerate(self.ListChunksClass):
             print("--- Chunk num:", i)
             C.print_summary()
+
+    ########## PERMUTATIONS
+    def search_permutations_chunks(self, return_ver="list_of_flattened_chunks", 
+        max_perms=100):
+        """ Return unique permutations of each Chunk. If num possible
+        perms is less than max_perms, then returns all.
+        PARAMS:
+        - return_ver, str, how to structure output:
+        --- list_of_list_of_chunks, each inner list corresponds to one ChunksClass
+        --- list_of_chunks, each inner list is a chunk, i..e, combines chunks acorss
+        ChunksClass
+        --- list_of_flattened_chunks, each inner list is a flattened chunk.
+        RETURNS:
+        - out (structure depends on return_ver). If no parses, returns []
+        """
+        out = []
+        for C in self.ListChunksClass:
+            # Get all permutations of grounded concrete sequences, given a chunks
+            list_chunk_permutations = C.search_permutations_chunks(max_perms=max_perms)
+
+            if return_ver=="list_of_list_of_chunks":
+                out.append(list_chunk_permutations)
+            elif return_ver=="list_of_chunks":
+                for chunk in list_chunk_permutations:
+                    out.append(chunk)
+            elif return_ver=="list_of_flattened_chunks":
+                for chunk in list_chunk_permutations:
+                    out.append(C._flatten_chunk(chunk))
+            else:
+                print(return_ver)
+                assert False
+
+        return out
+
 
 
 class ChunksClass(object):
@@ -375,6 +409,8 @@ class ChunksClass(object):
         Returns all permutatoins of chunks or hierarchy
         PARAMS:
         - ver, str, either "chunks", or "hier", which one to return permutations of.
+        RETURNS:
+        - list of chunks-like, each a permutation of the original chunks.
         """
         from .chunks import search_permutations_chunks
 
@@ -426,8 +462,16 @@ class ChunksClass(object):
         print("colorlist_hier:", self.ColorlistHier)
         if self.Flips is not None:
             print("Flips:", self.Flips)
-
         
+    def _flatten_chunk(self, chunk):
+        """ COnvert chunk to list of ints
+        PARAMS;
+        - chunk, list of list of ints, e.g, [[1,2], [4], [3]]
+        RETUNRS:
+        - chunk_flat, list of ints, e.g, [1,2,4,3]
+        """
+        return [xx for x in chunk for xx in x]
+
 
 ##### FAKE CHUNKS
 def generate_dummy_chunksclass():

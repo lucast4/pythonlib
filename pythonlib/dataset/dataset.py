@@ -278,13 +278,14 @@ class Dataset(object):
             # (only started saving this 8/13/22)
             path_bp = f"{path}/BlockParamsByDateSessBlock.pkl"
             if os.path.exists(path_bp):
+                from pythonlib.tools.monkeylogictools import dict2list2
+                
                 # Then load
                 print("Loading BlockParamsByDateSessBlock!")
                 with open(path_bp, "rb") as f:
                     BlockParamsByDateSessBlock = pickle.load(f)
 
                 # clean it up (the monkeylogic dicts have numbers as keys, should be lists)
-                from pythonlib.tools.monkeylogictools import dict2list2
                 tmp = {}
                 for k, v in BlockParamsByDateSessBlock.items():
                     # have to iterate becuase k is int, this would be converetd to list.
@@ -326,13 +327,14 @@ class Dataset(object):
         Dnew.Dat = self.Dat.copy()
         if hasattr(self, "Metadats"):
             Dnew.Metadats = copy.deepcopy(self.Metadats)
-
         if hasattr(self, "BPL"):
             Dnew.BPL = copy.deepcopy(self.BPL)
         if hasattr(self, "SF"):
             Dnew.SF = self.SF.copy()
         if hasattr(self, "Parses"):
             Dnew.Parses = copy.deepcopy(self.Parses)
+        if hasattr(self, "BlockParamsDefaults"):
+            Dnew.BlockParamsDefaults = copy.deepcopy(self.BlockParamsDefaults)
 
         return Dnew
 
@@ -891,7 +893,11 @@ class Dataset(object):
         """
 
         T = self.Dat.iloc[ind]["Task"]
-        return T.get_los_id()
+        out = T.get_los_id()
+        if out is None:
+            return None, None, None
+        else:
+            T.get_los_id()
 
     def taskclass_extract_los_info_append_col(self):
         """ For each trial, extract its los info and append as 
@@ -909,22 +915,28 @@ class Dataset(object):
         # for x in tmp_sorted:
         #     print(x)        
 
-
-
     def objectclass_get_active_chunk(self, ind):
         """ Get the active chunk thbat was used online, 
         from ObjectClass
+        RETURNS:
+        - ChunksClass representing active chunk. OR
+        --- None, if no ChunksListClass is defined (older datasets)
         """
+
         O = self.taskclass_extract_objectclass(ind)
 
-        # which are active chunk
-        model = O["ChunkState"]["active_chunk_model"]
-        index = O["ChunkState"]["active_chunk_ind"]
+        # Can only work if ChunksListClass is present
+        if O["ChunksListClass"] is None:
+            return None
+        else:
+            # which are active chunk
+            model = O["ChunkState"]["active_chunk_model"]
+            index = O["ChunkState"]["active_chunk_ind"]
 
-        # find it
-        CLC = O["ChunksListClass"]
-        C = CLC.find_chunk(model, index)
-        return C
+            # find it
+            CLC = O["ChunksListClass"]
+            C = CLC.find_chunk(model, index)
+            return C
 
     def objectclass_wrapper_extract_sequence_chunk_color(self, ind, plot_summary=False):
         """ Helps to extract all relevant info this trial regarding online 
@@ -953,7 +965,11 @@ class Dataset(object):
             # default colors
             bp = self.blockparams_extract_single(ind)
             col = bp["sizes"]["InkColor_untouched"]
-            nstrokes = len(O["Features_Active"]["shapes"])
+            nstrokes = O["actual_nstrokes"]
+            # for k, v in O.items():
+            #     print(k, len(v))
+            # nstrokes = len(O["StrokesFinalNorm"])
+            # nstrokes = len(O["Features_Active"]["shapes"])
             stroke_colors = [col for _ in range(nstrokes)]
 
             # sanity check that did not fade. if faded, then InkColor_untouched is not accurate. ahve to look into bb.
@@ -978,7 +994,10 @@ class Dataset(object):
                 print(' ', col)
 
             print('\n--- Active chunk:')
-            ChunkActive.print_summary()
+            if ChunkActive is None:
+                print("SKIPPED: ChunkActive is None")
+            else:
+                ChunkActive.print_summary()
 
         out = {
             "color_supervision_on": color_on,
@@ -4430,6 +4449,7 @@ class Dataset(object):
         """
         self.behclass_generate_alltrials()
         self.behclass_alignsim_compute()        
+        self.behclass_tokens_extract_datsegs()
 
     def behclass_generate(self, indtrial, expt=None):
         """ Generate the BehaviorClass object for this trial
@@ -4474,6 +4494,17 @@ class Dataset(object):
         self.Dat["BehClass"] = ListBeh
         
         print("stored in self.Dat[BehClass]")
+
+    def behclass_tokens_extract_datsegs(self):
+        """ Extract, single time, all task datsegs toekns.
+        """
+        print("Running D.behclass_tokens_extract_datsegs")
+        # if expt==""
+        for i in range(len(self.Dat)):
+            Beh = self.Dat.iloc[i]["BehClass"]
+            Beh.alignsim_extract_datsegs()
+            if i%200==0:
+                print(i)
 
     def behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
@@ -4784,6 +4815,55 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
+    def grammar_parses_generate(self, ind, list_rules = None):
+        """ Generate GrammarDat object and save, for this trial
+        PARAMS:
+        - ind, index in D.Dat
+        - list_rules, list of str, each a rule that is applied to this task to genereate parses
+        """
+
+        if ind not in self.GrammarDict.keys():
+            # Generate a new GD
+            from pythonlib.grammar.GrammarDat import GrammarDat
+
+            input_data_dict = {
+                "dataset":self,
+                "ind_dataset":ind
+            }
+            GD = GrammarDat(input_data_dict, input_version = "dataset")
+            self.GrammarDict[ind] = GD
+
+        GD = self.GrammarDict[ind]
+        GD.parses_generate_batch(list_rules)
+
+        # Return the grammardict, holding all the parses
+        return GD
+
+    def grammar_parses_extract(self, ind, list_rules, fail_if_empty=True):
+        """ Extract set of parses for each rule.
+        PARAMS;
+        - list_rules, list of str.
+        RETURNS:
+        - dict[rule] = parses, each a list of possible orderings
+        """
+        GD = self.grammar_parses_generate(ind, list_rules)
+        outdict = {}
+        for rule in list_rules:
+            parses = GD.ChunksListClassAll[rule].search_permutations_chunks()
+            if fail_if_empty and len(parses)==0:
+                print(rule)
+                print(parses)
+                assert False, "epty..."
+            outdict[rule] = parses
+        return outdict
+
+
+
+    def grammar_extract_beh_and_task(self, ind, ploton=False):
+        """ Goal is to replace "seuqence" module with grammar
+        """
+        return self.sequence_extract_beh_and_task(ind, ploton)
+
     def sequence_extract_beh_and_task(self, ind, ploton=False):
         """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
         task (e.g., taskstroke inds ordered by chunk, and whether there is color
@@ -4805,7 +4885,10 @@ class Dataset(object):
         # 2) Get target sequence
         out = self.objectclass_wrapper_extract_sequence_chunk_color(ind, ploton)
         C = out["active_chunk"]
-        taskstroke_inds_correct_order = C.extract_strokeinds_as("flat")
+        if C is not None:
+            taskstroke_inds_correct_order = C.extract_strokeinds_as("flat")
+        else:
+            taskstroke_inds_correct_order = None
         if ploton:
             print("*** Correct order: ", taskstroke_inds_correct_order)
 
@@ -4904,7 +4987,7 @@ class Dataset(object):
 
     def plotSingleTrial(self, idx=None, things_to_plot = ["beh", "task"],
         sharex=False, sharey=False, params=None, task_add_num=False,
-        number_from_zero=False):
+        number_from_zero=True):
         """ 
         Plot a single trial
         PARAMS;
