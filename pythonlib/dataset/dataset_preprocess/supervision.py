@@ -28,17 +28,23 @@ def extract_supervision_params(D, ind):
     if "failed_rule" in ABORT_MODES:
         # Then also include aborts due to failing ObjectClass rules
         if "RuleList" in allparams["task_objectclass"].keys():
+            found_rule=False
             for rule in allparams["task_objectclass"]["RuleList"]:
                 if False:
                     assert len(rule[1])==0, "this rule has a param, have to incorportae this info into ABORT_MODES somehow"
                     # Just take the first item (the kind of rule)
-                ABORT_MODES.append(rule[0])
+                if len(rule)>0:
+                    ABORT_MODES.append(rule[0])
+                    found_rule = True
+            if not found_rule:
+                # happened for gridlinecirlce sometime
+                ABORT_MODES.append("not_sure")
         else:
             # skip.
             ABORT_MODES.append("not_sure")
 
     ############## SEQUENCE SUPERVISION
-    if IS_NEW_TASK_VER:
+    if IS_NEW_TASK_VER and "Params" in allparams["task_objectclass"].keys():
         seq = allparams["sequence"]
 
         if seq["ver"]=="objectclass" and seq["on"]==1 and seq["manipulations"] == ['alpha', 'active_chunk'] and allparams["task_objectclass"]["Params"]["ChunksDone"]["order"]=="any_order":
@@ -194,19 +200,22 @@ def extract_supervision_params(D, ind):
     ################ ONLINE VISUAL FB
     if IS_NEW_TASK_VER:
         # Newere methods (2022)
-        p = allparams["task_objectclass"]["AllPtsVisCriteria"]
-        c = allparams["task_objectclass"]["CtrlPtsVisCriteria"]
-
-        if p == [['always_vis', {}, 'and', 0]] and c == [['always_vis', {}, 'and', 0]]:
-            VISUALFB_METH = "none"
-        elif p == [['not_touched', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
-            VISUALFB_METH = "all"
-        elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
-            VISUALFB_METH = "control_pts"
-        elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
-            VISUALFB_METH = "control_pts_norespawn"
+        if "AllPtsVisCriteria" not in allparams["task_objectclass"].keys() or "CtrlPtsVisCriteria" not in allparams["task_objectclass"].keys():
+            VISUALFB_METH = "not_sure"
         else:
-            assert False
+            p = allparams["task_objectclass"]["AllPtsVisCriteria"]
+            c = allparams["task_objectclass"]["CtrlPtsVisCriteria"]
+
+            if p == [['always_vis', {}, 'and', 0]] and c == [['always_vis', {}, 'and', 0]]:
+                VISUALFB_METH = "none"
+            elif p == [['not_touched', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
+                VISUALFB_METH = "all"
+            elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
+                VISUALFB_METH = "control_pts"
+            elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
+                VISUALFB_METH = "control_pts_norespawn"
+            else:
+                assert False
     else:
         # Older., liolke gridlinecirlce.
         VISUALFB_METH = "not_sure"
@@ -224,8 +233,9 @@ def extract_supervision_params(D, ind):
 
     ############### suonds
     # print(allparams["DonenessTracker"])
-    if IS_NEW_TASK_VER:
-        assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
+    # if IS_NEW_TASK_VER:
+    #     print(allparams["DonenessTracker"])
+    #     assert allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==0
     
     SOUNDS_TRIAL_ONSET = allparams["sounds"]["play_sound_trial_onset"]==1
     if "play_done_sound_on" in allparams["sounds"].keys():
@@ -233,12 +243,17 @@ def extract_supervision_params(D, ind):
     else:
         # Before around Jun 2022 - was default on.
         SOUNDS_ALLPTSDONE = True
-    if IS_NEW_TASK_VER:
+
+    if IS_NEW_TASK_VER and "Feedback" in allparams["task_objectclass"].keys():
         SOUNDS_HIT_VER = allparams["task_objectclass"]["Feedback"]["hit_sound_ver"]
         if allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_multiplier"]>0:
             SOUNDS_CHUNK_CHANGE = allparams["task_objectclass"]["Feedback"]["chunk_active_change_sound_ver"]
         else:
             SOUNDS_CHUNK_CHANGE = "none"
+
+        # Older method, overwrites.
+        if allparams["DonenessTracker"]["make_sound_on_chunk_switch"]==1:
+            SOUNDS_CHUNK_CHANGE = "any_change"
 
         SOUNDS_STROKES_DONE = allparams["task_objectclass"]["Feedback"]["stroke_done_sound_ver"]
     else:

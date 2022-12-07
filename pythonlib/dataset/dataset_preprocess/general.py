@@ -455,16 +455,17 @@ def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category,
                 if mapper_taskset_to_category is not None:
                     # OPTION 1 - use taskset
                     setname, setnum, taskind = D.taskclass_extract_los_info(ind)
+                    if setname is not None:
+                        # Then is not older tasks where cant find the set
+                        # try to find this set entered by hand
+                        for k, v in mapper_taskset_to_category.items():
+                            setname_mapper = k[0]
+                            setnum_mapper = k[1]
+                            taskinds_mapper = k[2] # list
 
-                    # try to find this set entered by hand
-                    for k, v in mapper_taskset_to_category.items():
-                        setname_mapper = k[0]
-                        setnum_mapper = k[1]
-                        taskinds_mapper = k[2] # list
-
-                        if setname==setname_mapper and setnum==setnum_mapper and taskind in taskinds_mapper:
-                            # found this trial's category
-                            return _final_name(v)
+                            if setname==setname_mapper and setnum==setnum_mapper and taskind in taskinds_mapper:
+                                # found this trial's category
+                                return _final_name(v)
                     # if got to here, then you did not include this task in the mapper. use its taskset
                     # e..g, grammar-ss-41
                     return _final_name(D.Dat.iloc[ind][what_use_for_default])
