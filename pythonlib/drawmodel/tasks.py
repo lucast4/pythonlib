@@ -1040,48 +1040,64 @@ class TaskClass(object):
                     else:
                         dat[k] = list(dat[k])
                         
-        nstrokes = len(dat['StrokindsDone'])
 
-        chunkslist = []
+        # Save number of strokes
+        nstrokes = len(dat['StrokesFinalNorm'])
+        list_keys_check = ["StrokesFinalNorm", "StrokesMaskTouched", 
+            "StrokesVisible", "StrokindsDone"]
+        for k in list_keys_check:
+            if k in dat.keys():
+                assert len(dat[k]) == nstrokes, "possibly somewhere concatenated strokes? find the _actual_ nstrokes"
+        dat["actual_nstrokes"] = nstrokes
+        
+        ######## chunklist (included within task)
+        if "ChunkList" in dat.keys():
+            # Autoatmicalyl get CHunksList based on matlab tasksequencer mods.
+            chunkslist = []
+            if isinstance(dat["ChunkList"], dict):
+                # shoudl be list of dicts...
+                dat["ChunkList"] = [dat["ChunkList"]]
 
-        if isinstance(dat["ChunkList"], dict):
-            # shoudl be list of dicts...
-            dat["ChunkList"] = [dat["ChunkList"]]
+            for this in dat["ChunkList"]:
+                # convert this item into the proper format
+                # print(type(this))
+                # print(type(dat["ChunkList"]))
+                # print("adsad")
+                # print(dat["ChunkList"])
 
-        for this in dat["ChunkList"]:
-            # convert this item into the proper format
-            # print(type(this))
-            # print(type(dat["ChunkList"]))
-            # print("adsad")
-            # print(dat["ChunkList"])
+                try:
+                    flips = [x["Flipped"] for x in this["StrokeSequence"]]
+                except Exception as err:
+                    print(1)
+                    print(dat)
+                    print(2)
+                    print(dat["ChunkList"])
+                    print(3)
+                    print(this)
+                    print(4)
+                    print(type(this))
+                    print(this.keys)
+                    raise err
 
-            try:
-                flips = [x["Flipped"] for x in this["StrokeSequence"]]
-            except Exception as err:
-                print(1)
-                print(dat)
-                print(2)
-                print(dat["ChunkList"])
-                print(3)
-                print(this)
-                print(4)
-                print(type(this))
-                print(this.keys)
-                raise err
+                hier = [x-1 for x in this["chunks_"]] # convert to 0-index
+                index = int(this["ind"])
 
-            hier = [x-1 for x in this["chunks_"]] # convert to 0-index
-            index = int(this["ind"])
+                if len(flips)!=len(hier):
+                    print(this)
+                    assert False
+                chunkslist.append([this["modelname"], hier, flips, index, this["color"]])
 
-            if len(flips)!=len(hier):
-                print(this)
-                assert False
-            chunkslist.append([this["modelname"], hier, flips, index, this["color"]])
-
-        shapes = dat["Features_Active"]["shapes"]
-        CL = ChunksClassList("chunkslist_entry", 
-            {"chunkslist":chunkslist, "nstrokes":nstrokes, 
-            "shapes":shapes})
-        dat["ChunksListClass"] = CL
+            shapes = dat["Features_Active"]["shapes"]
+            CL = ChunksClassList("chunkslist_entry", 
+                {"chunkslist":chunkslist, "nstrokes":nstrokes, 
+                "shapes":shapes})
+            dat["ChunksListClass"] = CL
+        else:
+            # Else, leave empty. older code (e.g,, gridlinecircle), to be 
+            # replaced by GrammarDat post-hoc extraction of ChunksListClass
+            dat["ChunkList"] = None
+            dat["ChunksListClass"] = None
+            dat["ChunkState"] = None 
         
         # Remove strokes, only needed above
         if "Strokes" in dat.keys():

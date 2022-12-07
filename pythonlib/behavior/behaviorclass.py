@@ -39,8 +39,9 @@ class BehaviorClass(object):
             D = params["D"]
             ind = params["ind"]
             Task = D.Dat.iloc[ind]["Task"]
-            if "expt" in params.keys():
-                self.Expt = params["expt"]
+            assert "expt" in params.keys() and isinstance(params["expt"], str), "you really should pass in the expt, becaause it can define diff steps in parts of the code -- e.g,, alignsim_extract_datsegs for gridlinecircle."
+            # if "expt" in params.keys():]
+            self.Expt = params["expt"]
             strokes_task = D.Dat.iloc[ind]["strokes_task"]
 
             # 2) Get the "names" for all task strokes
@@ -625,6 +626,7 @@ class BehaviorClass(object):
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False):
         """
+        [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
         Will only compute the first time run. then will save and reload cached every time run again
         (unless recompute=True)
@@ -649,10 +651,14 @@ class BehaviorClass(object):
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
+
         # Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
         Task = self.task_extract()
-
-        datsegs = Task.tokens_generate(params, inds_taskstrokes)
+        hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
+        Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle) # generate the defualt order
+        # Task.tokens_generate(params) # generate the defualt order
+        datsegs = Task.tokens_reorder(inds_taskstrokes)
+        # datsegs = Task.tokens_generate(params, inds_taskstrokes)
 
         if plot_print_on:
             for x in datsegs:
@@ -757,13 +763,22 @@ class BehaviorClass(object):
         return self._find_motif_in_beh(tokens, motif, list_beh_mask)
 
 
-    def alignsim_find_motif_in_beh_bykind(self, kind, params=None, list_beh_mask=None):
+    def alignsim_find_motif_in_beh_bykind(self, kind, params=None, list_beh_mask=None,
+        DEBUG = False):
         """ Helper to search for this kind of motif. More abstract, since kind and params
         are used to construct the specific motif.
         """
         tokens = self.alignsim_extract_datsegs()
         motif = self.motifs_generate_searchstring(kind, params)
-        return self._find_motif_in_beh(tokens, motif, list_beh_mask)
+
+        x = self._find_motif_in_beh(tokens, motif, list_beh_mask)
+        if DEBUG:
+            print("Motif:", motif)
+            print("Tokens:")
+            for t in tokens:
+                print(t["shape_oriented"], t["rel_from_prev"])
+            print(x)
+        return x
 
 
     def alignsim_find_motif_in_beh_wildcard(self, motifname, motifparams={}, 

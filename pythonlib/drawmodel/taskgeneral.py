@@ -399,7 +399,9 @@ class TaskClass(object):
         """ Get load_old_set information, which means info for this as a fixed task
         that was loaded online during expt
         RETURNS:
-
+        EIther:
+        - setname, setnum, taskind OR
+        - None
         """
         if self.Params["input_ver"]=="ml2":
             return self.Params["input_params"].info_summarize_task()["los_info"]
@@ -679,7 +681,7 @@ class TaskClass(object):
         ######################## Old task versions...
         if not self.get_is_new_version():
             return "undefined"
-        gridparams = self.get_grid_params()
+        gridparams = self.get_grid_params() 
         if gridparams is None:
             return "undefined"
 
@@ -730,7 +732,7 @@ class TaskClass(object):
             # Then each stroke center matches a grid center
             grid_ver = "on_grid"
         else:
-            print([isin_array(c, grid_centers, atol=ATOL) for c in centers])
+            # print([isin_array(c, grid_centers, atol=ATOL) for c in centers])
             # Then at least one stroke is off grid.
             grid_ver = "on_rel"
 
@@ -754,7 +756,8 @@ class TaskClass(object):
         # for k, v in T.PlanDat.items():
         #     print('-', k)
         #     print(v)
-        if "TaskGridClass" not in T.PlanDat.keys():
+
+        if T.PlanDat is None or "TaskGridClass" not in T.PlanDat.keys():
             return None
         else:
             ###############
@@ -813,8 +816,6 @@ class TaskClass(object):
                     # print(relation_struct)
                     if "xy_pairs" in relation_struct.keys():
                         # Then this method was active, list of paris.
-                        print(relation_struct["xy_pairs"])
-                        print(relation_struct)
                         # relation_struct["xy_pairs"][1] is an array of weights for each pt
                         # # array([1., 1., 1., 1., 1.])
                         for pt in relation_struct["xy_pairs"][0]:
@@ -918,24 +919,131 @@ class TaskClass(object):
             else:
                 return gridparams
 
-    def tokens_generate(self, params = {}, inds_taskstrokes=None, track_order=True):
+    def tokens_generate(self, params = {}, inds_taskstrokes=None, 
+        track_order=True, hack_is_gridlinecircle=False, assert_computed=False):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
         """
 
+        if assert_computed:
+            # Then force that you have alreadey computed. this usefeul for 
+            # gridline circle, where correct construction requires hack_is_gridlinecircle=True.
+            assert hasattr(self, '_DatSegs') and len(self._DatSegs)>0
+
+        assert inds_taskstrokes==None, "only use tokens_generate to genereate in default order. To reorder, use tokens_reorder"
+        assert len(params)==0, "do not pass in params. this needs to be default. instead, pass into tokens_reorder"
+
         # Check if it already exists.
-        if hasattr(self, 'DatSegs'):
-            if len(self.DatSegs)>0:
-                return self.DatSegs
+        if hasattr(self, '_DatSegs') and len(self._DatSegs)>0:
+            return self._DatSegs
+        else:
+            # Generate from scratch
+            datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
+                hack_is_gridlinecircle=hack_is_gridlinecircle)
+            self._DatSegs = datsegs
+            return self._DatSegs
 
-        # Generate from scratch
-        datsegs = self._tokens_generate(params, inds_taskstrokes, track_order)
-        self.DatSegs = datsegs
-        return self.DatSegs
-
-
-    def _tokens_generate(self, params = {}, inds_taskstrokes=None, track_order=True):
+    def tokens_reorder(self, inds_taskstrokes):
+        """ Return datsegs in any desired order.
+        NOTE: This must regenerate datsegs, becuasse the relational features need to know
+        about ordering.
         """
+        import copy
+        datsegs_new = copy.deepcopy(self._DatSegs)
+        datsegs_new = [datsegs_new[i] for i in inds_taskstrokes]
+        return self._tokens_generate_relations(datsegs_new)
+
+
+    def _tokens_generate_relations(self, datsegs):
+        """ Given datsegs already computed from _tokens_generate, now
+        compute relations. Only works if on grid (checks that locations are ints)
+        PARAMS:
+        - datsegs, return it from self._tokens_generate() or tokens_reorder()
+        """
+
+        grid_ver = "on_grid"
+        for dseg in datsegs:
+            if dseg["gridloc"] is None:
+                grid_ver = "on_rel"
+        
+        def _location(i):
+            xloc, yloc = datsegs[i]["gridloc"]
+            return xloc, yloc
+
+        def _posdiffs(i, j):
+            # return xdiff, ydiff, 
+            # in grid units.
+            pos1 = _location(i)
+            pos2 = _location(j)
+            return pos2[0]-pos1[0], pos2[1] - pos1[1]
+
+        def _direction(i, j):
+            # only if adjacnet on grid.
+            xdiff, ydiff = _posdiffs(i,j)
+            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
+                return "up"
+            elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
+                return "down"
+            elif xdiff ==-1. and np.isclose(ydiff, 0.):
+                return "left"
+            elif xdiff ==1. and np.isclose(ydiff, 0.):
+                return "right"
+            else:
+                return "far"
+
+        def _relation_from_previous(i):
+            # relation to previous stroke
+            if i==0:
+                return "start"
+            else:
+                return _direction(i-1, i)
+
+        def _horizontal_or_vertical(i, j):
+            xdiff, ydiff = _posdiffs(i,j)
+            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
+                assert False, "strokes are on the same grid location, decide what to call this"
+            elif np.isclose(xdiff, 0.):
+                return "vertical"
+            elif np.isclose(ydiff, 0.):
+                return "horizontal"
+            else: # xdiff, ydiff are both non-zero
+                return "diagonal" 
+
+        def _horiz_vert_move_from_previous(i):
+            if i==0:
+                return "start"
+            else:
+                return _horizontal_or_vertical(i-1, i)
+
+
+        for i, dseg in enumerate(datsegs):
+            # 2) Things that depend on grid
+            if grid_ver=="on_grid":
+                # Then this is on grid, so assign grid locations.
+                dseg["rel_from_prev"] = _relation_from_previous(i)
+                # dseg["rel_to_next"] = _relation_to_following(i)
+                dseg["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
+                # dseg["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
+            elif grid_ver=="on_rel":
+                # Then this is using relations, not spatial grid.
+                # give none for params
+                # dseg["gridloc"] = None
+                dseg["rel_from_prev"] = None
+                # datsegs[-1]["rel_to_next"] = None
+                dseg["h_v_move_from_prev"] = None
+                # datsegs[-1]["h_v_move_to_next"] = None
+            else:
+                print(grid_ver)
+                assert False, "code it"
+
+        return datsegs
+
+
+    def _tokens_generate(self, params = {}, inds_taskstrokes=None, 
+            track_order=True, hack_is_gridlinecircle=False):
+        """
+        [NOTE: ONLY use this for genreated tokens in default order. this important becuase
+        generates and caches. To reorder, see tokens_reorder]
         Designed for grid tasks, where each prim is a distinct location on grid,
         so "relations" are well-defined based on adjacency and direction
         PARAMS:
@@ -946,10 +1054,17 @@ class TaskClass(object):
         then tracks things related to roder (e.g., sequential relations). If False
         (e.g. for chunks where care only about grouping not order), then ignore those
         features.
+        - hack_is_gridlinecircle, for gridlinecirlce epxeirments, hacked the grid...
+        for both "gridlinecircle", "chunkbyshape2"
         RETURNS:
         - datsegs, list of dicts, each a token.
         """
+
         from math import pi
+
+        assert track_order==True, "if not, leads to mismatch in keys..."
+        assert inds_taskstrokes==None, "see docs"        
+        assert len(params)==0, "do not pass in params. this needs to be default. instead, pass into tokens_reorder"
 
         ############ PREPARE DATA
         # Extract shapes, formatted correctly
@@ -989,13 +1104,14 @@ class TaskClass(object):
 
         # - grid spatial params 
         get_grid = True
-        if "expt" in params.keys():
-            expt = params["expt"]
-            if expt in ["gridlinecircle", "chunkbyshape2"]:
-                xgrid = np.linspace(-1.7, 1.7, 3)
-                ygrid = np.linspace(-1.7, 1.7, 3)
-                get_grid = False
-                grid_ver = "on_grid"
+
+        if hack_is_gridlinecircle:
+        # if params["expt"] in ["gridlinecircle", "chunkbyshape2"]:
+            xgrid = np.linspace(-1.7, 1.7, 3)
+            ygrid = np.linspace(-1.7, 1.7, 3)
+            grid_ver = "on_grid"
+            get_grid = False
+
         if get_grid:
             # Look for this saved
             gridparams = self.get_grid_params()
@@ -1008,6 +1124,7 @@ class TaskClass(object):
             #     print('--', key, val)
             # # print(gridparams)
             # assert False
+
         nver = len(ygrid)
         nhor = len(xgrid)
 
@@ -1098,6 +1215,7 @@ class TaskClass(object):
                 yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
                 locations.append((xind, yind))
 
+            
             def _posdiffs(i, j):
                 # return xdiff, ydiff, 
                 # in grid units.
@@ -1179,23 +1297,26 @@ class TaskClass(object):
             if grid_ver=="on_grid":
                 # Then this is on grid, so assign grid locations.
                 datsegs[-1]["gridloc"] = locations[i]
-                if track_order:
-                    datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
-                    datsegs[-1]["rel_to_next"] = _relation_to_following(i)
-                    datsegs[-1]["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
-                    datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
+                # if track_order:
+                #     datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
+                #     datsegs[-1]["rel_to_next"] = _relation_to_following(i)
+                #     datsegs[-1]["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
+                #     datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 # give none for params
                 datsegs[-1]["gridloc"] = None
-                if track_order:
-                    datsegs[-1]["rel_from_prev"] = None
-                    datsegs[-1]["rel_to_next"] = None
-                    datsegs[-1]["h_v_move_from_prev"] = None
-                    datsegs[-1]["h_v_move_to_next"] = None
+                # if track_order:
+                #     datsegs[-1]["rel_from_prev"] = None
+                #     datsegs[-1]["rel_to_next"] = None
+                #     datsegs[-1]["h_v_move_from_prev"] = None
+                #     datsegs[-1]["h_v_move_to_next"] = None
             else:
                 print(grid_ver)
                 assert False, "code it"
+
+        datsegs = self._tokens_generate_relations(datsegs)
+        datsegs = tuple(datsegs)
 
         return datsegs
 
