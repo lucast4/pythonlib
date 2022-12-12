@@ -949,7 +949,12 @@ class TaskClass(object):
         about ordering.
         """
         import copy
-        datsegs_new = copy.deepcopy(self._DatSegs)
+
+        # Shallow copy is good enough, becuase you just want to avoid replacing the
+        # value in self._DatSegs[i][key]. Tested that this is fine.
+        datsegs_new = [copy.copy(d) for d in self._DatSegs]
+        # datsegs_new = self._DatSegs # BAD, modifies _DatSegs
+        # datsegs_new = copy.deepcopy(self._DatSegs) # Good, but slower.
         datsegs_new = [datsegs_new[i] for i in inds_taskstrokes]
         return self._tokens_generate_relations(datsegs_new)
 

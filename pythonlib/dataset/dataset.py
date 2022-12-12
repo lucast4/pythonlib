@@ -897,7 +897,7 @@ class Dataset(object):
         if out is None:
             return None, None, None
         else:
-            T.get_los_id()
+            return out
 
     def taskclass_extract_los_info_append_col(self):
         """ For each trial, extract its los info and append as 

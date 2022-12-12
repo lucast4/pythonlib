@@ -1042,7 +1042,18 @@ class TaskClass(object):
                         
 
         # Save number of strokes
-        nstrokes = len(dat['StrokesFinalNorm'])
+        if "StrokesFinalNorm" in dat.keys():
+            nstrokes = len(dat['StrokesFinalNorm'])
+        elif "StrokindsDone" in dat.keys():
+            nstrokes = len(dat['StrokindsDone'])
+        elif "StrokesMaskTouched" in dat.keys():
+            nstrokes = len(dat['StrokesMaskTouched'])
+        else:
+            for k, v in dat.items():
+                print(k, ' -- ' , v)
+            print(dat.keys())
+            assert False
+
         list_keys_check = ["StrokesFinalNorm", "StrokesMaskTouched", 
             "StrokesVisible", "StrokindsDone"]
         for k in list_keys_check:
@@ -1079,7 +1090,13 @@ class TaskClass(object):
                     print(this.keys)
                     raise err
 
-                hier = [x-1 for x in this["chunks_"]] # convert to 0-index
+                if "chunks_" in this.keys():
+                    # Newer code, where chunks_ is just a readout.
+                    hier = [x-1 for x in this["chunks_"]] # convert to 0-index. 
+                else:
+                    # Old code, should be the samet hing
+                    hier = [x-1 for x in this["chunks"]] # convert to 0-index
+
                 index = int(this["ind"])
 
                 if len(flips)!=len(hier):

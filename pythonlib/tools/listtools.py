@@ -199,18 +199,28 @@ def powerset(iterable):
 
 def extract_novel_unique_items_in_order(listin):
     """ 
-    e.g, listin=[0,2,2,1,3, 3, 2], returns [0,2,1,3,2]
+    Get change points, when the items in listin change.
+    PARAMS:
+    - listin, list of items with equals method
+    RETURNS:
+    - list_new_items, list of items at change points
+    - list_positions, list of indices in listin wherre those change pts are fond (right side)
+    e.g, listin=[0,2,2,1,3, 3, 2], returns:
+    [0, 2, 1, 3, 2]
+    [0, 1, 3, 4, 6]
     """
     list_new_items =[]
+    list_positions = []
     curr_item = None
-    for x in listin:
+    for i, x in enumerate(listin):
         if x==curr_item:
             continue
         else:
             list_new_items.append(x)
+            list_positions.append(i)
             curr_item = x
 
-    return list_new_items
+    return list_new_items, list_positions
 
 def remove_values_refrac_period(times_in_order, refrac_period):
     """ Given list of times, return indices to slice, to remove times that
@@ -230,3 +240,35 @@ def remove_values_refrac_period(times_in_order, refrac_period):
     inds_remove = [x[0].astype(int) for x in inds_remove]
     inds_keep = [i for i in range(len(times_in_order)) if i not in inds_remove]
     return inds_keep, inds_remove
+
+def indices_into_original_list_after_concat(list_of_lists):
+    """
+    returns a list, of sum of lents of all innter lisrts, with index back
+    into orignal list
+
+    e.g., x = [[0,1], [3,4,5], [10], [], range(5), range(2)]
+    RETURNS:
+    0
+    0
+    1
+    1
+    1
+    2
+    4
+    4
+    4
+    4
+    4
+    5
+    5
+    """
+
+    ct = 0
+    idxs = []
+    for i, xx in enumerate(list_of_lists):
+        for j in range(len(xx)):
+            # print(i)
+            idxs.append(i)
+        ct = ct+len(xx)
+
+    return idxs
