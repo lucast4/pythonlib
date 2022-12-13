@@ -72,8 +72,13 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
         x = [xx for xx in x if len(xx)>0] # e.g, if this shape doesnt exist for this trial.
         return x
     
+    print(Task)
+    print(expt)
+    print(rule)
+    print(params)
+
     # Find list_chunks and list_hier - note: they will be same lenght, 
-    if expt in ["gridlinecircle"]:
+    if expt in ["gridlinecircle","neuralbiasdir5c"]:
         chunks = list(range(len(objects))) # never concat strokes
         list_chunks = [chunks] # only one way
         if rule =="baseline":
