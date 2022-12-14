@@ -129,8 +129,10 @@ def color_make_pallete_categories(df, category_name):
     return pallete
 
 
-def makeColors(numcol, alpha=1, cmap="plasma"):
-    """ gets evensly spaced colors. currntly uses plasma map"""
+def makeColors(numcol, alpha=1, cmap="jet"):
+    """ gets evensly spaced colors. currntly uses jet map
+    PREVIOUSLY: plasma
+    """
     import matplotlib.pylab as pl
     import matplotlib.cm as cm
     if True:
