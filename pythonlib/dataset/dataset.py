@@ -4823,6 +4823,8 @@ class Dataset(object):
         - ind, index in D.Dat
         - list_rules, list of str, each a rule that is applied to this task to genereate parses
         """
+        if not hasattr(self, 'GrammarDict'):
+            self.GrammarDict = {}
 
         if ind not in self.GrammarDict.keys():
             # Generate a new GD
