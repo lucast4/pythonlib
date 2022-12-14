@@ -1414,9 +1414,26 @@ class TaskClass(object):
             print(this)
             assert False
 
+    ############## ML2 objectclass stuff
+    def ml2_objectclass_extract_active_chunk(self, return_as_inds=False):
+        """ Return the Active chukn
+        RETURNS:
+        - ChunkClass object,
+        - OR: list of indices, flattened, in order of chunks
+        """
+        TT = self.extract_monkeylogic_ml2_task()
+        C = TT.objectclass_extract_active_chunk()
+        if return_as_inds:
+            return C.extract_strokeinds_as("flat")
+        else:
+            return C
+
+
     ######### PLOT
     def plotStrokes(self, ax= None, ordinal=False):
         """ Quick plot of this task
+        RETURNS:
+        - ax, 
         """
         import matplotlib.pyplot as plt
         from pythonlib.drawmodel.strokePlots import plotDatStrokes

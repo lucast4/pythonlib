@@ -283,6 +283,7 @@ def _groupingParams(D, expt):
             ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
             ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
             ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
+        mapper_auto_rename_probe_taskgroups = True
     elif "grammardircolor" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
         grouping_reassign = True
@@ -293,6 +294,7 @@ def _groupingParams(D, expt):
             ("grammar", 41, tuple([16, 18, 21, 22, 23, 27, 28])): "diff_beh",
             ("grammar", 41, tuple([17, 20, 24, 26])): "diff_beh_probes",
             ("grammar", 41, tuple([15, 19, 25])): "same_beh"}
+        mapper_auto_rename_probe_taskgroups = True
 
     elif "dircolor" in expt:
         # 10/17/22 - e..g, dircolro3b    
@@ -303,6 +305,7 @@ def _groupingParams(D, expt):
         mapper_taskset_to_category = {
             ("neuralbiasdir", 31, tuple([1,3,6])): "heldout_I", # novel shape order x spatial config
             ("neuralbiasdir", 31, tuple([8,9])): "heldout_E_config"} # novel spatial config.
+        mapper_auto_rename_probe_taskgroups = True
 
     elif "dirshapecolor2" in expt:
         # 10/21/22 - 3 rules.
@@ -315,6 +318,7 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 30, tuple([5, 15, 20, 25, 30])):"train_test_same_LShape", 
             ("neuralbiasdir", 31, tuple([2, 12])):"train_test_same_LShape", 
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # heldout, diff across all 3 rules.
+        mapper_auto_rename_probe_taskgroups = True
 
     elif "dirshapecolor" in expt:
         # 10/17/22 - e..g, dircolro3b    
@@ -327,17 +331,22 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 31, tuple([2, 12])): "train_test_same", # 
             ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
+        mapper_auto_rename_probe_taskgroups = True            
+
     elif "charstrokeseq" in expt:
         grouping_reassign = False
 
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True
+        mapper_auto_rename_probe_taskgroups = True
 
     elif "dirdir" in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+        
     else:
         # pass, just use defaults
         pass

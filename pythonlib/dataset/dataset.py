@@ -923,20 +923,22 @@ class Dataset(object):
         --- None, if no ChunksListClass is defined (older datasets)
         """
 
-        O = self.taskclass_extract_objectclass(ind)
+        TT = self.taskclass_extract_ml2(ind)
+        return TT.objectclass_extract_active_chunk()
+        # O = self.taskclass_extract_objectclass(ind)
 
-        # Can only work if ChunksListClass is present
-        if O["ChunksListClass"] is None:
-            return None
-        else:
-            # which are active chunk
-            model = O["ChunkState"]["active_chunk_model"]
-            index = O["ChunkState"]["active_chunk_ind"]
+        # # Can only work if ChunksListClass is present
+        # if O["ChunksListClass"] is None:
+        #     return None
+        # else:
+        #     # which are active chunk
+        #     model = O["ChunkState"]["active_chunk_model"]
+        #     index = O["ChunkState"]["active_chunk_ind"]
 
-            # find it
-            CLC = O["ChunksListClass"]
-            C = CLC.find_chunk(model, index)
-            return C
+        #     # find it
+        #     CLC = O["ChunksListClass"]
+        #     C = CLC.find_chunk(model, index)
+        #     return C
 
     def objectclass_wrapper_extract_sequence_chunk_color(self, ind, plot_summary=False):
         """ Helps to extract all relevant info this trial regarding online 

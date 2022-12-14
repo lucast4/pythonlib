@@ -77,47 +77,52 @@ def mergeOnIndex(df1, df2):
 
 
 #############################vvvv OBSOLETE - USE aggregGeneral
-def aggreg(df, group, values, aggmethod=["mean","std"]):
-    """
-    get group means, for certain dimensions(values). 
-    e.g., group = ["worker_model", "worker_dat"]
-    e.g. values = ["score", "cond_is_same"]
-    NOTE: will change name of balues filed, e.g. to score_mean.
-    OBSOLETE - USE aggregGeneral]
-    """
-    assert False, "[OBSOLETE - use aggregGeneral]"
-    # this version did not deal with non-numeric stuff that would liek to preset
-    # but was useful in taking both mean and std.
-    df = df.groupby(group)[values].agg(aggmethod).reset_index()
-    # df.columns = df.columns.to_flat_index()
-    df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
-    return df
+# def aggreg(df, group, values, aggmethod=["mean","std"]):
+#     """
+#     get group means, for certain dimensions(values). 
+#     e.g., group = ["worker_model", "worker_dat"]
+#     e.g. values = ["score", "cond_is_same"]
+#     NOTE: will change name of balues filed, e.g. to score_mean.
+#     OBSOLETE - USE aggregGeneral]
+#     """
+#     assert False, "[OBSOLETE - use aggregGeneral]"
+#     # this version did not deal with non-numeric stuff that would liek to preset
+#     # but was useful in taking both mean and std.
+#     df = df.groupby(group)[values].agg(aggmethod).reset_index()
+#     # df.columns = df.columns.to_flat_index()
+#     df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
+#     return df
 
-def aggregMean(df, group, values, nonnumercols=[]):
-    """
-    get group means, for certain dimensions(values). 
-    e.g., group = ["worker_model", "worker_dat"]
-    e.g. values = ["score", "cond_is_same"]
-    e.g. nonnumercols=["sequence", "name"] i.e., will take the first item it encounters.
-    [OBSOLETE - USE aggregGeneral]
-    """
-    assert False, "[OBSOLETE - use aggregGeneral]"
-    agg = {c:"mean" for c in df.columns if c in values }
-    agg.update({c:"first" for c in df.columns if c in nonnumercols})
-    print(agg)
-    df = df.groupby(group).agg(agg).reset_index()
-    # df.columns = df.columns.to_flat_index()
-    # df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
-    return df
+# def aggregMean(df, group, values, nonnumercols=[]):
+#     """
+#     get group means, for certain dimensions(values). 
+#     e.g., group = ["worker_model", "worker_dat"]
+#     e.g. values = ["score", "cond_is_same"]
+#     e.g. nonnumercols=["sequence", "name"] i.e., will take the first item it encounters.
+#     [OBSOLETE - USE aggregGeneral]
+#     """
+#     assert False, "[OBSOLETE - use aggregGeneral]"
+#     agg = {c:"mean" for c in df.columns if c in values }
+#     agg.update({c:"first" for c in df.columns if c in nonnumercols})
+#     print(agg)
+#     df = df.groupby(group).agg(agg).reset_index()
+#     # df.columns = df.columns.to_flat_index()
+#     # df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
+#     return df
 ########################### ^^^^ OBSOLETE - USE aggregGeneral
 
 
 def aggregGeneral(df, group, values, nonnumercols=[], aggmethod=["mean"]):
     """
-    get group means, for certain dimensions(values). 
-    e.g., group = ["worker_model", "worker_dat"]
-    e.g. values = ["score", "cond_is_same"]
-    e.g. nonnumercols=["sequence", "name"] i.e., will take the first item it encounters.
+    Aggregate by first grouping (across multiple dimensions) and then applyiong
+    arbnitrary method.
+    PARAMS;
+    - group, list of str, each a column. groups using combos fo these
+    - values, list of str, which values to apply aggregation. the returned df will
+    have these as new columns.
+    - nonnumercols, list of str. these columsn will be retained, keeping only the 
+    first encountered value.
+    - aggmethod, list of str, applies each of these agg methods.
     """
     agg = {c:aggmethod for c in df.columns if c in values }
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
@@ -470,6 +475,34 @@ def filterPandasMultOrs(df, list_varnames, list_filts, return_as = "inds",
     else:
         assert False
 
+def filter_by_min_n(df, colname, n_min_per_level):
+    """ for each level in df[colname] prune all of its instances if
+    the n rows is less than n_min_per_level
+    PARAMS;
+    - colname, str
+    - n_min_per_level, int
+    RETURNS:
+    - df, a copy of the input, pruned
+    """
+
+    # n_min_per_level = 40 # min total n trials for level
+
+    levels = df[colname].unique().tolist()
+
+    indstoremove = []
+    for lev in levels:
+        n = sum(df[colname]==lev)
+        if n<n_min_per_level:
+            # then remove it
+            inds = df[df[colname]==lev].index.tolist()
+            indstoremove.extend(inds)
+            print(f'REMOVING, n={n} |', lev, ' --------  ', sum(df[colname]==lev))
+        print(lev, ' --------  ', sum(df[colname]==lev))
+    print('(removing this many indices): ', len(set(indstoremove)))
+    df = df.copy()
+    df = df.drop(list(set(indstoremove))).reset_index(drop=True)
+    return df
+
 def findPandas(df, colname, list_of_vals, reset_index=True):
     """ returns df with only rows matchibng list_of_vals. 
     output will be same length as list_of_vals, with order matching.
@@ -540,7 +573,7 @@ def printOverview(df, MAX=50):
 # @param grp: [col1 col2 col3]
 # @return: new column with index for category (based on col1/2/3 perm)
 def append_col_with_grp_index(df, grp, new_col_name, use_strings=True, 
-        strings_compact=False):
+        strings_compact=False, return_col_name=False):
     """ for each col, gets its grp index (based on grp list),
     and appends as new column. first converts to string by str(list)
     INPUTS:
@@ -570,8 +603,11 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True,
                 return str(tmp) 
         else:
             return tuple(tmp)
-    
-    return applyFunctionToAllRows(df, F, new_col_name)    
+    df = applyFunctionToAllRows(df, F, new_col_name)    
+    if return_col_name:
+        return df, new_col_name 
+    else:
+        return df
 
 
 def append_col_after_applying_to_group(df, groupby, cols_to_use, F, newcol):
@@ -628,7 +664,10 @@ def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", random
     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
 def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False, 
-        agg_method = "counts", ax=None):
+        agg_method = "counts", val_name = "val", ax=None, 
+        norm_method=None,
+        annotate_heatmap=True, zlims=[None, None],
+        diverge=False):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
@@ -636,10 +675,17 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     - col1, string name of col whose values will become row indices
     - col2, string name of col whose values wil become column indices.
     - plot_heatmap, bool
+    - agg_method, str, what to put into each cell (by agging across datapts)
+    - val_name, str name of column, optional if the agg function requires this (e,g. mean)
+    - annotate_heatmap, bool, to put numerical values in each cell as text.
+    - diverge, bool, if True, then centers the heat values.
     RETURNS:
-    - 2d dataframne
+    - 2d dataframne,
+    - fig, 
+    - ax,
+    - rgba_values, (nrows, ncols, 4), where rgba_values[0,1], means rgba value for row 0 col 1.
     """
-
+    from pythonlib.tools.snstools import heatmap
     list_cat_1 = sorted(df[col1].unique())
     list_cat_2 = sorted(df[col2].unique())
 
@@ -647,38 +693,55 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     for i, val1 in enumerate(list_cat_1):
         for j, val2 in enumerate(list_cat_2):
             
-            if agg_method:
+            dfsub = df[(df[col1] == val1) & (df[col2] == val2)]
+            if agg_method=="counts":
                 # get counts
-                dfsub = df[(df[col1] == val1) & (df[col2] == val2)]
                 n = len(dfsub)
+                valthis = n
+            elif agg_method=="mean":
+                valthis = dfsub[val_name].mean()
             else:
                 print(agg_method)
                 assert False
-            arr[i, j] = n
+            arr[i, j] = valthis
     
     dfthis = pd.DataFrame(arr, index=list_cat_1, columns=list_cat_2)
 
+    if norm_method=="col_div":
+        # normalize so that for each col, the sum across rows is 1
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
+    elif norm_method=="row_div":
+        # same, but for rows
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+    elif norm_method=="col_sub":
+        # normalize so by subtracting from each column its mean across rows
+        dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
+        diverge = True
+    elif norm_method=="row_sub":
+        # normalize so by subtracting from each column its mean across rows
+        dfthis = dfthis.subtract(dfthis.mean(axis=1), axis=0)
+        diverge = True
+    elif norm_method=="row_sub_firstcol":
+        # for each item in a given row, subtract the value of the first colum in that row.
+        dfthis = dfthis.subtract(dfthis.iloc[:,0], axis=0)
+    elif norm_method is None:
+        pass
+    else:
+        print(dfthis)
+        print(norm_method)
+        assert False
+
     if plot_heatmap:
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        # fig, ax = plt.subplots(1,1)
-        # sns.heatmap(dfthis, annot=True, ax=ax)        
-        if len(list_cat_2)>10:
-            w = len(list_cat_2)/15*5
-        else:
-            w = 5
-        if ax is None:
-            fig, ax = plt.subplots(1,1, figsize=(w, 5))
-        else:
-            fig = None
-        sns.heatmap(dfthis, annot=True, ax=ax)
+        fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims, diverge=diverge)
         ax.set_xlabel(col2)
         ax.set_ylabel(col1)
         ax.set_title(agg_method)
     else:
-        fig, ax = None, None
+        fig, ax, rgba_values = None, None, None
 
-    return dfthis, fig, ax
+    return dfthis, fig, ax, rgba_values
             
 
 
@@ -686,20 +749,21 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
 def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False):
     """
     Take a long-form datagrame, and convert into a wide form. 
-    INPUTS:
-    - index, the new index. pass in a list, if want to group. the output will have each group category 
-    as a separate column. (e.g., if index=[a, b], then a and b will be columns in output.)
-    - columns, generally keep this length 1, easy to understand. if len >1, then will be hierarchical 
-    columns
-    - values, naems of values, list, is fine to input multiple. will be hierarhcial. can index into the output
-    df as df[col1][col2]...
+    PARAMS:
+    - index, list of str, defining a grouping variable. Each level of this variable will be a
+    new row in the output dataframe. 
+    - columns, list of str or str, a grouping variable. each level of this variable will define a
+    new column in output dataframe. (generally keep this length 1, easy to understand. if len >1, then will be hierarchical 
+    columns)
+    - values, list of str, the response variable, whose values will populate the cells in the output dataframe,
+    will be aggregated (mean) across instance with same col and index.
     - flatten_col_names, if output is hierarchical, will flatten to <val>-<col1>-<col2>.., if 
     where col1, 2, ... are the items in columsn (if it is a list)
     RETURNS:
     - new dataframe, where can access e.g., by df["value"]["col_level"]
     NOTES:
-    - Also aggregates, by taking mean over all cases with a given combo of (index, columns, values)
-    - essentially groups by the uniion of index, columns, values, then aggregates, then reshapes so that index
+    - Also aggregates, by taking mean (for a given value) over all cases with a given combo of (index, columns)
+    - essentially groups by the uniion of index, columns, then aggregates, then reshapes so that index
     is over rows, and volumns/values are over columns (hierarhcical)
     - resets index, so that index levels will make up a column
     e.g.:
@@ -709,7 +773,6 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     - can eitehr do:
     (1) agg, then do this or
     (2) do this directly (since it aggs by taking mean.)
-
     """
 
     dftmp = pd.pivot_table(data=df, index=index, columns=columns, values=values, aggfunc=aggfunc)
@@ -1113,4 +1176,22 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True):
         dfout = dfout.reset_index()
     return dfout
 
+
+def concat(list_df):
+    """ Return concatenated df
+    Adds a column ("idx_df_orig") which indicates for 
+    each row which item in list_df it came from
+    PARAMS:
+    - list_df, list of df, with matching cols
+    RETURNS:
+    - df_all, concated (n rows increases), with index resetted
+    """
+
+    df_all = pd.concat(list_df).reset_index(drop=True)
+    from pythonlib.tools.listtools import indices_into_original_list_after_concat
+
+    indices = indices_into_original_list_after_concat(list_df)
+    df_all["idx_df_orig"] = indices
+
+    return df_all
 

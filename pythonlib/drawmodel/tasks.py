@@ -1123,6 +1123,29 @@ class TaskClass(object):
         # store
         self.ObjectClass = dat
 
+    def objectclass_extract_active_chunk(self):
+        """ Return the chunk (tasksequencer) that was active
+        during matlab task, by looking into ObjectClass
+        RETURNS:
+        - NOne, if dosnt find
+        - or a ChunksClass object
+        """
+        
+        self.objectclass_extract_all()
+        O = self.ObjectClass
+
+        if O["ChunksListClass"] is None:
+            return None
+        else:
+            # which are active chunk
+            model = O["ChunkState"]["active_chunk_model"]
+            index = O["ChunkState"]["active_chunk_ind"]
+
+            # find it
+            CLC = O["ChunksListClass"]
+            C = CLC.find_chunk(model, index)
+            return C
+
 
     def planclass_extract_all(self):
         """ Wrapper to extract all planclass info.
