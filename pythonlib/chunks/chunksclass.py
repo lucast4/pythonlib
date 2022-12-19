@@ -118,6 +118,7 @@ class ChunksClassList(object):
         - expt and rule are used for deciding what constitites a "chunk". Leave them as None if
         want to enter other method for deciding chunk
         """
+        from .chunks import find_chunks_hier
         from .chunks import find_chunks_wrapper
 
         self.Task = Task
@@ -127,8 +128,15 @@ class ChunksClassList(object):
 
         # Extract all chunks, hierarhchies, etc
         use_baseline_if_dont_find = True # e..g, for lolli.
-        list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
+
+        # list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
+        #     expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
+        
+        list_chunks, list_hier, list_fixed_order = find_chunks_hier(Task, 
             expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
+        print("list_chunks", list_chunks)
+        print("list_hier", list_hier)
+        print("list_fixed_order", list_fixed_order)
 
         # - Make one ChunksClass instance for each chunk:
         # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)

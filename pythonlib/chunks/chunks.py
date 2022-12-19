@@ -32,11 +32,92 @@ def check_all_strokes_used(chunks, nstrokes):
     else:
         return False
 
+#### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
+## @return [list_chunks, list_hier, list_fixed_order]
+## - list_chunks, where each chunk is a list indicating a way to chunk the strokes in Task.Strokes
+## - list_hier, similar to list_chunks, but used for hierarchical permutations, without needing to concat strokes.
+## - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
+def find_chunks_hier(Task, expt, rule, strokes=None, params={},use_baseline_if_dont_find=False):
+    objects = Task.Shapes
+
+    if strokes is not None:
+        from pythonlib.tools.stroketools import check_strokes_identical
+        assert check_strokes_identical(Task.Strokes, strokes)
+        assert len(objects)==len(strokes), "did you chunk the strokes already?"
+    else:
+        strokes = Task.Strokes
+
+    # print("task", Task)
+    # print("expt", expt)
+    # print("rule", rule)
+    print("objects", objects)
+ 
+    def _fixed_order_for_this_hier(rule, hier):
+        if rule in ['left', 'right', 'up', 'down']:
+            fixed_order = fixed_order_for_this_hier(hier, False, False)
+        else:
+            assert False, ''
+        return fixed_order
+
+    # @param objects, list of lists in format ['shape', {x:, y:}]
+    # @param direction, one of [left,right,up,down]
+    # @return objects, sorted in direction
+    def _get_sequence_on_dir(objects, direction):
+        # objects: [
+        # ['Lcentered-3-0', {'x': -2.342, 'y': 0.05}],
+        # ['V-4-0', {'x': -1.146, 'y': 0.05}],
+        # ['line-3-0', {'x': 0.05, 'y': 0.05}]
+        # ]
+        def _getX(e):
+            return e[1]['x']
+
+        def _getY(e):
+            return e[1]['y']
+
+        if direction=='left':
+            # sort by descending x
+            return sorted(objects, reverse=True, key=_getX)
+        elif direction=='right':
+            # sort by ascending x
+            return sorted(objects, key=_getX)
+        elif direction=='up':
+            # sort by ascending y
+            return sorted(objects, key=_getY)
+        elif direction=='down':
+            # sort by descending y
+            return sorted(objects, reverse=True, key=_getY)
+        else:
+            assert False, 'invalid direction'
+
+    if expt in ["neuralbiasdir5c"]:
+        chunks = list(range(len(objects))) # never concat strokes
+        list_chunks = [chunks] # only one way
+        
+        if rule in ["left", "right", "up", "down"]:
+            shape_order = _get_sequence_on_dir(objects, rule)
+            hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
+            list_hier = [hier]
+        else:
+            assert False, "code up rule"
+
+        list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
+
+    else:
+        print(params)
+        assert False, "code up expt"
+    
+    # Return as a list of possible chunkings.
+    assert len(list_chunks)==len(list_hier)
+    assert len(list_hier)==len(list_fixed_order)
+
+    return list_chunks, list_hier, list_fixed_order 
+
+
 
 #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
 def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
     use_baseline_if_dont_find=False):
-    """ [GOOD] General purpose to return chunks, hierarchies,
+    """ [OLD] General purpose to return chunks, hierarchies,
     and what kind of permutations allwoed, givne some kind of input
     model, etc, rules, etc.
     INPUT:
@@ -55,7 +136,9 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
     sorting lists of tuples. 
     """
 
+    assert False, "use new function find_chunks_hier"
     objects = Task.Shapes
+    print(objects)
     if strokes is not None:
         from pythonlib.tools.stroketools import check_strokes_identical
         assert check_strokes_identical(Task.Strokes, strokes)
@@ -71,11 +154,17 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
         x = [_inds_by_shape(shape) for shape in list_shapes]
         x = [xx for xx in x if len(xx)>0] # e.g, if this shape doesnt exist for this trial.
         return x
+    
+    # print(Task)
+    # print(expt)
+    # print(rule)
+    # print(params)
 
     # Find list_chunks and list_hier - note: they will be same lenght, 
-    if expt in ["gridlinecircle","neuralbiasdir5c"]:
+    if expt in ["gridlinecircle", "neuralbiasdir5c"]:
         chunks = list(range(len(objects))) # never concat strokes
         list_chunks = [chunks] # only one way
+
         if rule =="baseline":
             # circle, line, but no order
             hier = chunks
@@ -230,7 +319,7 @@ def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
 
     else:
         print(params)
-        assert False
+        assert False, "code up expt"
     
     # Remove anything that is just same as baseline
     if use_baseline_if_dont_find == False:
