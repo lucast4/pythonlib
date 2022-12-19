@@ -39,7 +39,7 @@ class BehModelHolder(object):
         elif input_ver=="long_form":
             self._input_data_long_form(data)
         elif input_ver=="mbh":
-            self._input_data_from_multiple_behmodel_handler(data):
+            self._input_data_from_multiple_behmodel_handler(data)
         else:
             print(input_ver)
             assert False
@@ -188,6 +188,8 @@ class BehModelHolder(object):
             """
             rthis = x["epoch"]
 
+            # print("mclass",mclass)
+            # print("rthis",rthis)
             colname_this = self.colnames_extract_scores([mclass], [rthis])[0]
 
             list_rules_this = [r for r in self.DictMclassToRules[mclass] if not r==rthis]
@@ -268,7 +270,7 @@ class BehModelHolder(object):
         datapt at both level of trials and characters
         """
 
-        from pythonlib.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
+        from pythonlib.dataset.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
         plots_cross_prior_and_model_anynum(self)
 
 
