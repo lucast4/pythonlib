@@ -16,7 +16,10 @@ class ColNames(object):
     , and different manipulatios of the scores
     """
     def __init__(self, model_classes, model_rules):
-        # The order of model_rules matters, mod2 minus mod1...
+        """
+        model_classes, model_rules, Takes cross-product?
+        Note: The order of model_rules matters, mod2 minus mod1...
+        """
         self.Classes = model_classes
         self.Rules = model_rules
         
@@ -78,11 +81,12 @@ class ColNames(object):
         return out
         
 
-def plots_cross_prior_and_model_anynum(MBH, monkey_prior_col_name="epoch", monkey_prior_list=None,
+def plots_cross_prior_and_model_anynum(BM, monkey_prior_col_name="epoch", monkey_prior_list=None,
     list_classes=None, model_score_name_list =None):
     """
     Summary plot of test dataset against models (scores), when num models is >2, this still works.
-
+    NOTE: modified 12/19/22 to work with beh_model_holder, not with multiple... (which should be 
+    changed to be a wrapper for beh_model_holder)
     INPUT:
     - monkey_prior_col_name
     --- e..g, "epoch"
@@ -95,12 +99,11 @@ def plots_cross_prior_and_model_anynum(MBH, monkey_prior_col_name="epoch", monke
     ALPHA = 0.2
 
     ### ALIGNMENT - rank, compute all
-    MBH.analy_compute_alignment_wrapper()
-    colthis = "alignment_rank_chunks"
+    BM.analy_compute_alignment_wrapper()
 
     # Get Single dataset
-    D, DatWide, DatFlat, DatThisAgg, DatFlatAgg = MBH.extract_concatenated_aggregated_dataset(
-        monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)
+    Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = BM.extract_concatenated_aggregated_dataset(
+        monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)[:5]
 
     # 1) Plot score fr all combo of dataset and model
     fig = sns.catplot(data=DatFlat, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
@@ -109,39 +112,22 @@ def plots_cross_prior_and_model_anynum(MBH, monkey_prior_col_name="epoch", monke
     fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
 
     # For each trial, alignment, as rank out of all model scores.
-    sns.catplot(data=D.Dat, x="epoch", y=colthis)
-    sns.catplot(data=D.Dat, x="epoch", y=colthis, kind="boxen")
-    sns.catplot(data=D.Dat, x="epoch", y=colthis, kind="swarm")
+    for colthis in BM.colnames_extract_alignment():
+        # colthis = "alignment_rank_chunks" # was this, for gridlinecircle.
+        sns.catplot(data=Dat, x="epoch", y=colthis)
+        sns.catplot(data=Dat, x="epoch", y=colthis, kind="boxen")
+        sns.catplot(data=Dat, x="epoch", y=colthis, kind="swarm")
 
     return DatWide, DatFlat, DatThisAgg, DatFlatAgg
     # Plot alignment, but aggregated
 
 
-    # assert False
-    # fig = sns.catplot(data=Dat, x=monkey_prior_col_name, y=model_score_name_list, aspect=3)
-    # plt.axhline(0, color="k", alpha=0.5)
-    # # if savedir:
-    # #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
-
-
-    # fig = sns.catplot(data=DatThisAgg, x=monkey_prior_col_name, y=model_score_name_list, aspect=3)
-    # plt.axhline(0, color="k", alpha=0.5)
-    # # if savedir:
-    # #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
-
-    # assert False
-
-    # fig = sns.catplot(data=DatThisTest, x=monkey_prior_col_name, y="mod2_minus_mod1", aspect=3)
-    # plt.axhline(0, color="k", alpha=0.5)
-    # if savedir:
-    #     fig.savefig(f"{savedir}/all_trials_catplot_summary_mod2minus1.pdf")
-
-
-    # # Pivot
-    # DatThisAggPaired = pivot_table(DatThisAgg, index=["character"], columns = [monkey_prior_col_name], 
-    #                                values=[model_score_name_list[0], model_score_name_list[1], "mod2_minus_mod1"])
-    # # cleanup remove any rows with nans
-    # DatThisAggPaired = DatThisAggPaired.dropna().reset_index(drop=True)
+    ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
+    # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
+    if model_score_name_list is None:
+        model_score_name_list = BM.colnames_extract_score()
+    BM.plot_score_scatter_compare_models(model_score_name_list[0], model_score_name_list[1])        
+    BM.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
 
 
@@ -154,6 +140,9 @@ def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior
     - column_dsets = "epoch" # names the dartasets.
 
     """
+
+    assert False, "this is old, only workse for cases with 2 models (uses mod minus mod). All relevant things moved to plots_cross_prior_and_model_anynum"
+
     from pythonlib.tools.pandastools import pivot_table
     from pythonlib.tools.plottools import plotScatter45
     ALPHA = 0.2
@@ -323,6 +312,10 @@ def plots_cross_prior_and_model_combined(D, GROUPING, GROUPING_LEVELS, list_mcla
     - initallly developed in ("See notebook drawnn --> test_on_monkey_tasks...")
     - STILL MESSY CODE.
     """
+
+    assert False, 'Obsolete --> all incorporated in to plots_cross_prior_and_model_anynum'
+    # Note: even before this, it was mostly redundant with plots_cross_prior_and_model
+
     from pythonlib.tools.pandastools import pivot_table
     from pythonlib.dataset.analy import score_alignment
     import pandas as pd

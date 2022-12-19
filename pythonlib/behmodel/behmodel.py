@@ -1,3 +1,8 @@
+""" Handles a single model, works with scorers that work with parses (graph representation of
+continuous tasks)
+Used for gridlinecircle
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 

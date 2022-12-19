@@ -4577,11 +4577,16 @@ class Dataset(object):
         num beh strokes.
         This requires doing alignsim stuff fifirst.
         RETURNS:
-        - primlist, list of strokeClass instances
+        - primlist, list of strokeClass instances, each a beh stroek, in order.
         - datsegs_behlength, tokens, same length as primlist, for the best match for
         each beh stroke
         - datsegs_tasklength, tokens, same length as num task strokes, in order of first time
         each task stroke gotten by beh.
+        - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
+        order that they are gotten (based on alignsim). Each tuple: 
+        (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes,
+        strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
+
         """
 
 

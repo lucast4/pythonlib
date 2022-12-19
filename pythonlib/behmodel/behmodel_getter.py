@@ -1,3 +1,6 @@
+""" Functions to help extract scorers for specific kinds of models 
+"""
+
 from .scorer.likeli_functions import *
 from .scorer.poster_functions import *
 from .scorer.prior_functions import *

@@ -1,3 +1,8 @@
+"""
+See below.
+WOrks with parses (graph repr of copntinuos strokes).
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 

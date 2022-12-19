@@ -2,6 +2,7 @@
 and best-fit perms of those parses.
 After in Dataset have run various parse extractions.
 
+WOrks with continuous parses in D.Dat (bpl)
 """
 
 
