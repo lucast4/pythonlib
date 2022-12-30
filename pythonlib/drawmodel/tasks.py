@@ -27,6 +27,7 @@ class TaskClass(object):
         if "strokes" not in self.Task.keys():
             assert False, "see Probedat.pd2strokes for how to get this."
         self.Strokes = self.Task["strokes"]
+        assert len(self.Strokes)>0, "maybe is novel prim or somethign?"
         self.Program = None
         self.Objects = None
         self.PlanDat = None
@@ -543,6 +544,7 @@ class TaskClass(object):
                 if shapes1 is not None:
                     out["obj"] = shapes1[i]
                     assert len(shapes1)==len(self.Program), "Objects and Program don't match, not sure why"
+            # print()
             Objects.append(out)
         self.Objects = Objects
 
@@ -1000,12 +1002,15 @@ class TaskClass(object):
     # Supercedes previous code on programs extract.
     # Here looks directly into "Plan" representation, which is the latest way that tasks
     # are defined in matlab side.
-    def objectclass_extract_all(self):
+    def objectclass_extract_all(self, auto_hack_if_detects_is_gridlinecircle_lolli=True):
         """ Extract TaskNew.Objects into self.ObjectClass. Preprocesses to corerctly extract
         chunks, etc.
+        - auto_hack_if_detects_is_gridlinecircle_lolli, bool, autmatocally fix issue with
+        one day of code (concatenaitng) (see belw0.)
         RETURNS:
         - modifies self.ObjectClass
         """
+
         from pythonlib.tools.monkeylogictools import dict2list2
         
         if self.get_tasknew() is None:
@@ -1021,7 +1026,17 @@ class TaskClass(object):
         # get all keys, except explicitly ignored
         _list_keys_to_ignore = ['StrokesFinalNorm_', 'StrokesFinalNorm_Active', 'RuleStates', 
             'StrokesFinalSketchpadPix'] # ignore since redundant with elsewhere.
+        _list_keys_to_ignore_2 = ["StrokesVisible"] # not used. e..g, some are in older versions of
+        # dragmonkey, like StrokesVisible for gridlinecirce.
         _list_keys = [k for k in Objects.keys() if k not in _list_keys_to_ignore]
+
+        # list_keys_check = ["StrokesFinalNorm", "StrokesMaskTouched", 
+        #     "StrokesVisible", "StrokindsDone"]
+        # print(Objects.keys())
+        # for k in list_keys_check:
+        #     if k in Objects.keys():
+        #         print(k, Objects[k], type(Objects[k]))
+        # assert False
 
         # Extract things
         dat = {}
@@ -1055,10 +1070,13 @@ class TaskClass(object):
             assert False
 
         list_keys_check = ["StrokesFinalNorm", "StrokesMaskTouched", 
-            "StrokesVisible", "StrokindsDone"]
+            "StrokindsDone"]
         for k in list_keys_check:
             if k in dat.keys():
-                assert len(dat[k]) == nstrokes, "possibly somewhere concatenated strokes? find the _actual_ nstrokes"
+                # print(k, dat[k], type(dat[k]))
+                if dat[k] is not None and len(dat[k])>0:
+                    # only if not empty
+                    assert len(dat[k]) == nstrokes, "possibly somewhere concatenated strokes? find the _actual_ nstrokes"
         dat["actual_nstrokes"] = nstrokes
         
         ######## chunklist (included within task)
@@ -1093,9 +1111,38 @@ class TaskClass(object):
                 if "chunks_" in this.keys():
                     # Newer code, where chunks_ is just a readout.
                     hier = [x-1 for x in this["chunks_"]] # convert to 0-index. 
-                else:
+                elif "chunks" in this.keys():
                     # Old code, should be the samet hing
                     hier = [x-1 for x in this["chunks"]] # convert to 0-index
+                else:
+                    # oldest.
+                    # this should be identical to chunks.
+                    hier = []
+                    for x in this["StrokeSequence"]:
+                        tmp = x["Index"]-1 # array of ints
+                        if tmp.size==1:
+                            # is a nuber
+                            hier.append([int(tmp)])
+                        else:
+                            # make into list of ints
+                            hier.append([int(xx) for xx in tmp])
+                
+                # HACK!!
+                if auto_hack_if_detects_is_gridlinecircle_lolli:
+                    # check if hier is like [[0,1], [2,3]] but nstrokes = 2, becuase in this code
+                    # (matlab) I concatenated. After this expt, I did not do that...
+                    # SOLUTION: convert hier to [0,1]
+                    vals = []
+                    for x in hier:
+                        if isinstance(x, list):
+                            for xx in x:
+                                vals.append(xx)
+                        else:
+                            vals.append(x)
+                    max_index_in_hier = max(vals)
+                    if nstrokes < max_index_in_hier+1:
+                        print("Tasks.objectclass_extract_all - HACKY FIX, only should happen for gridlinecirlce..")
+                        hier = [i for i in range(nstrokes)]
 
                 index = int(this["ind"])
 
@@ -1104,10 +1151,10 @@ class TaskClass(object):
                     assert False
                 chunkslist.append([this["modelname"], hier, flips, index, this["color"]])
 
-            shapes = dat["Features_Active"]["shapes"]
+            # shapes = dat["Features_Active"]["shapes"] # these are the useless ones.
             CL = ChunksClassList("chunkslist_entry", 
                 {"chunkslist":chunkslist, "nstrokes":nstrokes, 
-                "shapes":shapes})
+                "shapes":None})
             dat["ChunksListClass"] = CL
         else:
             # Else, leave empty. older code (e.g,, gridlinecircle), to be 
@@ -1159,7 +1206,8 @@ class TaskClass(object):
         - self.Objects modified.
         """
         from pythonlib.tools.monkeylogictools import dict2list2, dict2list
-        
+        from pythonlib.primitives.primitiveclass import PrimitiveClass
+
         if self.get_tasknew() is None:
             self.PlanDat = None
             return None
@@ -1199,10 +1247,87 @@ class TaskClass(object):
         # dat["ChunksList"]
         # for chunk in dat["ChunksList"]:
 
+        ############################################################
         # Extract shapes and their params
-        from pythonlib.primitives.primitiveclass import PrimitiveClass
-        dat["shapes"] = [x[0] for x in dat["Prims"]]
+        dat["shapes"] = [x[0] for x in dat["Prims"]]      
         dat["primitives"] = []
+
+        # Check whether prims were concatted.
+        if len(dat["Prims"])==len(self.Strokes):
+            # # dat["ChunksList"][0][4] is what triggers concatenatsion in dragmonkey. 
+            # assert dat["ChunksList"][0][4]==0
+            # NO concats!
+            DID_CONCAT = False
+            dat["CentersAfterConcat"] = dat["CentersActual"]
+
+            # Get reflects. this is becuase i was stupid and didnt save them in 
+            # Objectclass in dragmonkye. This should be correct here, as when
+            # there is concats, then this doesnt mater.
+            do_reflects = []
+            for prim in dat["Prims"]:
+                params = prim[1]
+                if len(params)>=5:
+                    reflect = params[4] # 1 means reflect.
+                else:
+                    reflect = np.array(0.)
+                do_reflects.append(reflect)
+            dat["ReflectsAfterConcat"] = do_reflects
+            dat["ShapesAfterConcat"] = [p[0] for p in dat["Prims"]]
+            dat["PrimsAfterConcat"] = dat["Prims"]
+        else:
+            # One itme per concat.
+            DID_CONCAT = True
+
+            # Extract features (just those that will use later on due to legacy code)
+            # for each chunk.
+            chunks =  dat["ChunksList"][0][1]
+
+            centers = []
+            do_reflects = []
+            list_shapes = []
+            list_prims = []
+            for ch in chunks:
+                
+                # Get the prim index for the first prim in this concat. many features are tied
+                # to this first prim, by convention.
+                idx_base1 = ch[0]
+                idx_base0 = int(idx_base1 - 1)
+
+                # center of the chunk, this is by default the center of the first stroke.
+                cen = dat["CentersActual"][idx_base0]
+                centers.append(cen)
+
+                # Get reflects. this is becuase i was stupid and didnt save them in 
+                # Objectclass in dragmonkye. This should be correct here, as when
+                # there is concats, then this doesnt mater.
+                prim = dat["Prims"][idx_base0]
+                params = prim[1]
+                if len(params)>=5:
+                    reflect = params[4] # 1 means reflect.
+                else:
+                    reflect = np.array(0.)
+                do_reflects.append(reflect)
+
+                # get shapes
+                if len(ch)>0:
+                    # then this is concatted. append "novel"
+                    list_shapes.append("novelprim")
+                else:
+                    list_shapes.append(prim[0])
+
+                if len(ch)>0:
+                    # then this is concatted. append "novel"
+                    list_prims.append("novelprim")
+                else:
+                    list_prims.append(prim)
+
+            dat["CentersAfterConcat"] = centers
+            dat["ReflectsAfterConcat"] = do_reflects
+            dat["ShapesAfterConcat"] = list_shapes
+            dat["PrimsAfterConcat"] = list_prims
+        assert len(dat["ReflectsAfterConcat"])==len(self.Strokes), 'bug above'
+        assert len(dat["CentersAfterConcat"])==len(self.Strokes), 'bug above'
+
         for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
             shape = prim[0]
             params = prim[1]
@@ -1218,7 +1343,30 @@ class TaskClass(object):
                 reflect = params[4] # 1 means reflect.
             else:
                 reflect = np.array(0.)
-            traj = self.Strokes[i]
+
+            # if i>len(self.Strokes)-1:
+            #     for k, v in dat.items():
+            #         print("---")
+            #         print(k)
+            #         print(v)
+            #     print(dat["Prims"])
+            #     print("===", params)
+            #     print(len(self.Strokes))
+            #     print(i)
+            #     print("****************8")
+            #     self.objectclass_extract_all()
+            #     print(self.ObjectClass)
+            #     assert False
+
+            if True:
+                # Stop collecting traj, beacuse self.Strokes is after concating, while
+                # i iterates over each base prim (before concat). Look in to ObjectClass for
+                # infor about each stroke.
+
+                # look into objectClass for strokes.
+                traj = None
+            else:
+                traj = self.Strokes[i]
 
             assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
             # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
@@ -1230,31 +1378,44 @@ class TaskClass(object):
                     "rotation":rotation,
                     "reflect":reflect,
                     "x":loc[0],
-                    "y":loc[1]}, traj = traj)
+                    "y":loc[1]}, 
+                    traj = traj)
             dat["primitives"].append(Prim)
-
-        
 
         # Sanity checks
         # - Base prims should correspond to objects
-        if self.Objects is not None:
-            for o, p in zip(self.Objects, dat["primitives"]):
-                if False:
-                    # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
-                    assert o["obj"] == p.Shape
-                assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
-                assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
+        if False:
+            if self.Objects is not None:
+                for o, p in zip(self.Objects, dat["primitives"]):
+                    if False:
+                        # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
+                        assert o["obj"] == p.Shape
+                    assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
+                    assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
 
         # - nstrokes here should match nstrokes extracted elsewhere
-        _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]
-        for k in _list_keys_check_nstrokes:
-            assert len(dat[k]) == len(self.Strokes)
+        if False:
+            _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]
+            for k in _list_keys_check_nstrokes:
+                assert len(dat[k]) == len(self.Strokes)
 
         # Get chunks in ChunksListClass format
+        # NOTE on kinds of chunks, in order that they are applied in dragmonkey:
+        # 1) chunks in dat["ChunksList"] which apply concat [index 4 equals 1]. Excluded
+        # from extraction below.
+        # 2) chunks in dat["ChunksList"] which define hierarchies. after around July 
+        # 2022 I stopped using these. These are extracted below.
+        # 3) Chunks defined in ObjectClass. This is good version. Extracted in
+        # self.objectclass_extract_all()
         from pythonlib.chunks.chunksclass import ChunksClassList
         chunkslist = []
         for this in dat["ChunksList"]:
             
+            if len(this)>4 and np.any(this[4]==1):
+                # Then skip, since this was used for concatting, and iwll not match the 
+                # num strokes. 
+                continue
+
             ch = []
 
             # just giving variables here note-taking purpose
@@ -1277,18 +1438,41 @@ class TaskClass(object):
             # Note: color is actually better in objectclass, acurate online)
 
             chunkslist.append(ch)
+
         del dat["ChunksList"]
 
+        # Genreate default chunks, in case therea re no chunks for som reason. eg., all concats?
         nstrokes = len(self.Strokes)
+        if len(chunkslist)==0:
+            col_default = np.array([0.5, 0.5, 0.5])
+            chunkslist.append([
+                "default", 
+                [i for i in range(nstrokes)], 
+                [0 for _ in range(nstrokes)],
+                None,
+                [col_default for _ in range(nstrokes)],
+            ])
+
+
         # ChunksClassList
+        # CL = ChunksClassList("chunkslist_entry", 
+        #     {"chunkslist":chunkslist, "nstrokes":nstrokes, 
+        #     "shapes":dat["shapes"]})
         CL = ChunksClassList("chunkslist_entry", 
-            {"chunkslist":chunkslist, "nstrokes":nstrokes, 
-            "shapes":dat["shapes"]})
+            {"chunkslist":chunkslist, "nstrokes":nstrokes})
         dat["ChunksListClass"] = CL
         
         # Remove strokes, only needed above
         if "Strokes" in dat.keys():
             del dat["Strokes"]
+
+        # Centers of the first strokes in each chunk(hier)
+        # Use the first chunk, by convnetion
+        # NOTE: wont be accurate forthat one glc lolli day
+        Ch = dat["ChunksListClass"].ListChunksClass[0]
+        centers = dat["CentersAfterConcat"]
+        centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
+        dat["CentersAfterConcat_FirstStrokeInChunk"] = centers
 
         # store
         self.PlanDat = dat

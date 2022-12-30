@@ -20,7 +20,10 @@ class PrimitiveClass(object):
         """ Initialize data, represnting a single primtiive
         PARAMS:
         - traj, optional stroke, np array (N,2 or 3). If input, then creates strokeclass
+        TODO:  Give it a hash code (since it is missing prim indices) within PrimitiveClass")
         """
+
+
         if ver=="prototype_prim_abstract":
             """ A prototype prim as in matlab ml2 code, where each prim is
             (shape, scale, rotation), where each are abstract categories.
@@ -28,17 +31,40 @@ class PrimitiveClass(object):
             - See drawmodel.tasks.planclass_extract_all, where uses planclass prims
             """
 
-            self.Shape = params["shape"]
-            self.ParamsAbstract = {
-                "reflect":int(params["reflect"]),
-                "scale":int(params["scale"]),
-                "rotation":int(params["rotation"]),
-            }
+            if "shape" in params.keys():
+                self.ShapeNotOriented = params["shape"]
+            else:
+                self.ShapeNotOriented = None
 
-            self.ParamsConcrete = {
-                "x":np.around(params["x"], 3),
-                "y":np.around(params["y"], 3)
-            }
+            # self.ParamsAbstract = {
+            #     "reflect":int(params["reflect"]),
+            #     "scale":int(params["scale"]),
+            #     "rotation":int(params["rotation"]),
+            # }
+            self.ParamsAbstract = {}
+            list_keys_abstract = ["reflect", "scale", "rotation"]
+            for k in list_keys_abstract:
+                if k not in params.keys() or params[k] is None:
+                    self.ParamsAbstract[k] = None
+                else:
+                    self.ParamsAbstract[k] = int(params[k])
+
+            self.ParamsConcrete = {}
+            list_keys_concrete = ["x", "y", "theta", "sx", "sy", "order"]
+            for k in list_keys_concrete:
+                if k not in params.keys() or params[k] is None:
+                    self.ParamsConcrete[k] = None
+                elif isinstance(params[k], str):
+                    self.ParamsConcrete[k] = params[k]
+                else:
+                    self.ParamsConcrete[k] = np.around(params[k], 3)
+            # self.ParamsConcrete = {
+            #     "x":np.around(params["x"], 3),
+            #     "y":np.around(params["y"], 3)
+            # }
+
+            for k in params.keys():
+                assert k in ["shape"] + list_keys_concrete + list_keys_abstract, "typo in entry"
 
             if traj is not None:
                 self.strokeclass_generate(traj)
@@ -87,13 +113,28 @@ class PrimitiveClass(object):
     def print_summary(self):
         """ quickly summarize this prim
         """
-        print(f"- Shape: {self.Shape}")
+        print(f"- Shape: {self.ShapeNotOriented}")
         print("- abstract params:")
         for k, v in self.ParamsAbstract.items():
             print(f"{k}: {v}")
         print("- concrete params:")
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
+
+    def shape_oriented(self, include_scale=False):
+        """ Returns shape oriented, e.g., line-3-0
+        """
+        prms = self.ParamsAbstract
+        def _sh(x):
+            # SHORTHAND
+            if x is None:
+                return "x"
+            else:
+                return x
+        if include_scale:
+            return f"{self.ShapeNotOriented}-{_sh(prms['scale'])}-{_sh(prms['rotation'])}-{_sh(prms['reflect'])}"
+        else:
+            return f"{self.ShapeNotOriented}-{_sh(prms['rotation'])}-{_sh(prms['reflect'])}"
 
     def extract_as(self, output="primtuple"):
         """ [Wrapper] Help extract ths primitives in different formats
@@ -111,7 +152,12 @@ class PrimitiveClass(object):
             par = self._extract_params()
             return [par["shape_rot"], {
                 "x":par["cnr_x"],
-                "y":par["cnr_y"]}
+                "y":par["cnr_y"],
+                "sx":par["cnr_sx"],
+                "sy":par["cnr_sy"],
+                "theta":par["cnr_theta"],
+                "order":par["cnr_order"],
+                }
                 ] # leave the tform as None, ideally extract this from combining (x,y) in plan and sizes/rotation for this primtive
         elif output=="params":
             """ A dict holding relevant params"""
@@ -120,14 +166,14 @@ class PrimitiveClass(object):
             print(output)
             assert False, "code it"
 
-    def _extract_params(self):
+    def _extract_params(self, include_scale=False):
         """ Extract params for this prim in a dict format
         RETURNS:
         - params, dict, where keys are things like scale, rotation, etc.
         """
 
         out = {}
-        out["shape"] = self.Shape
+        out["shape"] = self.ShapeNotOriented
 
         for k, v in self.ParamsAbstract.items():
             out[f"abs_{k}"] = v
@@ -136,7 +182,7 @@ class PrimitiveClass(object):
         
         # assert False, 'also add reflection here'
         # print("Also add reflection here")
-        out["shape_rot"] = f"{self.Shape}-{out['abs_rotation']}-{out['abs_reflect']}"
+        out["shape_rot"] = self.shape_oriented(include_scale=include_scale)
         
         return out
 

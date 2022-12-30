@@ -34,7 +34,11 @@ class ChunksClassList(object):
             # assumes no "chunking" but instead is using hierarchy.
             # This is the way you would input PlanClass information saved into ml2 tasks
             # i.e., see drawmodel.tasks
-            self._init_chunkslist_entry(params["chunkslist"], params["nstrokes"], params["shapes"])
+            if "shapes" in params.keys():
+                shapes = params["shapes"]
+            else:
+                shapes = None
+            self._init_chunkslist_entry(params["chunkslist"], params["nstrokes"], shapes)
         else:
             print(method)
             print(params)
@@ -65,7 +69,8 @@ class ChunksClassList(object):
         NOTE:  does Confirm that each model/index is unique
         """
 
-        assert len(list_shapes)==nstrokes
+        if list_shapes is not None:
+            assert len(list_shapes)==nstrokes
 
         already_entered = {}
 
@@ -87,7 +92,7 @@ class ChunksClassList(object):
             if check_matches_nstrokes:
                 from .chunks import check_all_strokes_used
                 all_used = check_all_strokes_used(C.Hier, nstrokes)
-                if not all_used:
+                if not all_used: 
                     print(nstrokes)
                     C.print_summary()
                     assert False, "maybe iyou entered using 1-indexing"

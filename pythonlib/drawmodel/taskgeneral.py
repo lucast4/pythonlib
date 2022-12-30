@@ -83,7 +83,9 @@ class TaskClass(object):
         if split_large_jumps:
             self._split_strokes_large_jump()
 
-
+        # Sanity check that all initializatinos are consistente with each other.
+        if False:
+            self._sanity_check_initializations()
     def _initialize_ml2(self, taskobj):
         """ Pass in a task from monkeylogic.
         - taskobj, task class from drawmodel.tasks
@@ -115,7 +117,9 @@ class TaskClass(object):
         if taskobj.get_tasknew() is not None:
             # Get abstract representaion of objects (primitives)
             taskobj.planclass_extract_all()
-            if taskobj.PlanDat is None:
+            self.PlanDat = taskobj.PlanDat
+
+            if self.PlanDat is None:
                 # Then this is old version, before using planclass
                 taskobj.objects_extract()
                 self.ShapesOldCoords = taskobj.Objects
@@ -124,24 +128,198 @@ class TaskClass(object):
                     if self.ShapesOldCoords[i][1] is not None:
                         self.ShapesOldCoords[i][1]["theta"] = self.ShapesOldCoords[i][1]["th"]
                         del self.ShapesOldCoords[i][1]["th"]
+                
+                # [gridlinecirlce, 210821] if call print(self.ShapesOldCoords) returns:
+                # [['line', {'x': array(-1.5), 'y': array(-1.5), 'sx': array(1.55), 'sy': array(1.55), 'order': 'trs', 'theta': array(0.)}]]
             else:
                 # New version, use planclass representation of prims. Dont have to re-extract
                 # here post-hoc. Dont use the "Shapes" thing anymore, instead represent them as
                 # PrimitiveClass objects
-                self.Primitives = taskobj.PlanDat["primitives"]
-                self.PlanDat = taskobj.PlanDat
-                
-                # populate self.ShapesOldCoords, for backwards compativbility with other code.
-                self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
+                # self.Primitives = taskobj.PlanDat["primitives"]
 
                 # Extract Chunks
                 self.ChunksListClass = taskobj.PlanDat["ChunksListClass"]
 
-                # Extract primitivechunks (e..g, motif is actually a single object)
-                print("TODO (taskgeneral)")
                 if False:
+                    # SKIP THIS! Motifs should be multipel objects...
+                    # Extract primitivechunks (e..g, motif is actually a single object)
                     self.objects_extract_using_planclass()
 
+
+        else:
+            assert False, "must generate self.Primitives (instead of using Shapes...)"
+
+        ############ GOOD, update to final concated objectclass
+        self.primitives_extract_final()
+
+        # populate self.ShapesOldCoords, for backwards compativbility with other code.
+        # print("BEFORE UPDATE: ", self.ShapesOldCoords)
+        self.ShapesOldCoords = [p.extract_as("shape") for p in self.Primitives]
+        # print(self.Primitives)
+        # print("AFTER UPDATE: ", self.ShapesOldCoords)
+
+
+    def primitives_extract_final(self, return_prims = False):
+        """
+        [GOOD] Replaces self.Primitives with updated version, which applies for
+        all bersions of tasks, including old tasks. Run this at very end.
+
+        For newest tasks: this accounts for
+        concatenation (which happens in step between PlanCalss and ObjectClass).
+        Must first run both planclass and objectclass extraction.
+        This _SHOULD_ match up perfectly with ObectClass. 
+        In  practice, self.PRimitives is changed only if there was concatenation.
+        
+        RETURNS:
+        - modifies self.Primitives
+        """
+
+        from pythonlib.primitives.primitiveclass import PrimitiveClass
+
+        nprims = len(self.StrokesOldCoords)
+        O = self.ml2_objectclass_extract()
+        P = self.PlanDat
+        TT = self.extract_monkeylogic_ml2_task()
+        TN = TT.get_tasknew()
+
+        # for p in Prims:
+        #     p.print_summary()
+        # assert False
+
+        # for i in range(nprims):
+                
+        #     Prim = PrimitiveClass()
+        #     traj = self.StrokesOldCoords[i]
+
+        primitives = []
+        if O is not None and P is not None:
+            
+            ################### V1, latest, if both O and P exist
+            assert len(self.PlanDat["ReflectsAfterConcat"])==len(self.StrokesOldCoords)
+            assert len(self.PlanDat["CentersAfterConcat"])==len(self.StrokesOldCoords)
+            
+            PrimsList = self.PlanDat["primitives"]
+            Features = O["Features_Active"]
+            list_shapes_1 = Features["shapes"] # these are not correct. ie, calls a "V" an "L"...
+            list_shapes_2 = P["ShapesAfterConcat"] # These are correct
+            # list_shapes_3 = [p.Shape for p in PrimsList] # These should match list_shapes_2
+            list_prims_plandat = P["PrimsAfterConcat"]
+
+            for i in range(nprims):
+                    
+                Prim = PrimitiveClass()
+
+                # Things that are true whether or not concat
+                traj = self.StrokesOldCoords[i]
+                loc = P["CentersAfterConcat"][i]
+
+                # Shapes signals whtehr this was concated (novel_prim)
+                shape = list_shapes_2[i]
+                if shape=="novelprim":
+                    # Then this is concatted. Use the new prim name
+                    shape = list_shapes_1[i] # e.g, "-line-line..."
+
+                    # then not defined:
+                    scale = None
+                    rotation = None
+                    reflect = None
+                    # scale = O["Features_Active"]["prot_level"][i]
+                    # rotation = O["Features_Active"]["prot_rot"][i]
+
+                    assert len(PrimsList)>len(list_shapes_1), "this expected if this is concatted"
+                else:
+                    # Then use plandat, just like before.
+                    scale = int(list_prims_plandat[i][1][1])
+                    rotation = int(list_prims_plandat[i][1][2])
+                    reflect = P["ReflectsAfterConcat"][i]
+
+                    # Sanity check that O and P match.
+                    if "prot_level" in Features.keys():
+                        assert scale == Features["prot_level"][i]
+                        assert rotation == Features["prot_rot"][i]
+
+                    # Assertion, sanity check that what I previuosly called 
+                    # self.ShapesOldCoord (which was generated directly from 
+                    # PrimsList in old code) matches the new prims.
+                    if False:
+                        # incorrect, since PrimsList is potentailyl longer than list_prims_plandat (if concatted)
+                        prms = PrimsList[i].extract_as("params")
+                        assert prms["shape"]==shape
+                        assert prms["abs_reflect"]==reflect
+                        assert prms["abs_scale"]==scale
+                        assert prms["abs_rotation"]==rotation
+                        assert np.isclose(prms["cnr_x"], loc[0], atol=0.001)
+                        assert np.isclose(prms["cnr_y"], loc[1], atol=0.001)
+
+                
+                Prim.input_prim("prototype_prim_abstract", {
+                        "shape":shape,
+                        "scale":scale,
+                        "rotation":rotation,
+                        "reflect":reflect,
+                        "x":loc[0],
+                        "y":loc[1]}, 
+                        traj = traj)
+
+                primitives.append(Prim)
+
+        elif P is None and TN is not None:
+            #################### V2, using saved program in TaskNew
+
+            if len(self.ShapesOldCoords)==len(self.StrokesOldCoords):
+                # then good
+                list_shapes = [x[0] for x in self.ShapesOldCoords]
+                list_prms = [x[1] for x in self.ShapesOldCoords]
+            else:
+                list_shapes = [None for _ in range(len(self.StrokesOldCoords))]
+                list_prms = [None for _ in range(len(self.StrokesOldCoords))]
+
+            for i in range(nprims):
+                Prim = PrimitiveClass()
+                traj = self.StrokesOldCoords[i]
+
+                shape = list_shapes[i]
+                prms = list_prms[i]
+
+                if shape is None and prms is None:
+                    print("THIS SHOULD ONLY HAPPEN FOR GRIDLINECIRCLE, LOLLI, 210829! if not, then debug.")
+                    Prim.input_prim("prototype_prim_abstract", {}, 
+                            traj = traj)
+                else:
+                    Prim.input_prim("prototype_prim_abstract", {
+                            "shape":shape,
+                            "theta":prms["theta"],
+                            "x":prms["x"],
+                            "y":prms["y"],
+                            "sx":prms["sx"],
+                            "sy":prms["sy"],
+                            "order":prms["order"]
+                            }, 
+                            traj = traj)
+
+                primitives.append(Prim)
+
+        elif TN is None:
+            #################### v3: oldest version, before even using programs...
+            for i in range(nprims):
+                Prim = PrimitiveClass()
+                traj = self.StrokesOldCoords[i]
+
+                Prim.input_prim("prototype_prim_abstract", 
+                    {}, 
+                    traj = traj)
+                primitives.append(Prim)
+        else:
+            assert False, "what kind of task is this?"
+            
+        # #     dat["primitives"].append(Prim)
+        # primitives.append(Prim)
+
+        if return_prims:
+            return primitives
+        else:
+            self.Primitives = primitives
+            
     def objects_extract_using_planclass(self):
         """ Uses plan in PlanClass version of task to decide on Objcts. Main point is
         the following chunking organization, based on the hand-coded prim categories (matlab):
@@ -674,7 +852,6 @@ class TaskClass(object):
         NOTE: if old version (before around 3/2022) then returns None, since gridclass is not
         defined
         """
-        from pythonlib.tools.nptools import isin_array
 
         # Latest version, this is saved as a meta param
 
@@ -684,17 +861,17 @@ class TaskClass(object):
         gridparams = self.get_grid_params() 
         if gridparams is None:
             return "undefined"
-
+        
         ######################## 
         # METHOD 1, TaskSetClass params. use the quick meta params originally used
         # for genreating tsc
-        if "grid_or_char" in gridparams.keys():
+        if "grid_or_char" in gridparams.keys() and gridparams["grid_or_char"] is not None:
             if gridparams["grid_or_char"]=="grid":
                 return "on_grid"
             elif gridparams["grid_or_char"]=="char":
                 return "on_rel"
-            elif gridparams["grid_or_char"] is None:
-                return "undefined"
+            # elif gridparams["grid_or_char"] is None:
+            #     return "undefined"
             else:
                 print(gridparams)
                 assert False
@@ -705,21 +882,70 @@ class TaskClass(object):
 
         ######################## 
         # METHOD 3
+
         # Older version, infer it from the saved centers.
         # if all centers are aligned with grid centers, then this is on grid.
-        if False:
-            centers = self.PlanDat["CentersActual"]
-        else:
-            # Only consider centers for the first prim in each chunk. This is concvention.
-            CLC = self.PlanDat["ChunksListClass"]
-            # Use the first chunk, by convnetion
-            Ch = CLC.ListChunksClass[0]
-            centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
-
         grid_x = gridparams["grid_x_actual_after_rel"]
         grid_y = gridparams["grid_y_actual_after_rel"]
         # grid_x = gridparams["grid_x"]
         # grid_y = gridparams["grid_y"]
+
+        if False:
+            centers = self.PlanDat["CentersActual"]
+        else:
+            # Only consider centers for the first prim in each chunk. This is concvention.
+            centers = self.PlanDat["CentersAfterConcat_FirstStrokeInChunk"]
+            
+
+            # CLC = self.PlanDat["ChunksListClass"]
+            # # Use the first chunk, by convnetion
+            # Ch = CLC.ListChunksClass[0]
+            # centers = self.PlanDat["CentersActual"]
+
+            # centers = [centers[h[0]] for h in Ch.Hier] # take first stroke in each chunk(hier)
+
+            # try:
+            #     assert self.PlanDat["CentersAfterConcat"] == centers, 'just a sanity check that what I think shoudl be identical'
+            # except Exception as err:
+
+            #     for k, v in self.PlanDat.items():
+            #         print("--", k)
+            #         print(v)
+            #     print(self.PlanDat["CentersAfterConcat"])
+            #     print(centers)
+            #     print(grid_x, grid_y)
+            #     self.plotStrokes()
+            #     raise err
+
+        grid_ver = self._get_grid_ver_manual(grid_x, grid_y, centers)
+
+        # grid_centers = []
+        # for x in grid_x:
+        #     for y in grid_y:
+        #         grid_centers.append(np.asarray([x, y]))
+
+        # if all([isin_array(c, grid_centers, atol=ATOL) for c in centers]):
+        #     # print("centers are on grid:")
+        #     # print(centers)
+        #     # print(grid_centers)
+        #     # Then each stroke center matches a grid center
+        #     grid_ver = "on_grid"
+        # else:
+        #     # print([isin_array(c, grid_centers, atol=ATOL) for c in centers])
+        #     # Then at least one stroke is off grid.
+        #     grid_ver = "on_rel"
+
+        return grid_ver
+
+
+    def _get_grid_ver_manual(self, grid_x, grid_y, centers):
+        """ Given arrays for gird_x and y, and arrays of 2-points for
+        centers, return string for what grid ver
+        PARAMS:
+        - centers, list of 2-arrays
+        """
+        from pythonlib.tools.nptools import isin_array
+
         grid_centers = []
         for x in grid_x:
             for y in grid_y:
@@ -737,7 +963,6 @@ class TaskClass(object):
             grid_ver = "on_rel"
 
         return grid_ver
-
 
 
     def get_grid_params(self, also_return_each_kind_of_params=False):
@@ -769,8 +994,8 @@ class TaskClass(object):
             #################
             # 2. grid params based on relations explicitly used (and sampled) to get 
             # location coords.
-            T = self.extract_monkeylogic_ml2_task()
-            tsc = T.tasksetclass_summary()
+            TT = self.extract_monkeylogic_ml2_task()
+            tsc = TT.tasksetclass_summary()
 
             # a) the "metaparams" used in Tasksetclass, to autoamticlaly generate relationsa nd grd.
             # tsc["tsc_params"]["quick_sketchpad_params"] =
@@ -874,7 +1099,13 @@ class TaskClass(object):
                 grid_y_actual = ys * y_mult + grid_center[1]
 
             else:
-                rel_xy_values = rels_list_of_dict = grid_x_actual = grid_y_actual = None
+
+                # rel_xy_values = rels_list_of_dict = grid_x_actual = grid_y_actual = None
+                rel_xy_values = rels_list_of_dict = None
+
+                # older code, usualyl didnt rescale, so these are accurate
+                grid_x_actual = gridparams_background["grid_x"]
+                grid_y_actual = gridparams_background["grid_y"]
             
             gridparams_rels = {
                 "rel_xy_values": rel_xy_values,
@@ -1073,33 +1304,40 @@ class TaskClass(object):
 
         ############ PREPARE DATA
         # Extract shapes, formatted correctly
-        objects = self.ShapesOldCoords
-        print("TODO: instead of ShapesOldCoords, should first concatenate strokes that are (i) in same motif and (ii) touching")
-        print("see: get_grid_ver")
-        print("should be in self.PrimitivesObjects")
+        # objects = self.ShapesOldCoords
+
+        # print("TODO: instead of ShapesOldCoords, should first concatenate strokes that are (i) in same motif and (ii) touching")
+        # print("see: get_grid_ver")
+        # print("should be in self.PrimitivesObjects")
+        # DONE: see self.info_...
+
         # also extract as primitiveclasses (NOTE: this should also be changed to primitivechunk)
         if not hasattr(self, "Primitives"):
             # then old version
-            Prims = None
+            assert False, "must generate self.Primitives (instead of using Shapes...)"
+            # Prims = None
         elif self.Primitives is None:
-            Prims = None
+            assert False, "must generate self.Primitives (instead of using Shapes...)"
         else:
             Prims = self.Primitives
-            assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
+            # assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
         if inds_taskstrokes is None:
-            inds_taskstrokes = list(range(len(objects)))
+            inds_taskstrokes = list(range(len(Prims)))
 
         try:
-            objects = [objects[i] for i in inds_taskstrokes]
-            if Prims is not None:
-                Prims = [Prims[i] for i in inds_taskstrokes]
+            # objects = [objects[i] for i in inds_taskstrokes]
+            # if Prims is not None:
+            Prims = [Prims[i] for i in inds_taskstrokes]
         except Exception as err:
-            print(objects)
-            print(len(objects))
+            # print(objects)
+            # print(len(objects))
             print(inds_taskstrokes)
             print(len(self.Strokes))
+            print(Prims)
+            for p in Prims:
+                p.print_summary()
             self.plotStrokes()
             raise err
 
@@ -1111,11 +1349,27 @@ class TaskClass(object):
         get_grid = True
 
         if hack_is_gridlinecircle:
-        # if params["expt"] in ["gridlinecircle", "chunkbyshape2"]:
             xgrid = np.linspace(-1.7, 1.7, 3)
             ygrid = np.linspace(-1.7, 1.7, 3)
-            grid_ver = "on_grid"
             get_grid = False
+
+            centersthis = []
+            for p in Prims:
+                prms = p.extract_as("shape")[1]
+                centersthis.append([prms["x"], prms["y"]])
+
+                if prms["x"] is None:
+                    assert False, "this is probably gridlinecirlce lolli? 210829 Need to extract x/y loc. see notes here"
+                    # This is becuase concatted, so doesnt extract the xy locations. 
+                    # See this code in self.primitives_extract_final():
+                        # if shape is None and prms is None:
+                        # Prim.input_prim("prototype_prim_abstract", {}, 
+                        #         traj = traj)
+                    # Do: 
+
+            # grid_ver = "on_grid"
+            grid_ver = self._get_grid_ver_manual(xgrid, ygrid, centersthis)          
+            # assert grid_ver=="on_grid"      
 
         if get_grid:
             # Look for this saved
@@ -1136,16 +1390,23 @@ class TaskClass(object):
         ################ METHODS (doesnt matter if on grid)
         def _orient(i):
             # Angle, orientation
-            if np.isclose(objects[i][1]["theta"], 0.):
+            this = Prims[i].extract_as("shape")
+            if this[1]["theta"] is None:
+                return "undef"
+            else:
+                th = this[1]["theta"]
+                # Prims[i].print_summary()
+                # assert False, "did not extract theta... this is the case for newer expts."
+            if np.isclose(th, 0.):
                 return "horiz"
-            elif np.isclose(objects[i][1]["theta"], pi):
+            elif np.isclose(th, pi):
                 return "horiz"
-            elif np.isclose(objects[i][1]["theta"], pi/2):
+            elif np.isclose(th, pi/2):
                 return "vert"
-            elif np.isclose(objects[i][1]["theta"], 3*pi/2):
+            elif np.isclose(th, 3*pi/2):
                 return "vert"
             else:
-                print(objects[i])
+                print(this)
                 assert False
 
         # Spatial scales.
@@ -1172,7 +1433,8 @@ class TaskClass(object):
 
         def _shape(i):
             # return string
-            return objects[i][0]
+            return Prims[i].shape_oriented(include_scale=False)
+            # return objects[i][0]
         
         def _shape_oriented(i):
             # different name depedning on orientaion
@@ -1189,36 +1451,51 @@ class TaskClass(object):
         if grid_ver in ["on_grid"]:
             # Sanity check that the hard coded things are correct.
             from pythonlib.tools.nptools import isin_close
-            for o in objects:
-                if not isin_close(o[1]["x"], xgrid, atol=ATOL)[0] or not isin_close(o[1]["y"], ygrid, atol=ATOL)[0]:
+            # for o in objects:
+            #     print("------")
+            #     print(o[1]["x"], xgrid)
+            #     print(o[1]["y"], ygrid)
+            #     if not isin_close(o[1]["x"], xgrid, atol=ATOL)[0] or not isin_close(o[1]["y"], ygrid, atol=ATOL)[0]:
+            #         self.plotStrokes()
+            #         print("---")
+            #         print(o[1], xgrid, ygrid)
+            #         print(isin_close(o[1]["x"], xgrid, atol=ATOL))
+            #         print("---")
+            #         assert False
+
+            locations = []
+            for p in Prims:
+                prms = p.extract_as("shape")[1]
+                xloc = prms["x"]
+                yloc = prms["y"]
+                
+                if not isin_close(xloc, xgrid, atol=ATOL)[0] or not isin_close(yloc, ygrid, atol=ATOL)[0]:
                     self.plotStrokes()
                     print("---")
-                    print(o[1], xgrid, ygrid)
-                    print(isin_close(o[1]["x"], xgrid, atol=ATOL))
+                    print(prms, xgrid, ygrid)
+                    print(isin_close(prms["x"], xgrid, atol=ATOL))
                     print("---")
                     assert False
 
-                # assert np.any(xgrid == o[1]["x"])
-                # assert np.any(ygrid == o[1]["y"])
-            # print("---")
-            # print(o[1]["x"], xgrid)
-            # print(o[1]["y"], ygrid)
-
-            # 1) assign each object a grid location
-            locations = []
-            for o in objects:
-                xloc = o[1]["x"]
-                yloc = o[1]["y"]
-
-                # print(xloc, xgrid)
-                # print(yloc, ygrid)
-                # print(isin_close(yloc, ygrid))
-                # print(isin_close(yloc, ygrid)[1])
-                # print(isin_close(yloc, ygrid)[1].shape)
-                # print(isin_close(yloc, ygrid)[1][0])
                 xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
                 yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
                 locations.append((xind, yind))
+
+            # # 1) assign each object a grid location
+            # locations = []
+            # for o in objects:
+            #     xloc = o[1]["x"]
+            #     yloc = o[1]["y"]
+
+            #     # print(xloc, xgrid)
+            #     # print(yloc, ygrid)
+            #     # print(isin_close(yloc, ygrid))
+            #     # print(isin_close(yloc, ygrid)[1])
+            #     # print(isin_close(yloc, ygrid)[1].shape)
+            #     # print(isin_close(yloc, ygrid)[1][0])
+            #     xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
+            #     yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
+            #     locations.append((xind, yind))
 
             
             def _posdiffs(i, j):
@@ -1250,7 +1527,8 @@ class TaskClass(object):
                     return _direction(i-1, i)
 
             def _relation_to_following(i):
-                if i==len(objects)-1:
+                # if i==len(objects)-1:
+                if i==len(Prims)-1:
                     return "end"
                 else:
                     return _direction(i, i+1)       
@@ -1273,18 +1551,19 @@ class TaskClass(object):
                     return _horizontal_or_vertical(i-1, i)
 
             def _horiz_vert_move_to_following(i):
-                if i==len(objects)-1:
+                # if i==len(objects)-1:
+                if i==len(Prims)-1:
                     return "end"
                 else:
                     return _horizontal_or_vertical(i, i+1)   
         else:
-            print(grid_ver)
             assert grid_ver in ["on_rel"]
 
 
         # Create sequence of tokens
         datsegs = []
-        for i in range(len(objects)):
+        for i in range(len(Prims)):
+        # for i in range(len(objects)):
 
             # 1) Things that don't depend on grid
             datsegs.append({
@@ -1335,9 +1614,7 @@ class TaskClass(object):
         RETURNS:
         - bool.
         """
-        if not hasattr(self, 'PlanDat'):
-            return False
-        elif len(self.PlanDat)==0:
+        if not hasattr(self, 'PlanDat') or self.PlanDat is None or len(self.PlanDat)==0:
             return False    
         else:
             return True
@@ -1415,6 +1692,19 @@ class TaskClass(object):
             assert False
 
     ############## ML2 objectclass stuff
+    # def ml2_plandat_extract(self):
+    #     """ Helper to return, making sure to try to extract if looks
+    #     like havent done yet
+    #     """
+    def ml2_objectclass_extract(self):
+        """
+         Return Objectclass from  ml2 task. Try extactig if not yet extracted.
+        """
+        TT = self.extract_monkeylogic_ml2_task()
+        if not hasattr(TT, "ObjectClass"):
+            TT.objectclass_extract_all()
+        return TT.ObjectClass
+
     def ml2_objectclass_extract_active_chunk(self, return_as_inds=False):
         """ Return the Active chukn
         RETURNS:
@@ -1505,6 +1795,53 @@ class TaskClass(object):
         savemat(fname, savedict)
         print("Saved to: ", fname)
 
+
+    def info_extract_all_prim_versions(self):
+        """ Get all versions of prims spanning odl and new task versions.
+        This only fully wokrs fo new verisons. for old, modify to skip somet hings.
+        Useful for taking notes.
+        NOTES
+        - how does it deal with motifs? Treats them as individual strokes, but chunked by
+        hierarhcy.
+        """
+
+        out = {}
+        # 1. task program prims:
+        taskobj = self.extract_monkeylogic_ml2_task()
+        taskobj.program_extract() 
+        taskobj.objects_extract()
+        out["task_program"] = taskobj.Objects
+                
+        # 2. plan prims. These are base prims before concat.
+        # (only started after glc)
+        if self.PlanDat is not None:
+            out["plan_prims"] = self.PlanDat["Prims"]
+        else:
+            out["plan_prims"] = None
+
+        # 3. objectclass prims. After concat. Post 12/2022, concatting in correct way.
+        # Before then, one time did concat (glc, lolli). 
+        if "Features_Active" in self.ml2_objectclass_extract().keys():
+            out["objectclass_features"] = self.ml2_objectclass_extract()["Features_Active"]
+        else:
+            out["objectclass_features"] = None
+
+        # 4. Objectlass prims, which are all after concatenation.
+        # - gridlinecircle (lolli, that one day): 4 line/circle concatted to 2 lollis.
+        # - all other expt: indices correspnd to concated strokes, hier are sequencings.
+        if "ChunksListClass" in self.ml2_objectclass_extract().keys():
+            out["objectclass_chunks"] = self.ml2_objectclass_extract()["ChunksListClass"]
+        else:
+            out["objectclass_chunks"] = None
+
+        # Note the location of original prims before concat in that one day for glc.
+        out["objectclass_prims_before_concat_glc"] = "this is in original ObjectClass.ChunkList"
+
+        # 4. final, merging plandat and objclass (plandat, except when concat)
+        out["final_prims"] = self.Primitives
+        out["final_strokes"] = self.StrokesOldCoords
+
+        return out
 
 
 #################### TO WORK WITH LISTS OF TASKS
