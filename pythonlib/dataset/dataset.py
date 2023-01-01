@@ -5543,9 +5543,53 @@ class Dataset(object):
                 # raise ValueError('left cannot be >= right')
                 pass
             figlist.append(fig)
-
-
         return figlist
+
+    ############### related to positions of things in sketchpad
+    def sketchpad_fixation_append_as_string(self):
+        """ append to each row the fixation location as a string
+        e.g., if xy is ['-0, -154'], then appends: '-0|-154' 
+        as new column: origin_string
+        """
+        from pythonlib.tools.nptools import stringify
+        origin_string = stringify(np.stack(self.Dat["origin"]))
+        self.Dat["origin_string"] = origin_string
+        print("Appended a new column: origin_string")
+
+    def sketchpad_fixation_plot_locations(self):
+        """ Quick plot of all locations across trials
+        """
+        xs = np.stack(self.Dat["origin"].values)[:,0]
+        ys = np.stack(self.Dat["origin"].values)[:,1]
+
+        fig, axes = plt.subplots(1,2)
+
+        ax = axes.flatten()[0]
+        ax.plot(xs, "ob", label="x")
+        ax.set_ylabel('x location')
+
+        ax = axes.flatten()[1]
+        ax.plot(ys, "or", label="y")
+        ax.set_ylabel('y location')
+
+
+
+    def sketchpad_fixation_button_position(self, ind):
+        """
+        Return the location of fix button, in pixels
+        RETUNRS:
+        - (2,) array, x,y, pixel locations
+        """
+        return self.Dat.iloc[ind]["origin"]
+
+    def sketchpad_done_button_position(self, ind):
+        """
+        Return the location of done button, in pixels, 
+        for this trial
+        - (2,) array, x,y, pixel locations
+        """
+
+        return self.Dat.iloc[ind]["donepos"]
 
     ############### PRINT INFO
     def printOverview(self):

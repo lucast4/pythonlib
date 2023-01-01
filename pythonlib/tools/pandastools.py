@@ -1133,6 +1133,9 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
         from .expttools import writeDictToYaml
         writeDictToYaml(outdict, savepath)
         print("Saved to: ", savepath)
+
+    for k, v in outdict.items():
+        print(k, ':    ', v)
         
     return outdict
 

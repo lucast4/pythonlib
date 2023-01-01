@@ -66,3 +66,31 @@ def isin_array(arr, list_arr, atol=1e-06):
     tmp = [np.allclose(arr, x, atol) for x in list_arr] # array of bools.
     return any(tmp)
 
+def stringify(arr, remove_decimels=True):
+    """ Convert array to list of strings, 
+    - each row in arr is a single item int he otuptu string.
+    - cols are concatenated like col1|col2|, ...
+    PARAMS:
+    - remove_decimels, bool, if True, then uses only singles digits and up.
+    RETURNS:
+    - out, list of strings.
+    """
+
+    assert len(arr.shape)==2
+
+    out = []
+    for val in arr:
+        s = ""
+        for i, item in enumerate(val):
+            if i>0:
+                sep = "|"
+            else:
+                sep = ""
+            if remove_decimels:
+                s += f"{sep}{item:.0f}"
+            else:
+                s += f"{sep}{item}"
+        out.append(s)
+        # out.append(f"{val[0]:.0f}|{val[1]:.0f}")
+    return out
+
