@@ -2,7 +2,8 @@
 import pandas as pd
 
 
-def generate_data_beh_model_scores(D, list_rules, dict_map_epoch_to_rulenames): #params, dic_map_epch_to_rulesname
+# return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
+def generate_data_beh_model_scores(D, list_rules, dict_map_epoch_to_rulenames):
     results = []
     for i in range(0, len(D.Dat)):
         # TODO: this should work for all rules, inclding "rank", "chain", "directions", etc.
@@ -34,3 +35,12 @@ def generate_data_beh_model_scores(D, list_rules, dict_map_epoch_to_rulenames): 
 #     if dict_map_epoch_to_rulenames: # dict_map_epoch_to_rulenames is NOT empty
 #         df = applyFunctionToAllRows(df, mapEpochToRuleNames, 'epoch')
     return df
+
+# modify existing D in-place, adding column 'binary_rule_tuple'
+def add_binary_rule_tuple_col(df, rule_cols):
+    tuple_col_name = 'binary_rule_tuple'
+    df[tuple_col_name] = ''
+
+    for i in range(0,len(df)):
+        df.at[i, tuple_col_name] = str(tuple([int(df.at[i, x]) for x in rule_cols]))
+
