@@ -99,7 +99,7 @@ class FeatureExtractor(object):
 
 
     def list_featurevec_from_mult_parser(self, D, ind, 
-        parser_names = ["parser_graphmod", "parser_nographmod"],
+        parser_names = None,
         hack_lines5 = False):
         """ Get list of feature vecs, convatenated across all parses
         IN:
@@ -109,6 +109,8 @@ class FeatureExtractor(object):
         OUT:
         - list of np arrays.
         """
+        if parser_names is None:
+            parser_names = ["parser_graphmod", "parser_nographmod"]
         
         list_of_parsers = D.parser_list_of_parsers(ind, parser_names=parser_names)
         list_featurevec_cat = []
@@ -187,7 +189,9 @@ class FeatureExtractor(object):
 
 
     ############### USING pre-flattened parses
-    def _path_to_feature_vec(self, p, list_features=[]):
+    def _path_to_feature_vec(self, p, list_features=None):
+        if list_features is None:
+            list_features = []
         feat = []
         traj = p["traj"]
 
@@ -206,7 +210,10 @@ class FeatureExtractor(object):
 
         return feat
 
-    def _strokes_to_feature_vec(self, list_of_p, list_features=[]):
+    def _strokes_to_feature_vec(self, list_of_p, list_features=None):
+        if list_features is None:
+            list_features = []
+
         feat = []
         strokes = [p["traj"] for p in list_of_p]
 

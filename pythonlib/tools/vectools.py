@@ -161,7 +161,8 @@ def transform_data_to_negative_start(angles_all, negative_angle):
 # takes in angles_all: all your angles from data
 # spits out a same-size array as angles_all, but with categorical info
 # i.e. creates bins, and categorizes your angles
-def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4, binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}):
+def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4, 
+    binnames = None):
     """ bin angle, based on slicing circle into same-sized slices, with first bin
     always starting from (1,0), and going CCW.
     INPUTS:
@@ -175,6 +176,9 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4, binna
     - nans will be 
     """
     
+    if binnames is None:
+        binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}
+        
     from math import pi
     if not num_angle_bins==4:
         assert False, "bin_names will not be accurate. code this"

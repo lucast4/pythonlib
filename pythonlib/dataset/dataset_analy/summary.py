@@ -11,7 +11,7 @@ import numpy as np
 import os
 
 
-def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
+def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     """
     PARAMS:
     - rulelist, list of str, rules, each a datsaet. leave None to load all rules that you find.
@@ -39,6 +39,8 @@ def plotall_summary(animal, expt, rulelist=[], savelocation="main"):
     from pythonlib.dataset.dataset import Dataset
     from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
 
+    if rulelist is None:
+        rulelist = []
     if savelocation=="daily":
         # --------------- INPUT PARAMS
         PLOT_OVERVIEW = True
@@ -482,7 +484,7 @@ def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable 
 
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
-        LIST_N_PER_GRID = [1], strokes_by_order=True, 
+        LIST_N_PER_GRID = (1,), strokes_by_order=True, 
         how_to_split_files = "task_stagecategory"):
     """ 
     Plot grid, where y axis is usually date (or epoch) and x axis are each unique task.
@@ -501,6 +503,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     RETURNS:
     - saves figures.
     """
+
     MAX_SUBPLOTS = 50
 
     print("*** FIX - don't subsample trials. instead make mulitpel plots")

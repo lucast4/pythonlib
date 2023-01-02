@@ -191,7 +191,7 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
         strokes=strokes, strokes_cols=color_list, markersize=markersize)
     
 
-def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
+def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
     mark_stroke_onset=True, centerize=False, onsets_by_order=True, clean_unordered=False,
@@ -212,6 +212,8 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=[],
     """
     import numpy as np
 
+    if fraction_of_stroke is None:
+        fraction_of_stroke = []
     if clean_ordered:
         assert clean_unordered==False, "can only choose one of these 2 options"
         each_stroke_separate= True
@@ -542,7 +544,7 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
 
 
 
-def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1., color=[0,0,0], alpha=0.6, overlay_elipses=False):
+def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1., color=(0,0,0), alpha=0.6, overlay_elipses=False):
     """ given list of strokes (i.e., list of list of nparray)
     plots for  strokenum a single stroke representing mean.
     optioanlykl adds covariance elipses.
@@ -593,7 +595,7 @@ def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1.,
 def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_list=None, strokes_ypos_list = None,
     ax=None, colorver="default", 
     cleanver=False, flipxy=False, chunkmodel=None, chunkmodel_idx = 0,
-     waterfallkwargs={}, ylabels=None):
+     waterfallkwargs=None, ylabels=None):
     """ wrapper to plot waterfall, i.e,., raster where y 
     is trial and x is time in trial. Plots multipel trials (strokes_list)
     INPUTS:
@@ -620,6 +622,8 @@ def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_li
     from pythonlib.tools.stroketools import assignStrokenumFromTask
     # from pythonlib.drawmodel.strokePlots import getStrokeColors, plotDatWaterfall
 
+    if waterfallkwargs is None:
+        waterfallkwargs = {}
     if ylabels is None:
         ylabels = range(len(strokes_list))
     strokescolors_list = []
@@ -712,7 +716,7 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
                     normalize_strok_lengths=False, ylabels=None, xaxis="time", fakegapdist=100., 
                     flipxy=False, align_all_strok=False, trialorder="asinput", 
                     strokes_ypos_list = None,
-                    plotkwargs = {"marker":"o", "alpha":0.8, "s":10}):
+                    plotkwargs = None):
     """ low-lebvel waterfall plot, i.e., like raster, 
     where y is trials and x is time in trial.
     each strokes_colors in strokes_colors_list must be same dimensions as
@@ -741,6 +745,8 @@ def plotDatWaterfall(strokes_list, strokescolors_list, ax, align_by_firsttouch_t
     # yticks = []
     row_nogaps = 0
     row = 1
+    if plotkwargs is None:
+        plotkwargs = {"marker":"o", "alpha":0.8, "s":10}
 
     if strokes_ypos_list is not None:
         # do nomalization.

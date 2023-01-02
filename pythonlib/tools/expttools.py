@@ -258,7 +258,7 @@ def modPathFname(path, prefix=None, suffix=None, do_move=True):
 
 def findPath(path_base, path_hierarchy, path_fname="", ext="",
     return_without_fname=False, sort_by="name", path_hierarchy_wildcard_on_ends=True,
-    strings_to_exclude_in_path=[]):
+    strings_to_exclude_in_path=None):
     """ get list of data, searches thru paths.
     INPUT:
     - path_base, str, static, common across all possible
@@ -301,8 +301,8 @@ def findPath(path_base, path_hierarchy, path_fname="", ext="",
     """
     import glob
     
-    if strings_to_exclude_in_path is not None:
-        assert isinstance(strings_to_exclude_in_path, list)
+    if strings_to_exclude_in_path is None:
+        strings_to_exclude_in_path = []
 
     def _summarize(pathlist):
         print("Found this many paths:")

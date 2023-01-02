@@ -40,7 +40,7 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
     rowvar=None, colvar=None, col_wrap=None, 
     height=4, aspect=1,
     include_mean = False, 
-    relplot_kw = {}):
+    relplot_kw = None):
     """ Flexible plotter for lineplots, where x is categorical (or small num of
     discrete vals) and y is scalar. Overlays lines on the same plot, and does summaries
     across lines. Can also overlay scatter of each datrapt.
@@ -65,7 +65,8 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
     """
 
     assert line_grouping!=xval, 'a mistake sometimes made...'
-
+    if relplot_kw is None:
+        relplot_kw = {}
     if color_single:
         # then turn off legend
         legend=False

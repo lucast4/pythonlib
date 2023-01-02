@@ -50,7 +50,7 @@ class BehModelHandler(object):
 
     def input_data(self, dataset, list_models, 
         list_model_ids=None, allow_separate_likelis=False,
-        parsers_to_flatten = ['parser_graphmod', 'parser_nographmod']):
+        parsers_to_flatten = None):
         """
         IN:
         - dataset, a single D object
@@ -68,6 +68,9 @@ class BehModelHandler(object):
         --- Assume all models applied to the same one dataset.
         --- Otherwise models hve different priors and posetiro scorers.
         """
+
+        if parsers_to_flatten is None:
+            parsers_to_flatten = ['parser_graphmod', 'parser_nographmod']
 
         self._parsers_to_flatten = parsers_to_flatten
         self._allow_separate_likelis = allow_separate_likelis
@@ -952,11 +955,14 @@ class BehModelHandler(object):
         # self.plot_parses_trial(indtrial, inds_parses[::-1][:8])
 
     def plot_parses_ordered(self, indtrial, modelname=None, Nplot = 8, plot_beh_task=True, 
-        plots=["prior", "likeli"], title=None):
+        plots=None, title=None):
         """ 
         plot top N ordered by prior, likeli, and post
         If modelname is None, then plots all
         """
+
+        if plots is None:
+            plots = ["prior", "likeli"]
 
         if modelname is None:
             for modelname in self.ListModelsIDs:

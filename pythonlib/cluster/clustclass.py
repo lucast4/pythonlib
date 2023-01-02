@@ -13,7 +13,7 @@ import numpy as np
 
 class Clusters(object):
     """docstring for Clusters"""
-    def __init__(self, X, labels=None, params={}):
+    def __init__(self, X, labels=None, params=None):
         """ 
         PARAMS;
         - X, (N, D) data, where N is num datpts, and D is dimensionality, 
@@ -21,7 +21,10 @@ class Clusters(object):
         [0,1,2, ..]. These are like "categories"
         - params, dict of params
 
-        """
+        """ 
+
+        if params is None:
+            params = {}
 
         self._Xinput = X # never changes
         self.Ndat = X.shape[0]

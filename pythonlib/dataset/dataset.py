@@ -1879,7 +1879,7 @@ class Dataset(object):
 
 
     def splitTrainTest(self, train_frac = 0.9, val_frac = 0.05, test_frac = 0.05,
-        grouby = ["character", "expt", "epoch"]):
+        grouby = ("character", "expt", "epoch")):
         """ Extract datasets (splits). does useful things, like making sure
         there is good variety across tasks, etc.
         By default, combines tasks across difficulties, inclulding monkey 
@@ -2035,7 +2035,7 @@ class Dataset(object):
 
         return SF
 
-    def sf_load_preextracted(self, strokes_ver_list = ["strokes_beh"]):
+    def sf_load_preextracted(self, strokes_ver_list = ("strokes_beh",)):
         """ wrapper to load multiple SFs.
         - strokes_ver_list, list of strings. (see _sf_load_preextracted)
         RETURNS:
@@ -2489,12 +2489,15 @@ class Dataset(object):
         print(f"Reloaded BPL into self.BPL, from {fthis}")
     
 
-    def bpl_extract_and_save_motorprograms(self, params_preprocess = ["recenter", "spad_edges"],
-            sketchpad_edges =np.array([[-260., 260.],[-260., 260.]]), save_checkpoints = [100, ""]):
+    def bpl_extract_and_save_motorprograms(self, params_preprocess = ("recenter", "spad_edges",),
+            sketchpad_edges =None, save_checkpoints = (100, "")):
         """ save for this dataset.
         does some auto preprocessing first too
         """
         from pythonlib.bpl.strokesToProgram import infer_MPs_from_strokes
+
+        if sketchpad_edges is None:
+            sketchpad_edges = np.array([[-260., 260.],[-260., 260.]])
 
         assert len(self.Metadats)==1, "advised to only do this if you are working wtih one dataset."
         save_checkpoints[1] = self.Metadats[0]["path"]
@@ -2516,9 +2519,12 @@ class Dataset(object):
 
         return MPlist, scores
 
-    def bpl_extract_and_save_motorprograms_parses(self, params_preprocess = ["recenter", "spad_edges"],
-            sketchpad_edges =np.array([[-260., 260.],[-260., 260.]]), save_checkpoints = [100, ""], 
+    def bpl_extract_and_save_motorprograms_parses(self, params_preprocess = ("recenter", "spad_edges",),
+            sketchpad_edges =None, save_checkpoints = (100, ""), 
             parses_good=False):
+
+        if sketchpad_edges is None:
+            sketchpad_edges = np.array([[-260., 260.],[-260., 260.]])
 
         from pythonlib.bpl.strokesToProgram import infer_MPs_from_strokes
 
@@ -2670,9 +2676,9 @@ class Dataset(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, 'motor_program')
 
 
-    def bpl_refit_libraries_to_MPs(self, gb = ["animal", "expt", "epoch", "monkey_train_or_test"], 
-        params_to_update=['kappa', 'rel_type_mixture', 'prim_type_mixture', 'spatial_hist'],
-        params_to_update_using_entire_dataset=[],
+    def bpl_refit_libraries_to_MPs(self, gb = ("animal", "expt", "epoch", "monkey_train_or_test"), 
+        params_to_update=('kappa', 'rel_type_mixture', 'prim_type_mixture', 'spatial_hist'),
+        params_to_update_using_entire_dataset=None,
         increment_idx=True):
         """ generate libraries refit to MPs extracted for this datsets.
         Flexible, in that can slice dataset in different ways before applying as 
@@ -2690,6 +2696,9 @@ class Dataset(object):
         self.BPL["refits"][idx]["libraries_params"] = params_to_update
         where idx incremenets at each run.
         """
+
+        if params_to_update_using_entire_dataset is None:
+            params_to_update_using_entire_dataset = []
         from pythonlib.bpl.refitting import libRefitted
 
         if isinstance(params_to_update[0], list):
@@ -2787,7 +2796,7 @@ class Dataset(object):
 
 
     def bpl_score_trials_by_libraries(self, lib_refit_index=0, libraries_to_apply_inds = None,
-        dsets_to_keep=None, scores_to_use = ["type"]):
+        dsets_to_keep=None, scores_to_use = ("type",)):
         """
         Score each trial in self.Dat (their motor program) based on libraries, previuosl;yl
         extracted ands aved in self.BPL. returns a scalar score, log ll
@@ -2902,7 +2911,7 @@ class Dataset(object):
                 self.Dat[newcol] = scores
 
     def bpl_score_parses_by_libraries(self, lib_refit_index=0, libraries_to_apply_inds = None,
-        dsets_to_keep=None, scores_to_use = ["type"]):
+        dsets_to_keep=None, scores_to_use = ("type",)):
         """
         Score each parse in self.Dat["parases"], each row can have multipe parese.
         Does this based on libraries, first converting the parses to motor programs,
@@ -2933,14 +2942,15 @@ class Dataset(object):
 
 
     def bpl_score_parses_factorized(self, lib_refit_index=0, libraries_to_apply_inds = None,
-        weights = {"k":1/3, "parts":1/3, "rel":1/3}):
+        weights = None):
         """
         RETURNS:
         - scores, factorized into features.
         """
         # weights = [1/3, 1/3, 1/3]
         from ..bpl.strokesToProgram import scoreMPs_factorized
-
+        if weights is None:
+            weights = {"k":1/3, "parts":1/3, "rel":1/3}
         LibListThis = self._bpl_extract_refitted_libraries(lib_refit_index, libraries_to_apply_inds)
         _checkPandasIndices(self.Dat)
 
@@ -3698,7 +3708,7 @@ class Dataset(object):
 
 
     def parser_list_of_parses(self, indtrial, kind="summary", 
-        parser_names = ["parser_graphmod", "parser_nographmod"]):
+        parser_names = ("parser_graphmod", "parser_nographmod")):
         """ return list of parses for this trial, in summary format, 
         i.e., each parse is list of dicts.
         IN:
@@ -3722,7 +3732,7 @@ class Dataset(object):
         return list_of_p
 
 
-    def parser_list_of_parsers(self, indtrial, parser_names = ["parser_graphmod", "parser_nographmod"]):
+    def parser_list_of_parsers(self, indtrial, parser_names = ("parser_graphmod", "parser_nographmod")):
         """ returns list of parsers
         e.g., [P1, P2]
         """
@@ -3749,7 +3759,7 @@ class Dataset(object):
         print("added scores to columns in self.Dat:", colname)
 
 
-    def parser_flatten(self, parser_names = ["parser_graphmod", "parser_nographmod"]):
+    def parser_flatten(self, parser_names = ("parser_graphmod", "parser_nographmod")):
         """ take parsers (each a single object) from multiple columns (each a parser_name)
         and combines all and flattens into a new column called "parser_all_flat"
         - each parse represented as a list of p, where p is a dict holding all representations.
@@ -4310,7 +4320,7 @@ class Dataset(object):
 
 
     def extract_beh_features(self, 
-        feature_list = ["angle_overall", "num_strokes", "circ", "dist"]):
+        feature_list = ("angle_overall", "num_strokes", "circ", "dist")):
         """ extract features, one val per row, 
         INPUT:
         - feature_list, list of strings. instead of string, if pass in function, then will use that.
@@ -4689,7 +4699,7 @@ class Dataset(object):
             return False
 
     def supervision_check_is_instruction_using_color(self, ind, 
-        list_methods_instructive = ["rank"]):
+        list_methods_instructive = ("rank",)):
         """ Check whethre this trial was using color as instruction
         (e.g., color encoding rank of each stroke)
         PARAMS:
@@ -4994,7 +5004,7 @@ class Dataset(object):
         plotMP(MP, ax=ax)
 
 
-    def plotSingleTrial(self, idx=None, things_to_plot = ["beh", "task"],
+    def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
         sharex=False, sharey=False, params=None, task_add_num=False,
         number_from_zero=True):
         """ 
@@ -5210,9 +5220,12 @@ class Dataset(object):
     def plotMultTrials2(self, idxs, which_strokes="strokes_beh", nrand=None,
             titles = None, add_stroke_number=True, SIZE=2.5, color_by="order",
             number_from_zero = True, 
-            plotkwargs={}):
+            plotkwargs=None):
         """ V2, which uses plotMultStrokes
         """
+
+        if plotkwargs is None:
+            plotkwargs = {}
 
         strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
             nrand=nrand, titles=titles)
@@ -5706,7 +5719,7 @@ class Dataset(object):
 
 
     def analy_get_tasks_strongesteffect(self, grouping, grouping_levels, feature,
-        dfunc = lambda x,y: y-x, df_in=None, return_vals_sorted=False):
+        dfunc = None, df_in=None, return_vals_sorted=False):
         """ Extract tasks which have greatest difference along some feature (column),
         after aggregating over tasks, separating by some grouping variable.
         Currently only works for goruping using 2 levels (takes difference)
@@ -5719,7 +5732,11 @@ class Dataset(object):
         RETURNS:
         - tasklist, which is sorted. first item is that with greatest psoitive difference (level 2 minus level 1)
         """
+
         from pythonlib.tools.pandastools import pivot_table
+
+        if dfunc is None:
+            dfunc = lambda x,y: y-x
 
         if df_in is None:
             print("Using self.Dat")
@@ -5956,12 +5973,15 @@ class Dataset(object):
                 _check_task_sequences(self, task, unique=False)
 
             
-    def analy_reassign_monkeytraintest(self, key, list_train, list_test, list_other=[]):
+    def analy_reassign_monkeytraintest(self, key, list_train, list_test, list_other=None):
         """ redefine monkey train test based on value in column "key".
         if a row[key] is in list_train, then is train, etc.
         - enforces that list_train and list_test no overlap.
         - enforces that each row will have an assignment.
         """
+
+        if list_other is None:
+            list_other = []
 
         # Make sure no common items
         assert len([x for x in list_train if x in list_test])==0

@@ -1,9 +1,9 @@
 """generally takes in list of dicts, where all dicts have same keys"""
 
 
-def printOverviewKeyValues(summarydict_all, keystoget=[]):
+def printOverviewKeyValues(summarydict_all, keystoget=None):
     """Prints all keys and their unique values. ignoers some keys that have numerical vbalues."""
-    if len(keystoget)==0:
+    if keystoget is None:
         keystoget = set([kk for k in summarydict_all for kk in k.keys()])
 
     out = {}

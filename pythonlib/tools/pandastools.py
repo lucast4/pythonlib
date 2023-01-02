@@ -112,7 +112,7 @@ def mergeOnIndex(df1, df2):
 ########################### ^^^^ OBSOLETE - USE aggregGeneral
 
 
-def aggregGeneral(df, group, values, nonnumercols=[], aggmethod=["mean"]):
+def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
     """
     Aggregate by first grouping (across multiple dimensions) and then applyiong
     arbnitrary method.
@@ -124,6 +124,11 @@ def aggregGeneral(df, group, values, nonnumercols=[], aggmethod=["mean"]):
     first encountered value.
     - aggmethod, list of str, applies each of these agg methods.
     """
+    if nonnumercols is None:
+        nonnumercols = []
+    if aggmethod is None:
+        aggmethod = ["mean"]
+
     agg = {c:aggmethod for c in df.columns if c in values }
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
     
@@ -376,11 +381,6 @@ def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True,
     NOTE - if return dataframe, automaticlaly resets indices.
     """
     for k, v in filtdict.items():
-        # print('--')
-        # print(len(df))
-        # print(k)
-        # print(v)
-#         print(df[k].isin(v))
         if not isinstance(v, list):
             if auto_convert_tolist:
                     v = [v]
@@ -666,7 +666,7 @@ def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", random
 def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False, 
         agg_method = "counts", val_name = "val", ax=None, 
         norm_method=None,
-        annotate_heatmap=True, zlims=[None, None],
+        annotate_heatmap=True, zlims=(None, None),
         diverge=False):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
@@ -813,8 +813,8 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
 
 
 def summarize_feature(df, GROUPING, FEATURE_NAMES,
-                          INDEX= ["character", "animal", "expt"], 
-                          func = lambda x: np.nanmean(x), newcol_variable=None, newcol_value=None):
+                          INDEX= ("character", "animal", "expt"), 
+                          func = None, newcol_variable=None, newcol_value=None):
     """ [USEFUL] wide-form --> long form
     aggregating and summarizing features
     See summarize_featurediff for variables.
@@ -842,6 +842,8 @@ def summarize_feature(df, GROUPING, FEATURE_NAMES,
 
     dfthis is basically looks like the input shape, but pruned to the relevant columns.
     """
+    if func is None:
+        func = lambda x: np.nanmean(x)
     if not isinstance(GROUPING, list):
         GROUPING = [GROUPING]
     dfagg = aggregGeneral(df, GROUPING + INDEX, FEATURE_NAMES, aggmethod=[func])
@@ -859,9 +861,9 @@ def summarize_feature(df, GROUPING, FEATURE_NAMES,
 
 
 def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
-                          INDEX= ["character", "animal", "expt"], 
-                          func = lambda x: np.nanmean(x), return_dfpivot=False, 
-                          do_normalize=False, normalize_grouping = ["animal", "expt"]
+                          INDEX= ("character", "animal", "expt"), 
+                          func = None, return_dfpivot=False, 
+                          do_normalize=False, normalize_grouping = ("animal", "expt")
                          ):
     """ High level summary, for each task (or grouping), get its difference 
     across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
@@ -916,6 +918,8 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
 17  0.107170    0.107170    0   0   vlPFC_p-vlPFC_a     shape_oriented    
     """
 
+    if func is None: 
+        func = lambda x: np.nanmean(x)
     assert len(GROUPING_LEVELS)==2
     assert isinstance(GROUPING, str), "see docs for pivot_table"
     
@@ -995,7 +999,7 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
-                                    F = {}, return_as_dict=False, method_if_not_enough_examples="all_none"):
+                                    F = None, return_as_dict=False, method_if_not_enough_examples="all_none"):
     """ To uniformly sample rows so that spans levels of a given variable (column)
     e..g, if a col is "shape" and you want to get one example trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
@@ -1013,6 +1017,8 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     - varlevels
     """
     import random
+    if F is None:
+        F = {}
 
     if method_if_not_enough_examples=="prune_subset":
         assert return_as_dict==True, "otherwise will lose traick of inidces."

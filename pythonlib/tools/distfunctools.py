@@ -263,7 +263,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
 
 
 
-def modHausdorffDistance(itemA, itemB, dims=[0,1], ver1="mean", ver2="max", D=None,
+def modHausdorffDistance(itemA, itemB, dims=(0,1), ver1="mean", ver2="max", D=None,
     return_marginals=False, asymmetric_ver=None):
     """
     Modified Hausdorff Distance.

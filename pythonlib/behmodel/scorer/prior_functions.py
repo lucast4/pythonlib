@@ -179,7 +179,7 @@ def prior_base():
 
 
 def prior_feature_extractor(hack_lines5=True, 
-    parser_names = ["parser_graphmod", "parser_nographmod"], rule=None):
+    parser_names = None, rule=None):
     """ combines FeatureExtractor and MotorCost to do:
     - features, scoring, normalizing to probs
     OUT:
@@ -190,6 +190,8 @@ def prior_feature_extractor(hack_lines5=True,
     from pythonlib.behmodel.feature_extractor.feature_extractor import FeatureExtractor
     from pythonlib.drawmodel.efficiencycost import Cost
 
+    if parser_names is None:
+        parser_names = ["parser_graphmod", "parser_nographmod"]
 
     assert False, "use prior_function_database"
     def priorscorer(D, indtrial):

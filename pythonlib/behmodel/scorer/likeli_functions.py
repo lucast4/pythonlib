@@ -51,7 +51,7 @@ def makeLikeliFunction(ver="segments", norm_by_num_strokes=True,
 
 
 
-def likeli_dataset(parser_names = ["parser_graphmod", "parser_nographmod"]):
+def likeli_dataset(parser_names = None):
     """ 
     Get likeli function that operates on a datset (single ind)
     - Also assumes that operates on all parses.
@@ -59,7 +59,8 @@ def likeli_dataset(parser_names = ["parser_graphmod", "parser_nographmod"]):
     - Scorer
     """    
     from pythonlib.behmodel.scorer.scorer import Scorer
-
+    if parser_names is None:
+        parser_names = ["parser_graphmod", "parser_nographmod"]
     def F(D, ind):
         strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
         list_of_parsestrokes = D.parser_list_of_parses(ind, kind="strokes", parser_names=parser_names)

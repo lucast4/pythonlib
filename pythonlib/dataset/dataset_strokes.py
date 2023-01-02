@@ -52,8 +52,10 @@ class DatStrokes(object):
         storing its associated task stroke, and params for that taskstroke
         PARAMS:
         - version, string. if
-        --- "beh", then each datapoint is a beh stroke
-        --- "task", then is task primitive
+        --- "beh", then each datapoint is a beh stroke. each row is a single beh stroke, includes
+        all strokes, ordered correctly.
+        --- "task", then is task primitive. each row is a single task prim, based on order
+        that each prim gotten (touched for first time) by beh
         RETURNS:
         - modifies self.Dat to hold dataframe where each row is stroke.
         """
@@ -76,11 +78,10 @@ class DatStrokes(object):
             if version=="beh":
                 strokes = primlist
                 datsegs = datsegs_behlength
-                combined_tuple = (None for _ in range(len(strokes)))
+                out_combined = (None for _ in range(len(strokes)))
             elif version=="task":
                 strokes = [dat[2]["Prim"].Stroke for dat in out_combined] # list of PrimitiveClass
                 datsegs = [dat[2] for dat in out_combined] # task version
-                combined_tuple = out_combined
                 assert datsegs == datsegs_tasklength, "bug?"
             else:
                 print(version)
@@ -89,7 +90,7 @@ class DatStrokes(object):
             # 2) Information about task (e..g, grid size)
             
             # 2) For each beh stroke, get its infor
-            for i, (stroke, dseg, comb) in enumerate(zip(strokes, datsegs, combined_tuple)):
+            for i, (stroke, dseg, comb) in enumerate(zip(strokes, datsegs, out_combined)):
                 DAT_BEHPRIMS.append({
                     'Stroke':stroke,
                     'datseg':dseg})
@@ -206,7 +207,7 @@ class DatStrokes(object):
         # Note down done preprocessing in params
         self.Params["params_preprocessing"] = params
 
-    def clean_data(self, methods=[]):
+    def clean_data(self, methods=None):
         """ Combine methods for pruning dataset to get clean data in specific ways
         PARAMS;
         - methods, list of str, each a method to run in order
@@ -214,6 +215,8 @@ class DatStrokes(object):
         - Modifies self.Dat
         """
 
+        if methods is None:
+            methods = []
         for meth in methods:
             if meth=="remove_if_multiple_behstrokes_per_taskstroke":
                 # Only keep trials with good behavior
@@ -251,6 +254,25 @@ class DatStrokes(object):
                 print(meth)
                 assert False, "code it"
 
+
+    ######################### PREP THE DATASET
+    def prep_compute_beh_task_strok_distances(self):
+        """ For each beh stroke, get its distance to matching single task strok
+        RETURNS:
+        - adds to dataframe, column: "dist_beh_task_strok"
+        """
+
+        list_inds = list(range(len(self.Dat)))
+
+        list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
+        list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
+        
+        # compute distances    
+        dists = self._dist_alignedtask_to_beh(list_inds)   
+
+        # Save it
+        self.Dat["dist_beh_task_strok"] = dists
+        print("Added column: dist_beh_task_strok")
 
 
     ######################### MOTOR TIMING
@@ -311,12 +333,19 @@ class DatStrokes(object):
                     return self.Dat.iloc[i]["strok"]
                 else:
                     return self.Dat.iloc[i]["Stroke"]()
-            elif ver_behtask=="task":
+            elif ver_behtask=="task_entire":
                 strokes_task = self.dataset_extract("strokes_task", i)
                 print("HACKY (extract_strokes) for task, taking entire task")
                 return np.concatenate(strokes_task, axis=0)
                 # return strokes_task[0]
-            elif ver_behtask=="beh":
+            elif ver_behtask=="task_aligned_single_strok":
+                # Return the best matching single taskstroke
+                # This is using the datseg alignment (so considers alginment of
+                # entire set of task and beh strokes)
+                ind_strok_task = self.Dat.iloc[i]["ind_taskstroke_orig"]
+                strokes_task = self.dataset_extract("strokes_task", i)
+                return strokes_task[ind_strok_task]
+            elif ver_behtask=="beh_aligned_single_strok":
                 # Then pull out the beh taht matches this task stroek the best
                 assert "aligned_beh_strokes_disttotask" in self.Dat.columns, "need to extract this first"
                 strokes_beh = [S() for S in self.Dat.iloc[i]["aligned_beh_strokes"]]
@@ -361,6 +390,8 @@ class DatStrokes(object):
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
         for ind indexing into the strokes (DatsetStrokes.Dat)
+        PARAMS:
+        - ind, index in to self (NOT into Dataset)
         """
         return self._dataset_index(ind, True)[colname].tolist()[0]
 
@@ -408,6 +439,8 @@ class DatStrokes(object):
         """
         from pythonlib.tools.pandastools import filterPandas
 
+        len_in = len(self.Dat)
+
         # 1) If a key doesnt already exist in self.Dat, then extract it from Dataset
         list_keys = filtdict.keys()
         for k in list_keys:
@@ -415,7 +448,9 @@ class DatStrokes(object):
                 self.dataset_append_column(k)
 
         # 2) Filter
-        return filterPandas(self.Dat, filtdict, return_indices=return_indices, reset_index=reset_index)
+        tmp = filterPandas(self.Dat, filtdict, return_indices=return_indices, reset_index=reset_index)
+        assert len(tmp)==len_in
+        return tmp
 
     def dataset_call_method(self, method, args, kwargs):
         """
@@ -424,30 +459,48 @@ class DatStrokes(object):
         return getattr(self.Dataset, method)(*args, **kwargs)
 
     ######################### SUMMARIZE
-    def print_summary(self):
-        assert False, "not coded"
-        print(DF_PRIMS["task_kind"].value_counts())
-        DF_PRIMS.iloc[0]
+    def print_summary(self, Nmin=0):
 
-    def print_n_samples_per_combo(self, list_grouping = ["shape_oriented", "gridloc", "gridsize"], Nmin=0, savepath=None):
+        list_keys = ["task_kind", "gridsize", "shape_oriented", "gridloc"]
+        for key in list_keys:
+            print(f"\n--- Value counts for {key}")
+            print(self.Dat[key].value_counts())
+
+        print("\n ==== n samples per combo of params")
+        self.print_n_samples_per_combo_grouping(Nmin=Nmin)
+
+
+    def print_n_samples_per_combo_grouping(self, 
+        list_grouping = None, 
+        Nmin=0, savepath=None):
         """ 
         print n samples for combo of goruping vars
         """
+        if list_grouping is None:
+            list_grouping = ["shape_oriented", "gridloc", "gridsize"]
+
         from pythonlib.tools.pandastools import grouping_print_n_samples
         outdict = grouping_print_n_samples(self.Dat, list_grouping, Nmin, savepath)
-        for k, v in outdict.items():
-            print(k, ':  ', v)
 
-
+    def print_n_samples_per_combo(self, list_grouping):
+        """ Wrapper, legacy name"""
+        return self.print_n_samples_per_combo_grouping(list_grouping)
 
     ####################### PLOTS
-    def plot_single_strok(self, strok, ax=None):
+    def plot_single_strok(self, strok, ver="beh", ax=None):
         """ plot a single inputed strok on axis.
         INPUT:
         - strok, np array,
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
-        plotDatStrokes([strok], ax, clean_ordered_ordinal=True)
+        if ver=="beh":
+            plotDatStrokes([strok], ax, clean_ordered=True, add_stroke_number=False, 
+                mark_stroke_onset=True)
+        elif ver=="task":
+            plotDatStrokes([strok], ax, clean_unordered=True, alpha=0.2)
+        else:
+            assert False
+
 
     def plot_single(self, ind, ax=None):
         """ Plot a single stroke
@@ -494,7 +547,8 @@ class DatStrokes(object):
     def plot_egstrokes_grouped_in_subplots(self, task_kind="prims_on_grid", 
         key_subplots="shape_oriented",
         key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
-        n_examples = 2, color_by="order", ver_behtask=None):
+        n_examples = 2, color_by="order", ver_behtask=None,
+        filtdict = None):
         """
         Subplots, organized at multipel levels.
         PARAMS:
@@ -516,12 +570,13 @@ class DatStrokes(object):
             key_to_extract_stroke_variations_in_single_subplot = None
 
         # 0) Static params:
-        if task_kind is None:
-            F = {}  
-        else:
-            F = {
-                "task_kind":[task_kind],
-            }
+        # filtdict = {}
+        if filtdict is None:
+            filtdict = {}
+        F = filtdict
+        if task_kind is not None:
+            # assert "task_kind" not in F.keys()
+            F["task_kind"] = [task_kind]
 
         # One plot for each level
         subplot_levels = sorted(self.Dat[key_subplots].unique().tolist())
@@ -561,10 +616,41 @@ class DatStrokes(object):
                 ax.set_title(level)
         return figholder
 
+    def plot_beh_and_aligned_task_strokes(self, list_inds, title_with_dists=False):
+        """ One subplot for each beh strokes, each a single subplot, 
+        and for each overlay its best-aligned task signle stroke
+        """
+        
+        assert len(list_inds)<50, "too many plots..."
+        
+        # collect beh and task strokes
+        list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
+        list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
+            
+        # Title with distances?
+        if title_with_dists:
+            dists = self._dist_alignedtask_to_beh(list_inds)   
+            titles = [f"{d:.2f}" for d in dists]
+        else:
+            titles = list_inds 
+
+        from pythonlib.tools.plottools import subplot_helper
+        ncols = 5
+        nrows = 10
+        n = len(list_inds)
+        getax, figholder, nplots = subplot_helper(ncols, nrows, n)
+
+        for i, (sbeh, stask, tit) in enumerate(zip(list_strok_beh, list_strok_task, titles)):
+            ax = getax(i)
+            self.plot_single_strok(stask, "task", ax=ax)
+            self.plot_single_strok(sbeh, "beh", ax=ax)
+            ax.set_title(tit)
+        
+
     def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
             flip_plot=False):
         """ 
-        Plot grid of strokes, where cols are (e.g.) shapes and rows are
+        Plot grid of strokes (sublots), where cols are (e.g.) shapes and rows are
         example trials
         PARAMS:
         - flip_plot, bool, if True, then cols are actually plotted as rows
@@ -629,7 +715,7 @@ class DatStrokes(object):
         return groupdict
 
 
-    def grouping_append_and_return_inner_items(self, list_grouping_vars=["shape_oriented", "gridloc"]):
+    def grouping_append_and_return_inner_items(self, list_grouping_vars=None):
         """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
         Useful if e./g., you want to get all indices for each of the levels in a combo group,
         where the group is defined by conjunction of two columns.
@@ -643,6 +729,9 @@ class DatStrokes(object):
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
 
+        if list_grouping_vars is None:
+            list_grouping_vars = ["shape_oriented", "gridloc"]
+            
         groupdict = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
             "index")
 
@@ -718,7 +807,24 @@ class DatStrokes(object):
         uses by defaiult hausdorff mean
         """
         from pythonlib.drawmodel.strokedists import distMatrixStrok
-        return distMatrixStrok([strok1], [strok2], convert_to_similarity=False).squeeze()
+        return distMatrixStrok([strok1], [strok2], convert_to_similarity=False).squeeze().item()
+
+
+    def _dist_alignedtask_to_beh(self, list_inds):
+        """ COmpute and return distances between strok beh and task, one scalar
+        for each index (in list_inds)
+        RETURNS:
+        - list of scalars, each a hsuasdorff dist, smaller the better
+        """
+        list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
+        list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
+
+        list_dists = []
+        for sb, st in zip(list_strok_beh, list_strok_task):
+            d = self._dist_strok_pair(sb, st)
+            list_dists.append(d)
+
+        return list_dists
 
 
 
@@ -744,3 +850,23 @@ class DatStrokes(object):
 
         self.Dat = applyFunctionToAllRows(self.Dat, F, "aligned_beh_strokes_disttotask")
 
+
+    ################################ UTILS
+    def filter_dataframe(self, filtdict, modify_in_place=False):
+        """ 
+        PARMS
+
+        Modifies self.Dat to retain the output after filtering self.Dat,
+        with indices reset.
+        """
+        from pythonlib.tools.pandastools import filterPandas
+
+        print("staritng legnth: ", len(self.Dat))
+        df = filterPandas(self.Dat, filtdict)
+        print("final legnth: ", df)
+
+        if modify_in_place:
+            print("Modified self.Dat!")
+            self.Dat = df
+
+        return df

@@ -455,11 +455,13 @@ class TaskClass(object):
         return assignments
 
     ######################## PLOTS
-    def plotTaskOnAx(self, ax=None, plotkwargs = {}):
+    def plotTaskOnAx(self, ax=None, plotkwargs = None):
         """ plot task on axes"""
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
         import matplotlib.pyplot as plt
 
+        if plotkwargs is None:
+            plotkwargs = {}
         if ax is None:
             fig, ax = plt.subplots(1,1)
 

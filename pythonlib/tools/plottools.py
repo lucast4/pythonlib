@@ -129,6 +129,20 @@ def color_make_pallete_categories(df, category_name):
     return pallete
 
 
+def legend_add_manual(ax, labels, colors, alpha=0.4):
+    """ Manually add a legend
+    PARAMS:
+    - labels, list of str
+    - colors, list of color, to match labels
+    """
+    import matplotlib.patches as mpatches
+    handles = []
+    for lab, col in zip(labels, colors):
+        this = mpatches.Patch(color=col, label=lab, alpha=alpha)
+        handles.append(this)
+    ax.legend(handles=handles, framealpha=alpha)
+
+
 def makeColors(numcol, alpha=1, cmap="jet"):
     """ gets evensly spaced colors. currntly uses jet map
     PREVIOUSLY: plasma
@@ -277,7 +291,7 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue"):
     if a or b:
         ax.plot(x, lower, color=color, alpha=0.1)
         ax.plot(x, upper, color=color, alpha=0.1)
-        ax.fill_between(x, lower, upper, alpha=0.2)
+        ax.fill_between(x, lower, upper, alpha=0.2, color=color)
     # ax.set_xlabel('timepoint')
     # ax.set_ylabel('signal')
     ax.spines['top'].set_visible(False)
@@ -325,7 +339,7 @@ def plotScatterXreduced(X, dims_to_take, nplot = 20, ax=None,
         return fig, ax
 
 
-def plotScatterOverlay(X, labels, dimsplot=[0,1], alpha=0.2, ver="overlay",
+def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     downsample_auto=True):
     """ overlay multiple datasets on top of each other
     or separate.
@@ -703,7 +717,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         return fig
 
 
-def get_ylim(vals, pertile=[1.5, 98.5]):
+def get_ylim(vals, pertile=(1.5, 98.5)):
     """ helper, to get ylims for plotting, whch remove outliers,
     """
     # Then remove outliers.

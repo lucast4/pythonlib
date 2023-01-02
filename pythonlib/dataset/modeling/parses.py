@@ -87,7 +87,7 @@ def plot_baseparses_all(D, indtrial):
     return figs
 
 
-def print_summary_bestparses_alltrials(D, list_rules = ["baseline", "linetocircle", "circletoline", "lolli"]):
+def print_summary_bestparses_alltrials(D, list_rules = ("baseline", "linetocircle", "circletoline", "lolli")):
     # same as below, differnt printing order
     # Print the best-fit for each combo of rule and trial
     for indtrial in range(len(D.Dat)):

@@ -13,7 +13,7 @@ Is like "motifs in a bag"...
 VARIABLES_KEEP = ["shape_oriented", "gridloc"]
 
 def generate_dict_of_all_used_motifs(D, nprims=2, 
-    variables_keep = VARIABLES_KEEP,
+    variables_keep = None,
     WHICH_DATSEGS = "task", shapes_to_ignore=None):
     """ Generate dict holding all motifs used in this dataset.
     PARAMS:
@@ -30,6 +30,8 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
     list of indices, where and index is (trial, starting strokenum)
     """
 
+    if variables_keep is None:
+        variables_keep = VARIABLES_KEEP
     motifs_all_dict = {}
     def prune_token_variables(token, variables_keep):
         """
@@ -130,7 +132,7 @@ def extract_list_shapes_loc(motifs_all_dict):
     return list_shapes, list_locs
 
 def generate_motifgroup_data(motifs_all_dict, 
-        list_group_kind= ["same", "diff_sequence", "diff_location", "diff_prims"]):
+        list_group_kind= None):
     """ Main extraction of computed data. For each way of grouping (e.g., same prim, same seq, diff location),
     pull out each "motifgroup" (which is a set of all motifs which are related under this grouping), and
     for each motifgroup save the trials that have these motifs. 
@@ -138,6 +140,8 @@ def generate_motifgroup_data(motifs_all_dict,
     - DatGroups, dict where keys are each kind of grouping (e.g, diff_sequence), and items 
     are lists of dicts, where each dict is a motifgroup and its data.
     """
+    if list_group_kind is None:
+        list_group_kind = ["same", "diff_sequence", "diff_location", "diff_prims"]
 
     list_shapes, list_locs = extract_list_shapes_loc(motifs_all_dict)
     

@@ -170,7 +170,7 @@ class BehaviorClass(object):
             assert False, "not coded"
 
     ##################### SHAPES, LABELS, etc
-    def shapes_nprims(self, ver="task", must_include_these_shapes=["circle", "line"]):
+    def shapes_nprims(self, ver="task", must_include_these_shapes=None):
         """ count how oftne each shape occurs in the beh or task.
         PARAMS:
         - ver, whether to use "beh" or "task" shapes.
@@ -178,6 +178,9 @@ class BehaviorClass(object):
         RETURNS:
         - dict, num times each shape occured. e.g., {"circle":5, ...}
         """
+
+        if must_include_these_shapes is None:
+            must_include_these_shapes =["circle", "line"]
 
         out = {}
         for sh in must_include_these_shapes:
@@ -384,9 +387,10 @@ class BehaviorClass(object):
         return self._find_motif_in_beh(list_beh, labelmotif, list_beh_mask=maskinds)
 
 
-    def _find_motif_in_beh_wildcard(self, list_beh, motifname, motifparams={}, 
+    def _find_motif_in_beh_wildcard(self, list_beh, motifname, motifparams=None, 
         list_beh_mask=None, return_as_number_instances=False, 
-        force_no_shared_tokens_across_motifs=False, force_no_shared_tokens_across_motifs_usealltokens=False):
+        force_no_shared_tokens_across_motifs=False, 
+        force_no_shared_tokens_across_motifs_usealltokens=False):
         """ More flexible way to find motifs, such as "a circle repeated N times" where 
         N is wildcard so can be anything (or with constraint). Is the most abstract method.
         PARAMS:
@@ -409,6 +413,8 @@ class BehaviorClass(object):
         a two different lollis must use different tokens. does this by keeping matches that are
         found later.
         """
+        if motifparams is None:
+            motifparams = {}
         dict_matches = {}
 
         def _is_in(match, key, use_all_tokens_in_match=force_no_shared_tokens_across_motifs_usealltokens):
@@ -942,7 +948,7 @@ class BehaviorClass(object):
 
 
     def timepoint_extract_features_categorical_(self, twind, 
-            list_feature=["ordinal", "shape_oriented"]):
+            list_feature=None):
         """ Extract categorical feature for this stroke at this timepoint
         PARAMS:
         - twind, [t1, t2], where feature uses data within this windopw (inclusinve)
@@ -951,6 +957,9 @@ class BehaviorClass(object):
         - features, list of values for features. Type for each feature can vary
         -- returns list of None (saem len as list_feature) if this window has no data...
         """
+        if list_feature is None:
+            list_feature = ["ordinal", "shape_oriented"]
+
         from pythonlib.tools.stroketools import sliceStrokes
         from scipy import stats
 

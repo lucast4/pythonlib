@@ -49,7 +49,7 @@ def scoreMPs_factorized(MPlist_flat, use_hist=True, lib=None, return_as_tensor=T
     return scorelist
 
 
-def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = ["type", "token"]):
+def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = None):
     """ outputs score (tokenscore + typescore, ignoring image score)
     as list of scores
     INPUT
@@ -61,6 +61,9 @@ def scoreMPs(MPlist_flat, use_hist=True, lib=None, scores_to_use = ["type", "tok
     NOTE: image is not implmeneted yet.
     """
 
+    if scores_to_use is None:
+        scores_to_use = ["type", "token"]
+        
     from pybpl.model import CharacterModel
 
     # Load model

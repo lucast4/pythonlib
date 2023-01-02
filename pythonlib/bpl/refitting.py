@@ -171,14 +171,17 @@ def update_param_2D(MPlist_flat, lib, lib_update, param, ploton=True):
 
 
 def libRefitted(MPlist_flat, 
-    params_to_update = ["kappa", "rel_type_mixture", "prim_type_mixture", "spatial_hist"],
+    params_to_update = None,
     lib_update=None, ploton=False):
     """ Get updated library from monkeyt data , motor programs previously fit to monkey.
     Will use empriical distributions from MPlist_flat.
     TODO, Things used in stroke type scoring. All updated except the following:
     self.shapes_mu[subid], self.shapes_Cov
     self.scales_con[subid], self.scales_rate
-    """
+    """ 
+
+    if params_to_update is None:
+        params_to_update = ["kappa", "rel_type_mixture", "prim_type_mixture", "spatial_hist"]
 
     # from pythonlib.tools.listtools import get_counts
 
@@ -217,7 +220,7 @@ def libRefitted(MPlist_flat,
     return lib_update
         
 
-def plotLibDists1D(libraries_list, indlist = None, paramlist = ["kappa", "rel_type_mixture", "prim_type_mixture"]):
+def plotLibDists1D(libraries_list, indlist = None, paramlist = None):
 
     # == PLOT DIFFERENCES IN LIB DISTRIBUTIONS
     # paramlist = ["kappa", "rel_type_mixture", "prim_type_mixture", "spatial_hist"]
@@ -225,6 +228,9 @@ def plotLibDists1D(libraries_list, indlist = None, paramlist = ["kappa", "rel_ty
     # indlist = [5, 7] # indices into libraryes
     # libraries_to_plot = [libraries_list[i]["lib"] for i in range(2)]
 
+    if paramslist is None:
+        paramslist = ["kappa", "rel_type_mixture", "prim_type_mixture"]
+        
     if indlist is None:
         indlist = range(len(libraries_list))
 

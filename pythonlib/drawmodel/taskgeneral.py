@@ -1150,11 +1150,14 @@ class TaskClass(object):
             else:
                 return gridparams
 
-    def tokens_generate(self, params = {}, inds_taskstrokes=None, 
+    def tokens_generate(self, params = None, inds_taskstrokes=None, 
         track_order=True, hack_is_gridlinecircle=False, assert_computed=False):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
         """
+
+        if params is None:
+            params = {}
 
         if assert_computed:
             # Then force that you have alreadey computed. this usefeul for 
@@ -1275,7 +1278,7 @@ class TaskClass(object):
         return datsegs
 
 
-    def _tokens_generate(self, params = {}, inds_taskstrokes=None, 
+    def _tokens_generate(self, params = None, inds_taskstrokes=None, 
             track_order=True, hack_is_gridlinecircle=False):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
@@ -1298,6 +1301,8 @@ class TaskClass(object):
 
         from math import pi
 
+        if params is None:
+            params = {}
         assert track_order==True, "if not, leads to mismatch in keys..."
         assert inds_taskstrokes==None, "see docs"        
         assert len(params)==0, "do not pass in params. this needs to be default. instead, pass into tokens_reorder"

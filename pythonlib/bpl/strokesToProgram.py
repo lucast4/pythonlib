@@ -247,7 +247,7 @@ def params2ctype(prog):
     return ctype
 
 
-def plotMP(ctype, score=None, xlim=[0, 104], ylim=[-104, 0], ax=None):
+def plotMP(ctype, score=None, xlim=(0, 104), ylim=(-104, 0), ax=None):
     """ plot both img and motor, for this program (type level)"""
 
     def box_only(obj):

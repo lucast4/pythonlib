@@ -407,7 +407,7 @@ class Parser(object):
         # Doesnt exist
         return False, None
 
-    def update_parse_with_input_parse(self, parse, keyvals_update={},
+    def update_parse_with_input_parse(self, parse, keyvals_update=None,
             stroke_order_doesnt_matter=True,
             direction_within_stroke_doesnt_matter=True,
             append_keyvals=False, is_base_parse=False
@@ -429,7 +429,8 @@ class Parser(object):
 
         # check if parse exists 
 
-
+        if keyvals_update is None:
+            keyvals_update = {}
         exists, ind = self.check_if_parse_exists(parse, stroke_order_doesnt_matter,
             direction_within_stroke_doesnt_matter, is_base_parse=is_base_parse)
         
@@ -451,7 +452,7 @@ class Parser(object):
         else:
             return False, None
 
-    def update_existing_parse(self, ind, keyvals_update={}, append_keyvals=False,
+    def update_existing_parse(self, ind, keyvals_update=None, append_keyvals=False,
             is_base_parse=False):
         """
         Helper to update an existing parse in smart way
@@ -470,7 +471,8 @@ class Parser(object):
         #     print(ind, parsedict)
         #     print(self.Parses[64])
         #     assert False
-
+        if keyvals_update is None:
+            keyvals_update = {}
         parsedict = self.extract_parses_wrapper(ind, "dict", is_base_parse=is_base_parse)
         # if len(self.Parses[64]["perm_of_list"])>0:
         #     print(ind, parsedict)
@@ -498,7 +500,7 @@ class Parser(object):
 
 
     def wrapper_input_parse(self, parse, ver, note="", apply_transform=True,
-        require_stroke_ends_on_nodes=True, params={}, is_base_parse=False):
+        require_stroke_ends_on_nodes=True, params=None, is_base_parse=False):
         """
         [GOOD USE THIS] Manually enter a new parse in where input format/type is flexible.
         INPUT:
@@ -513,6 +515,9 @@ class Parser(object):
         --- dict, holding list_ps.
         --- strokes, list of Nx2 arrays
         """
+        if params is None:
+            params = {}
+
 
         if ver=="list_of_paths":
             self._manually_input_parse(parse, use_all_edges=True, note=note,
@@ -3253,7 +3258,7 @@ class Parser(object):
 
         return fig
 
-    def findparses_bycommand(self, inds, params={}, is_base_parse=False):
+    def findparses_bycommand(self, inds, params=None, is_base_parse=False):
         """ inds is gneral purpose command
         INPUT:
         - inds,
@@ -3266,6 +3271,8 @@ class Parser(object):
         """
         import random
         
+        if params is None:
+            params = {}
         if is_base_parse==True:
             ParsesList = self.ParsesBase
         else:

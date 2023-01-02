@@ -289,7 +289,7 @@ def plot_beh_waterfall_singletask_alltrials(D, task, row_variable, row_levels=No
 
 
 def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, doscatter=True, domean=True,
-        grouping_each_panel = ["task_stagecategory", "taskgroup"], col_wrap = 4):
+        grouping_each_panel = None, col_wrap = 4):
     """
     Plot timecourse, (feature vs. tval) to summarize an expt. Separate 
     columns (character) and rows (taskgroup) and colors (epochs).
@@ -307,6 +307,9 @@ def plot_timecourse_overlaid(D, features_list, xval="tvalfake", grouping=None, d
     - this used in model expt timecurse analyses
     """
     from pythonlib.tools.snstools import timecourse_overlaid
+    if grouping_each_panel is None:
+        grouping_each_panel = ["task_stagecategory", "taskgroup"]
+        
     DF = D.Dat
     # YLIM = [0, 6]
 

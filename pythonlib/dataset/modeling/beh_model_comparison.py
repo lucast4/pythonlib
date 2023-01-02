@@ -66,9 +66,11 @@ class ColNames(object):
         assert rulethis in self.Rules
         return [r for r in self.Rules if r!=rulethis]
         
-    def get_all_cols(self, exclude=[]):
+    def get_all_cols(self, exclude=None):
         """ return list of col names, excluding if flexible.
         """
+        if exclude is None:
+            exclude = []
         out = []
         if "score" not in exclude:
             out.extend(self.colnames_score())

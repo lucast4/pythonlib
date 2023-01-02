@@ -132,6 +132,8 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     
     from pythonlib.tools.distfunctools import modHausdorffDistance, distStrok
 
+    if distStrok_kwargs is None:
+        distStrok_kwargs = {}
     
     # if distancever=="hausdorff":
     #     def distfunc(strok1, strok2):

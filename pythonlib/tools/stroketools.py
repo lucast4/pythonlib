@@ -183,7 +183,7 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
     return strokes_sm
 
 def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False, 
-    plotprepost=False, dims=[0,1], demean=False):
+    plotprepost=False, dims=(0,1), demean=False):
     """ filter each dimension of strokes (x,y).
     strokes is list of strok where a strok is N x 2(or 3, for t)
     array. assumes evenly sampled in time.
@@ -663,7 +663,7 @@ def splitStrokes(strokes, num=2):
 
 
 
-def fakeTimesteps(strokes, point=np.array([0.,0.]), ver="in_order"):
+def fakeTimesteps(strokes, point=None, ver="in_order"):
     """strokes is a list with each stroke an nparray 
     - each stroke can be (T x 3) or T x 2. doesnt mater.
     for each array, replaces the 3rd column with new timesteps, such 
@@ -678,6 +678,8 @@ def fakeTimesteps(strokes, point=np.array([0.,0.]), ver="in_order"):
     assert isinstance(strokes, (tuple, list)), "se above"
     if isinstance(strokes, tuple):
         strokes = list(strokes)
+    if point is None:
+        point = np.array([0.,0.])
 
     start_ind = 0
     for i, s in enumerate(strokes):

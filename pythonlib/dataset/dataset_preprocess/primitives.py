@@ -140,7 +140,7 @@ def extract_list_features(D, PRIM):
     return list_sx, list_sy, list_theta
 
 
-def extract_primtuple_list(D, Nmin = 8, list_prims_exclude = ["dot", "line"]):
+def extract_primtuple_list(D, Nmin = 8, list_prims_exclude = ("dot", "line",)):
     """ 
     GET list of primtuples that have more than N trials over all days.
     primtuple is (prim, sx, sy, theta)

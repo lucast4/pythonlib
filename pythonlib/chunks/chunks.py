@@ -37,7 +37,10 @@ def check_all_strokes_used(chunks, nstrokes):
 ## - list_chunks, where each chunk is a list indicating a way to chunk the strokes in Task.Strokes
 ## - list_hier, similar to list_chunks, but used for hierarchical permutations, without needing to concat strokes.
 ## - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
-def find_chunks_hier(Task, expt, rule, strokes=None, params={},use_baseline_if_dont_find=False):
+def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_if_dont_find=False):
+    
+    if params is None:
+        params = {}
     objects = Task.Shapes
 
     if strokes is not None:
@@ -115,7 +118,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params={},use_baseline_if_d
 
 
 #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
-def find_chunks_wrapper(Task, expt, rule, strokes=None, params = {},
+def find_chunks_wrapper(Task, expt, rule, strokes=None, params = None,
     use_baseline_if_dont_find=False):
     """ [OLD] General purpose to return chunks, hierarchies,
     and what kind of permutations allwoed, givne some kind of input
