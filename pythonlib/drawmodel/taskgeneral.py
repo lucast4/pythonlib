@@ -1014,7 +1014,8 @@ class TaskClass(object):
                     grid_or_char = tsc["tsc_params"]["quick_sketchpad_params"][0] # "grid", "char"
                     grid_scale = tsc["tsc_params"]["quick_sketchpad_params"][1][0] # e.g, 3.2
                     center_on = tsc["tsc_params"]["quick_sketchpad_params"][1][1][0] # "prims", "chunks"
-                    rel_kind = tsc["tsc_params"]["quick_sketchpad_params"][1][1][1] # str: "<>...5_by_5"
+                    if len(tsc["tsc_params"]["quick_sketchpad_params"][1][1])>1:
+                        rel_kind = tsc["tsc_params"]["quick_sketchpad_params"][1][1][1] # str: "<>...5_by_5"
                     if False:
                         # these may not always be avialble.. (len too short)
                         center_global = tsc["tsc_params"]["quick_sketchpad_params"][1][1][2]
