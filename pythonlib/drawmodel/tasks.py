@@ -344,8 +344,6 @@ class TaskClass(object):
         return taskcat
 
 
-
-
     ####################### ASSIGN EACH TASK STROKE A LABEL
     def assignLabelToEachStroke(self, method):
         """ label is generally string, but is like a class
@@ -539,6 +537,9 @@ class TaskClass(object):
         # V3: analyze program, extract the primitives.
         self.program_extract()
         Objects = []
+        # print("------")
+        # print(shapes1)
+        # print(self.Program)
         for i in range(len(self.Program)):
             out = self.program_interpret_subprog(i, fail_if_no_match=fail_if_no_match)
             if out["obj"] is None:

@@ -84,6 +84,9 @@ def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver
     if ver=="hausdorff":
         from pythonlib.tools.distfunctools import modHausdorffDistance
         return modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver) 
+    elif ver =="hausdorff_max":
+        from pythonlib.tools.distfunctools import modHausdorffDistance
+        return modHausdorffDistance(strok1, strok2, ver1="max", ver2="max", asymmetric_ver=asymmetric_ver) 
     elif ver=="hausdorff_means":
         # hausdorff, using means, to allow for more smooth distances
             #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then 

@@ -301,7 +301,7 @@ def get_xticklabels(fig):
     return out
             
 
-def heatmap(df, ax=None, annotate_heatmap=True, zlims=[None, None],
+def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False):
     """ 
     Plot a heatmap dictated by cols and rows of df, where the cells correspond to values

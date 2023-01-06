@@ -194,7 +194,8 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
     - returns copy
     """
     from scipy import signal
-    assert dims==[0,1], "niot yet coded"
+
+    assert dims==(0,1), "niot yet coded"
 #     # normalize the frequency based rel to nyquist freq
 #     nyq = 
     if Wn[0] is None:
@@ -1520,14 +1521,21 @@ def timepoint_extract_features_continuous(strokes, twind, list_feature=["mean_xy
     return features
         
 
-def strokes_average(strokes, Ninterp=50):
+def strokes_average(strokes, Ninterp=50, center_at_onset=False):
     """ Get average of trajs in strokes, after linearly interpolating them
     to all be the same
     PARAMS:
+    - center_at_onset, bool, if True, then first subtracts the onset of each stroke
+    RETURNS:
     - strokes, list of np array
     = strokes_stacked, np array, shape (n strokes, Ninterp, 3)
     """
     from pythonlib.tools.stroketools import strokesInterpolate
+
+    if center_at_onset:
+        def _center(strok):
+            return strok - strok[0,:]
+        strokes = [_center(s) for s in strokes]
 
     # interpolate each strokes (using actual time)
     # stack the arrays and then take average

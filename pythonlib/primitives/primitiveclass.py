@@ -136,7 +136,7 @@ class PrimitiveClass(object):
         else:
             return f"{self.ShapeNotOriented}-{_sh(prms['rotation'])}-{_sh(prms['reflect'])}"
 
-    def extract_as(self, output="primtuple"):
+    def extract_as(self, output="primtuple", include_scale=False):
         """ [Wrapper] Help extract ths primitives in different formats
         PARAMS:
         - output, string name for how to extract
@@ -149,7 +149,7 @@ class PrimitiveClass(object):
         elif output=="shape":
             """ TaskGeneral.Shape, which is like ["line", {"x":x, "y":y, ...}]
             """
-            par = self._extract_params()
+            par = self._extract_params(include_scale=include_scale)
             return [par["shape_rot"], {
                 "x":par["cnr_x"],
                 "y":par["cnr_y"],

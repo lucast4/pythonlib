@@ -70,6 +70,7 @@ def sort_by_labels(X, labels, axis=0):
     PARAMS:
     - X, ndat x ndim np array, rows will be osrted.
     - labels, list of ints, length ndat
+    - axis, dimeision to srot byt. if 0, then sorts rows...
     RETURNS:
     - X, labels, but sorted (copies)
     """

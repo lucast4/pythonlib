@@ -228,6 +228,12 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True, just_return
 # pivoting (to take multiple rows and make them colums)
 # Y = SFagg.pivot(index="task", columns="epoch", values="distance_median")
 
+def filter_prune_min_n_rows(df, column, min_n):
+    """ Returns copy of df pruning so that each  level of column has at leasnt
+    min_n rows. Resets index of output
+    """
+    assert False, 'code it'
+
 
 def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
     """ filter df so that each group has at

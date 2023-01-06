@@ -10,7 +10,8 @@ import random
 from ..dataset.dataset_strokes import DatStrokes
 
 
-def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, npts_space):
+def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, 
+    distancever, npts_space=50):
     """ Compute sim matrix between all strokes in SF vs. the specific inputed basis strokes
     PARAMS:
     - Dat, 
@@ -18,6 +19,7 @@ def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, 
     --- or strokes (list of np array)
     - DatBasis, same, but the basis set
     --- or strokes (list of np array)
+    - 
     """
     from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2
     from .strokedists import distMatrixStrok
@@ -29,6 +31,10 @@ def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, 
         stroklist = Dat["strok"].values.tolist()
     else:
         stroklist = Dat
+
+    # make copy
+    stroklist = [s for s in stroklist]
+
     idxs_stroklist_dat = range(len(stroklist))
     
     # data (basis set) (append)
@@ -44,13 +50,27 @@ def computeSimMatrixGivenBasis(Dat, DatBasis, rescale_strokes_ver, distancever, 
     if rescale_strokes_ver=="stretch_to_1":
         stroklist = [rescaleStrokes([s])[0] for s in stroklist]
     else:
-        assert False, "which?"
-        print("keeping strokes scale unchaged")
+        assert rescale_strokes_ver is None, "which?"
 
     # interpolate
     if distancever in ["euclidian", "euclidian_diffs"]:
         # then need to be same length
-        stroklist = strokesInterpolate2(stroklist, N=["npts", npts_space], base="space")
+        def _all_same_length(stroklist):
+            """Returns True if all strok in stroklist are same npts
+            otherwise False"""
+            list_n = [len(strok) for strok in stroklist]
+            if len(set(list_n))==1:
+                return True
+            else:
+                return False
+
+        if _all_same_length(stroklist):
+            pass
+        else:
+            stroklist = strokesInterpolate2(stroklist, N=["npts", npts_space], base="space")
+    elif distancever in ["hausdorff_means", "hausdorff", "hausdorff_max"]:
+        # OK, doesnt have to be same length strokes
+        pass
     else:
         assert False, "which?"
 

@@ -4581,7 +4581,7 @@ class Dataset(object):
 
 
 
-    def behclass_extract_beh_and_task(self, indtrial):
+    def behclass_extract_beh_and_task(self, indtrial, include_scale=True):
         """ Extract both beh (oist of PrimitiveClass) and task
         (List of datsegs) for this trial, they will be length of 
         num beh strokes.
@@ -4603,7 +4603,7 @@ class Dataset(object):
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        out_combined, datsegs_behlength, datsegs_tasklength = Beh.alignsim_extract_datsegs_both_beh_task()
+        out_combined, datsegs_behlength, datsegs_tasklength = Beh.alignsim_extract_datsegs_both_beh_task(include_scale=include_scale)
 
         # Assocaite each beh prim with a datseg.
         primlist = Beh.Strokes

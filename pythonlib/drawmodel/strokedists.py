@@ -103,7 +103,7 @@ def distmatStrokes(strokes1, strokes2, ver="mindist"):
 
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
-                   normalize_cols_range01=False, distStrok_kwargs={}, 
+                   normalize_cols_range01=False, distStrok_kwargs=None, 
                    rescale_strokes_ver=None, doprint=False, 
                    similarity_method="divide_by_max", cap_dist=None):
     """ 

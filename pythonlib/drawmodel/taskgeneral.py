@@ -1151,7 +1151,8 @@ class TaskClass(object):
                 return gridparams
 
     def tokens_generate(self, params = None, inds_taskstrokes=None, 
-        track_order=True, hack_is_gridlinecircle=False, assert_computed=False):
+        track_order=True, hack_is_gridlinecircle=False, assert_computed=False,
+        include_scale=False):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
         """
@@ -1173,7 +1174,7 @@ class TaskClass(object):
         else:
             # Generate from scratch
             datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
-                hack_is_gridlinecircle=hack_is_gridlinecircle)
+                hack_is_gridlinecircle=hack_is_gridlinecircle, include_scale=include_scale)
             self._DatSegs = datsegs
             return self._DatSegs
 
@@ -1279,7 +1280,7 @@ class TaskClass(object):
 
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
-            track_order=True, hack_is_gridlinecircle=False):
+            track_order=True, hack_is_gridlinecircle=False, include_scale=True):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
         generates and caches. To reorder, see tokens_reorder]
@@ -1438,7 +1439,7 @@ class TaskClass(object):
 
         def _shape(i):
             # return string
-            return Prims[i].shape_oriented(include_scale=False)
+            return Prims[i].shape_oriented(include_scale=include_scale)
             # return objects[i][0]
         
         def _shape_oriented(i):
@@ -1470,7 +1471,7 @@ class TaskClass(object):
 
             locations = []
             for p in Prims:
-                prms = p.extract_as("shape")[1]
+                prms = p.extract_as("shape", include_scale=include_scale)[1]
                 xloc = prms["x"]
                 yloc = prms["y"]
                 
@@ -1801,6 +1802,17 @@ class TaskClass(object):
         print("Saved to: ", fname)
 
 
+    def info_shape_category(self):
+        """ Good, the latest (12/2022) methods to get shape category for each
+        prim, which is like "Lcentered" or "circle", etc.
+        This works even with concatenated prims (their categories are concatenated
+        strings). Uses info from both ObjectClass and PlanClass
+        RETURNS:
+        - list of str, each a category for a prim
+        """
+
+        return [P.ShapeNotOriented for P in self.Primitives]
+
     def info_extract_all_prim_versions(self):
         """ Get all versions of prims spanning odl and new task versions.
         This only fully wokrs fo new verisons. for old, modify to skip somet hings.
@@ -1814,7 +1826,11 @@ class TaskClass(object):
         # 1. task program prims:
         taskobj = self.extract_monkeylogic_ml2_task()
         taskobj.program_extract() 
-        taskobj.objects_extract()
+        try:
+            taskobj.objects_extract()
+        except AssertionError as err:
+            pass
+
         out["task_program"] = taskobj.Objects
                 
         # 2. plan prims. These are base prims before concat.

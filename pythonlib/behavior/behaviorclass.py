@@ -630,7 +630,8 @@ class BehaviorClass(object):
             self.Alignsim_simmat_unsorted = smat
             self.Alignsim_Datsegs = None
 
-    def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False):
+    def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
+            include_scale=True):
         """
         [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
@@ -661,7 +662,8 @@ class BehaviorClass(object):
         # Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
         Task = self.task_extract()
         hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
-        Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle) # generate the defualt order
+        Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
+            include_scale=include_scale) # generate the defualt order
         # Task.tokens_generate(params) # generate the defualt order
         datsegs = Task.tokens_reorder(inds_taskstrokes)
         # datsegs = Task.tokens_generate(params, inds_taskstrokes)
@@ -680,7 +682,7 @@ class BehaviorClass(object):
 
         return datsegs
 
-    def alignsim_extract_datsegs_both_beh_task(self):
+    def alignsim_extract_datsegs_both_beh_task(self, include_scale=True):
         """
         [GOOD] get summary of beh and task strokes, including their alignemnet.
         RETURNS:
@@ -691,7 +693,7 @@ class BehaviorClass(object):
         """        
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        datsegs_tasklength = self.alignsim_extract_datsegs()
+        datsegs_tasklength = self.alignsim_extract_datsegs(include_scale=include_scale)
         datsegs_behlength = [datsegs_tasklength[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
 
 
@@ -710,7 +712,6 @@ class BehaviorClass(object):
             out_combined.append((inds_beh, strokesbeh, dseg_task))
 
         return out_combined, datsegs_behlength, datsegs_tasklength
-
 
 
     def alignsim_plot_summary(self):
