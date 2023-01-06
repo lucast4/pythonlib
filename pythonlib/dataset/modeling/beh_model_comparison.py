@@ -113,6 +113,16 @@ def plots_cross_prior_and_model_anynum(BM, monkey_prior_col_name="epoch", monkey
     # 2) same, agg over trials
     fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
 
+
+    # if column exists for binary_tuple then plot
+    # to create 'binary_rule_tuple' column: run dataset.modeling.discrete.add_binary_rule_tuple_col
+    if 'binary_rule_tuple' in Dat.columns:
+        fig,ax = plt.subplots(figsize=(8,4))
+        sns.histplot(data=Dat,x='epoch',hue='binary_rule_tuple',ax=ax,multiple="dodge",shrink=0.8)
+        fig,ax = plt.subplots(figsize=(8,4))
+        sns.histplot(data=Dat,x='binary_rule_tuple',hue='epoch',ax=ax,multiple="dodge",shrink=0.8)
+
+
     # For each trial, alignment, as rank out of all model scores.
     for colthis in BM.colnames_extract_alignment():
         # colthis = "alignment_rank_chunks" # was this, for gridlinecircle.

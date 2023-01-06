@@ -194,8 +194,7 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
     - returns copy
     """
     from scipy import signal
-
-    assert dims==(0,1), "niot yet coded"
+    assert dims==(0,1), "not yet coded"
 #     # normalize the frequency based rel to nyquist freq
 #     nyq = 
     if Wn[0] is None:
