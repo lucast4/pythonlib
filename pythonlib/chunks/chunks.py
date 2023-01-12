@@ -3,6 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 
 def _check_is_proper_chunk(chunk):
     """ Must be list of lists.
@@ -33,6 +34,9 @@ def check_all_strokes_used(chunks, nstrokes):
         return False
 
 #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
+##
+## @param rule, either one word e.g. ['left', 'right'] or dashed e.g. ['rank-IVL', 'chain-LVI']
+##
 ## @return [list_chunks, list_hier, list_fixed_order]
 ## - list_chunks, where each chunk is a list indicating a way to chunk the strokes in Task.Strokes
 ## - list_hier, similar to list_chunks, but used for hierarchical permutations, without needing to concat strokes.
@@ -50,16 +54,27 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_i
     else:
         strokes = Task.Strokes
 
+    # get shape-order from rule, if applicable
+    if '-' in rule: # e.g. 'rank-LVI', 'chain-IVL'
+        s = rule.split('-')
+        rule = s[0]
+        shape_order = s[1]
+
+
     # print("task", Task)
     # print("expt", expt)
     # print("rule", rule)
-    print("objects", objects)
+    # print("objects", objects)
  
     def _fixed_order_for_this_hier(rule, hier):
         if rule in ['left', 'right', 'up', 'down']:
             fixed_order = fixed_order_for_this_hier(hier, False, False)
+        elif rule in ['rank']:
+            fixed_order = fixed_order_for_this_hier(hier, False, True) # top reorder False, bottom True
+        elif rule in ['chain']:
+            fixed_order = fixed_order_for_this_hier(hier, False, False) # top and bottom reorder False
         else:
-            assert False, ''
+            assert False, 'invalid rule'
         return fixed_order
 
     # @param objects, list of lists in format ['shape', {x:, y:}]
@@ -77,6 +92,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_i
         def _getY(e):
             return e[1]['y']
 
+        # NOTE: does not expect/handle ambiguous cases (i.e. two in row or col)
         if direction=='left':
             # sort by descending x
             return sorted(objects, reverse=True, key=_getX)
@@ -92,6 +108,84 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_i
         else:
             assert False, 'invalid direction'
 
+    # @param objects, list of lists in format ['shape', {x:, y:}]
+    # @param ordering_rule, one of [rank,chain]
+    # @return objects, sorted in direction
+    def _get_sequences_on_ordering_rule(objects, rule, shape_order):
+        # objects: [
+        # ['Lcentered-3-0', {'x': -2.342, 'y': 0.05}],
+        # ['V-4-0', {'x': -1.146, 'y': 0.05}],
+        # ['line-3-0', {'x': 0.05, 'y': 0.05}]
+        # ]
+        if rule=='rank':
+            # AABBCC; so, need to specify A,B,C first
+            return _chunks_by_shape_rank(objects, shape_order)
+        elif rule=='chain':
+            # ABCABC; so, need to specify A,B,C first
+            return _chunks_by_shape_chain(objects, shape_order)
+        else:
+            assert False, 'invalid rule'
+
+    def _inds_by_shape(objects, shape):
+        # Return list of inds with this shape
+        return [ind for ind, obj in enumerate(objects) if shape in obj[0]] # if obj[0] contains shape substring
+    
+    def _chunks_by_shape_rank(objects, shape_order):
+        # Return [indsshape1, indsshape2, ...], where each inds is list of ints
+        x = [_inds_by_shape(objects, shape) for shape in shape_order]
+        x = [xx for xx in x if len(xx)>0] # e.g, if this shape exists for this trial.
+        return [x]
+
+    def _chunks_by_shape_chain(objects, shape_order):
+        # takes in [['shape', {x,y}],...]
+
+        # returns [
+        # [[A1B1C],[A2B2]],
+        # [[A1B2C],[A2B1]],
+        # [[A2B1C],[A1B2]],
+        # [[A2B2C],[A1B1]]]
+        x = [_inds_by_shape(objects, shape) for shape in shape_order]
+        #print("x", x)
+        x_perms = _get_all_shape_ind_perms(x)
+        result = []
+        [result.append(_get_chain_for_single_x(xx)) for xx in x_perms]
+        return result
+
+    # gets the chain for a single x, taking the first element of each sub-list until all are exhausted
+    # @param x: list of shape_ind lists, e.g. [[0], [2], [1, 3]]
+    def _get_chain_for_single_x(x):
+        import copy
+        cp = copy.deepcopy(x) # NOTE: we don't want to change the original x..
+
+        result = []
+        while any(cp):
+            subresult = []
+            for shape_ind_list in cp:
+                if shape_ind_list: #not-empty
+                    shape_ind = shape_ind_list[0]
+                    subresult.append(shape_ind)
+                    shape_ind_list.remove(shape_ind) # should be unique..
+            result.append(subresult)
+        #print("chain for single cp", result)
+        return result
+
+    # gets all permutations of sub-lists within a list, preserving first-order
+    #
+    # e.g. [[0,1],[2,3],[4]] ->
+    # -- [[0,1],[2,3],[4]],
+    # -- [[0,1],[3,2],[4]],
+    # -- [[1,0],[2,3],[4]],
+    # -- [[1,0],[3,2],[4]]
+    def _get_all_shape_ind_perms(shape_inds):
+        result = []
+        for l in shape_inds:
+            subresult = itertools.permutations(l)
+            subresult_list = [list(x) for x in subresult]
+            result.append(subresult_list)
+        #print("all_shape_ind_perms", [list(xx) for xx in itertools.product(*result)])
+        return [list(xx) for xx in itertools.product(*result)]
+
+
     if expt in ["neuralbiasdir5c"]:
         chunks = list(range(len(objects))) # never concat strokes
         list_chunks = [chunks] # only one way
@@ -105,257 +199,277 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_i
 
         list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
 
+    elif expt in ["shapesequence2"]:
+        chunks = list(range(len(objects))) # never concat strokes
+
+        if rule in ["rank", "chain"]:
+            if shape_order == 'IVL':
+                s_order = ('line','V','Lcentered')
+            elif shape_order == 'LVI':
+                s_order = ('Lcentered','V','line')
+            else:
+                assert False, 'incorrect shape_order after rule-'
+            list_hier = _get_sequences_on_ordering_rule(objects, rule, s_order)
+        else:
+            assert False, "code up rule"
+
+        list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
+        list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
+
     else:
         print(params)
         assert False, "code up expt"
     
+    print("list_chunks", list_chunks)
+    print("list_hier", list_hier)
+    print("list_fixed_order", list_fixed_order)
+
     # Return as a list of possible chunkings.
-    assert len(list_chunks)==len(list_hier)
+    assert len(list_chunks)==len(list_hier) # TODO: check, is this necesary?
     assert len(list_hier)==len(list_fixed_order)
 
     return list_chunks, list_hier, list_fixed_order 
 
 
+# #### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
+# def find_chunks_wrapper(Task, expt, rule, strokes=None, params = None,
+#     use_baseline_if_dont_find=False):
+#     """ [OLD] General purpose to return chunks, hierarchies,
+#     and what kind of permutations allwoed, givne some kind of input
+#     model, etc, rules, etc.
+#     INPUT:
+#     - Task, TaskGeneral instance
+#     - strokes, generally is same as Task.Strokes, but if enter, then assesrts that
+#     OUT:
+#     - list_chunks, where each chunk is
+#     a list indictating a way to chunk the strokes in Task.Strokes
+#     - list_hier, similar to chunks, but used for hierarhical permutations, without needing
+#     to concat storkes.
+#     - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
+#     #TODO: 
+#     - should return empty chunks if there are not reasonable chunks? e..g lolli rule
+#     will still output all strokes even if there are no lollis at all.
+#     - NOTE: order within and across chunks will not matter. Identity is determined by
+#     sorting lists of tuples. 
+#     """
 
-#### HIGH-LEVEL CODE FOR WORKING WITH TASKS 
-def find_chunks_wrapper(Task, expt, rule, strokes=None, params = None,
-    use_baseline_if_dont_find=False):
-    """ [OLD] General purpose to return chunks, hierarchies,
-    and what kind of permutations allwoed, givne some kind of input
-    model, etc, rules, etc.
-    INPUT:
-    - Task, TaskGeneral instance
-    - strokes, generally is same as Task.Strokes, but if enter, then assesrts that
-    OUT:
-    - list_chunks, where each chunk is
-    a list indictating a way to chunk the strokes in Task.Strokes
-    - list_hier, similar to chunks, but used for hierarhical permutations, without needing
-    to concat storkes.
-    - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
-    #TODO: 
-    - should return empty chunks if there are not reasonable chunks? e..g lolli rule
-    will still output all strokes even if there are no lollis at all.
-    - NOTE: order within and across chunks will not matter. Identity is determined by
-    sorting lists of tuples. 
-    """
-
-    assert False, "use new function find_chunks_hier"
-    objects = Task.Shapes
-    print(objects)
-    if strokes is not None:
-        from pythonlib.tools.stroketools import check_strokes_identical
-        assert check_strokes_identical(Task.Strokes, strokes)
-        assert len(objects)==len(strokes), "did you chunk the strokes already?"
-    else:
-        strokes = Task.Strokes
+#     assert False, "use new function find_chunks_hier"
+#     objects = Task.Shapes
+#     print(objects)
+#     if strokes is not None:
+#         from pythonlib.tools.stroketools import check_strokes_identical
+#         assert check_strokes_identical(Task.Strokes, strokes)
+#         assert len(objects)==len(strokes), "did you chunk the strokes already?"
+#     else:
+#         strokes = Task.Strokes
         
-    def _inds_by_shape(shape):
-        # Return list of inds with this shape
-        return [i for i, x in enumerate(objects) if x[0]==shape]
-    def _chunks_by_shapes_inorder(list_shapes):
-        # Return [indsshape1, indsshape2, ...], where each inds is lsit of int
-        x = [_inds_by_shape(shape) for shape in list_shapes]
-        x = [xx for xx in x if len(xx)>0] # e.g, if this shape doesnt exist for this trial.
-        return x
+#     def _inds_by_shape(shape):
+#         # Return list of inds with this shape
+#         return [i for i, x in enumerate(objects) if x[0]==shape]
+#     def _chunks_by_shapes_inorder(list_shapes):
+#         # Return [indsshape1, indsshape2, ...], where each inds is lsit of int
+#         x = [_inds_by_shape(shape) for shape in list_shapes]
+#         x = [xx for xx in x if len(xx)>0] # e.g, if this shape doesnt exist for this trial.
+#         return x
     
-    # print(Task)
-    # print(expt)
-    # print(rule)
-    # print(params)
+#     # print(Task)
+#     # print(expt)
+#     # print(rule)
+#     # print(params)
 
-    # Find list_chunks and list_hier - note: they will be same lenght, 
-    if expt in ["gridlinecircle", "neuralbiasdir5c"]:
-        chunks = list(range(len(objects))) # never concat strokes
-        list_chunks = [chunks] # only one way
+#     # Find list_chunks and list_hier - note: they will be same lenght, 
+#     if expt in ["gridlinecircle", "neuralbiasdir5c"]:
+#         chunks = list(range(len(objects))) # never concat strokes
+#         list_chunks = [chunks] # only one way
 
-        if rule =="baseline":
-            # circle, line, but no order
-            hier = chunks
-            list_hier = [hier]
-        elif rule == "circletoline":
-            # first circles, then lines
-            list_shapes = ["circle", "line"]
-            hier = _chunks_by_shapes_inorder(list_shapes)
+#         if rule =="baseline":
+#             # circle, line, but no order
+#             hier = chunks
+#             list_hier = [hier]
+#         elif rule == "circletoline":
+#             # first circles, then lines
+#             list_shapes = ["circle", "line"]
+#             hier = _chunks_by_shapes_inorder(list_shapes)
 
-            list_hier = [hier]
-        elif rule=="linetocircle":
-            list_shapes = ["line", "circle"]
-            hier = _chunks_by_shapes_inorder(list_shapes)
-            list_hier = [hier]
-        elif rule=="lolli":
-            # Returns both (no chunking, all hier) and (chukjning, no hier), combined
-            # into long list
-            # 1) NOT concating
-            # find all ways of exhausting the objects with combos of lollis.
-            paramsthis = {
-                "expt":expt,
-                "rule":rule,
-                "ver":"lolli"
-            }
-            list_lollis, left_over = find_object_groups_new(Task, paramsthis)
+#             list_hier = [hier]
+#         elif rule=="linetocircle":
+#             list_shapes = ["line", "circle"]
+#             hier = _chunks_by_shapes_inorder(list_shapes)
+#             list_hier = [hier]
+#         elif rule=="lolli":
+#             # Returns both (no chunking, all hier) and (chukjning, no hier), combined
+#             # into long list
+#             # 1) NOT concating
+#             # find all ways of exhausting the objects with combos of lollis.
+#             paramsthis = {
+#                 "expt":expt,
+#                 "rule":rule,
+#                 "ver":"lolli"
+#             }
+#             list_lollis, left_over = find_object_groups_new(Task, paramsthis)
 
-            if len(list_lollis)==0:
-                # then no lollis. then just skip this, since is same as baseline
-                list_hier = [chunks]
-            else:
+#             if len(list_lollis)==0:
+#                 # then no lollis. then just skip this, since is same as baseline
+#                 list_hier = [chunks]
+#             else:
 
-                # 1) Get all hierarchices, holding hcyunks constaint
-                list_hier = sample_all_possible_chunks(list_lollis, list(range(len(strokes))))
-                list_chunks = [chunks for _ in range(len(list_hier))]
+#                 # 1) Get all hierarchices, holding hcyunks constaint
+#                 list_hier = sample_all_possible_chunks(list_lollis, list(range(len(strokes))))
+#                 list_chunks = [chunks for _ in range(len(list_hier))]
 
-                # 2) Get all chunks, concating (so replicating hierahcy)
-                list_chunks_toadd = list_hier # concat strokes
-                list_hier_toadd = [list(range(len(h))) for h in list_hier] # no hierarchy
+#                 # 2) Get all chunks, concating (so replicating hierahcy)
+#                 list_chunks_toadd = list_hier # concat strokes
+#                 list_hier_toadd = [list(range(len(h))) for h in list_hier] # no hierarchy
 
-                ## combine 1 and 2
-                list_chunks += list_chunks_toadd
-                list_hier += list_hier_toadd
+#                 ## combine 1 and 2
+#                 list_chunks += list_chunks_toadd
+#                 list_hier += list_hier_toadd
 
-        elif rule=="alternate":
-            # Alternate between lines and circles
-            # - pick a random circle, then 
-            import random
+#         elif rule=="alternate":
+#             # Alternate between lines and circles
+#             # - pick a random circle, then 
+#             import random
 
-            def _eligible_tokens(tokens_remain, tokens_taken):
-                """ 
-                all are lists of indices
-                """
-                # only those not taken and not identical shape to prev taken
-                if len(tokens_taken)==0:
-                    tokens_elegible = tokens_remain
-                else:
-                    tokens_elegible = [t for t in tokens_remain if list_tokens[t] != list_tokens[tokens_taken[-1]]]
-                    if len(tokens_elegible)==0 and len(tokens_remain)>0:
-                        # then open up eligibility to all tokens
-                        tokens_elegible = tokens_remain
-                return tokens_elegible
+#             def _eligible_tokens(tokens_remain, tokens_taken):
+#                 """ 
+#                 all are lists of indices
+#                 """
+#                 # only those not taken and not identical shape to prev taken
+#                 if len(tokens_taken)==0:
+#                     tokens_elegible = tokens_remain
+#                 else:
+#                     tokens_elegible = [t for t in tokens_remain if list_tokens[t] != list_tokens[tokens_taken[-1]]]
+#                     if len(tokens_elegible)==0 and len(tokens_remain)>0:
+#                         # then open up eligibility to all tokens
+#                         tokens_elegible = tokens_remain
+#                 return tokens_elegible
 
-            def _sample_token(tokens_remain, tokens_taken):
-                tokens_elig = _eligible_tokens(tokens_remain, tokens_taken)
-                ind_tok = random.choice(tokens_elig)
+#             def _sample_token(tokens_remain, tokens_taken):
+#                 tokens_elig = _eligible_tokens(tokens_remain, tokens_taken)
+#                 ind_tok = random.choice(tokens_elig)
                 
-                tokens_taken.append(ind_tok)
-                tokens_remain = [t for t in tokens_remain if t!=ind_tok]
-                return tokens_remain, tokens_taken
+#                 tokens_taken.append(ind_tok)
+#                 tokens_remain = [t for t in tokens_remain if t!=ind_tok]
+#                 return tokens_remain, tokens_taken
                 
-            def _sample_single_chunk(list_tokens):
-                tokens_remain = range(len(list_tokens))
-                tokens_taken = []
-                while len(tokens_remain)>0:
-                    tokens_remain, tokens_taken = _sample_token(tokens_remain, tokens_taken)
-                return tokens_taken
+#             def _sample_single_chunk(list_tokens):
+#                 tokens_remain = range(len(list_tokens))
+#                 tokens_taken = []
+#                 while len(tokens_remain)>0:
+#                     tokens_remain, tokens_taken = _sample_token(tokens_remain, tokens_taken)
+#                 return tokens_taken
 
-            # list_tokens = ["line", "circle", "line", "circle"]
-            list_tokens = [o[0] for o in objects]
-            list_chunks = []
-            list_hier = []
-            Nsamp = 20
-            for _ in range(Nsamp):
-                list_hier.append(_sample_single_chunk(list_tokens))
-                list_chunks.append(list(range(len(list_tokens))))
+#             # list_tokens = ["line", "circle", "line", "circle"]
+#             list_tokens = [o[0] for o in objects]
+#             list_chunks = []
+#             list_hier = []
+#             Nsamp = 20
+#             for _ in range(Nsamp):
+#                 list_hier.append(_sample_single_chunk(list_tokens))
+#                 list_chunks.append(list(range(len(list_tokens))))
 
-        else:
-            assert False
+#         else:
+#             assert False
 
-        ##### Fixed order
-        def _fixed_order_for_this_hier(hier):
-            if rule in ["baseline", "lolli"]:
-                # Order allows all reordering
-                fixed_order = fixed_order_for_this_hier(hier, True, True)
-            elif rule in ["circletoline", "linetocircle"]:
-                # Order only allows for reordering both hier levels.
-                fixed_order = fixed_order_for_this_hier(hier, False, True)
-            elif rule in ["alternate"]:
-                # becasue hier is a specific sequence for altenration
-                # e..g, hier = [0, 1, 2, 3]
-                fixed_order = fixed_order_for_this_hier(hier, False, False)
-            else:
-                assert False
-            return fixed_order
-        list_fixed_order = [_fixed_order_for_this_hier(hier) for hier in list_hier]
+#         ##### Fixed order
+#         def _fixed_order_for_this_hier(hier):
+#             if rule in ["baseline", "lolli"]:
+#                 # Order allows all reordering
+#                 fixed_order = fixed_order_for_this_hier(hier, True, True)
+#             elif rule in ["circletoline", "linetocircle"]:
+#                 # Order only allows for reordering both hier levels.
+#                 fixed_order = fixed_order_for_this_hier(hier, False, True)
+#             elif rule in ["alternate"]:
+#                 # becasue hier is a specific sequence for altenration
+#                 # e..g, hier = [0, 1, 2, 3]
+#                 fixed_order = fixed_order_for_this_hier(hier, False, False)
+#             else:
+#                 assert False
+#             return fixed_order
+#         list_fixed_order = [_fixed_order_for_this_hier(hier) for hier in list_hier]
 
-        # Make sure no redundant ones (identical in chunk, hier, and fixed)
-        def _print(l):
-            print("--")
-            for ll in l:
-                print(ll)
-        # print("_____")
-        # _print(list_chunks)
-        # _print(list_hier)
+#         # Make sure no redundant ones (identical in chunk, hier, and fixed)
+#         def _print(l):
+#             print("--")
+#             for ll in l:
+#                 print(ll)
+#         # print("_____")
+#         # _print(list_chunks)
+#         # _print(list_hier)
 
-        list_chunks_good = [list_chunks[0]]
-        list_hier_good = [list_hier[0]]
-        list_fixed_order_good = [list_fixed_order[0]]
+#         list_chunks_good = [list_chunks[0]]
+#         list_hier_good = [list_hier[0]]
+#         list_fixed_order_good = [list_fixed_order[0]]
 
-        for ch, hi, fi in zip(list_chunks[1:], list_hier[1:], list_fixed_order[1:]):
-            # Check against all already gotten
-            is_good = True
-            for chB, hiB, fiB in zip(list_chunks_good, list_hier_good, list_fixed_order_good):
-                if chunks_are_identical_full(ch, hi, fi, chB, hiB, fiB):
-                    is_good = False
-                    continue
-            if is_good:
-                list_chunks_good.append(ch)
-                list_hier_good.append(hi)
-                list_fixed_order_good.append(fi)
-        list_chunks = list_chunks_good
-        list_hier = list_hier_good
-        list_fixed_order = list_fixed_order_good
+#         for ch, hi, fi in zip(list_chunks[1:], list_hier[1:], list_fixed_order[1:]):
+#             # Check against all already gotten
+#             is_good = True
+#             for chB, hiB, fiB in zip(list_chunks_good, list_hier_good, list_fixed_order_good):
+#                 if chunks_are_identical_full(ch, hi, fi, chB, hiB, fiB):
+#                     is_good = False
+#                     continue
+#             if is_good:
+#                 list_chunks_good.append(ch)
+#                 list_hier_good.append(hi)
+#                 list_fixed_order_good.append(fi)
+#         list_chunks = list_chunks_good
+#         list_hier = list_hier_good
+#         list_fixed_order = list_fixed_order_good
 
-        # list_chunks_good = [list_chunks[0]]
-        # list_hier_good = [list_hier[0]]
-        # list_fixed_order_good = [list_fixed_order[0]]
-        # for ch1, hi1, in zip(list_chunks[1:], list_hier[1:]):
-        #     # check if is in
-        #     # if any([chunks_are_identical(ch, x) for x in list_chunks_good]):
-        #     #     continue
-        #     if any([chunks_are_identical_full(ch1, hi1, fi1, ch2, hi2, fi2) for ch2, hi2 in zip(list_chunks_good, list_hier_good)]):
-        #         continue
-        #     else:
-        #         list_chunks_good.append(ch)
-        #         list_hier_good.append(hi)
-        # list_chunks = list_chunks_good
-        # list_hier = list_hier_good
-        # _print(list_chunks)
-        # _print(list_hier)
-        # print("_____")
+#         # list_chunks_good = [list_chunks[0]]
+#         # list_hier_good = [list_hier[0]]
+#         # list_fixed_order_good = [list_fixed_order[0]]
+#         # for ch1, hi1, in zip(list_chunks[1:], list_hier[1:]):
+#         #     # check if is in
+#         #     # if any([chunks_are_identical(ch, x) for x in list_chunks_good]):
+#         #     #     continue
+#         #     if any([chunks_are_identical_full(ch1, hi1, fi1, ch2, hi2, fi2) for ch2, hi2 in zip(list_chunks_good, list_hier_good)]):
+#         #         continue
+#         #     else:
+#         #         list_chunks_good.append(ch)
+#         #         list_hier_good.append(hi)
+#         # list_chunks = list_chunks_good
+#         # list_hier = list_hier_good
+#         # _print(list_chunks)
+#         # _print(list_hier)
+#         # print("_____")
 
-    else:
-        print(params)
-        assert False, "code up expt"
+#     else:
+#         print(params)
+#         assert False, "code up expt"
     
-    # Remove anything that is just same as baseline
-    if use_baseline_if_dont_find == False:
-        if not rule=="baseline":
-            list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline = find_chunks_wrapper(Task, 
-                expt, "baseline", strokes, params)
+#     # Remove anything that is just same as baseline
+#     if use_baseline_if_dont_find == False:
+#         if not rule=="baseline":
+#             list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline = find_chunks_wrapper(Task, 
+#                 expt, "baseline", strokes, params)
             
-            list_chunks_good = []
-            list_hier_good = []
-            list_fixed_order_good = []
+#             list_chunks_good = []
+#             list_hier_good = []
+#             list_fixed_order_good = []
 
-            for ch, hi, fi in zip(list_chunks, list_hier, list_fixed_order):
-                for chB, hiB, fiB in zip(list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline):
-                    if chunks_are_identical_full(ch, hi, fi, chB, hiB, fiB):
-                        continue
-                    else:
-                        list_chunks_good.append(ch)
-                        list_hier_good.append(hi)
-                        list_fixed_order_good.append(fi)
-            list_chunks = list_chunks_good
-            list_hier = list_hier_good
-            list_fixed_order = list_fixed_order_good
-    # Return as a list of possible chunkings.
-    assert len(list_chunks)==len(list_hier)
-    assert len(list_hier)==len(list_fixed_order)
-    # _print(list_chunks)
-    # _print(list_hier)
-    # print(list_chunks)
-    # print(list_hier)
-    # print(list_fixed_order)
-    # assert False
+#             for ch, hi, fi in zip(list_chunks, list_hier, list_fixed_order):
+#                 for chB, hiB, fiB in zip(list_chunks_baseline, list_hier_baseline, list_fixed_order_baseline):
+#                     if chunks_are_identical_full(ch, hi, fi, chB, hiB, fiB):
+#                         continue
+#                     else:
+#                         list_chunks_good.append(ch)
+#                         list_hier_good.append(hi)
+#                         list_fixed_order_good.append(fi)
+#             list_chunks = list_chunks_good
+#             list_hier = list_hier_good
+#             list_fixed_order = list_fixed_order_good
+#     # Return as a list of possible chunkings.
+#     assert len(list_chunks)==len(list_hier)
+#     assert len(list_hier)==len(list_fixed_order)
+#     # _print(list_chunks)
+#     # _print(list_hier)
+#     # print(list_chunks)
+#     # print(list_hier)
+#     # print(list_fixed_order)
+#     # assert False
 
-    return list_chunks, list_hier, list_fixed_order
+#     return list_chunks, list_hier, list_fixed_order
     
 
 def find_object_groups_new(Task, params):
