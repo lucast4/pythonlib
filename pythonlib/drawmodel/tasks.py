@@ -1131,7 +1131,9 @@ class TaskClass(object):
                             hier.append([int(xx) for xx in tmp])
                 
                 # HACK!!
-                if auto_hack_if_detects_is_gridlinecircle_lolli:
+
+                if auto_hack_if_detects_is_gridlinecircle_lolli and "chunks_" not in this.keys():
+                    # (Checking if chunks_ exists is just hacky way of ehcking that this is older experiment)
                     # check if hier is like [[0,1], [2,3]] but nstrokes = 2, becuase in this code
                     # (matlab) I concatenated. After this expt, I did not do that...
                     # SOLUTION: convert hier to [0,1]
@@ -1142,7 +1144,20 @@ class TaskClass(object):
                                 vals.append(xx)
                         else:
                             vals.append(x)
-                    max_index_in_hier = max(vals)
+                    # print(this)
+                    # print("nstrokes", dat["actual_nstrokes"])
+                    # print("va;s", vals)
+                    # print("hier", hier)
+                    try:
+                        max_index_in_hier = max(vals)
+                    except Exception as err:
+                        import matplotlib.pyplot as plt
+                        fig, ax = plt.subplots()
+                        self.plotTaskOnAx(ax)
+                        fig.savefig("/tmp/test.pdf")
+                        print(list(hier[1]))
+                        raise err
+
                     if nstrokes < max_index_in_hier+1:
                         print("Tasks.objectclass_extract_all - HACKY FIX, only should happen for gridlinecirlce..")
                         hier = [i for i in range(nstrokes)]

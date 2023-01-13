@@ -31,7 +31,8 @@ elif MACHINE == "bonobo":
 elif MACHINE == "ltbonobo":
 	PATH_DRAWMONKEY_DIR = "/home/kgg/Desktop/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/home/kgg/mnt/Freiwald/kgupta/macaque_data"
-	PATH_MATLAB = "/usr/local/MATLAB/R2022b/bin/matlab"
+	# PATH_MATLAB = "/usr/local/MATLAB/R2022b/bin/matlab"
+	PATH_MATLAB = "/data1/programs/MATLAB/R2021a/bin/matlab"
 	PATH_ANALYSIS_OUTCOMES = "/home/kgg/Desktop/analyses"
 	PATH_DATASET_BEH = "/home/kgg/Desktop/analyses/database"
 else:
