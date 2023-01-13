@@ -460,6 +460,7 @@ class Dataset(object):
     def removeTrialsExistAcrossGroupingLevels(self, GROUPING, GROUPING_LEVELS):
         """ only keeps trials that exist across all grouping levels (conditions on character)
         """
+        assert False, "deprecated - use prune_min_ntrials_across_higher_levels."
         _checkPandasIndices(self.Dat)
 
         tasklist = self.Dat["character"].unique().tolist()
@@ -5556,7 +5557,20 @@ class Dataset(object):
                 # raise ValueError('left cannot be >= right')
                 pass
             figlist.append(fig)
+
         return figlist
+
+    def plotOverviewScoresRewardsFeatures(self, savedir):
+        """
+        Related to online features, scores, rewards, during experiment.
+        """
+        import seaborn as sns
+        ### SCores, rewards, features
+        f = "rew_total"
+        fig = sns.catplot(data=self.Dat, x="block", y="rew_total", hue="probe", col="date_sess", col_wrap=3, kind="violin")
+        fig.savefig(f"{savedir}/feat-{f}_byblock-1.pdf")
+        fig = sns.catplot(data=self.Dat, x="block", y="rew_total", row="probe", col="date_sess", aspect=2, height=2.5)
+        fig.savefig(f"{savedir}/feat-{f}_byblock-2.pdf")
 
     ############### related to positions of things in sketchpad
     def sketchpad_fixation_append_as_string(self):
@@ -6008,6 +6022,14 @@ class Dataset(object):
         print(self.Dat["monkey_train_or_test"].value_counts())
 
 
-
-
-
+    ################## PRUNING DATASET
+    def prune_min_ntrials_across_higher_levels(self, col_high, col_low, n_min=1):
+        """ 
+        e.g, only keep characters that have at least 5 trials in each epoch:
+        self.prune_min_ntrials_across_higher_levels("epoch", "character", 5)
+        RETURNS:
+        - df, pruned. (Does not modify self.Dat)
+        """
+        from pythonlib.tools.pandastools import filterGroupsSoNoGapsInData
+        df = filterGroupsSoNoGapsInData(self.Dat, col_low, col_high, min_n_trials=n_min)
+        return df
