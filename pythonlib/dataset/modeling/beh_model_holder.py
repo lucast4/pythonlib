@@ -190,7 +190,13 @@ class BehModelHolder(object):
 
             # print("mclass",mclass)
             # print("rthis",rthis)
-            colname_this = self.colnames_extract_scores([mclass], [rthis])[0]
+            list_names = self.colnames_extract_scores([mclass], [rthis])
+            
+            # this means that epoch doesn't match any rules
+            if not list_names:
+                return np.nan
+
+            colname_this = list_names[0]
 
             list_rules_this = [r for r in self.DictMclassToRules[mclass] if not r==rthis]
             colname_others = self.colnames_extract_scores([mclass], list_rules_this)
