@@ -124,7 +124,6 @@ class ChunksClassList(object):
         want to enter other method for deciding chunk
         """
         from .chunks import find_chunks_hier
-        from .chunks import find_chunks_wrapper
 
         self.Task = Task
         self.Expt = expt
