@@ -100,12 +100,13 @@ def distmatStrokes(strokes1, strokes2, ver="mindist"):
     return distmat
         
 
-
 def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means", 
                    convert_to_similarity=True, normalize_rows=False, ploton=False, 
                    normalize_cols_range01=False, distStrok_kwargs=None, 
                    rescale_strokes_ver=None, doprint=False, 
-                   similarity_method="divide_by_max", cap_dist=None):
+                   similarity_method="divide_by_max", cap_dist=None,
+                   centerize_strokes=False, normalize_by_range=False, 
+                   range_norm = None, DEBUG=False):
     """ 
     [use this over distmatStrokes]
     Given list of stroks, gets distance/similarity matrix, between all pariwise strokes.
@@ -131,6 +132,17 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     """
     
     from pythonlib.tools.distfunctools import modHausdorffDistance, distStrok
+    assert centerize_strokes==False, "not coded"
+
+    # certain params are incompatible
+    if normalize_cols_range01:
+        # then each column convert to range 0,1 (min, max distance)
+        assert normalize_by_range==False
+        assert similarity_method not in ["divide_by_maxcap", "divide_by_inputed_range"], "tehse fail becuase they change units beofre norm."
+    if normalize_by_range:
+        # clip into range 0,1.
+        assert range_norm is not None
+        assert normalize_cols_range01 ==False
 
     if distStrok_kwargs is None:
         distStrok_kwargs = {}
@@ -146,9 +158,12 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     #         return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean") 
         
     if stroklist is None:
+        # Then you inputed the strokes directly
         stroklist1 = idxs1
         stroklist2 = idxs2
+        assert not isinstance(stroklist1[0], int)
     else:
+        # Then you inputed the indices
         stroklist1 = [stroklist[i] for i in idxs1]
         stroklist2 = [stroklist[i] for i in idxs2]
 
@@ -158,23 +173,24 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         stroklist1 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist1]
         stroklist2 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist2]
 
+    ### Generate distance matrix
     n1 = len(stroklist1)
     n2 = len(stroklist2)
-
     D = np.empty((n1, n2))
-
     for i_dat, strokdat in enumerate(stroklist1):
         if doprint:
             if i_dat%250==0:
                 print(i_dat)
         for i_bas, strokbas in enumerate(stroklist2):
-            # print(strokdat)
-            # print(strokbas)
             d = distStrok(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
             D[i_dat, i_bas] = d
 
-    # print(D)
+    # Cap the distance?
     if cap_dist is not None:
+        # plt.figure()
+        # plt.hist(D)
+        # print(cap_dist)
+        # assert False
         D[D>cap_dist] = cap_dist
     # print(D)
     # print(n1, n2)
@@ -190,10 +206,34 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         D = D-dmin
         dmax = np.max(D, axis=0, keepdims=True)
         D = D/dmax
-        
-        
+
+    if normalize_by_range:
+        # clip into range 0,1 (all values)
+        if DEBUG:
+            plt.figure()
+            plt.hist(D)
+            plt.title("Before norm by range")
+            print(range_norm)
+        assert range_norm[1]>range_norm[0]
+        D[D>range_norm[1]] = range_norm[1] # first clip
+        D = (D-range_norm[0])/(range_norm[1] - range_norm[0])
+        if DEBUG:
+            plt.figure()
+            plt.hist(D)        
+            plt.title("After norm by range")
+
+    # Convert from distance to similarity
     if convert_to_similarity:
-        if similarity_method=="divide_by_max":
+        # plt.figure()
+        # plt.hist(D[:])
+        # assert False
+        if similarity_method=="squared_one_minus":
+            # take differenc,e then take square
+            # emprically: makes it more normal, becuase of skew.
+            D = (1-D)**2
+        elif similarity_method=="one_minus":
+            D = (1-D)
+        elif similarity_method=="divide_by_max":
             D = 1-D/np.max(D)
         elif similarity_method=="divide_by_median":
             tmp = D/np.median(D)
@@ -204,6 +244,11 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         else:
             assert False
 
+    if DEBUG:
+        plt.figure()
+        plt.hist(D)        
+        plt.title("After convert to similaity")
+        assert False
         
     if ploton:
         plt.figure()

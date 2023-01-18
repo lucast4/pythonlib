@@ -750,9 +750,12 @@ class Dataset(object):
                 from pythonlib.drawmodel.taskgeneral import TaskClass
                 taskobj = T.Params["input_params"]
                 Tnew = TaskClass()
-                # print(taskobj.Task)
+
+                # A hack for a single expt (gridlinecircle2), for lollis.
+                auto_hack_if_detects_is_gridlinecircle_lolli = M["expt"]=="gridlinecircle" and M["date"] <= 210903
                 Tnew.initialize("ml2", taskobj, 
-                    convert_coords_to_abstract=convert_coords_to_abstract)
+                    convert_coords_to_abstract=convert_coords_to_abstract,
+                    auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli)
                 T = Tnew
             return T
 
@@ -824,6 +827,45 @@ class Dataset(object):
 
         return SDIR, idstring
 
+    def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False):
+        """ Get list of characters sorted by their avreage score across trials.
+        PARAMS:
+        - scorename, str name of score to use. 
+        - plot, whether to plot drawings, sinlge examples, in a grid, sorted
+        by score.
+        RETURNS"
+        - list_char, list of characters, sorted in decresing order of score.
+        - list_score, list of num, scores matching the char. 
+        """
+
+        list_char = self.Dat["character"].unique().tolist()
+        list_score = []
+        for char in list_char:
+            sc = np.mean(self.Dat[self.Dat["character"]==char][scorename])
+            list_score.append(sc)
+
+        # sort
+        tmp = [(ch, sc) for ch, sc in zip(list_char, list_score)]
+        tmp = sorted(tmp, key=lambda x:-x[1])
+        list_char = [x[0] for x in tmp]
+        list_score = [x[1] for x in tmp]
+
+        if plot:
+            # Plot
+            # -- get one trial for each char
+            from pythonlib.tools.pandastools import extract_trials_spanning_variable
+            n_iter = 3
+            for i in range(n_iter):
+                inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char)
+                assert chars == list_char
+
+                # -- plot
+                fig, axes, idxs = self.plotMultTrials2(inds, titles=chars, SIZE=3);
+                # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+                fig, axes, idxs = self.plotMultTrials2(inds, "strokes_task", titles=list_score);
+                # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+
+        return list_char, list_score
 
     def taskcharacter_find(self, setname, setnum, index):
         """ Get all indices that have this fixed task name
@@ -915,6 +957,13 @@ class Dataset(object):
         # tmp_sorted = sorted(set(tmp))
         # for x in tmp_sorted:
         #     print(x)        
+
+    def taskclass_get_grid_ver(self, ind):
+        """ return string naem of grid
+        """
+
+        T = self.Dat.iloc[ind]["Task"]
+        return T.get_grid_ver()
 
     def objectclass_get_active_chunk(self, ind):
         """ Get the active chunk thbat was used online, 
@@ -1608,7 +1657,8 @@ class Dataset(object):
         by first concatenating, then applying, then unconcatnating
         """
         from pythonlib.tools.stroketools import rescaleStrokes
-
+        assert rescale_ver=="stretch_to_1", "not coded"
+        
         strokes_beh_list = self.Dat["strokes_beh"]
         strokes_task_list = self.Dat["strokes_task"]
 
@@ -5005,6 +5055,29 @@ class Dataset(object):
         plotMP(MP, ax=ax)
 
 
+    def plot_single_trial(self, idx, ax=None, single_color=None, 
+            ver="beh"):
+        """ Low-level code to plot a single trial, beh or task strokes, on an axis.
+        PARAMS:
+        - single_color, either None (colors by ordinal), or str color code
+        - ver, str, {'task', 'beh'}
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
+        if ver=="beh":
+            strokes = self.Dat.iloc[idx]["strokes_beh"]
+            if ax is None:
+                fig, ax = plt.subplots(1,1)
+            plotDatStrokesWrapper(strokes, ax, color=single_color)    
+        elif ver=="task":
+            stim = self.Dat.iloc[idx]["strokes_task"]
+            plotDatStrokes(stim, ax, each_stroke_separate=True, 
+                plotver="onecolor", add_stroke_number=False, 
+                mark_stroke_onset=False, pcol="k", number_from_zero=False)
+        else:
+            assert False
+        return ax
+
+
     def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
         sharex=False, sharey=False, params=None, task_add_num=False,
         number_from_zero=True):
@@ -5036,8 +5109,9 @@ class Dataset(object):
             if thing=="beh":
                 # Plot behavior for this trial
                 # - the ball marks stroke onset. stroke orders are color coded, and also indicated by numbers.
-                strokes = dat["strokes_beh"].values[idx]
-                plotDatStrokes(strokes, ax, each_stroke_separate=True, number_from_zero=number_from_zero)
+                # strokes = dat["strokes_beh"].values[idx]
+                # plotDatStrokes(strokes, ax, each_stroke_separate=True, number_from_zero=number_from_zero)
+                self.plot_single_trial(idx, ax)
             elif thing=="task":
                 # overlay the stimulus
                 stim = dat["strokes_task"].values[idx]
@@ -6027,9 +6101,12 @@ class Dataset(object):
         """ 
         e.g, only keep characters that have at least 5 trials in each epoch:
         self.prune_min_ntrials_across_higher_levels("epoch", "character", 5)
+        PARAMS:
+        - col_high, the higher-level column, string, e.g., "epoch"
+        - col_low, the lower-level column, e.g., "character".
         RETURNS:
         - df, pruned. (Does not modify self.Dat)
         """
         from pythonlib.tools.pandastools import filterGroupsSoNoGapsInData
-        df = filterGroupsSoNoGapsInData(self.Dat, col_low, col_high, min_n_trials=n_min)
+        df = prune_min_ntrials_across_higher_levels(self.Dat, col_low, col_high, min_n_trials=n_min)
         return df

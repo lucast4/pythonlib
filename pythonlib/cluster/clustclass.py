@@ -267,8 +267,33 @@ class Clusters(object):
 
         # Plot
         cg = self.ClusterResults["hier_clust_seaborn"]
+
+        # Label axes both col and row.
+        self._hier_clust_label_axis(cg, "col")
+        self._hier_clust_label_axis(cg, "row")
+
         return cg
 
 
-
-
+    def _hier_clust_label_axis(self, cg, which_axis):
+        """ Label axes with strings (i.e., Colnames) instead of the
+        indices which is default
+        """
+        # cg = self.plot_save_hier_clust()
+        ax = cg.ax_heatmap
+        if which_axis=="col":
+            inds = cg.dendrogram_col.reordered_ind
+            list_labels = self.LabelsCols
+            list_labels_this = [list_labels[i] for i in inds]
+            locs = range(len(list_labels_this))
+            locs = [l+0.5 for l in locs]
+            ax.set_xticks(locs, labels=list_labels_this, rotation=80);
+        elif which_axis=="row":
+            inds = cg.dendrogram_row.reordered_ind
+            list_labels = self.Labels
+            list_labels_this = [list_labels[i] for i in inds]
+            locs = range(len(list_labels_this))
+            locs = [l+0.5 for l in locs]
+            ax.set_yticks(locs, labels=list_labels_this, rotation=0);
+        else:
+            assert False
