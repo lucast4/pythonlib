@@ -191,6 +191,25 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
         strokes=strokes, strokes_cols=color_list, markersize=markersize)
     
 
+def plotDatStrokesWrapper(strokes, ax, color=None, mark_stroke_onset=True, 
+    add_stroke_number=True):
+    """ [GOOD] WRapper to plot strokes a single color
+    PARAMS:
+    - color, either None (ordinal) or single color string code.
+    """
+
+    if color is None:
+        # Use default colors.
+        plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, add_stroke_number=add_stroke_number, 
+            mark_stroke_onset=mark_stroke_onset, number_from_zero=True)
+    else:
+        # use the inputed color
+        plotDatStrokes(strokes, ax, plotver="onecolor", pcol=color, 
+            force_onsets_same_col_as_strokes=True, each_stroke_separate=True,
+            add_stroke_number=add_stroke_number, mark_stroke_onset=mark_stroke_onset,
+            number_from_zero=True)
+        
+
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
     add_stroke_number=True, markersize=6, pcol=None, alpha=0.55, 
     interpN=None, each_stroke_separate = False, strokenums_to_plot=None, 
@@ -411,6 +430,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
 
             if plotver == "onecolor":
                 mfc = col
+                # mfc = "w"
                 markersize = markersize + 0.5
             else:
                 mfc = "w"

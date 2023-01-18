@@ -1542,3 +1542,27 @@ def strokes_average(strokes, Ninterp=50, center_at_onset=False):
     strokes_stacked = np.stack(stroklist_interp)
     strok_mean = np.mean(strokes_stacked, axis=0)
     return strok_mean, strokes_stacked
+
+
+def strokes_centerize(strokes):
+    """ Return list ofs trokes (copy) which are 
+    cetnred in xy coord"""
+
+    def F(strok):
+        # c = np.mean(strok[:,:2], axis=0)
+        # s = strok.copy()
+        # s[:,:2] = s[:,:2] - c
+        s = strok - np.mean(strok, axis=0)
+        s = s[:, :2] # remove time axis
+        return s
+    strokes = [F(strok) for strok in strokes]
+    return strokes
+
+def strokes_alignonset(strokes):
+    """ Return list ofs trokes (copy) which are translated 
+    so that (0,0) as the onset"""
+
+    def F(strok):
+        return strok - strok[0,:]
+    strokes = [F(strok) for strok in strokes]
+    return strokes

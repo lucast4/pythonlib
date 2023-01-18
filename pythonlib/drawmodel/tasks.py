@@ -1130,8 +1130,7 @@ class TaskClass(object):
                             # make into list of ints
                             hier.append([int(xx) for xx in tmp])
                 
-                # HACK!!
-
+                # HACK!!    
                 if auto_hack_if_detects_is_gridlinecircle_lolli and "chunks_" not in this.keys():
                     # (Checking if chunks_ exists is just hacky way of ehcking that this is older experiment)
                     # check if hier is like [[0,1], [2,3]] but nstrokes = 2, becuase in this code

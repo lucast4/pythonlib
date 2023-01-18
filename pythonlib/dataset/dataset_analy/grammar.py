@@ -423,7 +423,7 @@ def plot_counts_heatmap(dfGramScore, SDIR):
         else:
             df = dfGramScore
 
-        dfthis, fig, ax = convert_to_2d_dataframe(df, col1, col2, True)
+        dfthis, fig, ax, _ = convert_to_2d_dataframe(df, col1, col2, True)
             
         return dfthis, fig, ax
 

@@ -23,7 +23,8 @@ class TaskClass(object):
         self.ShapesOldCoords = None
 
     def initialize(self, ver, params, coord_force_same_aspect_ratio=True,
-            convert_coords_to_abstract=True, split_large_jumps=False):
+            convert_coords_to_abstract=True, split_large_jumps=False,
+            auto_hack_if_detects_is_gridlinecircle_lolli=False):
         """ General purpose, to initialize with params for
         this task. Is flexible, takes in many formats, converts
         each into general abstract format
@@ -57,7 +58,7 @@ class TaskClass(object):
         elif ver=="ml2":
             # Monkeylogic tasks
             taskobj = params
-            self._initialize_ml2(taskobj) 
+            self._initialize_ml2(taskobj, auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli) 
         else:
             print(ver)
             assert False, "not coded"
@@ -86,7 +87,8 @@ class TaskClass(object):
         # Sanity check that all initializatinos are consistente with each other.
         if False:
             self._sanity_check_initializations()
-    def _initialize_ml2(self, taskobj):
+
+    def _initialize_ml2(self, taskobj, auto_hack_if_detects_is_gridlinecircle_lolli=False):
         """ Pass in a task from monkeylogic.
         - taskobj, task class from drawmodel.tasks
 
@@ -150,7 +152,7 @@ class TaskClass(object):
             assert False, "must generate self.Primitives (instead of using Shapes...)"
 
         ############ GOOD, update to final concated objectclass
-        self.primitives_extract_final()
+        self.primitives_extract_final(auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli)
 
         # populate self.ShapesOldCoords, for backwards compativbility with other code.
         # print("BEFORE UPDATE: ", self.ShapesOldCoords)
@@ -159,7 +161,7 @@ class TaskClass(object):
         # print("AFTER UPDATE: ", self.ShapesOldCoords)
 
 
-    def primitives_extract_final(self, return_prims = False):
+    def primitives_extract_final(self, return_prims = False, auto_hack_if_detects_is_gridlinecircle_lolli=False):
         """
         [GOOD] Replaces self.Primitives with updated version, which applies for
         all bersions of tasks, including old tasks. Run this at very end.
@@ -177,7 +179,7 @@ class TaskClass(object):
         from pythonlib.primitives.primitiveclass import PrimitiveClass
 
         nprims = len(self.StrokesOldCoords)
-        O = self.ml2_objectclass_extract()
+        O = self.ml2_objectclass_extract(auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli)
         P = self.PlanDat
         TT = self.extract_monkeylogic_ml2_task()
         TN = TT.get_tasknew()
@@ -1703,13 +1705,13 @@ class TaskClass(object):
     #     """ Helper to return, making sure to try to extract if looks
     #     like havent done yet
     #     """
-    def ml2_objectclass_extract(self):
+    def ml2_objectclass_extract(self, auto_hack_if_detects_is_gridlinecircle_lolli=False):
         """
          Return Objectclass from  ml2 task. Try extactig if not yet extracted.
         """
         TT = self.extract_monkeylogic_ml2_task()
         if not hasattr(TT, "ObjectClass"):
-            TT.objectclass_extract_all()
+            TT.objectclass_extract_all(auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli)
         return TT.ObjectClass
 
     def ml2_objectclass_extract_active_chunk(self, return_as_inds=False):

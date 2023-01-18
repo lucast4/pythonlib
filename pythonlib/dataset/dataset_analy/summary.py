@@ -39,8 +39,6 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     from pythonlib.dataset.dataset import Dataset
     from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
 
-    if rulelist is None:
-        rulelist = []
     if savelocation=="daily":
         # --------------- INPUT PARAMS
         PLOT_OVERVIEW = True
@@ -64,12 +62,14 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         # To avoid making large plots.
 
         # --------------- INPUT PARAMS
-        PLOT_OVERVIEW = False
+        # PLOT_OVERVIEW = False
+        PLOT_OVERVIEW = True
         PLOT_OVERVIEW_IGNORE_LARGE_PLOTS = True
 
         # - related to fixed test tasks:
         PLOT_EXAMPLE_DATEVTASK = True
-        PLOT_ALL_EACHTRIAL = False
+        PLOT_ALL_EACHTRIAL = True
+        # PLOT_ALL_EACHTRIAL = False
         PLOT_TEST_TASK_IMAGES = False
         PLOT_ALL_DRAWINGS_IN_GRID = False # example trials x unique tasks, one plot for each task set. [may take a while]
 
@@ -80,7 +80,8 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         # - other stuff
         PLOT_RANDOM_GRID_EXAMPLES= False
 
-        FILT_ONLY_TEST = True # only test tasks, train leads to huge plots.
+        # FILT_ONLY_TEST = True # only test tasks, train leads to huge plots.
+        FILT_ONLY_TEST = False # only test tasks, train leads to huge plots.
     else:
         print(savelocation)
         assert False
@@ -90,9 +91,14 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         # Then find all the rules automatically
         from pythonlib.dataset.dataset_preprocess.general import get_rulelist
         rulelist = get_rulelist(animal, expt)
+        assert len(rulelist)>0
 
 
     D = Dataset([])
+    # print(animal)
+    # print(expt)
+    # print(rulelist)
+    # assert False
     D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
     GROUPING = D.MetadatPreprocess["GROUPING"]
     GROUPING_LEVELS = D.MetadatPreprocess["GROUPING_LEVELS"]
@@ -201,6 +207,9 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         fig = sns.catplot(data=D.Dat, x="block", y="supervision_stage", col="task_stagecategory", row="date")
         fig.savefig(f"{SDIR_MAIN}/overview_supervisionstage.pdf")
         plt.close("all")
+
+        D.plotOverviewScoresRewardsFeatures(SDIR_MAIN)
+        
 
     ##### Any random tasks that are repeated?
 

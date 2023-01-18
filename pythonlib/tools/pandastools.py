@@ -235,7 +235,20 @@ def filter_prune_min_n_rows(df, column, min_n):
     assert False, 'code it'
 
 
-def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
+def prune_min_ntrials_across_higher_levels(df, col_high, col_low, n_min):
+    """ Wrapper for filterGroupsSoNoGapsInData
+        e.g, only keep characters that have at least 5 trials in each epoch:
+    self.prune_min_ntrials_across_higher_levels("epoch", "character", 5)
+    PARAMS:
+    - col_high, the higher-level column, string, e.g., "epoch"
+    - col_low, the lower-level column, e.g., "character".
+    RETURNS:
+    - df, pruned. (Does not modify self.Dat)
+    """
+    return filterGroupsSoNoGapsInData(df, col_low, col_high, min_n_trials=n_min)
+
+def filterGroupsSoNoGapsInData(df, group, colname, values_to_check=None,
+        min_n_trials = 1):
     """ filter df so that each group has at
     least one item for each of the desired values
     for the column of interest. useful for removing
@@ -247,12 +260,27 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check):
         group = "unique_task_name"
     # NOTE - index of output will be reset.
     """
+
+    if values_to_check is None:
+        values_to_check = df[colname].unique().tolist()
+
     def F(x):
         """ True if has data for all values"""
         checks  = []
+
+        # count n trials for each value
+        list_n =[]
         for v in values_to_check:
-            checks.append(v in x[colname].values)
-        return all(checks)
+            n = sum(x[colname]==v)
+            list_n.append(n)
+
+        # check if each n is >= than min
+        list_good = [n>=min_n_trials for n in list_n]
+        return all(list_good)
+        # for v in values_to_check:
+        #     print(x[colname].values)
+        #     checks.append(v in x[colname].values)
+        # return all(checks)
     return df.groupby(group).filter(F).reset_index(drop=True)
 
 
@@ -669,6 +697,30 @@ def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", random
 
     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
+def convert_to_1d_dataframe_hist(df, col1, plot_hist=True):
+    """ Aggregate (usually counts for each level of col1).
+    Plots a histogram, ordered by the n counts
+    RETURNS:
+    - labels, ncounts, list of str and ncounts, matching, sorted from high to low.
+    - fig, ax
+    """
+    x = df[col1].value_counts()
+    labels = x.index
+    ncounts = x.values
+    if plot_hist:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1,1)
+        ax.bar(labels, ncounts)
+        # ax.set_xticks(ax.get_xticks(), ax.get_xticklabels(), rotation=45)
+        plt.xticks(rotation=90)
+
+        # ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+
+        # df[col1].hist(xrot=45)
+    else:
+        fig, ax = None, None
+    return labels, ncounts, fig, ax
+
 def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False, 
         agg_method = "counts", val_name = "val", ax=None, 
         norm_method=None,
@@ -1005,9 +1057,10 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
 # dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
-                                    F = None, return_as_dict=False, method_if_not_enough_examples="all_none"):
+                                    F = None, return_as_dict=False, 
+                                    method_if_not_enough_examples="prune_subset"):
     """ To uniformly sample rows so that spans levels of a given variable (column)
-    e..g, if a col is "shape" and you want to get one example trial of each shape,
+    e..g, if a col is "shape" and you want to get one example random trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
     PARAMS:
     - df, dataframe
@@ -1045,7 +1098,7 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                 # option 1< return all as None
                 inds = [None for _ in range(n_examples)]
             elif method_if_not_enough_examples=="prune_subset":
-                # sample size changes...
+                # sample size changes... keep how many you have
                 n_examples = len(list_idx)
                 inds = random.sample(list_idx, n_examples)[:n_examples]
             else:
@@ -1171,7 +1224,8 @@ def replaceNone(dfthis, column, replace_with):
     return dfthis
 
 
-def slice_by_row_label(df, colname, rowvalues, reset_index=True):
+def slice_by_row_label(df, colname, rowvalues, reset_index=True, 
+    assert_exactly_one_each=False):
     """ Return a sliced dataframe, where rows are sliced
     to match the list of labels (rowvalues) for a column
     PARAMS:
@@ -1180,12 +1234,17 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True):
     returned df will have rows exactly matching these values.
     NOTE: error if rowvalues contains value not in df
     NOTE: if a value occurs in multipel rows, it extracts all rows.
+    - assert_exactly_one_each, if True, then each val in rowvalues
+    matches exactly one and only one.
     EG:
     df = pd.DataFrame({'A': [5,6,3,4, 5], 'B': [1,2,3,5, 6]})
     list_of_values = [3, 6, 5]
     df.set_index('A').loc[list_of_values].reset_index()
     """
 
+    if assert_exactly_one_each:
+        for val in rowvalues:
+            assert sum(df[colname]==val)==1
     dfout = df.set_index(colname).loc[rowvalues]
     if reset_index:
         dfout = dfout.reset_index()
