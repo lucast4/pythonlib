@@ -27,7 +27,7 @@ def debug_eyeball_distance_metric_goodness(D):
         plot_example_trials(RES, list_inds=list_inds)
 
 
-def pipeline_generate_and_plot_all(D):
+def pipeline_generate_and_plot_all(D, do_plots=True):
     """
     Full pipeline to generate and plot and save all.
     """
@@ -36,12 +36,13 @@ def pipeline_generate_and_plot_all(D):
 
     RES = generate_data(D)
 
-    DS = RES["DS"]
-    list_strok_basis = RES["list_strok_basis"]
-    list_shape_basis = RES["list_shape_basis"]
-    plot_clustering(DS, list_strok_basis, list_shape_basis, savedir)
+    if do_plots: 
+        DS = RES["DS"]
+        list_strok_basis = RES["list_strok_basis"]
+        list_shape_basis = RES["list_shape_basis"]
+        plot_clustering(DS, list_strok_basis, list_shape_basis, savedir)
 
-    plot_learning_and_characters(D, savedir)
+        plot_learning_and_characters(D, savedir)
 
     return RES, savedir
 
@@ -178,6 +179,8 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     - changes in strokiness (i.e., learning)
     (Meant for across day analyssi)
     """ 
+    from scipy.stats import linregress as lr
+    from pythonlib.tools.nptools import rankItems
 
     sdir = f"{savedir}/figs_character_strokiness"
     import os
@@ -198,17 +201,21 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     fig = sns.catplot(data=D.Dat, x="date", y=scorename, kind="point", aspect=2, hue="block")
     fig.savefig(f"{sdir}/score_by_date-1.pdf")
 
-    fig = sns.relplot(data=D.Dat, col="block", col_wrap=3, x="tvalfake", y=scorename, aspect=2, kind="scatter")
-    fig.savefig(f"{sdir}/score_by_date-2.pdf")
-
     fig = sns.catplot(data=D.Dat, col="block", col_wrap=4, x="date", y=scorename, aspect=1, kind="point")
     fig.savefig(f"{sdir}/score_by_date-3.pdf")
 
+    fig = sns.relplot(data=D.Dat, col="block", col_wrap=3, x="tvalfake", y=scorename, aspect=2, kind="scatter")
+    fig.savefig(f"{sdir}/score_by_tval_withinblock.pdf")
+
+    if "strokinessv2" in D.Dat.columns:
+        fig = sns.relplot(data=D.Dat, col="block", col_wrap=3, x="tvalfake", y="strokinessv2", aspect=2, kind="scatter")
+        fig.savefig(f"{sdir}/strokinessv2_by_tval_withinblock.pdf")
 
     ## For each character
     # First, sort characters
     # Sort all characters by score, and plot them in a grid
-    list_char, list_score = D.taskcharacter_find_sorted_by_score("strokes_clust_score")
+    list_char, list_score = D.taskcharacter_find_plot_sorted_by_score(scorename)
+
     # Plot
     # -- get one trial for each char
     from pythonlib.tools.pandastools import extract_trials_spanning_variable
@@ -244,6 +251,118 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
                col_order=list_char, hue="block")
     fig.savefig(f"{sdir}/char_learning_tval.pdf")
 
+    ## COrrelation between online scores (e.g, strokiness) and offline computed strokiness
+    # sdir = f"{savedir}/corr_scores"
+    # import os
+    # os.makedirs(sdir, exist_ok=True)
+    list_blocks = sorted(D.Dat["block"].unique().tolist())
+    vars_to_compare = ["rew_total", "strokinessv2", "pacman", "score_final"]
+    vars_to_compare = [var for var in vars_to_compare if var in D.Dat.columns]
+    for bk in list_blocks:
+        df = D.Dat[D.Dat["block"]==bk]
+        if sum(~df[scorename].isna())>0:
+            fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
+            fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+
+
+    ### Change in score over trials (each char one slope)
+    list_char_alpha = sorted(D.Dat["character"].unique().tolist())
+    
+    # For each character, get its change in score
+    list_slope = []
+    list_slope_sk2 = []
+    list_slope_rew = []
+    for char in list_char_alpha:
+        df = D.Dat[D.Dat["character"]==char]
+        t = df["tvalfake"]
+        v = df[scorename]
+        strokinessv2 = df["strokinessv2"]
+        rew_total = df["rew_total"]
+
+        if len(t)>=5:
+            # convert to to rank
+            t = rankItems(t)
+            slope = lr(t, v)[0]
+            list_slope.append(slope)
+            
+            # make sure score and strokiness correlate with offline score
+            slope = lr(strokinessv2, v)[0]
+            list_slope_sk2.append(slope)
+            
+            slope = lr(rew_total, v)[0]
+            list_slope_rew.append(slope)      
+        else:
+            list_slope.append(np.nan)
+            list_slope_rew.append(np.nan)
+            list_slope_sk2.append(np.nan)
+
+
+    # only keep chars with enough data
+    inds = np.where(~np.isnan(list_slope))[0].tolist()
+    list_char_alpha = [list_char_alpha[i] for i in inds]
+    list_slope = [list_slope[i] for i in inds]
+    list_slope_rew = [list_slope_rew[i] for i in inds]
+    list_slope_sk2 = [list_slope_sk2[i] for i in inds]
+
+    # Plot (each char)
+    fig, axes = plt.subplots(1,3, figsize=(15, len(list_char_alpha)*0.16))
+
+    ax=axes.flatten()[0]
+    ax.plot(list_slope, list_char_alpha, "ok")
+    ax.axvline(0)
+    ax.set_xlabel(f"slope ({scorename}/trials)")
+    ax.grid(True)
+
+    ax=axes.flatten()[1]
+    ax.plot(list_slope_sk2, list_char_alpha, "ok")
+    ax.axvline(0)
+    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+    ax.grid(True)
+
+    ax=axes.flatten()[2]
+    ax.plot(list_slope_rew, list_char_alpha, "ok")
+    ax.axvline(0)
+    ax.set_xlabel(f"slope ({scorename}/rew_total)")
+    ax.grid(True)
+
+    fig.savefig(f"{sdir}/slope_score_vs_trial-each_char.pdf")
+
+    # Plot, historgram across cahar
+    fig, axes = plt.subplots(1,3, figsize=(9,2))
+
+    ax=axes.flatten()[0]
+    ax.hist(list_slope, bins=20)
+    ax.axvline(0, color="k")
+    ax.set_xlabel(f"slope ({scorename}/trials)")
+
+    ax=axes.flatten()[1]
+    ax.hist(list_slope_sk2, bins=20)
+    ax.axvline(0, color="k")
+    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+
+    ax=axes.flatten()[2]
+    ax.hist(list_slope_rew, bins=20)
+    ax.axvline(0, color="k")
+    ax.set_xlabel(f"slope ({scorename}/rew_total)")
+
+    fig.savefig(f"{sdir}/slope_score_vs_trial-hist.pdf")
+
+    # Does having higher slope for (rew vs. score) predict learning?
+    fig, axes = plt.subplots(2,2, figsize=(8,8))
+
+    ax = axes.flatten()[0]
+    ax.plot(list_slope_rew, list_slope, 'ok')
+    ax.set_xlabel(f"slope ({scorename}/rew_total)")
+    ax.set_ylabel(f"slope ({scorename}/trials)")
+
+    ax = axes.flatten()[1]
+    ax.plot(list_slope_sk2, list_slope, 'ok')
+    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+    ax.set_ylabel(f"slope ({scorename}/trials)")
+
+    fig.savefig(f"{sdir}/scatter-slopes_vs_slopes.pdf")
+
+    # Close
     plt.close("all")
 
 
