@@ -211,6 +211,8 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
         fig = sns.relplot(data=D.Dat, col="block", col_wrap=3, x="tvalfake", y="strokinessv2", aspect=2, kind="scatter")
         fig.savefig(f"{sdir}/strokinessv2_by_tval_withinblock.pdf")
 
+    plt.close("all")
+
     ## For each character
     # First, sort characters
     # Sort all characters by score, and plot them in a grid
@@ -251,6 +253,8 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
                col_order=list_char, hue="block")
     fig.savefig(f"{sdir}/char_learning_tval.pdf")
 
+    plt.close("all")
+    
     ## COrrelation between online scores (e.g, strokiness) and offline computed strokiness
     # sdir = f"{savedir}/corr_scores"
     # import os
@@ -267,35 +271,57 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
 
     ### Change in score over trials (each char one slope)
     list_char_alpha = sorted(D.Dat["character"].unique().tolist())
-    
+        
+    # First, prune dataset to avoid (i) trials with supervision and (ii) trials
+    # without enough strokes, both of which have artifically high strokiness.
+    # Each trial, got correct n strokes?
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
+    def F(x):
+        # Returns True if n beh strokes = or > than n task strokes.
+        ntask = len(x["strokes_task"])
+        nbeh = len(x["strokes_beh"])
+        return nbeh>=ntask
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "nbeh_match_ntask")
+
     # For each character, get its change in score
+    ONLY_TRIALS_WITH_ENOUGH_STROKES = True
+    ONLY_TRIALS_IN_NOSUP_BLOCKS = True
+
+    DF = D.Dat
+    print("orignial", len(DF))
+    if ONLY_TRIALS_IN_NOSUP_BLOCKS:
+        DF = DF[DF["supervision_stage_concise"]=="off|0||0"]
+    print("ONLY_TRIALS_IN_NOSUP_BLOCKS", len(DF))
+    if ONLY_TRIALS_WITH_ENOUGH_STROKES:
+        DF = DF[DF["nbeh_match_ntask"]==True]
+    print("ONLY_TRIALS_IN_NOSUP_BLOCKS", len(DF))
+
     list_slope = []
     list_slope_sk2 = []
     list_slope_rew = []
     for char in list_char_alpha:
-        df = D.Dat[D.Dat["character"]==char]
+        df = DF[DF["character"]==char]
         t = df["tvalfake"]
         v = df[scorename]
         strokinessv2 = df["strokinessv2"]
         rew_total = df["rew_total"]
 
-        if len(t)>=5:
+        if len(t)>=4:
             # convert to to rank
             t = rankItems(t)
             slope = lr(t, v)[0]
             list_slope.append(slope)
-            
+
             # make sure score and strokiness correlate with offline score
             slope = lr(strokinessv2, v)[0]
             list_slope_sk2.append(slope)
-            
+
             slope = lr(rew_total, v)[0]
             list_slope_rew.append(slope)      
         else:
             list_slope.append(np.nan)
             list_slope_rew.append(np.nan)
             list_slope_sk2.append(np.nan)
-
 
     # only keep chars with enough data
     inds = np.where(~np.isnan(list_slope))[0].tolist()
@@ -411,6 +437,7 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
     rotateLabel(fig)
     fig.savefig(f"{sdir}/scoredist_shapes-2.pdf")
 
+    plt.close("all")
 
     # For each basis stroke, plot examples, sorted by score
     from pythonlib.tools.pandastools import extract_trials_spanning_variable

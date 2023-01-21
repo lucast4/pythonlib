@@ -98,7 +98,7 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     # D = Dataset([])
     # D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
 
-    D = load_dataset(animal, expt, rulelist)
+    D, rulelist = load_dataset(animal, expt, rulelist, return_rulelist=True)
     GROUPING = D.MetadatPreprocess["GROUPING"]
     GROUPING_LEVELS = D.MetadatPreprocess["GROUPING_LEVELS"]
     FEATURE_NAMES = D.MetadatPreprocess["FEATURE_NAMES"]

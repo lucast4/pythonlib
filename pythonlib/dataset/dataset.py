@@ -35,7 +35,7 @@ def _checkPandasIndices(df):
     assert np.unique(np.diff(df.index)) ==1 
 
 
-def load_dataset(animal, expt, rulelist=None):
+def load_dataset(animal, expt, rulelist=None, return_rulelist=False):
     """
     Helper to load a dataset, using most common methods. Works for both
     daily and main analysis (see PARAMS).
@@ -45,6 +45,7 @@ def load_dataset(animal, expt, rulelist=None):
     --- list of YYMMDD str, for daily analyses
     RETURNS:
     - Dataset, with preprocessing and Tasks already extracted.
+    - [if return_rulelist], auto extracted, if rulelist is None. otherwise returns the input.
     """
 
     if rulelist is None:
@@ -57,8 +58,10 @@ def load_dataset(animal, expt, rulelist=None):
 
     D = Dataset([])
     D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
-    return D
-    
+    if return_rulelist:
+        return D, rulelist
+    else:
+        return D    
 
 class Dataset(object):
     """ 
