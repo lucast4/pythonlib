@@ -11,6 +11,8 @@ from pythonlib.tools.expttools import makeTimeStamp, findPath
 import seaborn as sns
 
 
+assert False, "use beh_model_holder instead. this Obsolete, there is a nice class"
+
 class ColNames(object):
     """ helper to get column names in D, given sets of model classes and rules
     , and different manipulatios of the scores
