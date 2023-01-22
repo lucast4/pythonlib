@@ -818,6 +818,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # Extract concise supervision stage
     D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
     
+    def F(x):
+        return (x["epoch"], x["supervision_stage_concise"])
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
+
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 
