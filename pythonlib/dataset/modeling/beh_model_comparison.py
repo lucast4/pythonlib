@@ -96,6 +96,8 @@ def plots_cross_prior_and_model_anynum(BM, monkey_prior_col_name="epoch", monkey
 
     """
 
+    assert(False, "use plot_score_cross_prior_model in beh_model_holder")
+
     from pythonlib.tools.pandastools import pivot_table
     from pythonlib.tools.plottools import plotScatter45
     ALPHA = 0.2
@@ -130,10 +132,6 @@ def plots_cross_prior_and_model_anynum(BM, monkey_prior_col_name="epoch", monkey
         sns.catplot(data=Dat, x="epoch", y=colthis, kind="boxen")
         sns.catplot(data=Dat, x="epoch", y=colthis, kind="swarm")
 
-    return DatWide, DatFlat, DatThisAgg, DatFlatAgg
-    # Plot alignment, but aggregated
-
-
     ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
     # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
     if model_score_name_list is None:
@@ -141,7 +139,8 @@ def plots_cross_prior_and_model_anynum(BM, monkey_prior_col_name="epoch", monkey
     BM.plot_score_scatter_compare_models(model_score_name_list[0], model_score_name_list[1])        
     BM.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
-
+    return DatWide, DatFlat, DatThisAgg, DatFlatAgg
+    # Plot alignment, but aggregated
 
 def plots_cross_prior_and_model(DatThisTest, monkey_prior_col_name, monkey_prior_list, 
                                 model_score_name_list, savedir=None, return_DatThisAggPaired=False):

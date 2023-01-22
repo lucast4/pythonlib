@@ -9,6 +9,7 @@ See jupyter notebook for development of this code:
 
 """
 import numpy as np
+import matplotlib.pyplot as plt
 
 class BehModelHolder(object):
     """
@@ -51,6 +52,10 @@ class BehModelHolder(object):
 
         # Sanituy check of data
         self._preprocess_sanity_check()
+
+        ### ALIGNMENT - rank, compute all
+        self.analy_compute_alignment_wrapper()
+
 
     def _preprocess_sanity_check(self):
         print("TODO! _preprocess_sanity_check")
@@ -103,7 +108,7 @@ class BehModelHolder(object):
         return list_colname
 
 
-    def extract_concatenated_aggregated_dataset(self, monkey_prior_col_name="epoch", monkey_prior_list=None,
+    def extract_concatenated_aggregated_dataset(self, Dat=None, monkey_prior_col_name="epoch", monkey_prior_list=None,
         list_classes=None, model_score_name_list =None):
         """ 
         Returns single D, but also returns variations after different
@@ -113,7 +118,8 @@ class BehModelHolder(object):
 
         # Get Single dataset
         # D = self.extract_concatenated_dataset()
-        Dat = self.Dat
+        if Dat is None:
+            Dat = self.Dat
 
         # Get list of monkye priors
         if monkey_prior_list is None:
@@ -277,21 +283,78 @@ class BehModelHolder(object):
         """
 
         from pythonlib.dataset.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
-        plots_cross_prior_and_model_anynum(self)
+        # plots_cross_prior_and_model_anynum(self)
+        self.plot_score_cross_prior_model(self.Dat)
+
+        ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
+        # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
+        model_score_name_list = self.colnames_extract_scores()
+        self.plot_score_scatter_compare_models(model_score_name_list[0], model_score_name_list[1])        
+        self.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
 
-    def plot_score_scatter_compare_models(self, ax, score_name_1, score_name_2,
-            savedir= None):
+    def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
+        list_classes=None, model_score_name_list =None):
+        """
+        Summary plot of test dataset against models (scores), when num models is >2, this still works.
+        NOTE: modified 12/19/22 to work with beh_model_holder, not with multiple... (which should be 
+        changed to be a wrapper for beh_model_holder)
+        INPUT:
+        - monkey_prior_col_name
+        --- e..g, "epoch"
+        - GROUPING_LEVELS [aka monkey_prior_list]
+        """
+        from pythonlib.tools.pandastools import pivot_table
+        from pythonlib.tools.plottools import plotScatter45
+        import seaborn as sns
+        ALPHA = 0.2
+
+        # Get Single dataset
+        Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
+            df, monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)[:5]
+
+        # 1) Plot score fr all combo of dataset and model
+        fig = sns.catplot(data=DatFlat, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+
+        # 2) same, agg over trials
+        fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+
+        # if column exists for binary_tuple then plot
+        # to create 'binary_rule_tuple' column: run dataset.modeling.discrete.add_binary_rule_tuple_col
+        if 'binary_rule_tuple' in Dat.columns:
+            fig,ax = plt.subplots(figsize=(8,4))
+            sns.histplot(data=Dat,x='epoch',hue='binary_rule_tuple',ax=ax,multiple="dodge",shrink=0.8)
+            fig,ax = plt.subplots(figsize=(8,4))
+            sns.histplot(data=Dat,x='binary_rule_tuple',hue='epoch',ax=ax,multiple="dodge",shrink=0.8)
+
+        # For each trial, alignment, as rank out of all model scores.
+        for colthis in self.colnames_extract_alignment():
+            # colthis = "alignment_rank_chunks" # was this, for gridlinecircle.
+            sns.catplot(data=Dat, x="epoch", y=colthis)
+            sns.catplot(data=Dat, x="epoch", y=colthis, kind="boxen")
+            sns.catplot(data=Dat, x="epoch", y=colthis, kind="swarm")
+
+        return DatWide, DatFlat, DatThisAgg, DatFlatAgg
+
+
+    def plot_score_scatter_compare_models(self, score_name_1, score_name_2, ax=None,
+            savedir= None, list_epoch=None):
         """
         For a given epoch, plot scatter of score for each model, plotted as pairwise
         scatterplot (for a given pair of models)
         """
+        from pythonlib.tools.plottools import plotScatter45
+
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+
         ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
         # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
-        import matplotlib.pyplot as plt
-        from pythonlib.tools.plottools import plotScatter45
         ALPHA = 0.2
 
+        if list_epoch is None:
+            list_epoch = sorted(self.Dat["epoch"].unique().tolist())
         monkey_prior_list = list_epoch
         monkey_prior_col_name = "epoch"
         plot_level = "trial"
