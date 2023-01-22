@@ -12,6 +12,7 @@ if MACHINE == "lucast4-MS-7B98":
 	PATH_DATA_NEURAL_PREPROCESSED = "/gorilla1/neural_preprocess"
 	PATH_DATA_BEHAVIOR_RAW = "/gorilla1/animals"
 	PATH_ANALYSIS_OUTCOMES = "/gorilla1/analyses"
+	PATH_ANALYSIS_OUTCOMES_SERVER = "/mnt/Freiwald/kgupta/analyses"
 	PATH_DATASET_BEH = "/gorilla1/analyses/database"
 	PATH_MATLAB = "/gorilla1/programs/MATLAB/R2021a/bin/matlab"
 elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan" or MACHINE == "kggs-macbook.lan.rockefeller.edu":

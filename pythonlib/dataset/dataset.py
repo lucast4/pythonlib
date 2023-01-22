@@ -12,7 +12,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
-from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
+from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_ANALYSIS_OUTCOMES_SERVER
 
 base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
@@ -748,6 +748,14 @@ class Dataset(object):
 
             # Load the tasks
             pathlist = findPath(sdir, [], "Tasks", "pkl")
+            if len(pathlist)==0:
+                # Try server
+                if len(r)>0:
+                    sdir = f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/TASKS_GENERAL/{a}-{e}-{r}-all"
+                else:
+                    sdir = f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/TASKS_GENERAL/{a}-{e}-all"
+                pathlist = findPath(sdir, [], "Tasks", "pkl")
+
             if len(pathlist)!=1:
                 print(pathlist)
                 assert False
@@ -1387,7 +1395,9 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
 
         # Collects across these dirs
-        SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH"]
+        SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH",
+            f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database", f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/BEH"
+            ]
 
         def _find(SDIR):
             pathlist = findPath(SDIR, [[f"{animal}-", f"{expt}-", f"{rule}-"]], "dat", ".pkl", True)
@@ -4912,7 +4922,7 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
-    def grammar_parses_generate(self, ind, list_rules = None):
+    def _grammar_parses_generate(self, ind, list_rules = None):
         """ Generate GrammarDat object and save, for this trial
         PARAMS:
         - ind, index in D.Dat
@@ -4945,7 +4955,7 @@ class Dataset(object):
         RETURNS:
         - dict[rule] = parses, each a list of possible orderings
         """
-        GD = self.grammar_parses_generate(ind, list_rules)
+        GD = self._grammar_parses_generate(ind, list_rules)
         outdict = {}
         for rule in list_rules:
             parses = GD.ChunksListClassAll[rule].search_permutations_chunks()
@@ -4955,7 +4965,6 @@ class Dataset(object):
                 assert False, "epty..."
             outdict[rule] = parses
         return outdict
-
 
 
     def grammar_extract_beh_and_task(self, ind, ploton=False):
