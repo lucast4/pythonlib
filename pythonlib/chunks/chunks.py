@@ -38,10 +38,11 @@ def check_all_strokes_used(chunks, nstrokes):
 ## @param rule, either one word e.g. ['left', 'right'] or dashed e.g. ['rank-IVL', 'chain-LVI']
 ##
 ## @return [list_chunks, list_hier, list_fixed_order]
-## - list_chunks, where each chunk is a list indicating a way to chunk the strokes in Task.Strokes
+## - list_chunks, where each chunk is a list indicating a way to concat the strokes in Task.Strokes
 ## - list_hier, similar to list_chunks, but used for hierarchical permutations, without needing to concat strokes.
 ## - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
-def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_if_dont_find=False):
+def find_chunks_hier(Task, expt, rule, strokes=None, params=None, 
+    use_baseline_if_dont_find=False, DEBUG=False):
     
     if params is None:
         params = {}
@@ -185,44 +186,34 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None, use_baseline_i
         #print("all_shape_ind_perms", [list(xx) for xx in itertools.product(*result)])
         return [list(xx) for xx in itertools.product(*result)]
 
+    # For now, concats are never done...
+    chunks = list(range(len(objects))) # never concat strokes
+    list_chunks = [chunks] # only one way
 
-    if expt in ["neuralbiasdir5c"]:
-        chunks = list(range(len(objects))) # never concat strokes
-        list_chunks = [chunks] # only one way
-        
-        if rule in ["left", "right", "up", "down"]:
-            shape_order = _get_sequence_on_dir(objects, rule)
-            hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
-            list_hier = [hier]
+    if rule in ["left", "right", "up", "down"]:
+        shape_order = _get_sequence_on_dir(objects, rule)
+        hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
+        list_hier = [hier]
+    elif rule in ["rank", "chain"]:
+        assert expt in ["shapesequence2"], "code this rule up more generally, so dont need to pass in expt."
+        if shape_order == 'IVL':
+            s_order = ('line','V','Lcentered')
+        elif shape_order == 'LVI':
+            s_order = ('Lcentered','V','line')
         else:
-            assert False, "code up rule"
-
-        list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
-
-    elif expt in ["shapesequence2"]:
-        chunks = list(range(len(objects))) # never concat strokes
-
-        if rule in ["rank", "chain"]:
-            if shape_order == 'IVL':
-                s_order = ('line','V','Lcentered')
-            elif shape_order == 'LVI':
-                s_order = ('Lcentered','V','line')
-            else:
-                assert False, 'incorrect shape_order after rule-'
-            list_hier = _get_sequences_on_ordering_rule(objects, rule, s_order)
-        else:
-            assert False, "code up rule"
-
-        list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
-        list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
-
+            assert False, 'incorrect shape_order after rule-'
+        list_hier = _get_sequences_on_ordering_rule(objects, rule, s_order)
     else:
-        print(params)
-        assert False, "code up expt"
-    
-    print("list_chunks", list_chunks)
-    print("list_hier", list_hier)
-    print("list_fixed_order", list_fixed_order)
+        print(rule)
+        assert False, "code up rule"
+
+    list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
+    list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
+
+    if DEBUG:
+        print("list_chunks", list_chunks)
+        print("list_hier", list_hier)
+        print("list_fixed_order", list_fixed_order)
 
     # Return as a list of possible chunkings.
     assert len(list_chunks)==len(list_hier) # TODO: check, is this necesary?

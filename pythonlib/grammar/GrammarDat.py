@@ -121,7 +121,9 @@ class GrammarDat(object):
 
 
 
-    ################################################# 
+    ############### PLOT
+    # Plot all parses for each rule, and compare to the beh drawing.
+    
     
 
 

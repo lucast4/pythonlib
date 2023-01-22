@@ -109,7 +109,7 @@ class ChunksClassList(object):
 
 
 
-    def _init_task_entry(self, Task, expt, rule):
+    def _init_task_entry(self, Task, expt, rule, DEBUG=False):
         """
         Input a single Task.
         If pass in expt and rule, then will generate chunks autoatmically, 
@@ -136,15 +136,17 @@ class ChunksClassList(object):
         # list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
         #     expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
         
-        list_chunks, list_hier, list_fixed_order = find_chunks_hier(Task, 
-            expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
-        print("list_chunks", list_chunks)
-        print("list_hier", list_hier)
-        print("list_fixed_order", list_fixed_order)
+        list_chunks, list_hier, list_fixed_order = find_chunks_hier(self.Task, 
+            self.Expt, self.Rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
+        if DEBUG:
+            print("list_chunks", list_chunks)
+            print("list_hier", list_hier)
+            print("list_fixed_order", list_fixed_order)
 
         # - Make one ChunksClass instance for each chunk:
         # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)
         list_shapes = [s for s in Task.Shapes]
+        # e.g., [['line-3-0', {'x': -1.146, 'y': 0.05, 'sx': None, 'sy': None, 'theta': None, 'order': None}], ['V-4-0', {'x': 0.05, 'y': -1.146, 'sx': None, 'sy': None, 'theta': None, 'order': None}], ['Lcentered-3-0', {'x': 1.246, 'y': -2.342, 'sx': None, 'sy': None, 'theta': None, 'order': None}]]
         for chunks, hier, fixedorder in zip(list_chunks, list_hier, list_fixed_order):
             C = ChunksClass(chunks, hier, fixedorder, task_stroke_labels=list_shapes)
             self.ListChunksClass.append(C)
