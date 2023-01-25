@@ -44,6 +44,11 @@ def pipeline_generate_and_plot_all(D, do_plots=True):
 
         plot_learning_and_characters(D, savedir)
 
+        for MIN_SCORE in [0., 0.7]:
+            for sorted_unique_shapes in [True, False]:
+                plot_prim_sequences(RES, D, savedir, MIN_SCORE, 
+                    sorted_unique_shapes)
+
     return RES, savedir
 
 
@@ -457,3 +462,103 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
         fig, axes, list_inds = DS.plot_multiple(inds, titles=scores, ncols=8)
         fig.savefig(f"{sdir}/behstrokes_matching_basis-{sh}-sorted_by_score.pdf")    
 
+
+def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=False):
+    """ Extract for each trial a sequence of strokes (shape names), and plot
+    things about these (e.g. distribution across trialsS).
+    PARAMS:
+    - MIN_SCORE, scalar, only keep trials with mean strokes_clust_score >= this
+    - sorted_unique_shapes, bool, then first get sorted(unqiue()) shapes for each trial.
+    """
+    from pythonlib.tools.plottools import makeColors, rotate_x_labels
+
+    # MIN_SCORE = 0.75
+    sdir = f"{savedir}/prim_sequences-MIN_SCORE_{MIN_SCORE}-sorteduniq_{sorted_unique_shapes}"
+    import os
+    os.makedirs(sdir, exist_ok=True)
+    print("Saving at:", sdir)
+    DS = RES["DS"]
+
+    def _extract_shapes_beh_order(ind_dataset):
+        """ get list of shapes for this trial in order of beh strokes
+        """        
+        # 1) shapes, based on simmat alignment
+        shapes_ordered_by_beh_strokes_datseg = DS.dataset_extract_strokeslength_list(ind_dataset, "shape")
+
+        # 2) shapes, based on clustering each stroke
+        shapes_ordered_by_beh_strokes_cluster = DS.dataset_extract_strokeslength_list(ind_dataset, "clust_sim_max_colname")
+
+        return shapes_ordered_by_beh_strokes_datseg, shapes_ordered_by_beh_strokes_cluster
+
+    # For each char, get its "best parse"
+    # list_scores = []
+    list_shapes_datseg = []
+    list_shapes_cluster = []
+    for i in range(len(D.Dat)):
+        if D.Dat.iloc[i]["strokes_clust_score"]>=MIN_SCORE:
+            shapes_datseg, shapes_cluster = _extract_shapes_beh_order(i)
+            list_shapes_cluster.append(shapes_cluster)
+            list_shapes_datseg.append(shapes_datseg)
+        else:
+            list_shapes_cluster.append(None)
+            list_shapes_datseg.append(None)
+    
+    # Remove Nones
+    A = []
+    B = []
+    for sh_c, sh_d in zip(list_shapes_cluster, list_shapes_datseg):
+        if sh_c is None:
+            continue
+        A.append(sh_c)
+        B.append(sh_d)
+    list_shapes_cluster = A
+    list_shapes_datseg = A
+
+    # Colors, for plotting ranks.
+    n = max([len(x) for x in list_shapes_cluster])
+    pcols, fig, ax = makeColors(n, ploton=True)
+    fig.savefig(f"{sdir}/legend_rank_colors.pdf")
+
+    # "Waterfall"-like plot, showing sequences ordered by their freqeuncy.
+    if sorted_unique_shapes:
+        def F(x):
+            x = tuple(sorted(set(x)))
+            return x
+    else:
+        def F(x):
+            x = tuple(x)
+            return x
+    for Nprims in [None, 1, 2, 3,4,5]:
+
+        list_shapes_cluster_unique = [F(x) for x in list_shapes_cluster if x is not None]
+
+        # only keep if has Nprims
+        if Nprims is not None:
+            list_shapes_cluster_unique = [x for x in list_shapes_cluster_unique if len(x)==Nprims]
+
+        from pythonlib.tools.listtools import tabulate_list
+        list_shapes_sorted = sorted(tabulate_list(list_shapes_cluster_unique, True), key=lambda x:-x[1])
+
+        # Plot it
+        fig, axes = plt.subplots(1,2, figsize=(10, 6))
+
+        # 1) Waterfall
+        ax = axes.flatten()[0]
+        for i, shapes in enumerate(list_shapes_sorted):
+            for j, (sh, col) in enumerate(zip(shapes[0], pcols)):
+                ax.plot(sh, i, 'x', color=col, alpha=0.7)
+        ax.set_ylabel('rank in ordered by freq (0, most frequent sequence)')
+        ax.set_xlabel('shapes in sequence')
+        ax.set_title(f"[Nprims={Nprims}], Most common sequences")
+        # plt.xticks(rotation=45);
+        # ax.draw(ax.figure.canvas.renderer)
+        rotate_x_labels(ax, 45)
+
+        #2) Hist, n strokes in sew
+        ax = axes.flatten()[1]
+        ax.set_xlabel("n shapes in sequence")
+        list_n = [len(x[0]) for x in list_shapes_sorted]
+        ax.hist(list_n)
+        plt.xticks(rotation=45);
+
+        fig.savefig(f"{sdir}/waterfall_hist-Nprims_{Nprims}.pdf")

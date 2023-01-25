@@ -482,6 +482,31 @@ class DatStrokes(object):
         else:
             return row.index.tolist()[0]
 
+    def dataset_extract_strokeslength_list(self, ind_dataset, column):
+        """ Extract a list of items matching the beh strokes in this datsaet trials,
+        in order, and not missing any items.
+        e..g, if column=="shape", then gets the list of shapes matching the beh strokes
+        PARAMS;
+        - ind_dataset, index into Dataset
+        - column, str, name of column to extract
+        RETURNS:
+        - list_vals, list of values, or None, if this dataset has no strokes in self
+        """
+        
+        inds = self._dataset_index_here_given_dataset(ind_dataset)
+        if len(inds)==0:
+            return None
+        else:
+            # get all rows matching this datsate index, sorted by beh stroke index
+            df = self.Dat.iloc[inds].sort_values("stroke_index")
+            
+            # sanity check that got all beh strokes
+            assert np.all(np.diff(df["stroke_index"])==1)
+            assert df.iloc[0]["stroke_index"]==0
+            assert len(df)==len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"])
+
+            return df[column].values.tolist()
+
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
         for ind indexing into the strokes (DatsetStrokes.Dat)

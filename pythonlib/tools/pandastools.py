@@ -1058,7 +1058,7 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                                     F = None, return_as_dict=False, 
-                                    method_if_not_enough_examples="all_none"):
+                                    method_if_not_enough_examples="prune_subset"):
     """ To uniformly sample rows so that spans levels of a given variable (column)
     e..g, if a col is "shape" and you want to get one example random trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
@@ -1079,8 +1079,10 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     if F is None:
         F = {}
 
-    if method_if_not_enough_examples=="prune_subset":
-        assert return_as_dict==True, "otherwise will lose traick of inidces."
+    if False: # This didnt make sense to me...
+        if method_if_not_enough_examples=="prune_subset":
+            assert return_as_dict==True, "otherwise will lose traick of inidces."
+
     # Get the levels of this vars
     if varlevels is None:
         varlevels = df[varname].unique().tolist()

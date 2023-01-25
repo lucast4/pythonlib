@@ -16,6 +16,13 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
     if fill:
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
+def rotate_x_labels(ax, rotation):
+    
+    # draw the figure (update)
+    ax.figure.canvas.draw_idle()
+    # plt.draw() # equivalent to above.
+    
+    ax.set_xticks(ax.get_xticks(), ax.get_xticklabels(), rotation=rotation)
     
 def rose_plot(ax, angles, bins=16, density="frequency_radius", offset=0, lab_unit="degrees",
               start_zero=True, fill=False, skip_plot=False, **param_dict):
@@ -143,7 +150,7 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     ax.legend(handles=handles, framealpha=alpha)
 
 
-def makeColors(numcol, alpha=1, cmap="jet"):
+def makeColors(numcol, alpha=1, cmap="jet", ploton=False):
     """ gets evensly spaced colors. currntly uses jet map
     PREVIOUSLY: plasma
     """
@@ -160,7 +167,14 @@ def makeColors(numcol, alpha=1, cmap="jet"):
             print(cmaps)
             assert False, "dont know this CMAP"
     # cool
-    return pcols
+
+    if ploton:
+        fig, ax = plt.subplots()
+        ax.scatter(range(len(pcols)), range(len(pcols)), c=pcols)
+        ax.set_title('Color list')
+        return pcols, fig, ax
+    else:
+        return pcols
 
 def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
     """ pos between 0 and 1, gets a value between gradient btw
