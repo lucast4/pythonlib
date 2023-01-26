@@ -11,6 +11,7 @@ if MACHINE == "lucast4-MS-7B98":
 	PATH_DATA_NEURAL_RAW = "/mnt/hopfield_data01/ltian/recordings"
 	PATH_DATA_NEURAL_PREPROCESSED = "/gorilla1/neural_preprocess"
 	PATH_DATA_BEHAVIOR_RAW = "/gorilla1/animals"
+	PATH_DATA_BEHAVIOR_RAW_SERVER = "/mnt/Freiwald/kgupta/macaque_data"
 	PATH_ANALYSIS_OUTCOMES = "/gorilla1/analyses"
 	PATH_ANALYSIS_OUTCOMES_SERVER = "/mnt/Freiwald/kgupta/analyses"
 	PATH_DATASET_BEH = "/gorilla1/analyses/database"

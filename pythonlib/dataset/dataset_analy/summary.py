@@ -467,28 +467,40 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
 
             plt.close("all")    
 
-
-def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable = "date_epoch"):
+def _plot_summary_drawing_eachtrial(df, SAVEDIR_FIGS, subfolder, row_variable = "date_epoch"):
     """ Plot all trials for each characater, sorterd in chron orde, with row_variables
     separating them by rows.
     """
 
-    from pythonlib.dataset.plots import plot_beh_grid_singletask_alltrials, plot_beh_grid_flexible_helper
+    from pythonlib.dataset.plots import plot_beh_grid_singletask_alltrials, _plot_beh_grid_flexible_helper
     sdirthis = f"{SAVEDIR_FIGS}/each_task_all_trials/{subfolder}"
     os.makedirs(sdirthis, exist_ok=True)
-    tasklist = Dthis.Dat["character"].unique()
+    tasklist = df["character"].unique().tolist()
+    # tasklist = Dthis.Dat["character"].unique()
     for task in tasklist:
     #     task = "mixture2_1-savedset-50-39276"
         print("task", task)
         
         # New version, plotting trialcode, and coloring by order
-        Dthisthis = Dthis.filterPandas({"character":task}, "dataset")
-        figb, figt = plot_beh_grid_flexible_helper(Dthisthis, row_variable, "trial", 
+        dfthis = df[df["character"]==task]
+        # Dthisthis = Dthis.filterPandas({"character":task}, "dataset")
+        # figb, figt = plot_beh_grid_flexible_helper(Dthisthis, row_variable, "trial", 
+        #                                            plotkwargs={"strokes_by_order":True}, 
+        #                                            max_cols=150)
+        figb, figt = _plot_beh_grid_flexible_helper(dfthis, row_variable, "trial", 
                                                    plotkwargs={"strokes_by_order":True}, 
                                                    max_cols=150)
         figb.savefig(f"{sdirthis}/{task}-beh.pdf");
         figt.savefig(f"{sdirthis}/{task}-task.pdf");
         plt.close("all")
+
+
+
+def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable = "date_epoch"):
+    """ Plot all trials for each characater, sorterd in chron orde, with row_variables
+    separating them by rows.
+    """
+    return _plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable)
 
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
@@ -512,6 +524,17 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     - saves figures.
     """
 
+    return _plot_summary_drawing_examplegrid(Dthis.Dat, SAVEDIR_FIGS, subfolder, yaxis_ver, 
+        LIST_N_PER_GRID, strokes_by_order, 
+        how_to_split_files)
+
+def _plot_summary_drawing_examplegrid(df, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
+        LIST_N_PER_GRID = (1,), strokes_by_order=True, 
+        how_to_split_files = "task_stagecategory"):
+    """ 
+    See plot_summary_drawing_examplegrid
+    """
+
     MAX_SUBPLOTS = 50
 
     print("*** FIX - don't subsample trials. instead make mulitpel plots")
@@ -525,9 +548,9 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
     print(" ** SAVING AT : ", sdirthis)
     
     # 2) one plot for each task category
-    taskcats = Dthis.Dat[how_to_split_files].unique()
+    taskcats = df[how_to_split_files].unique()
     for tc in taskcats:
-        dfthis = Dthis.Dat[Dthis.Dat[how_to_split_files]==tc]
+        dfthis = df[df[how_to_split_files]==tc]
         tasklist = dfthis["character"].unique()
 
         # predict how large the plot will be
@@ -556,7 +579,7 @@ def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="
                 
                 # Plots Iterate, since is single plots. 
                 for i in range(n):
-                    figb, figt = plot_beh_grid_grouping_vs_task(Dthis.Dat, yaxis_ver, 
+                    figb, figt = plot_beh_grid_grouping_vs_task(df, yaxis_ver, 
                                                                 tasklist_this, 
                                                                 max_n_per_grid=max_n_per_grid, 
                                                                 max_n_trials=200,

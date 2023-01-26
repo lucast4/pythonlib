@@ -35,6 +35,31 @@ def _checkPandasIndices(df):
     assert np.unique(np.diff(df.index)) ==1 
 
 
+def load_dataset_daily_helper(animal, date):
+    """Helper, just pass in animal and dat, load the
+    single dataset for this day. 
+    PARAMS;
+    - date, YYMMDD, either str or int
+    RETURNS:
+    - D, dataset.
+    """
+    date = str(date)
+    from pythonlib.dataset.dataset_preprocess.general import extract_expt_metadat
+    list_metadat = extract_expt_metadat(animal=animal, rule=str(date))
+    if len(list_metadat)==0:
+        print(animal, date)
+        assert False, "couldnt find this metadat"
+    elif len(list_metadat)>1:
+        print(animal, date)
+        print(list_metadat)
+        assert False, "found >1 dataset -- not sure what to do"
+    else:
+        # Load
+        expt = list_metadat[0][0]
+        print("Loading this dataset", animal, expt, date)
+        D = load_dataset(animal, expt, rulelist=[date])
+        return D
+
 def load_dataset(animal, expt, rulelist=None, return_rulelist=False):
     """
     Helper to load a dataset, using most common methods. Works for both
@@ -124,7 +149,6 @@ class Dataset(object):
             else:
                 ver = "single"
             self.load_dataset_helper(animal, expt, ver)
-
         elif ver=="generic":
             # then give me behaviro and tasks
             strokes_list = params["strokes_list"]
@@ -132,6 +156,9 @@ class Dataset(object):
             self.Dat = pd.DataFrame({
                 "strokes_beh":strokes_list,
                 "Task":task_list})
+        else:
+            print(ver)
+            assert False
 
     def load_dataset_helper(self, animal, expt, ver="single", rule=""):
         """ load a single dataset. 
@@ -846,6 +873,29 @@ class Dataset(object):
     #     return self._task_hash(Task, use_objects = use_objects, 
     #         original_ver_before_sep21=original_ver_before_sep21)
 
+    def save_generate_string_animal_dates(self):
+        """ Generate a stroing useful for summarizing
+        this datset, epsecialy if is acros aniamsl and dates,
+        RETURNS:
+        - string, like Diego_221103_221103-Pancho_220531_220630,
+        with deates being first and last dates.
+        """
+
+        s = ""
+        list_animals = sorted(self.animals())
+        i=0
+        for an in list_animals:
+            dates = sorted(self.Dat[self.Dat["animal"]==an]["date"].unique())
+
+            d1 = min(dates)
+            d2 = max(dates)
+            if i>0:
+                pref = "-"
+            else:
+                pref = ""
+            s += f"{pref}{an}_{d1}_{d2}"
+            i+=1
+        return s
 
     def save_task_for_dragmonkey(self, indtrial, 
         SDIR = "/data2/analyses/main/resaved_tasks_for_matlab"):
@@ -857,7 +907,10 @@ class Dataset(object):
 
         # 1) Extract the task and save
         T = self.Dat.iloc[indtrial]["Task"]
-        idstring = self.identifier_string()
+        idstring = self.save_generate_string_identifier_wrapper(concise=False)
+        if len(idstring)>35:
+            # get concise
+            idstring = self.save_generate_string_identifier_wrapper(concise=True)
         trialcode = self.Dat.iloc[indtrial]["trialcode"]
         fname = f"trial_{indtrial}-trialcode_{trialcode}"
         T.save_task_for_dragmonkey(subdirname=idstring, fname=fname)
@@ -1106,6 +1159,21 @@ class Dataset(object):
             return False
         else:
             return True
+
+    def _check_character_fixed_los_not_multiple_hashes(self):
+        """ Checks that each unique character that is a fixed task
+        has only one hash, and vice versa
+        Fails assertion if not true"""
+
+        groupdict = self.grouping_get_inner_items("los_info", "character")
+        for los, charlist in groupdict.items():
+            if los[0] is not None:
+                assert len(charlist)==1
+
+        groupdict = self.grouping_get_inner_items("character", "los_info")
+        for char, los in groupdict.items():
+            if char is not None:
+                assert len(los)==1
 
     def _check_consistency(self):
         """ sanity checks, should run this every time after fully load 
@@ -1532,10 +1600,22 @@ class Dataset(object):
 
         return tp
         
-    def identifier_string(self):
-        """ string, useful for saving
+
+    def save_generate_string_identifier_wrapper(self, concise=True):
+        """ Wrapper for making string that identifie sthis dataset
+        PARAMS:
+        - concise, bool, if true, then is shorter, just the animals and first
+        and last date. else, if animal_expt_date
         """
         
+        if concise:
+            return self.save_generate_string_animal_dates()
+        else:
+            return self.identifier_string()
+
+    def identifier_string(self):
+        """ string, useful for saving
+        """    
         a = "_".join(self.animals())
         e = "_".join(self.expts())
         r = "_".join(self.rules())
@@ -5017,14 +5097,19 @@ class Dataset(object):
         return gramdict
 
 
-
     ################ SAVE
     def make_savedir_for_analysis_figures(self, analysis_name):
         from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
         animal = self.animals()
         expt = self.expts()
         rulelist = self.rules()
-        SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/{analysis_name}/{'_'.join(animal)}-{'_'.join(expt)}-{'_'.join(rulelist)}"
+
+        idstring = self.save_generate_string_identifier_wrapper(concise=False)
+        if len(idstring)>35:
+            # get concise
+            idstring = self.save_generate_string_identifier_wrapper(concise=True)
+
+        SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/{analysis_name}/{idstring}"
         print("SAVING at: ", SDIR_MAIN)
         os.makedirs(SDIR_MAIN, exist_ok=True)
         return SDIR_MAIN

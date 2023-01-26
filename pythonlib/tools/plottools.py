@@ -16,6 +16,13 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
     if fill:
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
+def rotate_x_labels(ax, rotation):
+    
+    # draw the figure (update)
+    ax.figure.canvas.draw_idle()
+    # plt.draw() # equivalent to above.
+    
+    ax.set_xticks(ax.get_xticks(), ax.get_xticklabels(), rotation=rotation)
     
 def rose_plot(ax, angles, bins=16, density="frequency_radius", offset=0, lab_unit="degrees",
               start_zero=True, fill=False, skip_plot=False, **param_dict):
@@ -143,7 +150,7 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     ax.legend(handles=handles, framealpha=alpha)
 
 
-def makeColors(numcol, alpha=1, cmap="jet"):
+def makeColors(numcol, alpha=1, cmap="jet", ploton=False):
     """ gets evensly spaced colors. currntly uses jet map
     PREVIOUSLY: plasma
     """
@@ -160,7 +167,14 @@ def makeColors(numcol, alpha=1, cmap="jet"):
             print(cmaps)
             assert False, "dont know this CMAP"
     # cool
-    return pcols
+
+    if ploton:
+        fig, ax = plt.subplots()
+        ax.scatter(range(len(pcols)), range(len(pcols)), c=pcols)
+        ax.set_title('Color list')
+        return pcols, fig, ax
+    else:
+        return pcols
 
 def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
     """ pos between 0 and 1, gets a value between gradient btw
@@ -576,7 +590,6 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
     """
-
     if xlabels is not None:
         tight = False # or else cannot see
 
@@ -701,14 +714,18 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                 if col_labels:
                     if row==0:
                         ax.set_title(col_labels[col])
+
                 if row_labels:
                     if col==0:
                         ax.set_ylabel(row_labels[row])
+
             if naked_axes:
                 ax.set_yticklabels([])
                 ax.set_xticklabels([])
                 ax.tick_params(axis='both', which='both',length=0)
 
+            # smaller font size, since can be long tirles
+            ax.title.set_fontsize(10)
 
     # x and y lim should contain all data
     if return_axes:
