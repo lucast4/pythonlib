@@ -590,7 +590,6 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     - fig, 
     NOTE: will overlay plots if multiple pltos on same on.
     """
-
     if xlabels is not None:
         tight = False # or else cannot see
 
@@ -715,14 +714,18 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                 if col_labels:
                     if row==0:
                         ax.set_title(col_labels[col])
+
                 if row_labels:
                     if col==0:
                         ax.set_ylabel(row_labels[row])
+
             if naked_axes:
                 ax.set_yticklabels([])
                 ax.set_xticklabels([])
                 ax.tick_params(axis='both', which='both',length=0)
 
+            # smaller font size, since can be long tirles
+            ax.title.set_fontsize(10)
 
     # x and y lim should contain all data
     if return_axes:

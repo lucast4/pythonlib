@@ -867,7 +867,9 @@ def preprocess_task_train_test(D, expt, method="probes"):
     D.analy_reassign_monkeytraintest(key, list_train, list_test)
 
 
-def extract_expt_metadat(expt=None, animal=None, rule=None, metadat_dir = "/home/lucast4/drawmonkey/expt_metadat"):
+def extract_expt_metadat(expt=None, animal=None, rule=None, 
+        metadat_dir = f"{PATH_DRAWMONKEY_DIR}/expt_metadat", 
+        metadat_dir_daily = f"{PATH_DRAWMONKEY_DIR}/expt_metadat_daily"):
     """ Get matadata for this expt, without having to load a Dataset first. useful if want to
     know what rules exits (for exampel) before extracting those datsaets.
     This is looks for expt metadat yaml files defined usually in drawmonkey repo.
@@ -891,6 +893,14 @@ def extract_expt_metadat(expt=None, animal=None, rule=None, metadat_dir = "/home
 
     list_path = findPath(metadat_dir, [pathwildcard], None)
     list_expts = [(extractStrFromFname(path, "-", "all")) for path in list_path]
+
+    if len(list_expts)==0:
+        # Search for daily
+        list_path = findPath(metadat_dir_daily, [pathwildcard], None)
+        list_expts_daily = [(extractStrFromFname(path, "-", "all")) for path in list_path]
+
+        list_expts = list_expts+list_expts_daily
+        
     return list_expts
 
 
@@ -899,7 +909,6 @@ def get_rulelist(animal, expt):
     RETURNS:
     - list of str, unique rules
     """
-    from pythonlib.dataset.dataset_preprocess.general import extract_expt_metadat
     list_expts = extract_expt_metadat(animal=animal, expt=expt, metadat_dir=f"{PATH_DRAWMONKEY_DIR}/expt_metadat") ##CHANGE## metadat_dir if necessary
     rulelist = [e[1] for e in list_expts]
     assert len(rulelist)>0

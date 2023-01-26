@@ -1139,7 +1139,7 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         if groupinner=="index":
             itemsinner = dfthisgroup.index.tolist()
         else:
-            itemsinner = dfthisgroup[groupinner].unique()
+            itemsinner = dfthisgroup[groupinner].unique().tolist()
         groupdict[lev] = itemsinner
     return groupdict
 

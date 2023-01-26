@@ -64,7 +64,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
     return figbeh, figtask
 
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
-def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
+def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
     plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True):
     """ [GOOD] flexible helper, can choose what variable to group by.
@@ -80,8 +80,6 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
     tight (since will not see the trialcode).
     """
     from pythonlib.tools.pandastools import filterPandas
-
-    dfthis = D.Dat
 
     if strokes_by_order:
         plotkwargs["strokes_by_order"] = True
@@ -146,6 +144,19 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
 
     return figbeh, figtask
 
+def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
+    max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True):
+    """ 
+    see _plot_beh_grid_flexible_helper
+    """
+    from pythonlib.tools.pandastools import filterPandas
+
+    dfthis = D.Dat
+    return _plot_beh_grid_flexible_helper(dfthis, row_group, col_group, row_levels, 
+        col_levels, max_n_per_grid, plotfuncbeh, max_cols, max_rows, plot_task, 
+        plotkwargs, strokes_by_order, xlabel_trialcode)
+
 
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
     plotfuncbeh=None, max_n_per_grid=1, max_n_trials=50, max_cols=150):
@@ -196,9 +207,13 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
     dfthis = applyFunctionToAllRows(dfthis, row_mapper, "row")
     dfthis = applyFunctionToAllRows(dfthis, col_mapper, "col")
 
-
     # tasknames too long, so prune for plotting
-    tasklist_titles = [t[:10] + ".." + t[-5:] for t in tasklist]
+    if False:
+        tasklist_titles = [t[:10] + ".." + t[-5:] for t in tasklist]
+    else:
+        # instead, make text smaller
+        tasklist_titles = [t for t in tasklist]
+
     # Plot
     figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, 
         col_labels = tasklist_titles, row_labels=row_levels, plotfuncbeh=plotfuncbeh, 
@@ -343,6 +358,7 @@ def plot_beh_day_vs_trial(D, prim_list, SAVEDIR, Nmin_toplot=5, max_cols=40):
         Nmin_toplot = 5 # only ploit if > this many trials across all days.
         max_cols = 40 # max to plot in single day
     """
+    assert False, "DONE! see simple summary"
     assert False, "see analy/primtiives - port plot to here"
 
 
