@@ -500,7 +500,7 @@ def plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable 
     """ Plot all trials for each characater, sorterd in chron orde, with row_variables
     separating them by rows.
     """
-    return _plot_summary_drawing_eachtrial(Dthis, SAVEDIR_FIGS, subfolder, row_variable)
+    return _plot_summary_drawing_eachtrial(Dthis.Dat, SAVEDIR_FIGS, subfolder, row_variable)
 
 
 def plot_summary_drawing_examplegrid(Dthis, SAVEDIR_FIGS, subfolder, yaxis_ver="date", 
