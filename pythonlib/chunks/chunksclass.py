@@ -138,10 +138,12 @@ class ChunksClassList(object):
         
         list_chunks, list_hier, list_fixed_order = find_chunks_hier(self.Task, 
             self.Expt, self.Rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
+            
         if DEBUG:
             print("list_chunks", list_chunks)
             print("list_hier", list_hier)
             print("list_fixed_order", list_fixed_order)
+
 
         # - Make one ChunksClass instance for each chunk:
         # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)

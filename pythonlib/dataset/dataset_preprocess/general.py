@@ -6,53 +6,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 from ..analy_dlist import extract_strokes_monkey_vs_self
 from pythonlib.globals import PATH_DRAWMONKEY_DIR
 from .dates import preprocess_dates
-
-def _get_default_grouping_map_tasksequencer_to_rule():
-    """ Dict that maps tasksequencer params (which in matlab
-    dictates the sequencing rule for each block) to a string name for the 
-    rule. Hard code these, but they are general across expts
-    """
-    grouping_map_tasksequencer_to_rule = {}
-    grouping_map_tasksequencer_to_rule[(None, None)] = "base"
-
-    grouping_map_tasksequencer_to_rule[("direction", "3.14")] = "L"
-    grouping_map_tasksequencer_to_rule[("direction", "0.00")] = "R"
-
-
-    grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "R"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("right",))] = "R"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "L"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("left",))] = "L"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "D"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("down",))] = "D"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "U"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("up",))] = "U"
-    grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "TR"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
-    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "VlL1"
-    
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-9-3', 'line-9-4', 'Lcentered-6-8'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('V2-2-2', 'V2-2-4', 'V-2-4', 'line-13-14', 'line-8-4', 'line-13-13', 'line-8-3'))] = "llV1R"
-
-    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm"
-    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
-    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm"
-    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-11-1', 'line-11-2'))] = "AnBmHV"
-    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('squiggle3-3-1', 'V-2-4'))] = "AnBm"
-
-    grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
-
-    grouping_map_tasksequencer_to_rule[(
-        'prot_prims_in_order_AND_directionv2', 
-        ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBmTR"
-
-    grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
-
-    return grouping_map_tasksequencer_to_rule
+from pythonlib.dataset.modeling.discrete import _get_default_grouping_map_tasksequencer_to_rule
 
 def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
@@ -266,8 +220,13 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+    elif "shapedirseq" in expt:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
 
-    elif expt in ["shapedirsequence1", "grammar1b", "grammardir1"]:
+    elif expt in ["grammar1b", "grammardir1"]:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -595,9 +554,12 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         list_rule.append(_index_to_rule(ind))
     # Assign rule back into D.Dat
     D.Dat["epoch"] = list_rule
+    D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
     print("Modified D.Dat[epoch]")
     print("These counts for epochs levels: ")
     print(D.Dat["epoch"].value_counts())
+    print("These counts for epoch_rule_tasksequencer levels: ")
+    print(D.Dat["epoch_rule_tasksequencer"].value_counts())
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
@@ -791,6 +753,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         # 2) Autoamticlaly categorize probes based on task features?
         if mapper_auto_rename_probe_taskgroups:
             map_task_to_taskgroup = taskgroups_assign_each_probe(D)
+
             # append_probe_status = False, so that only appends 1x (the last call)
             taskgroup_reassign_by_mapper(D, None, map_task_to_taskgroup, append_probe_status=False,
                 what_use_for_default="taskgroup")

@@ -957,6 +957,31 @@ class Dataset(object):
 
         return list_char, list_score
 
+    def taskgroup_char_ntrials_print_save(self, sdir=None, fname="taskgroup_char_trial"):
+        """ Print all the existing tasks in each taskgroup, and thier n trials,
+        and save to text file, if sdir is not None, will call file:
+        f"{sdir}/{fname}.txt"
+        """
+        from pythonlib.tools.expttools import writeStringsToFile
+
+        # 1) collect n trials and strings lines.
+        groupdict = self.grouping_get_inner_items("taskgroup", "character")
+        list_str = []
+        for key, vals in groupdict.items():
+            print(key)
+            list_str.append(key)
+            for char in vals:
+                n = sum(self.Dat["character"]==char)
+                print(f" - {char}  -  {n} trials")
+                list_str.append(f" - {char}  -  {n} trials")
+
+        if sdir is not None:
+            fname = f"{sdir}/{fname}.txt"
+            writeStringsToFile(fname, list_str)
+            print("Saved to: ", fname)
+
+
+
     def taskcharacter_find(self, setname, setnum, index):
         """ Get all indices that have this fixed task name
         <setname>-<setnum>-<index>-<hash>
@@ -4897,8 +4922,34 @@ class Dataset(object):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
         self.Dat["INSTRUCTION_COLOR"] = list_issup
 
+    def supervision_reassign_epoch_rule_by_color_instruction(self):
 
-    def supervision_reassign_epoch_rule_by_color_instruction(self, new_col_name="epoch", overwrite=False):
+        # 1) conjunction of color and epoch
+        self._supervision_reassign_epoch_rule_by_color_instruction("epoch", "epoch_color", False)
+
+        # 2) which epochs have multipel color values? 
+        list_epochs_to_update = []
+        list_epochs = self.Dat["epoch"].unique().tolist()
+        for ep in list_epochs:
+            n = len(self.Dat[self.Dat["epoch"]==ep]["epoch_color"].unique())
+            if n>1:
+                # Then multiple color instruction values. use epoch_color
+                list_epochs_to_update.append(ep)
+        
+        print("For these epochs, replacing epoch with epoch_color:")
+        print(list_epochs_to_update)
+
+        # 3) replace epoch with epoch_color, if necessary
+        def F(x):
+            if x["epoch"] in list_epochs_to_update:
+                return x["epoch_color"]
+            else:
+                return x["epoch"]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+
+    def _supervision_reassign_epoch_rule_by_color_instruction(self, old_col_name = "epoch", 
+            new_col_name="epoch_color", 
+            overwrite=False):
         """ Replaces epoch column with conjunction of (i) current value in epoch and
         (ii) whether trial is color-based supervision. Idea is that if using color,
         then this is an entirely different kind of "rule"
@@ -4925,7 +4976,7 @@ class Dataset(object):
         # self.Dat["INSTRUCTION_COLOR"] = list_issup
 
         # 2) get conjuction of epoch and instruction
-        grouping_vars = [new_col_name, "INSTRUCTION_COLOR"]
+        grouping_vars = [old_col_name, "INSTRUCTION_COLOR"]
         self.grouping_append_col(grouping_vars, new_col_name, use_strings=True, strings_compact=True)
 
         print("Reassigned rules taking conjucntion of old rules x color instruction")
@@ -5027,6 +5078,17 @@ class Dataset(object):
 
         # Return the grammardict, holding all the parses
         return GD
+
+    def grammar_tasksequencer_rules_matlab(self, ind):
+        """ REturn the tasksequencer rules used in matlab to generate
+        the ObjectClass seuqence
+        """
+
+        # 1) get the matlab params
+
+        # 2) [optional] convert to a string code for post-processing.
+
+        assert False, 'this is alread in self.Dat["epoch_rule_tasksequencer"] To reextract, see epoch_grouping_reassign_by_tasksequencer'
 
     def grammar_parses_extract(self, ind, list_rules, fail_if_empty=True):
         """ Extract set of parses for each rule.

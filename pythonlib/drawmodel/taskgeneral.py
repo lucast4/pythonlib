@@ -1181,6 +1181,24 @@ class TaskClass(object):
             self._DatSegs = datsegs
             return self._DatSegs
 
+    def tokens_concat(self, tokens):
+        """ concatenate these toeksn into a singl etoekn with average features
+        IN PROGRESS: add mpre things
+        PARAMS:
+        - tokens, list of dicts
+        RETURNS:
+        - tok, a single dict
+        """
+
+        gridx = np.mean([t["gridloc"][0] for t in tokens])
+        gridy = np.mean([t["gridloc"][1] for t in tokens])
+
+        tok = {
+            "gridloc":(gridx, gridy)
+        }
+
+        return tok
+
     def tokens_reorder(self, inds_taskstrokes):
         """ Return datsegs in any desired order.
         NOTE: This must regenerate datsegs, becuasse the relational features need to know
@@ -1583,7 +1601,7 @@ class TaskClass(object):
                 "diag":_diag(i),
                 "max_wh":_max_wh(i),
                 "Prim":Prims[i] if Prims is not None else None,
-                "ind_taskstroke_orig":inds_taskstrokes[i]
+                "ind_taskstroke_orig":inds_taskstrokes[i],
                 })
             
             # 2) Things that depend on grid

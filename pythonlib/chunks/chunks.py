@@ -43,10 +43,20 @@ def check_all_strokes_used(chunks, nstrokes):
 ## - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
 def find_chunks_hier(Task, expt, rule, strokes=None, params=None, 
     use_baseline_if_dont_find=False, DEBUG=False):
+    """Find possible parses given this Task and rule. 
+    PARAMS;
+    - expt, often None
+    - rule, string, usualyl format: <category>-<subcat>-<rule>
+    """
+    from pythonlib.dataset.modeling.discrete import map_from_rulestring_to_ruleparams
     
     if params is None:
         params = {}
     objects = Task.Shapes
+    tokens = Task.tokens_generate()
+    # NOTE: objects is just
+    # P = tokens[0]["Prim"]
+    # objects[0] = P.extract_as("shape")
 
     if strokes is not None:
         from pythonlib.tools.stroketools import check_strokes_identical
@@ -55,55 +65,71 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
     else:
         strokes = Task.Strokes
 
-    # get shape-order from rule, if applicable
-    if '-' in rule: # e.g. 'rank-LVI', 'chain-IVL'
-        s = rule.split('-')
-        rule = s[0]
-        shape_order = s[1]
+    def _fixed_order_for_this_hier(ruledict, hier):
+        """Repository of params for deciding on fixed order
+        for different levels of the hierarcy, depending on the
+        rule
+        """
 
-
-    # print("task", Task)
-    # print("expt", expt)
-    # print("rule", rule)
-    # print("objects", objects)
- 
-    def _fixed_order_for_this_hier(rule, hier):
-        if rule in ['left', 'right', 'up', 'down']:
-            fixed_order = fixed_order_for_this_hier(hier, False, False)
-        elif rule in ['rank']:
-            fixed_order = fixed_order_for_this_hier(hier, False, True) # top reorder False, bottom True
-        elif rule in ['chain']:
-            fixed_order = fixed_order_for_this_hier(hier, False, False) # top and bottom reorder False
-        else:
-            assert False, 'invalid rule'
-        return fixed_order
+        # NOTE: bools are NOT fixed order.
+        map_rule_to_fixedorder = {
+            ("ss", "rank"): [False, True], # [alow reorder, allow reorder.]
+            ("ss", "chain"): [False, False],
+            ("dir", "null"): [False, False],
+            ("ch", "dir2"): [False, True],
+            ("ch", "dir1"): [True, False],
+            ("ch", "dirdir"): [False, False],
+        }
+        key = (ruledict["categ"], ruledict["subcat"])
+        tmp = map_rule_to_fixedorder[key] # [False, True]
+        return fixed_order_for_this_hier(hier, tmp[0], tmp[1])
 
     # @param objects, list of lists in format ['shape', {x:, y:}]
     # @param direction, one of [left,right,up,down]
     # @return objects, sorted in direction
     def _get_sequence_on_dir(objects, direction):
-        # objects: [
+        """Find a single parse that reorders objects based on 
+        a global spatial direction. 
+        TODO: break ties. currently just takes their input order
+        """
+        # objects:  either:
+        # [
         # ['Lcentered-3-0', {'x': -2.342, 'y': 0.05}],
         # ['V-4-0', {'x': -1.146, 'y': 0.05}],
         # ['line-3-0', {'x': 0.05, 'y': 0.05}]
         # ]
+        # OR:
+        # list of dict.
         def _getX(e):
-            return e[1]['x']
+            if isinstance(e, list) and len(e)==2:
+                return e[1]['x']
+            elif isinstance(e, dict):
+                return e['x']
+            else:
+                print(e)
 
         def _getY(e):
-            return e[1]['y']
+            if isinstance(e, list) and len(e)==2:
+                return e[1]['y']
+            elif isinstance(e, dict):
+                return e['y']
+            else:
+                print(e)
 
+        # print("TODO: break ties")
+        # print("OBJECTS:", objects)
+        # assert False
         # NOTE: does not expect/handle ambiguous cases (i.e. two in row or col)
-        if direction=='left':
+        if direction=='L':
             # sort by descending x
             return sorted(objects, reverse=True, key=_getX)
-        elif direction=='right':
+        elif direction=='R':
             # sort by ascending x
             return sorted(objects, key=_getX)
-        elif direction=='up':
+        elif direction=='U':
             # sort by ascending y
             return sorted(objects, key=_getY)
-        elif direction=='down':
+        elif direction=='D':
             # sort by descending y
             return sorted(objects, reverse=True, key=_getY)
         else:
@@ -113,11 +139,18 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
     # @param ordering_rule, one of [rank,chain]
     # @return objects, sorted in direction
     def _get_sequences_on_ordering_rule(objects, rule, shape_order):
+        """Get set of parses for ordering by shapes, using
+        specific strategy (e.g., rank or chain)
+        """ 
         # objects: [
         # ['Lcentered-3-0', {'x': -2.342, 'y': 0.05}],
         # ['V-4-0', {'x': -1.146, 'y': 0.05}],
         # ['line-3-0', {'x': 0.05, 'y': 0.05}]
         # ]
+        # print(objects)
+        # print(rule)
+        # print(shape_order)
+        # assert False, "make sure names are correct"
         if rule=='rank':
             # AABBCC; so, need to specify A,B,C first
             return _chunks_by_shape_rank(objects, shape_order)
@@ -125,6 +158,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
             # ABCABC; so, need to specify A,B,C first
             return _chunks_by_shape_chain(objects, shape_order)
         else:
+            print("RULETHIS", rule)
             assert False, 'invalid rule'
 
     def _inds_by_shape(objects, shape):
@@ -186,38 +220,178 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
         #print("all_shape_ind_perms", [list(xx) for xx in itertools.product(*result)])
         return [list(xx) for xx in itertools.product(*result)]
 
-    # For now, concats are never done...
+    #### Define chunks. For now, concats are never done...
     chunks = list(range(len(objects))) # never concat strokes
     list_chunks = [chunks] # only one way
 
-    if rule in ["left", "right", "up", "down"]:
-        shape_order = _get_sequence_on_dir(objects, rule)
+    #### Define hierarchies
+    ruledict = map_from_rulestring_to_ruleparams(rule)
+    if ruledict["categ"]=="dir":
+    # if rule in ["left", "right", "up", "down"]:
+        # print(objects)
+        shape_order = _get_sequence_on_dir(objects, ruledict["params_good"])
+        # print(shape_order)
+        # assert False
         hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
         list_hier = [hier]
-    elif rule in ["rank", "chain"]:
-        assert expt in ["shapesequence2"], "code this rule up more generally, so dont need to pass in expt."
-        if shape_order == 'IVL':
-            s_order = ('line','V','Lcentered')
-        elif shape_order == 'LVI':
-            s_order = ('Lcentered','V','line')
-        else:
-            assert False, 'incorrect shape_order after rule-'
-        list_hier = _get_sequences_on_ordering_rule(objects, rule, s_order)
+    elif ruledict["categ"]=="ss": # shape sequence:
+    # elif rule in ["rank", "chain"]:
+        # assert expt in ["shapesequence2"], "code this rule up more generally, so dont need to pass in expt."
+
+        # Map from shapeorderstring (e.g, LVl1) to list of shapes
+        s_order = ruledict["params_good"]
+        rank_or_chain = ruledict["subcat"]
+
+        # if shape_order == 'IVL':
+        #     s_order = ('line','V','Lcentered')
+        # elif shape_order == 'LVI':
+        #     s_order = ('Lcentered','V','line')
+        # else:
+        #     assert False, 'incorrect shape_order after rule-'
+        list_hier = _get_sequences_on_ordering_rule(objects, rank_or_chain, s_order)
+    elif ruledict["categ"] == "ch" and ruledict["subcat"] == "dir2":
+        # Concrete chunk, with direction across chunks fixed, but
+        # direction within variable (i.e., chunk_mask)
+        # Dir across chunks is defined by param
+
+        paramsthis = {
+            # "expt":expt,
+            "rule":"concrete_chunk",
+            "shapes_in_order":ruledict["params_good"][0],
+            "orientation":ruledict["params_good"][1]
+        }
+        list_groups, left_over = find_object_groups_new(Task, paramsthis)
+        
+
+        # 1) Get all hierarchices, holding hcyunks constaint
+        list_possible_inds = list(range(len(tokens)))
+        list_hier = sample_all_possible_chunks(list_groups, list_possible_inds)
+
+        # Reorder each of the hier by direction in space
+        direction = ruledict["params_good"][2]
+
+        # concatenate each chunk into a temporary object, with mean positions
+        def _mean_loc(inds_taskstrokes):
+            tokens_this = [tokens[i] for i in inds_taskstrokes]
+            tok = Task.tokens_concat(tokens_this)
+            return {
+                "x": tok["gridloc"][0],
+                "y": tok["gridloc"][1],
+                "inds_taskstrokes": inds_taskstrokes
+            }
+
+        list_hier_reordered = []
+        for hier in list_hier:
+            locations = [_mean_loc(inds_taskstrokes) for inds_taskstrokes in hier]
+            locations = _get_sequence_on_dir(locations, direction)
+            hier_reordered = [x["inds_taskstrokes"] for x in locations]
+            list_hier_reordered.append(hier_reordered)
+        list_hier = list_hier_reordered
+
+    elif ruledict["categ"] == "alternation":
+        assert False, "FILL THIS IN"
+
+        #             # Alternate between lines and circles
+        #             # - pick a random circle, then 
+        #             import random
+
+        #             def _eligible_tokens(tokens_remain, tokens_taken):
+        #                 """ 
+        #                 all are lists of indices
+        #                 """
+        #                 # only those not taken and not identical shape to prev taken
+        #                 if len(tokens_taken)==0:
+        #                     tokens_elegible = tokens_remain
+        #                 else:
+        #                     tokens_elegible = [t for t in tokens_remain if list_tokens[t] != list_tokens[tokens_taken[-1]]]
+        #                     if len(tokens_elegible)==0 and len(tokens_remain)>0:
+        #                         # then open up eligibility to all tokens
+        #                         tokens_elegible = tokens_remain
+        #                 return tokens_elegible
+
+        #             def _sample_token(tokens_remain, tokens_taken):
+        #                 tokens_elig = _eligible_tokens(tokens_remain, tokens_taken)
+        #                 ind_tok = random.choice(tokens_elig)
+                        
+        #                 tokens_taken.append(ind_tok)
+        #                 tokens_remain = [t for t in tokens_remain if t!=ind_tok]
+        #                 return tokens_remain, tokens_taken
+                        
+        #             def _sample_single_chunk(list_tokens):
+        #                 tokens_remain = range(len(list_tokens))
+        #                 tokens_taken = []
+        #                 while len(tokens_remain)>0:
+        #                     tokens_remain, tokens_taken = _sample_token(tokens_remain, tokens_taken)
+        #                 return tokens_taken
+
+        #             # list_tokens = ["line", "circle", "line", "circle"]
+        #             list_tokens = [o[0] for o in objects]
+        #             list_chunks = []
+        #             list_hier = []
+        #             Nsamp = 20
+        #             for _ in range(Nsamp):
+        #                 list_hier.append(_sample_single_chunk(list_tokens))
+        #                 list_chunks.append(list(range(len(list_tokens))))
+
     else:
         print(rule)
+        print(ruledict)
         assert False, "code up rule"
 
+    ### Expand chunks and fixed order to match number of identified hiers
     list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
-    list_fixed_order = [_fixed_order_for_this_hier(rule, hier) for hier in list_hier]
-
+    list_fixed_order = [_fixed_order_for_this_hier(ruledict, hier) for hier in list_hier]
+    
     if DEBUG:
-        print("list_chunks", list_chunks)
-        print("list_hier", list_hier)
-        print("list_fixed_order", list_fixed_order)
+        print("list_chunks")
+        for chunk in list_chunks:
+            print(chunk)
+        print("list_hier")
+        for hier in list_hier:
+            print(hier)
+        print("list_fixed_order")
+        for fo in list_fixed_order:
+            print(fo)
 
+    # How to deal with hier that dont get all strokes.
+    # Replace it entirely with a single random parse.
+    def _random_parse(tokens):
+        """ sampel a single ranodm parse, fixed order
+        """
+        import random
+        tokens_indices = range(len(tokens))
+        hier = [[i] for i in random.sample(tokens_indices, len(tokens))]
+        chunks = [[i] for i in range(len(tokens))]
+        fixed_order = fixed_order_for_this_hier(hier, False, False)
+        return hier, chunks, fixed_order
+
+    inds_all = list(range(len(tokens)))
+    for i, hier in enumerate(list_hier):
+        inds_used = [xx for x in hier for xx in x]
+        inds_not_used = [ind for ind in inds_all if ind not in inds_used]
+        if len(inds_not_used)>0:
+            # replace this with a random parse
+            h, c, f = _random_parse(tokens)
+            list_hier[i] = h
+            list_chunks[i] = c
+            list_fixed_order[i] = f
+
+    # Sanity checks: Should always be something
+    for hier in list_hier:
+        if len(hier)==0:
+            print(list_hier)
+            print(ruledict)
+            Task.plotStrokes()
+            assert False
+    if len(list_hier)==0:
+        print(ruledict)
+        Task.plotStrokes()
+        assert False
+    
     # Return as a list of possible chunkings.
     assert len(list_chunks)==len(list_hier) # TODO: check, is this necesary?
     assert len(list_hier)==len(list_fixed_order)
+    assert len(list_hier)>0, "why empty?"
 
     return list_chunks, list_hier, list_fixed_order 
 
@@ -466,7 +640,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
 def find_object_groups_new(Task, params):
     """ return list of groups (list of objects/shapes) passing constraints.
     Uses tokens from Task.tokens_generate(), and assumes this is unordered list. 
-    So assumes any ordering of tokens, which means this outputs different ways
+    So allows for any ordering of tokens, which means this outputs different ways
     of chunking. This differs from BehClass methods for finding motifs, because
     the latter assumes ordered tokens.
     e..g, find list of lollis, where each lolli is a set of 2 inds in objects
@@ -509,15 +683,16 @@ def find_object_groups_new(Task, params):
         Uses grid locations. direction from i to j """
         xdiff, ydiff = _posdiffs_grid(i,j)
         if np.isclose(xdiff, 0.) and ydiff ==1.:
-            return "up"
+            return "U"
         elif np.isclose(xdiff, 0.) and ydiff ==-1.:
-            return "down"
+            return "D"
         elif xdiff ==-1. and np.isclose(ydiff, 0.):
-            return "left"
+            return "L"
         elif xdiff ==1. and np.isclose(ydiff, 0.):
-            return "right"
+            return "R"
         else:
-            return "far"
+            # FAR
+            return "f"
     def _orient(i):
         """ Orientation, in string, {'horiz, 'vert', ...}
         """
@@ -535,38 +710,83 @@ def find_object_groups_new(Task, params):
             assert False
 
 
-    # Given a rule for chunking, extract all the ways of chunking
-    if params["expt"]=="gridlinecircle" and params["rule"]=="lolli":
-        # get list of all lollis possible
-        list_groups = [] # aleays [(circle, line), ...]
-
+    if params["rule"]=="concrete_chunk":
+        # concrete chunk is grouping of defined shape/locations. spatially defined, (i.e,, any temporal order)
+        shapes_in_order = params["shapes_in_order"]
+        orientation = params["orientation"]
+        # e.g {'rule': 'concrete_chunk', 'shapes_in_order': ['line-8-4-0', 'line-8-3-0'], 'orientation': 'U'}
+        if len(shapes_in_order)>2:
+            print(shapes_in_order)
+            assert False, "# not coded yet, assuming length 2"
+        
+        list_groups = [] # 
         for i in range(len(objects)):
-            for j in range(i+1, len(objects)):
-                # print(i, j)
-                # print(_oshape(i), _oshape(j), _direction_grid(i, j))
-                if _oshape(i)=="circle" and _oshape(j)=="hline":
-                    if _direction_grid(i, j) in ["left", "right"]:
-                        list_groups.append([i,j])
-                elif _oshape(i)=="circle" and _oshape(j)=="vline":
-                    if _direction_grid(i, j) in ["up", "down"]:
-                        list_groups.append([i,j])
-                elif _oshape(i)=="hline" and _oshape(j)=="circle":
-                    if _direction_grid(i, j) in ["left", "right"]:
-                        list_groups.append([i,j])
-                elif _oshape(i)=="vline" and _oshape(j)=="circle":
-                    if _direction_grid(i, j) in ["up", "down"]:
-                        list_groups.append([i,j])
+            for j in range(len(objects)):
+                if _oshape(i)==shapes_in_order[0] and _oshape(j)==shapes_in_order[1] and _direction_grid(i, j)==orientation:
+                    # Found a chunk, include it
+                    if False:
+                        print("FOUDN THIS")
+                        print(i, j)
+                        print(_oshape(i), _oshape(j), _direction_grid(i, j))
+                    list_groups.append([i, j])
+
+                # assert False
+                # if _oshape(i)=="circle" and _oshape(j)=="hline":
+                #     if _direction_grid(i, j) in ["left", "right"]:
+                #         list_groups.append([i,j])
+                # elif _oshape(i)=="circle" and _oshape(j)=="vline":
+                #     if _direction_grid(i, j) in ["up", "down"]:
+                #         list_groups.append([i,j])
+                # elif _oshape(i)=="hline" and _oshape(j)=="circle":
+                #     if _direction_grid(i, j) in ["left", "right"]:
+                #         list_groups.append([i,j])
+                # elif _oshape(i)=="vline" and _oshape(j)=="circle":
+                #     if _direction_grid(i, j) in ["up", "down"]:
+                #         list_groups.append([i,j])
+
         # Find what objects are left over
         list_groups_flat = [xx for x in list_groups for xx in x]
         left_over = [i for i in range(len(objects)) if i not in list_groups_flat]
+    else:
+        print(params)
+        assert False, "code it"
 
-    # print(list_groups)
-    # assert False 
+
+
+
+    # # Given a rule for chunking, extract all the ways of chunking
+    # if params["expt"]=="gridlinecircle" and params["rule"]=="lolli":
+    #     # get list of all lollis possible
+    #     list_groups = [] # aleays [(circle, line), ...]
+
+    #     for i in range(len(objects)):
+    #         for j in range(i+1, len(objects)):
+    #             # print(i, j)
+    #             # print(_oshape(i), _oshape(j), _direction_grid(i, j))
+    #             if _oshape(i)=="circle" and _oshape(j)=="hline":
+    #                 if _direction_grid(i, j) in ["left", "right"]:
+    #                     list_groups.append([i,j])
+    #             elif _oshape(i)=="circle" and _oshape(j)=="vline":
+    #                 if _direction_grid(i, j) in ["up", "down"]:
+    #                     list_groups.append([i,j])
+    #             elif _oshape(i)=="hline" and _oshape(j)=="circle":
+    #                 if _direction_grid(i, j) in ["left", "right"]:
+    #                     list_groups.append([i,j])
+    #             elif _oshape(i)=="vline" and _oshape(j)=="circle":
+    #                 if _direction_grid(i, j) in ["up", "down"]:
+    #                     list_groups.append([i,j])
+    #     # Find what objects are left over
+    #     list_groups_flat = [xx for x in list_groups for xx in x]
+    #     left_over = [i for i in range(len(objects)) if i not in list_groups_flat]
+
+    # # print(list_groups)
+    # # assert False 
     return list_groups, left_over
 
 def find_object_groups(Task, params):
     """ return list of groups (list of obj) passing constraints.
-    General-purpse, takes in objects (Task.Shapes).
+    General-purpse, takes in objects (Task.Shapes). This does not care aobut the 
+    ordering in Task tokens, instead is about goruping in space.
     e..g, find list of lollis, where each lolli is a set of 2 inds in objects
     NOTE:
     - a given object can be used more than once, or not at all,
@@ -659,57 +879,52 @@ def find_object_groups(Task, params):
         
                     
 
-def sample_a_lolli_list(list_lollis, list_possible_inds):
-    """ Hacky, but good template for future mods.
-    get all ways of sampling lollis, given sets of objects. 
+def sample_a_lolli_list(list_groups, list_possible_inds):
+    """ get all ways of sampling groups, given sets of groups. 
     IN:
-    - list_lollis, list of all 2-tuples (circle, line), which are lollis.
-    - left_over, list of ints, those unused in list_lollis.
+    - list_groups, list of all n-tuples (circle, line), which are groups.
+    e.g., [[1,2], [0,2], [1,2,3]]
     - list_possible_inds, list of inds for all objects in storkes.
     --- usually just range(len(strokes))
     OUT:
-    - sample randomly a single chunk that maximizes use of lollis.
+    - chunk, list of list of ints,a single  randomly sampled chunk that maximizes use of lollis.
+    NOTE:
     - will use each obj (int) once and onlye once.
-    - will be sorted.
+    - will be sorted, since assumes temporal order doesnt matter.
     """
     import random
 
-    def _is_eligible(lolli, items_selected):
+    def _is_eligible(gp, items_selected):
+        # Returns bool for whether this group is 
+        # eligible (onky if its items are not in items_selected)
         # no items already selected
         # items_selected, flat list of inds
-        for l in lolli:
-            # if len(items_selected)>3:
-            #     print(items_selected)
-            #     assert False
+        for l in gp:
             if l in items_selected:
                 return False
         return True
 
     items_selected = []
-    lollis_selected = []
-    eligible_lollis = [lolli for lolli in list_lollis if _is_eligible(lolli, items_selected)]
+    groups_selected = []
+    eligible_groups = [gp for gp in list_groups if _is_eligible(gp, items_selected)]
     eligible_singles = []
     
-    while len(eligible_lollis)>0:
+    # Keep sampling until no more eligible groups
+    while len(eligible_groups)>0:
 
         # Pick one
-        lolli_picked = random.sample(eligible_lollis, 1)[0]
-        lollis_selected.append(lolli_picked)
-        items_selected.extend(lolli_picked)
+        gp_picked = random.sample(eligible_groups, 1)[0]
+        groups_selected.append(gp_picked)
+        items_selected.extend(gp_picked)
 
         # update eligible lolli
-        eligible_lollis = [lolli for lolli in list_lollis if _is_eligible(lolli, items_selected)]
-        # print("---")
-        # print(eligible_lollis)
-        # print(lollis_selected)
-        # print(items_selected)
-        # eligible_singles = [it for it in left_over if _is_eligible([it], items_selected)]
+        eligible_groups = [gp for gp in list_groups if _is_eligible(gp, items_selected)]
 
-    lollis_selected = sorted(lollis_selected)    
+    groups_selected = sorted(groups_selected)    
 
     # conver to chunk, always list of lollis (sorted) and then remianing inds
     inds_extra = [i for i in list_possible_inds if i not in items_selected]
-    chunk = sort_chunk(lollis_selected + inds_extra)
+    chunk = sort_chunk(groups_selected + inds_extra)
     return chunk
 
 def sample_all_possible_chunks(list_groups, list_possible_inds, nfailstoabort=10, maxsearch=1000):

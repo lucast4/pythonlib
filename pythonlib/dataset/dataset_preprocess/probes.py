@@ -4,6 +4,15 @@
 import numpy as np
 
 
+def extract_epochs(D):
+    """ Return list of epochs in D, taking into account:
+    # Ignore these because baseline has no correct seq, and is not testing anything, and so
+    # shouldn't contribute to the probe kind label.
+    """
+    list_epochs_ignore = ["baseline", "baseline|0", "baseline|1", "base", "base|0", "base|1"]
+    epochs = sorted(D.Dat["epoch"].unique().tolist())
+    epochs = [ep for ep in epochs if ep not in list_epochs_ignore]
+    return epochs
 
 def _extract_concurrent_train_tasks(task_probe, D):
     """ for a given probe task, get list of all non-probe tasks presented in each epoch
@@ -13,7 +22,7 @@ def _extract_concurrent_train_tasks(task_probe, D):
     
 #     blocks = D.Dat[D.Dat["character"]==task_probe]["block"] # blocks that has this 
     epochs = D.Dat[D.Dat["character"]==task_probe]["epoch"] # epochs that this task is in
-    
+    epochs = [ep for ep in epochs if ep in extract_epochs(D)]
     tasks_per_epoch = {}
     for ep in epochs:
         inds = (D.Dat["epoch"]==ep) & (D.Dat["probe"]==0)
@@ -138,20 +147,39 @@ def _check_equidistant_from_first_stroke(ind, D):
         return np.isclose(dist1, dist2)
         
 
-def _classify_probe_task(novel_location_config, equidistant):
+def _classify_probe_task(novel_location_config, equidistant, novel_location_shape_combo, 
+        more_n_strokes):
     """ map from params to name that describes this probe task.
     Can use name as taskgroup
     """
     
-    if novel_location_config and equidistant:
-        return "E_cfig_eq"
-    elif novel_location_config and not equidistant:
-        return "E_cfig"
-    elif not novel_location_config and equidistant:
-        return "I_eq"
+    if novel_location_config or novel_location_shape_combo or more_n_strokes:
+        s = "E"
     else:
-        return "I"
-    
+        s = "I"
+
+    if novel_location_config:
+        s += "_cfig"
+
+    if equidistant:
+        s += "_eq"
+
+    if novel_location_shape_combo:
+        s += "_locsh"
+
+    if more_n_strokes:
+        s += "_nstrk"
+
+    # if novel_location_config and equidistant:
+    #     return "E_cfig_eq"
+    # elif novel_location_config and not equidistant:
+    #     return "E_cfig"
+    # elif not novel_location_config and equidistant:
+    #     return "I_eq"
+    # else:
+    #     return "I"
+
+    return s
     
 def _generate_map_taskclass(D):
     """ Generate dict mapping from (taskname, epochname) [both strings] to 
@@ -159,7 +187,8 @@ def _generate_map_taskclass(D):
     RETURNS:
     - mapper_taskname_epoch_to_taskclass, dict,(see above
     """
-    epochs = D.Dat["epoch"].unique().tolist()
+    # epochs = D.Dat["epoch"].unique().tolist()
+    epochs = extract_epochs(D)
     tasks = D.Dat["character"].unique().tolist()
     mapper_taskname_epoch_to_taskclass = {}
     for ep in epochs:
@@ -199,57 +228,149 @@ def compute_features_each_probe(D):
     NOTE: generally uses tasks taht were actually poresented, nopt what is in blockparams
     """
 
+    # First, ignore any "baseline" epochs
+
+
     # 1) get names of all probes
     list_tasks_probe = sorted(D.Dat[D.Dat["probe"]==1]["character"].unique())
 
     mapper_taskname_epoch_to_taskclass = _generate_map_taskclass(D)
+    list_epochs = extract_epochs(D)
 
     # 2) For each probe, collect its features
     dict_probe_features = {}
     dict_probe_kind = {}
     for task_probe in list_tasks_probe:
-        print(task_probe)
-        train_tasks_per_epoch = _extract_concurrent_train_tasks(task_probe, D)
+        train_tasks_per_epoch = _extract_concurrent_train_tasks(task_probe, D) 
+        epochs_that_have_train_tasks = [ep for ep, tasks in train_tasks_per_epoch.items() if len(tasks)>0]
 
-        for ep, tasks_this_epoch in train_tasks_per_epoch.items():
-            
-            ### COLLECT FEATURES
-            # 1) probe is a unique location config?
-            list_same_config = []
-            for task_train in tasks_this_epoch:
-                same_config = _check_same_spatial_config(task_probe, task_train, 
-                    D, mapper_taskname_epoch_to_taskclass)
-                list_same_config.append(same_config)
-            novel_location_config = not any(list_same_config)
-                
-            # 2) taskstrokes 2 and 3 (in sequence) are same distance from 1?
-            # get inds that have this task and epoch
-            list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
-            list_equidistant = [] # check all inds, and confirm they are identical
-            for ind in list_inds:
+        if len(train_tasks_per_epoch)==0:
+            # Then this task was never presented with train tasks (e..g, just in pretest)
+            for ep in list_epochs:
+                dict_probe_features[(ep, task_probe)] = {
+                    "novel_location_config":False, 
+                    "equidistant_from_first_stroke":False,
+                    "novel_location_shape_combo":False,
+                    "more_n_strokes":False                    
+                    }
+                dict_probe_kind[(ep, task_probe)] = "undefined"
+        else:
+            ########### IF Same correct beh across rules, then ignore classifying this probe.
+            list_correct_sequence = []
+            for ep in list_epochs:
+                list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
+                if len(list_inds)>0:
+                    # list_equidistant = [] # check all inds, and confirm they are identical
+                    sdict = D.sequence_extract_beh_and_task(list_inds[0])
+                    taskstroke_inds_correct_order = sdict["taskstroke_inds_correct_order"]
+                    list_correct_sequence.append(tuple(taskstroke_inds_correct_order))
+            list_correct_sequence_unique = list(set(list_correct_sequence))
 
-                eq = _check_equidistant_from_first_stroke(ind, D)
-                list_equidistant.append(eq)
-            if "rndstr" in ep:
-                # then there is no consistent sequence, it is randomiozed, so cant compute thisd
-                equidistant = False
+            if len(list_correct_sequence)==0:
+                # Then no train tasks found...
+                for ep in list_epochs:
+                    dict_probe_features[(ep, task_probe)] = {
+                        "novel_location_config":False, 
+                        "equidistant_from_first_stroke":False,
+                        "novel_location_shape_combo":False,
+                        "more_n_strokes":False                    
+                        }
+                    dict_probe_kind[(ep, task_probe)] = "none"
+            elif len(list_correct_sequence_unique)==1 and len(epochs_that_have_train_tasks)>1:
+                # Then multipel epochs require the same beh sequence...
+                print(list_correct_sequence_unique)
+                print(list_correct_sequence_unique)
+                print(epochs_that_have_train_tasks)
+                assert False
+                for ep in list_epochs:
+                    dict_probe_features[(ep, task_probe)] = {
+                        "novel_location_config":False, 
+                        "equidistant_from_first_stroke":False,
+                        "novel_location_shape_combo":False,
+                        "more_n_strokes":False                    
+                        }
+                    dict_probe_kind[(ep, task_probe)] = "same_beh"
             else:
-                # all trials for this probe taskk shoudl have same seuqence.
-                assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
-                equidistant = list_equidistant[0]
+                for ep, tasks_this_epoch in train_tasks_per_epoch.items():
+                    
+                    print("probe task in epoch: ", task_probe, ep)
+                    ### COLLECT FEATURES
+                    # 1) probe is a unique location config?
+                    list_same_config = []
+                    for task_train in tasks_this_epoch:
+                        same_config = _check_same_spatial_config(task_probe, task_train, 
+                            D, mapper_taskname_epoch_to_taskclass)
+                        list_same_config.append(same_config)
+                    novel_location_config = not any(list_same_config)
+                        
+                    # 2) taskstrokes 2 and 3 (in sequence) are same distance from 1?
+                    # get inds that have this task and epoch
+                    list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
+                    list_equidistant = [] # check all inds, and confirm they are identical
+                    for ind in list_inds:
+                        eq = _check_equidistant_from_first_stroke(ind, D)
+                        list_equidistant.append(eq)
+                    if "rndstr" in ep:
+                        # then there is no consistent sequence, it is randomiozed, so cant compute thisd
+                        equidistant = False
+                    else:
+                        # all trials for this probe taskk shoudl have same seuqence.
+                        assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
+                        equidistant = list_equidistant[0]
 
-            # 3) How many instances of each prim? (n)
-            _extract_n_prims(task_probe, mapper_taskname_epoch_to_taskclass)
+                    # 3) How many instances of each prim? (n)
+                    _extract_n_prims(task_probe, mapper_taskname_epoch_to_taskclass)
 
-            ### GIVE PROBE TASK CATEGORY A NAME
-            c = _classify_probe_task(novel_location_config, equidistant)
+                    # 4) Any shape-location combo never seen during training?
+                    # get list of all shape-location combos for tasks
+                    list_shape_loc_in_train = []
+                    for task_train in tasks_this_epoch:
+                        Task = _extract_taskclass_from_taskname(task_train, 
+                            mapper_taskname_epoch_to_taskclass)
+                        tokens = Task.tokens_generate()
+                        sl_this = [(t["shape"], t["gridloc"]) for t in tokens]
+                        list_shape_loc_in_train.extend(sl_this)
+                    list_shape_loc_in_train = set(list_shape_loc_in_train)
 
-            ### SAVE
-            dict_probe_features[(ep, task_probe)] = {
-                "novel_location_config":novel_location_config, 
-                "equidistant_from_first_stroke":equidistant
-                }
-            dict_probe_kind[(ep, task_probe)] = c
+                    # for each probe, check if any of its items are in that list
+                    TaskProbe = _extract_taskclass_from_taskname(task_probe, 
+                        mapper_taskname_epoch_to_taskclass)
+                    tokens = TaskProbe.tokens_generate()
+                    sl_this = [(t["shape"], t["gridloc"]) for t in tokens]
+                    novel_location_shape_combo = any([x not in list_shape_loc_in_train 
+                        for x in sl_this])        
+
+                    # 5) Diff n strokes
+                    # list_shape_l    oc_in_train = []
+                    list_nstrok_in_train = []
+                    for task_train in tasks_this_epoch:
+                        Task = _extract_taskclass_from_taskname(task_train, 
+                            mapper_taskname_epoch_to_taskclass)
+                        tokens = Task.tokens_generate()
+                        n_tok = len(tokens)
+                        list_nstrok_in_train.append(n_tok)
+                    list_nstrok_in_train = set(list_nstrok_in_train)
+
+                    # for each probe, check if any of its items are in that list
+                    TaskProbe = _extract_taskclass_from_taskname(task_probe, 
+                        mapper_taskname_epoch_to_taskclass)
+                    tokens = TaskProbe.tokens_generate()
+                    n_tok = len(tokens)
+                    more_n_strokes = n_tok > max(list_nstrok_in_train)
+
+                    ### GIVE PROBE TASK CATEGORY A NAME
+                    c = _classify_probe_task(novel_location_config, equidistant, 
+                        novel_location_shape_combo, more_n_strokes)
+
+                    ### SAVE
+                    dict_probe_features[(ep, task_probe)] = {
+                        "novel_location_config":novel_location_config, 
+                        "equidistant_from_first_stroke":equidistant,
+                        "novel_location_shape_combo":novel_location_shape_combo,
+                        "more_n_strokes":more_n_strokes
+                        }
+                    dict_probe_kind[(ep, task_probe)] = c
+
     if False:
         # Sort by name of (epoch, probe).
         keys = sorted(dict_probe_kind.keys())
@@ -279,7 +400,8 @@ def taskgroups_assign_each_probe(D):
 
     # 2) map from probe_task to categeroy. main point of this step is to combine catgegory names
     # across epochs if they are different names.
-    epochs = D.Dat["epoch"].unique().tolist()
+    # epochs = D.Dat["epoch"].unique().tolist()
+    epochs = extract_epochs(D)
     map_task_to_taskgroup = {}
     for task_probe in list_tasks_probe:
         
@@ -291,6 +413,13 @@ def taskgroups_assign_each_probe(D):
             if key in dict_probe_kind.keys():
                 epochs_used.append(ep)
                 probe_kind_used.append(dict_probe_kind[key])
+
+        if len(probe_kind_used)==0:
+            print(dict_probe_kind)
+            print(task_probe)
+            print(ep, ' -- ', epochs)
+            assert False, "not sure how this possible."
+
         
         # b) combine names across epochs   
         # - if a given probe task has same cartegoryt acropss all epochs, give it that name

@@ -4,11 +4,234 @@
 
 import pandas as pd
 
+def _get_default_grouping_map_tasksequencer_to_rule():
+    """ Dict that maps tasksequencer params (which in matlab
+    dictates the sequencing rule for each block) to a string name for the 
+    rule. Hard code these, but they are general across expts
+    """
+    grouping_map_tasksequencer_to_rule = {}
+    grouping_map_tasksequencer_to_rule[(None, None)] = "base"
+
+    grouping_map_tasksequencer_to_rule[("direction", "3.14")] = "L"
+    grouping_map_tasksequencer_to_rule[("direction", "0.00")] = "R"
+
+
+    grouping_map_tasksequencer_to_rule[("directionv2", ("lr",))] = "R"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("rl",))] = "L"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("ud",))] = "D"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("du",))] = "U"
+
+    grouping_map_tasksequencer_to_rule[("directionv2", ("right",))] = "R"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("left",))] = "L"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("down",))] = "D"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("up",))] = "U"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "TR"
+
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
+    grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "VlL1"
+    
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-9-3', 'line-9-4', 'Lcentered-6-8'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2'))] = "llV1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('V2-2-2', 'V2-2-4', 'V-2-4', 'line-13-14', 'line-8-4', 'line-13-13', 'line-8-3'))] = "llV1R"
+
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm1a"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm1b"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-11-1', 'line-11-2'))] = "AnBmHV"
+    grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('squiggle3-3-1', 'V-2-4'))] = "AnBm0"
+
+    grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBmTR"
+
+    grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
+
+    return grouping_map_tasksequencer_to_rule
+
+
+def map_from_rulestring_to_ruleparams(rulestring):
+    """ Map from python string rule repreantation to matlab params:
+    PARAMS:
+    - rulestring, <rulecategory>-<subcategory>-<params>
+    EG:
+    - rulestring = ss-chain-LVl1
+    Returns: 
+        {'categ_matlab': 'prot_prims_in_order',
+         'params_matlab': ('Lcentered-4-3', 'V-2-4', 'line-8-3'),
+         'categ': 'ss',
+         'subcat': 'chain',
+         'params': 'LVl1'}
+    """
+    from pythonlib.tools.stringtools import decompose_string
+
+    grouping_map_tasksequencer_to_rule = _get_default_grouping_map_tasksequencer_to_rule()
+
+    # 1) decompose string
+    substrings = decompose_string(rulestring)
+    assert len(substrings)==3, "must be <rulecategory>-<subcategory>-<params>"
+    categ = substrings[0]
+    subcat = substrings[1]
+    params = substrings[2]
+
+    def _find_params_matlab(params):
+        FOUND = False
+        for key, val in grouping_map_tasksequencer_to_rule.items():
+            if val==params:
+                if FOUND:
+                    print(categ_matlab, params_matlab)
+                    print(key)
+                    print(rulestring)
+                    print(val, params)
+                    assert False, "this val is in multiple items; use category to further refine"
+                categ_matlab = key[0] # e.g., prot_prims_in_order
+                params_matlab = key[1] # e.g., ('line-8-3', 'V-2-4', 'Lcentered-4-3')
+                FOUND = True
+        assert FOUND, "did not find this val"
+        return categ_matlab, params_matlab
+
+    # FInd the matlab params
+    if categ=="ss":
+        # shape orders are encoded in matlab parmas:
+        # 2) find it in grouping_map_tasksequencer_to_rule
+        categ_matlab, params_matlab = _find_params_matlab(params)
+    # elif categ=="ch":
+    #     # chunk, direction across chunks, and also within chunks --> i.e. only single correct sequewnce.
+    #     assert False, "code it"
+
+        # then the shape represntations may be wrong
+        # num dashes
+        def _convert_shape_string(s):
+            # convert from Lcentered-4-3 to Lcentered-4-3-0
+            substrings = decompose_string(s)
+            if not len(substrings)==3:
+                print(s)
+                assert False, "expect like Lcentered-4-3"
+            else:
+                # then is liek: Lcentered-4-3, which has scale-rotation. assumes reflect is 0.
+                # convert to: shape-rotation-reflect
+                shape = substrings[0]
+                scale = substrings[1]
+                rot = substrings[2]
+                refl = 0
+                return f"{shape}-{scale}-{rot}-0"
+        list_shapestring_good = [_convert_shape_string(shapestring) for shapestring in params_matlab]
+        params_good = list_shapestring_good
+
+    elif categ=="ch" and subcat=="dir2":
+        # Concrete chunk, with direction across chunks fixed, but
+        # direction within variable (i.e., chunk_mask)
+        categ_matlab, params_matlab = _find_params_matlab(params)
+        if categ_matlab=="hack_220829":
+            # categ_matlab = "shape_chunk_concrete"
+            # params_matlab = ("")
+            # # e..g, ('lolli', {'D', 'R'}).
+            shapes_in_order = ["line-8-4-0", "line-8-3-0"]
+            rel_shapes = "U"
+            direction = "R" # chunk to chunk.
+        params_good = (shapes_in_order, rel_shapes, direction)
+    elif categ=="dir":
+        # Directions using string keys, no need to look at matlab params
+        categ_matlab = None
+        params_matlab = None
+    else:
+        print(categ)
+        assert False, "code it"
+
+    # # 3) Clean up the shapes
+    # if categ_matlab in ["prot_prims_in_order", "prot_prims_chunks_in_order", 
+    #         "prot_prims_in_order_AND_directionv2"]:
+    # else:
+    #     params_good = params
+    #     # print(categ_matlab)
+    #     # assert False, "code it"
+
+    # 3) return as params.
+    out = {
+        "categ_matlab":categ_matlab,
+        "params_matlab":params_matlab,
+        "params_good":params_good,
+        "categ":categ,
+        "subcat":subcat,
+        "params":params}
+
+    return out
+
+def rules_extract_auto(D):
+    """ Helper to try to extract all relevant rules, based on:
+    (i) the groundt truth rules in D< and (ii) related rules that
+    are alternative huypotjeses to those rules
+    """
+
+    def _get_rank_and_chain_variations(list_shape_orders):
+        list_shape_orders_rankchain = []
+        for order in list_shape_orders:
+            list_shape_orders_rankchain.append(f"ss-rank-{order}")
+            list_shape_orders_rankchain.append(f"ss-chain-{order}")
+        return list_shape_orders_rankchain
+    def _get_direction_variations(list_dir):
+        # e..g, list_dir = ["D", "U", "R", "L"]
+        return [f"dir-null-{x}" for x in list_dir]
+    def _get_chunk_dirdir_variations(list_rule):
+        """ chunk with direction both within and across, only one correct sequence"""
+        return [f"ch-dirdir-{x}" for x in list_rule]
+    def _get_chunk_dir2_variations(list_rule):
+        """ specific direction across chunks, but not within
+        aka. chunk_mask in matlab.
+        """
+        return [f"ch-dir2-{x}" for x in list_rule]
+
+
+    DICT_RELATED_RULES = {
+        # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
+        ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
+        ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
+        ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
+        ("AnBm2"):["ss-rank-AnBm2"] # grammar2
+        # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
+    }
+    RULES_IGNORE = ["base"] # rules to ignore. assumed that other rules int he same day will
+    # bring in all the rules.
+
+    # 1) list of rules present in D
+    list_rules_dat = sorted(D.Dat["epoch_rule_tasksequencer"].unique().tolist())
+
+    # 2) for each rule there, get "related" rules from a database
+    def _find_related_rules(rulethis):
+        related_rules = []
+        FOUND = False
+        for rule_keys, rule_set in DICT_RELATED_RULES.items():
+            if rulethis in RULES_IGNORE:
+                return []
+            elif rulethis in rule_keys:
+                FOUND = True
+                related_rules.extend(rule_set)
+        assert FOUND, f"didnt find this rule in any sets: {rulethis}"
+        return list(set(related_rules))
+
+    list_rules_related =[]
+    for rulethis in list_rules_dat:
+        list_rules_related.extend(_find_related_rules(rulethis))
+
+    # 3) combine
+    # list_rules_all = list_rules_dat + list_rules_related
+    list_rules_all = list_rules_related
+
+    # sanity check
+    from pythonlib.tools.stringtools import decompose_string
+    for rule in list_rules_all:
+        assert len(decompose_string(rule))==3, "needs to be cat-subcat-rulename"
+
+    return sorted(list(set(list_rules_all)))
 
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data(D, list_rules, 
     dict_map_epoch_to_rulenames=None, binary_rule=False, how_define_correct_order="matlab",
-    modelclass="default", DEBUG=False):
+    modelclass="default", DEBUG=False, return_as_bmh_object=True):
     """High-level extraction for each trial its parses under each given rule, and evaluate whether this
     trials' beahvhiro was correct/incorrect.
     PARAMS:
@@ -111,6 +334,7 @@ def generate_scored_beh_model_data(D, list_rules,
         # COLLECT
         results.append({
             "epoch_rule":epoch_i,
+            "isprobe":D.Dat.iloc[ind]["probe"],
             "epoch_superv":D.Dat.iloc[ind]["epoch_superv"],
             "success_binary":success_binary,
             "beh_sequence_wrong":beh_sequence_wrong,
@@ -152,7 +376,14 @@ def generate_scored_beh_model_data(D, list_rules,
             D.Dat[col] = list_vals
         print("Added this columnt to D.Dat: ", col)
 
-    return dfGramScore
+    # Return as a BehModelHolder instance
+    if return_as_bmh_object:
+        from pythonlib.dataset.modeling.beh_model_holder import BehModelHolder
+        dict_modelclass_to_rules = {modelclass:list_rules} # leav this hard coded for now. since not working with mult model classes.
+        bm = BehModelHolder(dfGramScore, dict_modelclass_to_rules)
+        return bm
+    else:
+        return dfGramScore
 
 # for BOOLEAN rules only—adds column for each rule with True/False values.
 # @noReturn; modifies existing D in-place, adding column 'binary_rule_tuple'

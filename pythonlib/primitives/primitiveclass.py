@@ -121,7 +121,7 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
-    def shape_oriented(self, include_scale=False):
+    def shape_oriented(self, include_scale=True):
         """ Returns shape oriented, e.g., line-3-0
         """
         prms = self.ParamsAbstract
@@ -136,7 +136,7 @@ class PrimitiveClass(object):
         else:
             return f"{self.ShapeNotOriented}-{_sh(prms['rotation'])}-{_sh(prms['reflect'])}"
 
-    def extract_as(self, output="primtuple", include_scale=False):
+    def extract_as(self, output="primtuple", include_scale=True):
         """ [Wrapper] Help extract ths primitives in different formats
         PARAMS:
         - output, string name for how to extract
@@ -166,7 +166,7 @@ class PrimitiveClass(object):
             print(output)
             assert False, "code it"
 
-    def _extract_params(self, include_scale=False):
+    def _extract_params(self, include_scale=True):
         """ Extract params for this prim in a dict format
         RETURNS:
         - params, dict, where keys are things like scale, rotation, etc.

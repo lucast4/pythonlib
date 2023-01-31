@@ -18,7 +18,8 @@ from .learning import print_useful_things, plot_performance_all, plot_performanc
 rcParams.update({'figure.autolayout': True})
 
 def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule=None,
-        DEBUG = False, how_define_correct_order="matlab"):
+        DEBUG = False, how_define_correct_order="matlab",
+        reset_grammar_dat = False):
     """ Preprocess Dataset as basis for all subsetquence grammar/learning analyses.
     PARAMS:
     - grammar_recompute_parses, bool, if False, then uses the saved "active chunk" used 
@@ -37,8 +38,10 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from .learning import preprocess_dataset as learn_preprocess
-    from pythonlib.dataset.modeling.discrete import generate_scored_beh_model_data
+    from pythonlib.dataset.modeling.discrete import generate_scored_beh_model_data, rules_extract_auto
     
+    if reset_grammar_dat:
+        D.GrammarDict = {}
     ################## Create save directiory
     SDIR = D.make_savedir_for_analysis_figures("grammar")
     savedir= f"{SDIR}/summary"
@@ -49,143 +52,51 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
 
     # 2) Get grammar scores.
     # list_rules = D.Dat["epoch"].unique().tolist()
-    list_rules = []
-    dfGramScore = generate_scored_beh_model_data(D, list_rules = list_rules,
-        how_define_correct_order=how_define_correct_order)
-    dfGramScore["which_probe_blockset"] = D.Dat["which_probe_blockset"]
+    if False:
+        list_rules = []
+    else:
+        # 2) get additional rules (hypotheses)
+        ## Test each beh against hypothetical rules (discrete models)
+        list_rules = rules_extract_auto(D)
+
+    bm = generate_scored_beh_model_data(D, list_rules = list_rules,
+        how_define_correct_order=how_define_correct_order, binary_rule=True)
+    bm.Dat["which_probe_blockset"] = D.Dat["which_probe_blockset"]
+
+    return bm, list_blocksets_with_contiguous_probes, SDIR
 
 
-    # ################## Generate behclass
-    # D.behclass_preprocess_wrapper()
+def pipeline_generate_and_plot_all(D):
+    """ Entire pipeline to extract data and plot, for 
+    a single dataset
+    """
 
-    # ################## Extract dataframe computing matches of beh sequence to task sequence
-    # # 2) For each trial, determine whether (to waht extent) beh matches task inds sequence
-    # gramscoredict = []
-    # # def nmatch_(order_beh, order_correct):
-    # print("frac strokes gotten in progress -> use a string edit distance")
+    bmh, list_blockset, SDIR = preprocess_dataset(D)
 
-    # for ind in range(len(D.Dat)):
-    #     gramdict = D.sequence_extract_beh_and_task(ind)
+    ####### 1) COmpare beh to all hypotheses (rules, discrete)
+    # Also make plots for rule-based analysis
+    savedir= f"{SDIR}/discrete_rules"
+    os.makedirs(savedir, exist_ok=True) 
 
-    #     # frac strokes gotten
-    #     order_beh = gramdict["taskstroke_inds_beh_order"]
+    # combine in single plot (all taskgroups)
+    sdir = f"{savedir}/score_epoch_x_rule_splitby"
+    os.makedirs(sdir, exist_ok=True)
 
-    #     # What is the correct order?
-    #     if grammar_recompute_parses:
-    #         # Generate from stratch, based on defined rules.
-    #         # This returns a list of orders, not just a single order
-    #         assert grammar_correct_rule is not None
-    #         this = D.grammar_parses_extract(ind, [grammar_correct_rule])
-    #         list_order_correct = this[grammar_correct_rule]
-    #     else:
-    #         # Saved in matlab ObjectClass
-    #         order_correct = gramdict["taskstroke_inds_correct_order"]
-    #         assert order_correct is not None, "not defined in matlab ObjectClass.. you must recompute, useing grammar_recompute_parses"
-    #         list_order_correct = [order_correct] # only a single correct order
-
-    #     # binary fail/success
-    #     success_binary = order_beh in list_order_correct
-    #     # success_binary = order_beh==order_correct
-        
-    #     ########## CONSIDER EXCEPTIONs, i..e, to say didn't actally fail the sequence...
-    #     # note cases where did not complete the trial, but sequence was correct so far (exclude those)
-    #     # NOTE: if multipel correct possible parses, considers each criterion one by one, instread of
-    #     # considering only if any possible parses passes all criteria.. This is OK?
-    #     def beh_good_ignore_length(order_beh, order_correct):
-    #         """ True if beh is good up unitl the time beh fails.
-    #         e.g., if beh is [0, 3, 2], and correct is [0, 3, 2, 1], then
-    #         this is True
-    #         """
-    #         for x, y in zip(order_beh, order_correct):
-    #             if x!=y:
-    #                 return False
-    #         return True
-
-    #     list_beh_sequence_wrong = []
-    #     list_beh_too_short = []
-    #     list_beh_got_first_stroke = []
-    #     for order_correct in list_order_correct:
-    #         beh_sequence_wrong = not beh_good_ignore_length(order_beh, order_correct)
-    #         beh_too_short = len(order_beh) < len(order_correct)
-    #         beh_got_first_stroke = False # whether the first beh stroke was correct.
-    #         if len(order_beh)>0:
-    #             if order_beh[0]==order_correct[0]:
-    #                 beh_got_first_stroke = True
-
-    #         list_beh_sequence_wrong.append(beh_sequence_wrong)
-    #         list_beh_too_short.append(beh_too_short)
-    #         list_beh_got_first_stroke.append(beh_got_first_stroke)
-
-    #     beh_too_short = all(list_beh_too_short)
-    #     beh_got_first_stroke = any(list_beh_got_first_stroke)
-    #     if any([not x for x in list_beh_sequence_wrong]):
-    #         # Then for at least one parse, the beh is correct up until beh 
-    #         # seq ends, implying failure due to online abort (stroke quality)
-    #         beh_sequence_wrong = False
-    #     else:
-    #         # all are wrong..
-    #         beh_sequence_wrong = True
-
-    #     # exclude cases where beh was too short, but order was correct
-    #     exclude_because_online_abort = beh_too_short and not beh_sequence_wrong
-
-    #     if DEBUG:
-    #     # if success_binary==False and beh_sequence_wrong==False:
-    #         print(ind)
-    #         print(order_beh)
-    #         print(list_order_correct)
-    #         print(success_binary, beh_too_short, beh_got_first_stroke, beh_sequence_wrong)
-    #     ######################################
-
-    #     # combination of (epoch, supervision_tuple)
-    #     epoch_superv = (gramdict["epoch"], gramdict["supervision_tuple"])
-
-    #     # # epoch, converting from epoch --> rule name
-    #     # epoch_i = D.Dat.iloc[ind]['epoch']
-    #     # if epoch_i in dict_map_epoch_to_rulenames.keys():
-    #     #     epoch_i = dict_map_epoch_to_rulenames[epoch_i]
-
-    #     # block (sanity check)
-    #     block = D.Dat.iloc[ind]["block"]
-        
-    #     # taskgroup
-    #     taskgroup = D.Dat.iloc[ind]["taskgroup"]
-        
-    #     # character
-    #     char = D.Dat.iloc[ind]["character"]
-        
-    #     # COLLECT
-    #     gramscoredict.append({
-    #         "success_binary":success_binary,
-    #         "beh_sequence_wrong":beh_sequence_wrong,
-    #         "beh_too_short":beh_too_short,
-    #         "beh_got_first_stroke":beh_got_first_stroke,
-    #         "exclude_because_online_abort":exclude_because_online_abort,
-    #         "epoch_superv":epoch_superv,
-    #         "epoch":D.Dat.iloc[ind]['epoch'],
-    #         "block": block,
-    #         "datind":ind,
-    #         "taskgroup":taskgroup,
-    #         "character":char
-    #     })
-
-    # dfGramScore = pd.DataFrame(gramscoredict)
-
-    # # Append things to dfgramscore
-    # from pythonlib.tools.pandastools import applyFunctionToAllRows
-    # cols_to_copy = ["success_binary", "beh_sequence_wrong", "beh_too_short", "exclude_because_online_abort", "epoch_superv", 
-    #                 "which_probe_blockset"]
-    # for col in cols_to_copy:
-    #     list_vals = []
-    #     for i in range(len(D.Dat)):
-    #         vals = dfGramScore[dfGramScore["datind"] == i][col].tolist()
-    #         assert len(vals)==1
-    #         list_vals.append(vals[0])
-    #     if col in D.Dat.columns:
-    #         assert list_vals==D.Dat[col].tolist()
-    #     else:
-    #         D.Dat[col] = list_vals
-    #     print("Added this columnt to D.Dat: ", col)
-
-    return dfGramScore, list_blocksets_with_contiguous_probes, SDIR
-
+    for split_by in ["taskgroup", "isprobe"]:
+        fig = bmh.plot_score_cross_prior_model_splitby(split_by=split_by)
+        fig.savefig(f"{sdir}/splitby_{split_by}-trialdat.pdf")
+    
+    ######### 2) Plot summary
+    dfGramScore = bmh.Dat
+    if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
+        plot_performance_all(dfGramScore, list_blockset, SDIR)
+        plot_performance_timecourse(dfGramScore, list_blockset, SDIR)
+        plot_performance_static_summary(dfGramScore, list_blockset, SDIR, False)
+        plot_performance_static_summary(dfGramScore, list_blockset, SDIR, True)
+        plot_counts_heatmap(dfGramScore, SDIR)
+        plot_performance_trial_by_trial(dfGramScore, D, SDIR)
+        plot_performance_each_char(dfGramScore, D, SDIR)
+        # 1) print all the taskgroups
+        D.taskgroup_char_ntrials_print_save(SDIR)
+    else:
+        print("[SKIPPING, since SDIR exists and has contents: ", SDIR)

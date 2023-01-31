@@ -56,6 +56,9 @@ class BehModelHolder(object):
         ### ALIGNMENT - rank, compute all
         self.analy_compute_alignment_wrapper()
 
+        ## Get colnames
+        self.colnames_extract_alignment()
+
 
     def _preprocess_sanity_check(self):
         print("TODO! _preprocess_sanity_check")
@@ -108,8 +111,8 @@ class BehModelHolder(object):
         return list_colname
 
 
-    def extract_concatenated_aggregated_dataset(self, Dat=None, monkey_prior_col_name="epoch", monkey_prior_list=None,
-        list_classes=None, model_score_name_list =None):
+    def extract_concatenated_aggregated_dataset(self, Dat=None, monkey_prior_col_name="epoch", 
+        monkey_prior_list=None, list_classes=None, model_score_name_list =None):
         """ 
         Returns single D, but also returns variations after different
         kinds of aggregations.
@@ -146,18 +149,19 @@ class BehModelHolder(object):
         print("Model scores (colnames): ", model_score_name_list)
         print("Model alignments (colnames): ", list_colnames_alignment)
 
+        LIST_COLS_KEEP =  ["character", "trialcode", "taskgroup", "isprobe"]
 
         # 1) wide-form to long-form (a single column of "scores") (inlcude alignments)
-        DatWide, _ = summarize_feature(Dat, "epoch", model_score_name_list+list_colnames_alignment, ["character", "trialcode"], 
-            newcol_variable="model", newcol_value="score")
+        DatWide, _ = summarize_feature(Dat, "epoch", model_score_name_list+list_colnames_alignment, 
+            LIST_COLS_KEEP, newcol_variable="model", newcol_value="score")
 
         # 1) wide-form to long-form (a single column of "scores")
-        _, DatFlat = summarize_feature(Dat, "epoch", model_score_name_list, ["character", "trialcode"], 
+        _, DatFlat = summarize_feature(Dat, "epoch", model_score_name_list, LIST_COLS_KEEP, 
             newcol_variable="model", newcol_value="score")
 
         # 1) wide-form to long-form (a single column of "scores") (inlcude alignments)
         if len(list_colnames_alignment)>0:
-            _, DatFlatAlignment = summarize_feature(Dat, "epoch", list_colnames_alignment, ["character", "trialcode"], 
+            _, DatFlatAlignment = summarize_feature(Dat, "epoch", list_colnames_alignment, LIST_COLS_KEEP, 
                 newcol_variable="model", newcol_value="score")
             # 3) Long, agg over tasks
             DatFlatAlignmentAgg = aggregGeneral(DatFlatAlignment, group = ["character", monkey_prior_col_name, "model"], 
@@ -282,9 +286,13 @@ class BehModelHolder(object):
         datapt at both level of trials and characters
         """
 
-        from pythonlib.dataset.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
+        # from pythonlib.dataset.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
         # plots_cross_prior_and_model_anynum(self)
         self.plot_score_cross_prior_model(self.Dat)
+
+        # Separate plots,split by taskgroup and by probe
+        for split_by in ["taskgroup", "isprobe"]:
+            self.plot_score_cross_prior_model_splitby(self.Dat, split_by=split_by)
 
         ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
         # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
@@ -293,8 +301,27 @@ class BehModelHolder(object):
         self.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
 
+    def plot_score_cross_prior_model_splitby(self, df=None, split_by="taskgroup"):
+        """ bar plots crossing prior and model, plot separately for differelt levels of the variable
+        split_by
+        PARAMS;
+        - split_by, variabl eto split by, e.g., "taskgroup"
+        """
+        import seaborn as sns
+
+        if df is None:
+            df = self.Dat
+
+        Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
+            df, "epoch")[:5]
+
+        # combine in single plot (all taskgroups)
+        fig = sns.catplot(data=DatFlat, x="epoch", y="score", hue="model", col=split_by, col_wrap=3, kind="bar")
+        return fig
+
+
     def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
-        list_classes=None, model_score_name_list =None):
+        list_classes=None, model_score_name_list =None, ALPHA = 0.2, sdir=None):
         """
         Summary plot of test dataset against models (scores), when num models is >2, this still works.
         NOTE: modified 12/19/22 to work with beh_model_holder, not with multiple... (which should be 
@@ -307,17 +334,19 @@ class BehModelHolder(object):
         from pythonlib.tools.pandastools import pivot_table
         from pythonlib.tools.plottools import plotScatter45
         import seaborn as sns
-        ALPHA = 0.2
-
+        
         # Get Single dataset
         Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
             df, monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)[:5]
 
         # 1) Plot score fr all combo of dataset and model
         fig = sns.catplot(data=DatFlat, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
-
+        if sdir:
+            fig.savefig(f"{sdir}/meanscore_epoch_by_rule_alltrials.pdf")
         # 2) same, agg over trials
         fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+        if sdir:
+            fig.savefig(f"{sdir}/meanscore_epoch_by_rule_allchars.pdf")
 
         # if column exists for binary_tuple then plot
         # to create 'binary_rule_tuple' column: run dataset.modeling.discrete.add_binary_rule_tuple_col
