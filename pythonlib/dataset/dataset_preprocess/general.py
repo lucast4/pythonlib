@@ -785,6 +785,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         return (x["epoch"], x["supervision_stage_concise"])
     D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
 
+    # Since epoch might change...
+    D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
+
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 

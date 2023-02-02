@@ -54,20 +54,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     return grouping_map_tasksequencer_to_rule
 
 
-def map_epoch_rule_to_acceptable_rulestrings(list_epoch_rule):
-    """ 
-    Find rulestrings that, if beh matches any of these, would lead to 
-    behavior being called a correct trial.
-    PARAMS:
-    - list_epoch_rule, list of str, such as "(AB)n"
-    - list_rules_related, relatied (alt hypothes) rulestrings.
-    e.g,, bm.DictMclassToRules[mclass]
-    RETURNS:
-    - list of list fo str, where inner lists are lists of rules accepatable for each rule.
-    """
-    return _rules_consistent_rulestrings_extract_auto(list_epoch_rule)
+# def map_epoch_rule_to_acceptable_rulestrings(list_epoch_rule):
+#     return _rules_consistent_rulestrings_extract_auto(list_epoch_rule)
 
-def map_from_rulestring_to_ruleparams(rulestring):
+def rules_map_rulestring_to_ruledict(rulestring):
     """ Map from python string rule repreantation to matlab params:
     PARAMS:
     - rulestring, <rulecategory>-<subcategory>-<params>
@@ -193,7 +183,18 @@ def _get_chunk_dir2_variations(list_rule):
     return [f"ch-dir2-{x}" for x in list_rule]
 
 def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False):
-    """ list rules, list of str, i.e, epoch, such as "R"
+    """ 
+     
+    Find rulestrings that, if beh matches any of these, would lead to 
+    behavior being called a correct trial.
+    PARAMS:
+    - list_epoch_rule, list of str, such as "(AB)n"
+    - list_rules_related, relatied (alt hypothes) rulestrings.
+    e.g,, bm.DictMclassToRules[mclass]
+    RETURNS:
+    - list of list fo str, where inner lists are lists of rules accepatable for each rule.
+    
+    list rules, list of str, i.e, epoch, such as "R"
     DICT_RULESTRINGS_CONSISTENT = {
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
@@ -204,6 +205,8 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False):
     RETURNS:
     - list of list fo str, where inner lists are lists of rules accepatable for each rule.
     """
+    assert isinstance(list_rules, list)
+
     DICT_RULESTRINGS_CONSISTENT = {}
     for r in ["D", "U", "R", "L"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
@@ -224,6 +227,30 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False):
             assert False, "add it."
     return [DICT_RULESTRINGS_CONSISTENT[r] for r in list_rules]
 
+def rules_map_rule_to_ruledict_extract_auto(D):
+    """for each rule, get its ruledict
+    RETURNS:
+    - dicst, rule --> ruledict
+    """
+  
+    list_rulestring = rules_related_rulestrings_extract_auto(D)
+
+    map_rule_to_ruledict = {}
+    for rs in list_rulestring:
+        rule_dict = rules_map_rulestring_to_ruledict(rs)
+        rule = rule_dict["params"]
+        map_rule_to_ruledict[rule] = rule_dict
+        
+    return map_rule_to_ruledict
+
+
+def rules_related_rulestrings_extract_auto(D):
+    """ Helper to try to extract all relevant rules, based on:
+    (i) the groundt truth rules in D< and (ii) related rules that
+    are alternative huypotjeses to those rules
+    """
+    list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
+    return _rules_related_rulestrings_extract_auto(list_rules)
 
 def _rules_related_rulestrings_extract_auto(list_rules):
     """
@@ -251,7 +278,7 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         ("AnBm2"):["ss-rank-AnBm2"] # grammar2
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
-    RULES_IGNORE = ["base"] # rules to ignore. assumed that other rules int he same day will
+    RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
     # bring in all the rules.
 
     # 1) list of rules present in D
@@ -282,14 +309,6 @@ def _rules_related_rulestrings_extract_auto(list_rules):
     for rule in list_rules_all:
         assert len(decompose_string(rule))==3, "needs to be cat-subcat-rulename"
     return sorted(list(set(list_rules_all)))
-
-def rules_related_rulestrings_extract_auto(D):
-    """ Helper to try to extract all relevant rules, based on:
-    (i) the groundt truth rules in D< and (ii) related rules that
-    are alternative huypotjeses to those rules
-    """
-    list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
-    return _rules_related_rulestrings_extract_auto(list_rules)
 
 
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
@@ -399,7 +418,7 @@ def generate_scored_beh_model_data(D, list_rules,
         # COLLECT
         results.append({
             "epoch_rule":epoch_i,
-            "isprobe":D.Dat.iloc[ind]["probe"],
+            "probe":D.Dat.iloc[ind]["probe"],
             "epoch_superv":D.Dat.iloc[ind]["epoch_superv"],
             "success_binary":success_binary,
             "beh_sequence_wrong":beh_sequence_wrong,
@@ -453,13 +472,16 @@ def generate_scored_beh_model_data(D, list_rules,
         # map from current rule to "acceptable model rules"
         def F(x):
             rulethis = x["epoch_rule"]
-            list_rulestr = map_epoch_rule_to_acceptable_rulestrings([rulethis])[0]
-            list_sname = bm.colnames_extract_scores(list_rule_get=list_rulestr)
-            if len(list_sname)==0:
-                print(rulethis, list_rulestr, list_sname)
-                assert False, f"this rule has not acceptable rule scoreres: {rulethis}"
-            successes = [x[name] for name in list_sname] # list of bool
-            return any(successes)
+            if rulethis=="base":
+                return True
+            else:
+                list_rulestr = _rules_consistent_rulestrings_extract_auto([rulethis])[0]
+                list_sname = bm.colnames_extract_scores(list_rule_get=list_rulestr)
+                if len(list_sname)==0:
+                    print(rulethis, list_rulestr, list_sname)
+                    assert False, f"this rule has not acceptable rule scoreres: {rulethis}"
+                successes = [x[name] for name in list_sname] # list of bool
+                return any(successes)
         bm.Dat = applyFunctionToAllRows(bm.Dat, F, "success_binary")
         
     # Return as a BehModelHolder instance
@@ -480,3 +502,71 @@ def _add_binary_rule_tuple_col(df, rule_cols):
     for i in range(len(df)):
         df.at[i, tuple_col_name] = str(tuple([int(df.at[i, f"behmodpost_{x}_default"]) for x in rule_cols]))
 
+
+
+#################### CATEGORIZE TASKS BASED ON SEQUENCE FEATURES
+# e..g, ngram (AABBB)
+
+def tasks_categorize_based_on_rule(D, rule):
+    """ fore ach task, categorize it based on a given rule and on its
+    features, such as what shapes are invovled. Is liek a more detaield 
+    (and rule-dependent) version of taskgorups. e.g, if
+    rule == AnBm, then each task is an ngram, and could be (3,2) meaning
+    it is A3B2. 
+    The kinds of categories will depend on the rule (hard coded).
+    PARAMS:
+    - rule, string.
+    RETURNS:
+    - list of dict, matching each trial in D.
+    """
+
+    # prepare the dicts
+    # OUT = []
+    OUT = [{} for _ in range(len(D.Dat))]
+
+    # for a given trial, get what shapes it should be mapped to.
+    def _extract_shapes_pool(ruledict):
+        if ruledict["categ"]=="ss": # shape sequence
+            if ruledict["subcat"]=="rank":
+                shapes_pool = ruledict["params_good"]
+            else:
+                print(rd)
+                assert False
+        else:
+            print(ruledict)
+            assert False
+        return shapes_pool
+
+    # Get ruledict, to decide what features are relevant
+    map_rule_ruledict = rules_map_rule_to_ruledict_extract_auto(D)
+    rd = map_rule_ruledict[rule]
+
+    if rd["categ"]=="ss":
+        # Shape sequence.
+
+        shapes_pool = _extract_shapes_pool(rd)
+
+        ## 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
+        list_ns = []
+        for ind in range(len(D.Dat)):
+            tokens = D.taskclass_tokens_extract_wrapper(ind, "task")
+            shapes = [t["shape"] for t in tokens]
+            
+            # ignore order. just count how many A, B, C, ... etc
+            nshapes = []
+            inds_used = []
+            for sh in shapes_pool:
+                n = sum([sh==x for x in shapes])
+                nshapes.append(n)
+            # shapes left over?
+            n_left_over = len([x for x in shapes if x not in shapes_pool])
+            nshapes.append(n_left_over)
+
+            # list_ns.append(tuple(nshapes))
+            OUT[ind]["ss-shapes_ngram"] = tuple(nshapes)
+
+    else:
+        print(rule, rd)
+        assert False, "not coded"
+            
+    return OUT

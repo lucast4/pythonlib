@@ -822,7 +822,13 @@ class Dataset(object):
                 Tnew = TaskClass()
 
                 # A hack for a single expt (gridlinecircle2), for lollis.
-                auto_hack_if_detects_is_gridlinecircle_lolli = M["expt"]=="gridlinecircle" and M["date"] <= 210903
+                if "date" in M.keys() and M["date"] <= 210903:
+                    old = True
+                elif "date" not in M.keys():
+                    old = True  
+                else:
+                    old = False
+                auto_hack_if_detects_is_gridlinecircle_lolli = M["expt"]=="gridlinecircle" and old==True
                 Tnew.initialize("ml2", taskobj, 
                     convert_coords_to_abstract=convert_coords_to_abstract,
                     auto_hack_if_detects_is_gridlinecircle_lolli=auto_hack_if_detects_is_gridlinecircle_lolli)
@@ -1104,12 +1110,16 @@ class Dataset(object):
         for x in this:
             ind_task = x[2]["ind_taskstroke_orig"]
             mapper_taskstroke_to_beh[ind_task] = x[0] # indidces into storkes_beh
+        
+        # some tasktrokes were missed
+        n_task_strokes = len(self.Dat.iloc[ind]["strokes_task"])
+        for i in range(n_task_strokes):
+            if i not in mapper_taskstroke_to_beh.keys():
+                mapper_taskstroke_to_beh[i] = []
 
         if which_order=="task":
             Task = self.Dat.iloc[ind]["Task"]
             tokens = Task.tokens_generate()
-
-
         elif which_order=="beh":
             tokens = self.behclass_extract_beh_and_task(ind)[1]
         elif which_order=="beh_firsttouch":
@@ -1121,6 +1131,7 @@ class Dataset(object):
         # Also get the corresponding beahvior
         for t in tokens:
             t["ind_behstrokes"] = mapper_taskstroke_to_beh[t["ind_taskstroke_orig"]]
+            # print(t["ind_taskstroke_orig"],  t["ind_behstrokes"])
 
         if plot:
             self.sequence_extract_beh_and_task(ind, ploton=True)
@@ -5357,7 +5368,7 @@ class Dataset(object):
             strokes = self.Dat.iloc[idx]["strokes_task"]
         else:
             assert False
-            
+
         strokes_overlay = [strokes[i] for i in ind_strokes]
         return self.plot_single_trial_highlighting_overlaid_strokes(ind, strokes_overlay,
             ax, underlay_beh_or_task, overlay_single_color=overlay_single_color, 

@@ -641,7 +641,7 @@ class BehaviorClass(object):
         - expt, str, name of expt which is used for defining params for extracting stroke labels. 
         e..g, things like size of sketchpad grid. None, to use self.Expt
         RETURNS:
-        - datsegs, list of dicts, each w same keys, each a single token.
+        - datsegs, list of dicts, each w same keys, each a single token, length of beh strokes
         """
 
         if not recompute:
@@ -703,7 +703,6 @@ class BehaviorClass(object):
 
         def find_inds_behstroke_aligned_to_this_taskstroke(indtask_get):
             return [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted) if indtask==indtask_get]
-            
         out_combined = []
         for i, dseg_task in enumerate(datsegs_tasklength):
             # get all the beh that are aligned with this task

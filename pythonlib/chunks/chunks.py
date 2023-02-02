@@ -48,7 +48,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
     - expt, often None
     - rule, string, usualyl format: <category>-<subcat>-<rule>
     """
-    from pythonlib.dataset.modeling.discrete import map_from_rulestring_to_ruleparams
+    from pythonlib.dataset.modeling.discrete import rules_map_rulestring_to_ruledict
     
     if params is None:
         params = {}
@@ -225,7 +225,7 @@ def find_chunks_hier(Task, expt, rule, strokes=None, params=None,
     list_chunks = [chunks] # only one way
 
     #### Define hierarchies
-    ruledict = map_from_rulestring_to_ruleparams(rule)
+    ruledict = rules_map_rulestring_to_ruledict(rule)
     if ruledict["categ"]=="dir":
     # if rule in ["left", "right", "up", "down"]:
         # print(objects)

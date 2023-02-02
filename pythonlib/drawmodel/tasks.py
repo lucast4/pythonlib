@@ -1066,10 +1066,15 @@ class TaskClass(object):
             nstrokes = len(dat['StrokindsDone'])
         elif "StrokesMaskTouched" in dat.keys():
             nstrokes = len(dat['StrokesMaskTouched'])
+        elif "Seq" in dat.keys(): 
+            nstrokes = len(dat["Seq"])
         else:
             for k, v in dat.items():
                 print(k, ' -- ' , v)
             print(dat.keys())
+            # print(dat["StrokesAll"])
+            # print(dat["StrokesObj"])
+            # print(dat["Seq"])
             assert False
 
         list_keys_check = ["StrokesFinalNorm", "StrokesMaskTouched", 

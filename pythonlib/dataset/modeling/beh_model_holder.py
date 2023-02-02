@@ -112,7 +112,8 @@ class BehModelHolder(object):
 
 
     def extract_concatenated_aggregated_dataset(self, Dat=None, monkey_prior_col_name="epoch", 
-        monkey_prior_list=None, list_classes=None, model_score_name_list =None):
+        monkey_prior_list=None, list_classes=None, model_score_name_list =None,
+        list_cols_keep = None):
         """ 
         Returns single D, but also returns variations after different
         kinds of aggregations.
@@ -149,9 +150,12 @@ class BehModelHolder(object):
         print("Model scores (colnames): ", model_score_name_list)
         print("Model alignments (colnames): ", list_colnames_alignment)
 
-        LIST_COLS_KEEP =  ["character", "trialcode", "taskgroup", "isprobe"]
+        LIST_COLS_KEEP =  ["character", "trialcode", "taskgroup", "probe"]
+        if list_cols_keep:
+            LIST_COLS_KEEP = LIST_COLS_KEEP + list_cols_keep
 
         # 1) wide-form to long-form (a single column of "scores") (inlcude alignments)
+        
         DatWide, _ = summarize_feature(Dat, "epoch", model_score_name_list+list_colnames_alignment, 
             LIST_COLS_KEEP, newcol_variable="model", newcol_value="score")
 
@@ -291,7 +295,7 @@ class BehModelHolder(object):
         self.plot_score_cross_prior_model(self.Dat)
 
         # Separate plots,split by taskgroup and by probe
-        for split_by in ["taskgroup", "isprobe"]:
+        for split_by in ["taskgroup", "probe"]:
             self.plot_score_cross_prior_model_splitby(self.Dat, split_by=split_by)
 
         ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
@@ -313,7 +317,7 @@ class BehModelHolder(object):
             df = self.Dat
 
         Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
-            df, "epoch")[:5]
+            df, "epoch", list_cols_keep=[split_by])[:5]
 
         # combine in single plot (all taskgroups)
         fig = sns.catplot(data=DatFlat, x="epoch", y="score", hue="model", col=split_by, col_wrap=3, kind="bar")
