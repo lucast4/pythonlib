@@ -38,7 +38,7 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from .learning import preprocess_dataset as learn_preprocess
-    from pythonlib.dataset.modeling.discrete import generate_scored_beh_model_data, rules_extract_auto
+    from pythonlib.dataset.modeling.discrete import generate_scored_beh_model_data, rules_related_rulestrings_extract_auto
     
     if reset_grammar_dat:
         D.GrammarDict = {}
@@ -57,7 +57,7 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
     else:
         # 2) get additional rules (hypotheses)
         ## Test each beh against hypothetical rules (discrete models)
-        list_rules = rules_extract_auto(D)
+        list_rules = rules_related_rulestrings_extract_auto(D)
 
     bm = generate_scored_beh_model_data(D, list_rules = list_rules,
         how_define_correct_order=how_define_correct_order, binary_rule=True)

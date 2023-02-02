@@ -14,21 +14,24 @@ VARIABLES_KEEP = ["shape_oriented", "gridloc"]
 
 def generate_dict_of_all_used_motifs(D, nprims=2, 
     variables_keep = None,
-    WHICH_DATSEGS = "task", shapes_to_ignore=None):
+    WHICH_DATSEGS = "beh_firsttouch", shapes_to_ignore=None):
     """ Generate dict holding all motifs used in this dataset.
     PARAMS:
     - D, Dataset
     - nprims, number of prims in motif. Currently only coded for 2
     - variables_keep, list of str keys into datsegs. order of this list
     defines the feature tuple for each token. e..g, ["shape_oriented", "gridloc"]
-    - WHICH_DATSEGS, str, {'beh', 'task'}, defines which datsegs to use, ether
-    aligned to beh or task.
+    - WHICH_DATSEGS, str, {'beh', 'beh_firsttouch'}, defines which datsegs to use, ether
+    aligned to beh or beh_firsttouch.
     - shapes_to_ignore, list of str of shapes_oriented, ignores any motifs that inlcude this
     shape. None to not apply this
     RETURNS:
     - motifs_all_dict, dict, where keys are motifs (tuples of tokens) and itmes are 
     list of indices, where and index is (trial, starting strokenum)
     """
+
+    assert WHICH_DATSEGS in {"beh", "beh_firsttouch"}, "these are the only ones that make sens..."
+    # assert WHICH_DATSEGS == "beh", "this is the only one that maintains mappign between stroke indices across all dat. if use beh_firsttouch, plots will be weird."
 
     if variables_keep is None:
         variables_keep = VARIABLES_KEEP
@@ -45,15 +48,22 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
         return token_tuple
 
     for ind in range(len(D.Dat)):
-        Beh = D.Dat.iloc[ind]["BehClass"]
-        primlist, datsegs_behlength, datsegs_tasklength = D.behclass_extract_beh_and_task(ind)[:3]
-        if WHICH_DATSEGS=="task":
-            datsegs = datsegs_tasklength
-        elif WHICH_DATSEGS=="beh":
-            datsegs = datsegs_behlength
-        else:
-            assert False
-        
+        datsegs = D.taskclass_tokens_extract_wrapper(ind, which_order=WHICH_DATSEGS)
+        # Beh = D.Dat.iloc[ind]["BehClass"]
+        # primlist, datsegs_behlength, datsegs_tasklength = D.behclass_extract_beh_and_task(ind)[:3]
+        # if WHICH_DATSEGS=="task":
+        #     # matching beh strokes first touch
+        #     datsegs = datsegs_tasklength
+        # elif WHICH_DATSEGS=="beh":
+        #     # matching beh strokes,
+        #     datsegs = datsegs_behlength
+        # else:
+        #     assert False
+            
+        # print(datsegs)
+        # print(datsegs[0]["Prim"].Stroke())
+        # assert False
+
         for i in range(len(datsegs)-(nprims-1)):
             motif = datsegs[i:i+nprims]
                 
@@ -63,14 +73,17 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
             # save this motif
             # use the motif as a key (hash it)
             # just keep the variables that you care about
-            motif = tuple([prune_token_variables(token, variables_keep) for token in motif])
+            motif_features = tuple([prune_token_variables(token, variables_keep) for token in motif])
             
             # This is hashable. use as key in dict
-            index = (ind, i)
-            if motif in motifs_all_dict.keys():
-                motifs_all_dict[motif].append(index)
+            index = (motif, (ind, i))
+            if motif_features in motifs_all_dict.keys():
+                motifs_all_dict[motif_features].append(index)
             else:
-                motifs_all_dict[motif] = [index]
+                motifs_all_dict[motif_features] = [index]
+
+            # # Save its tokens and strokes.
+            # motif_tokens = motif
 
     # prune motifs
     if shapes_to_ignore is not None:
@@ -84,31 +97,32 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
 
         # Second, clean up the motifs
         def _is_bad(motif):
-            for token in motif:
+            for token in motif_features:
                 if token[0] in shapes_to_ignore:
                     return True
             return False
 
         motifs_all_dict_new = {}
-        for motif, v in motifs_all_dict.items():
-            if _is_bad(motif):
-                print("removing motif: ", motif)
+        for motif_features, v in motifs_all_dict.items():
+            if _is_bad(motif_features):
+                print("removing motif: ", motif_features)
                 continue
             else:
-                motifs_all_dict_new[motif] = v
+                motifs_all_dict_new[motif_features] = v
         motifs_all_dict = motifs_all_dict_new
 
     print("Found this many motifs: ", len(motifs_all_dict))
     sorted(list(motifs_all_dict.keys()))
-    print("This many instances per motif: ", [len(v) for k, v in motifs_all_dict.items()])
+    print("This many instances per motif_features: ", [len(v) for k, v in motifs_all_dict.items()])
+    
     return motifs_all_dict
 
-def extract_shapes_in_motif(motif):
+def extract_shapes_in_motif(motif_features):
     """
-    Get list of shapes (unique, sorted) in this motif
+    Get list of shapes (unique, sorted) in this motif_features
     """
     shapes = []
-    for token in motif:
+    for token in motif_features:
         # loc = token[1]
         shape = token[0]
         shapes.append(shape)
@@ -614,3 +628,20 @@ def expt_extract_motifgroups_to_regenerate(which_group, DatGroups, motifs_all_di
     return DatTrials, DatGroupsUsedSimple, ALREADY_USED_MOTIFGROUPS_INDS
         
             
+def prune_dataset_unique_shapes_only(D):
+    """ Only keep trials where no shape is repeated within the trial
+    """
+    assert False,'in progress. copied from ntoebook...'
+    indtrial_keep = []
+    print(len(D.Dat))
+    for indtrial in range(len(D.Dat)):
+        shapes = D.taskclass_shapes_extract(indtrial)
+        nshape_uniq = len(set(shapes))
+        n = len(shapes)
+        if n - nshape_uniq > 1:
+            print(indtrial, '-', shapes)
+        else:
+            indtrial_keep.append(indtrial)
+
+    print(len(indtrial_keep))
+D.subsetDataframe(indtrial_keep)    

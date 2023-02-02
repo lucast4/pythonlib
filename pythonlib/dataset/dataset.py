@@ -370,23 +370,29 @@ class Dataset(object):
         """
         assert False, "not coded, didnt think necesayr"
 
-    def copy(self):
+    def copy(self, dfdeep=True):
         """ returns a copy. does this by extracting 
         data
+        PARAMS:
+        - dfdeep, whether to copy self.Dat deep. pandas defualt is True. if
+        False, will not be changed even if you subsample the original dataframe..
+        It will change though if tyou change the index or data.
         NOTE: copies over all metadat, regardless of whether all
         metadats are used.
+
         """
         import copy
 
         Dnew = Dataset([])
 
-        Dnew.Dat = self.Dat.copy()
+        Dnew.Dat = self.Dat.copy(deep=dfdeep)
+
         if hasattr(self, "Metadats"):
             Dnew.Metadats = copy.deepcopy(self.Metadats)
         if hasattr(self, "BPL"):
             Dnew.BPL = copy.deepcopy(self.BPL)
         if hasattr(self, "SF"):
-            Dnew.SF = self.SF.copy()
+            Dnew.SF = self.SF.copy(deep=dfdeep)
         if hasattr(self, "Parses"):
             Dnew.Parses = copy.deepcopy(self.Parses)
         if hasattr(self, "BlockParamsDefaults"):
@@ -1080,6 +1086,56 @@ class Dataset(object):
         T = self.Dat.iloc[ind]["Task"]
         return T.get_grid_ver()
 
+    def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", plot=False):
+        """ [GOOD] REturn tokens (lsit of dict) for this trial, in any order,
+        and with aligned indices into beh strokes.
+        PARAMS:
+        - which_order, in
+        --- 'task', order of ind_taskstrokes
+        --- 'beh', matching each beh stroke,
+        --- 'beh_firsttouch', ordered by behstroke first touch, but length <=ntask.
+        RETURNS:
+        - list of dict, a reordered tokens
+        """
+
+        # mapper from taskstrokeinds to beh
+        mapper_taskstroke_to_beh = {}
+        this = self.behclass_extract_beh_and_task(ind)[3]
+        for x in this:
+            ind_task = x[2]["ind_taskstroke_orig"]
+            mapper_taskstroke_to_beh[ind_task] = x[0] # indidces into storkes_beh
+
+        if which_order=="task":
+            Task = self.Dat.iloc[ind]["Task"]
+            tokens = Task.tokens_generate()
+
+
+        elif which_order=="beh":
+            tokens = self.behclass_extract_beh_and_task(ind)[1]
+        elif which_order=="beh_firsttouch":
+            tokens = self.behclass_extract_beh_and_task(ind)[2]
+        else:
+            print(which_order)
+            assert False, "not coded yet"
+
+        # Also get the corresponding beahvior
+        for t in tokens:
+            t["ind_behstrokes"] = mapper_taskstroke_to_beh[t["ind_taskstroke_orig"]]
+
+        if plot:
+            self.sequence_extract_beh_and_task(ind, ploton=True)
+
+        return tokens
+
+
+    def taskclass_shapes_extract(self, ind):
+        """ Return list of shape strings used in 
+        this task, in order of indices in taskstrokes
+        """
+        tokens = self.taskclass_tokens_extract(ind, "task")
+        shapes = [d["shape_oriented"] for d in tokens]
+        return shapes
+
     def objectclass_get_active_chunk(self, ind):
         """ Get the active chunk thbat was used online, 
         from ObjectClass
@@ -1572,9 +1628,23 @@ class Dataset(object):
                     self.recomputeSketchpadEdges()
                 elif p=="rescale_to_1":
                     self.rescaleStrokes()
+                elif p=="no_supervision":
+                     # Remove trials with online supervision (e.g, color)
+                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"]=="off|0||0"]
+                elif p=="only_success":
+                    # Remove trials with online abort
+                    self.Dat = self.Dat[self.Dat["aborted"]==False]
+                elif p=="correct_sequencing":
+                    # Only if beh sequence is consistent with at least one acceptable rule 
+                    # based on the epoch.
+                    bm = self.grammar_wrapper_extract()
+                    self.Dat = self.Dat[(bm.Dat["success_binary"]==True)].reset_index(drop=True)
                 else:
                     print(p)
                     assert False, "dotn know this"
+        
+        self.Dat.reset_index(drop=True)
+
         return params
 
 
@@ -4782,18 +4852,17 @@ class Dataset(object):
         num beh strokes.
         This requires doing alignsim stuff fifirst.
         RETURNS:
-        - primlist, list of strokeClass instances, each a beh stroek, in order.
+        - primlist, list of strokeClass instances, each a beh stroek 
+        [in order and num of BEH]
         - datsegs_behlength, tokens, same length as primlist, for the best match for
-        each beh stroke
+        each beh stroke [in order and num of BEH]
         - datsegs_tasklength, tokens, same length as num task strokes, in order of first time
-        each task stroke gotten by beh.
+        each task stroke gotten by beh. [in order of BEH, but num of TASK]
         - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
         order that they are gotten (based on alignsim). Each tuple: 
         (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes,
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
-
         """
-
 
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
@@ -5114,6 +5183,16 @@ class Dataset(object):
         """
         return self.sequence_extract_beh_and_task(ind, ploton)
 
+
+    def grammar_wrapper_extract(self):
+        """ Extract grammar data for each trial
+        RETURNS:
+        - bm, beh_model_holder, with dataset (rows) matching self.Dat
+        """
+        from pythonlib.dataset.dataset_analy.grammar import preprocess_dataset
+        bm, _, _ = preprocess_dataset(self)
+        return bm
+
     def sequence_extract_beh_and_task(self, ind, ploton=False):
         """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
         task (e.g., taskstroke inds ordered by chunk, and whether there is color
@@ -5240,8 +5319,72 @@ class Dataset(object):
         plotMP(MP, ax=ax)
 
 
+    def _plot_single_trial_highlighting_overlaid_strokes(self, ind, strokes_overlay, 
+            ax=None, underlay_beh_or_task="task",
+            underunderlay_task=True, underunderlay_color = "w",
+            overlay_single_color="r", underlay_single_color="k"):
+        """ Low-level plot of single trial with overlaid strokes (any). Useful if want to highlight
+        subset of strokes 
+        PARAMS:
+        - strokes_overlay, list of np arary.
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        if underlay_beh_or_task=="beh" and underunderlay_task:
+            # then underlay with a faint task
+            self.plot_single_trial(ind, ax, single_color=underunderlay_color, ver="task")
+
+        # plot trial
+        if underlay_beh_or_task=="beh":
+            self.plot_single_trial(ind, ax, single_color=underlay_single_color)
+        elif underlay_beh_or_task=="task":
+            self.plot_single_trial(ind, ax, single_color=underlay_single_color, ver="task")
+        else:
+            assert False
+
+        plotDatStrokesWrapper(strokes_overlay, ax, color=overlay_single_color, 
+            add_stroke_number=False)    
+
+    def plot_single_trial_highlighting_overlaid_strokes(self, ind, ind_strokes, 
+            ax=None, overlay_beh_or_task="beh", underlay_beh_or_task="task",
+            overlay_single_color="r", underlay_single_color="k"):
+
+        if overlay_beh_or_task=="beh":
+            strokes = self.Dat.iloc[idx]["strokes_beh"]
+        elif overlay_beh_or_task=="task":
+            strokes = self.Dat.iloc[idx]["strokes_task"]
+        else:
+            assert False
+            
+        strokes_overlay = [strokes[i] for i in ind_strokes]
+        return self.plot_single_trial_highlighting_overlaid_strokes(ind, strokes_overlay,
+            ax, underlay_beh_or_task, overlay_single_color=overlay_single_color, 
+            underlay_single_color=underlay_single_color)
+
+        # if ax is None:
+        #     fig, ax = plt.subplots(1,1)
+
+        # # plot trial
+        # if underlay_beh_or_task=="beh":
+        #     self.plot_single_trial(ind, ax, single_color=underlay_single_color)
+        # elif underlay_beh_or_task=="task":
+        #     self.plot_single_trial(ind, ax, single_color=underlay_single_color, ver="task")
+        # else:
+        #     assert False
+
+        # if overlay_beh_or_task=="beh":
+        #     self.plot_single_trial(ind, ax, single_color=overlay_single_color, 
+        #         strok_indices=ind_strokes, add_stroke_number_beh=False)
+        # elif overlay_beh_or_task=="task":
+        #     assert False, "cant do this! ind_strokes is defined wrt to beh strokes..."
+        #     # self.plot_single_trial(ind, ax, single_color="r", ver="task", strok_indices=ind_strokes)
+        # else:
+        #     assert False
+
     def plot_single_trial(self, idx, ax=None, single_color=None, 
-            ver="beh"):
+            ver="beh", strok_indices=None, add_stroke_number_beh=True):
         """ Low-level code to plot a single trial, beh or task strokes, on an axis.
         PARAMS:
         - single_color, either None (colors by ordinal), or str color code
@@ -5250,14 +5393,19 @@ class Dataset(object):
         from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
         if ver=="beh":
             strokes = self.Dat.iloc[idx]["strokes_beh"]
+            if strok_indices:
+                strokes = [strokes[i] for i in strok_indices]
             if ax is None:
                 fig, ax = plt.subplots(1,1)
-            plotDatStrokesWrapper(strokes, ax, color=single_color)    
+            plotDatStrokesWrapper(strokes, ax, color=single_color, 
+                add_stroke_number=add_stroke_number_beh)    
         elif ver=="task":
             stim = self.Dat.iloc[idx]["strokes_task"]
+            if strok_indices:
+                stim = [stim[i] for i in strok_indices]
             plotDatStrokes(stim, ax, each_stroke_separate=True, 
                 plotver="onecolor", add_stroke_number=False, 
-                mark_stroke_onset=False, pcol="k", number_from_zero=False)
+                mark_stroke_onset=False, pcol=single_color, number_from_zero=False)
         else:
             assert False
         return ax

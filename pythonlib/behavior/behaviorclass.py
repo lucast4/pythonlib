@@ -703,6 +703,7 @@ class BehaviorClass(object):
 
         def find_inds_behstroke_aligned_to_this_taskstroke(indtask_get):
             return [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted) if indtask==indtask_get]
+            
         out_combined = []
         for i, dseg_task in enumerate(datsegs_tasklength):
             # get all the beh that are aligned with this task
