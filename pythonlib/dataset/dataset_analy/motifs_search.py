@@ -56,8 +56,8 @@ def find_motif_in_beh_bykind(tokens, kind, params=None, list_beh_mask=None,
             assert isinstance(token, dict)
             motif = [token for _ in range(n)] 
         elif kind=="chunk":
-        	# Simplest, a concrete chunk. is just looking for a specific sequence
-        	motif = params["tokens"]
+            # Simplest, a concrete chunk. is just looking for a specific sequence
+            motif = params["tokens"]
         elif kind=="lolli":
             # circle and adjacent line, orinetation can be one of 4. 
             # order can be one of two
@@ -88,8 +88,8 @@ def find_motif_in_beh_bykind(tokens, kind, params=None, list_beh_mask=None,
             else:
                 assert False
         else:
-        	print(kind)
-        	assert False
+            print(kind)
+            assert False
 
         return motif
 
@@ -182,6 +182,17 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
         shape = motifparams_abstract["shape"] # e..g, circle
         nmin = motifparams_abstract["nmin"] # min num repeats (inclusive)
         nmax = motifparams_abstract["nmax"] # max num repeats (inclusive)
+        if "allowed_rank_first_token" in motifparams_abstract.keys():
+            allowed_rank_first_token = motifparams_abstract["allowed_rank_first_token"] # list of ints, only keeps motifs whose first item are in these ranks
+        else:
+            allowed_rank_first_token = None
+        if "allowed_rank_last_token" in motifparams_abstract.keys():
+            allowed_rank_last_token = motifparams_abstract["allowed_rank_last_token"] # same as above.
+        else:
+            allowed_rank_last_token = None
+        # None to ignore
+        # -1, -2, etc. interpreted as last, second-to-last..
+
         force_no_shared_tokens_across_motifs = True
 
         # construct single token
@@ -193,6 +204,41 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
 
             motif = [token for _ in range(n)]
             list_matches = find_motif_in_beh_specific(list_beh, motif, list_beh_mask)
+
+            # check if matches pass criteria
+            def _convert_rank_to_positive(list_rank):
+                """ Convert all the neg ranks in list_rank to positive, based
+                on legnth of motif. returns a copy of list_rank
+                """
+                nmax = len(list_beh)
+                list_rank_pos = []
+                for rank in list_rank:
+                    if rank<0:
+                        list_rank_pos.append(nmax+rank)
+                    else:
+                        list_rank_pos.append(rank)
+                return list_rank_pos
+
+            if allowed_rank_first_token is not None:
+                # convert negative ranks to positive
+                allowed_rank_first_token_positives = _convert_rank_to_positive(allowed_rank_first_token)
+                list_matches = [m for m in list_matches if m[0] in allowed_rank_first_token_positives]
+                # assert False
+            if allowed_rank_last_token is not None:
+                # check their first toekns
+                allowed_rank_last_token_positives = _convert_rank_to_positive(allowed_rank_last_token)
+                # print("HER")
+                # print(allowed_rank_last_token)
+                # print(len(list_beh))
+                # print(allowed_rank_last_token_positives)
+                # print(list_matches)
+                # A = len(list_matches)
+                list_matches = [m for m in list_matches if m[-1] in allowed_rank_last_token_positives]
+                # print(list_matches)
+                # B = len(list_matches)
+                # if A>0 and B==0:                    
+                #     assert False
+                # print("---")
 
             # store list matches
             key_this = n

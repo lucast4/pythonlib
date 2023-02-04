@@ -1642,7 +1642,7 @@ class Dataset(object):
                 elif p=="no_supervision":
                      # Remove trials with online supervision (e.g, color)
                     self.Dat = self.Dat[self.Dat["supervision_stage_concise"]=="off|0||0"]
-                elif p=="only_success":
+                elif p=="remove_online_abort":
                     # Remove trials with online abort
                     self.Dat = self.Dat[self.Dat["aborted"]==False]
                 elif p=="correct_sequencing":
@@ -5133,6 +5133,35 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
+    def grammar_rules_extract_info(self):
+        """ Return dict holding infor for all rules (epochs)
+        epoch: Dict holding:
+        - rule_dict
+        - for each rule, rules consstent with ti
+        """
+        from pythonlib.dataset.modeling.discrete import rules_map_rule_to_ruledict_extract_auto, _rules_consistent_rulestrings_extract_auto
+        # list_ruledict_all_related_rules = rules_map_rule_to_ruledict_extract_auto(self)
+        # list_rule = 
+        # dict_rules_consistent_with_each_rule = {}
+
+        list_rules_exist = self.Dat["epoch"].unique().tolist()
+
+        # For each existing rule, get ruledicts consistent with it
+        dict_ruledicts_consistent_with_each_existing_rule = {}
+        for rule in list_rules_exist:
+            ld = _rules_consistent_rulestrings_extract_auto([rule], return_as_dict=True)[0]
+            dict_ruledicts_consistent_with_each_existing_rule[rule] = ld
+
+        out = {
+            "list_rules_exist":list_rules_exist,
+            "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule
+        }
+        return out
+
+
+    # def grammar_rules_extract_rul
+
+
     def _grammar_parses_generate(self, ind, list_rulestring = None):
         """ Generate GrammarDat object and save, for this trial
         PARAMS:

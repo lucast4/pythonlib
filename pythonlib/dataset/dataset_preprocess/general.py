@@ -226,12 +226,12 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
-    elif expt in ["grammar1b", "grammardir1"]:
-        # Reassign rules: each epoch is based on tasksequencer rule
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
-        traintest_reassign_method = "supervision_except_color"
-        mapper_auto_rename_probe_taskgroups = True
+    # elif expt in ["grammar1b", "grammardir1"]:
+    #     # Reassign rules: each epoch is based on tasksequencer rule
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+    #     traintest_reassign_method = "supervision_except_color"
+    #     mapper_auto_rename_probe_taskgroups = True
 
     elif "grammardircolor1" in expt or "grammardircolor2" in expt or "grammardircolor3" in expt:
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
@@ -298,6 +298,8 @@ def _groupingParams(D, expt):
     elif "grammar" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
     elif "dirfullvar" in expt or "dirdir" in expt:

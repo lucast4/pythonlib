@@ -13,11 +13,16 @@ import pandas as pd
 #     """
 
 
-def generate_diagnostic_model_data(D, DM):
+def generate_diagnostic_model_data(D, LIST_MOTIFS=None):
     """ Convert from diagnostic model results to BM.
     See grammar.diagnostic_model
     """
     
+    from pythonlib.grammar.diagnostic_model import DiagnosticModel
+    
+    DM = DiagnosticModel()
+    DM.preprocess_dataset_extract_scores(D, LIST_MOTIFS=LIST_MOTIFS)
+
     map_old_to_new = {
         "score_value":"score",
         # "score_name":"diagfeat",
@@ -25,7 +30,7 @@ def generate_diagnostic_model_data(D, DM):
     DM.Dat = DM.Dat.rename(map_old_to_new, axis=1)
 
     BM = BehModelHolder(DM.Dat, input_ver="long_form")
-    return BM
+    return BM, DM
 
 
 
@@ -393,8 +398,9 @@ def generate_scored_beh_model_data_long(D, list_rules,
                 if rulethis=="base":
                     return True
                 else:
-                    list_ruledict = _rules_consistent_rulestrings_extract_auto([rulethis], return_as_dict=False)[0]
-                    list_sname = [bm.Map_score_rule_agent_to_colname[("binsucc", rd, "model")] for rd in list_ruledict]
+                    list_rule = _rules_consistent_rulestrings_extract_auto([rulethis], return_as_dict=False)[0]
+                    list_sname = [bm.Map_score_rule_agent_to_colname[("binsucc", rule, "model")] for rule in list_rule]
+                    # list_sname = [bm.Map_rule_to_colname[rule] for rule in list_rule]
                     if len(list_sname)==0:
                         print(rulethis, list_rulestr, list_sname)
                         assert False, f"this rule has not acceptable rule scoreres: {rulethis}"

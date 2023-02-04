@@ -64,15 +64,20 @@ class BehModelHolder(object):
 
         map_score_rule_agent_to_colname = {}
         this = grouping_print_n_samples(self.DatLong, ["score_name", "agent_rule", "agent_kind"])
+        # Map_rule_to_colname = {}
         for x in this.keys():
             sn = x[0]
             r = x[1]
             ag = x[2]
             colname = "|".join(x)
             map_score_rule_agent_to_colname[x]=colname
+            # if r in Map_rule_to_colname.keys():
+            #     assert False, "THIS IS HACKY, overwrites if multiple cols for a rule."
+            # Map_rule_to_colname[r] = colname 
 
         self.Map_agent_to_rules = map_agent_to_rules
         self.Map_score_rule_agent_to_colname = map_score_rule_agent_to_colname
+        # self.Map_rule_to_colname = Map_rule_to_colname
 
         from pythonlib.tools.pandastools import aggregGeneral
         self.DatLongAgg = aggregGeneral(self.DatLong, ["character"], values=["score"], nonnumercols=["score_name", "epoch", "agent_kind", "agent_rule"])
@@ -392,7 +397,8 @@ class BehModelHolder(object):
             row=split_by, col="score_name", kind="swarm")
         return fig
 
-    def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup"):
+    def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
+            savedir=None):
         """Plot score as function of "split_by" categorical levels, where levels are on
         x-axis. Useful for comparing across levels.
         PARAMS;
@@ -405,20 +411,27 @@ class BehModelHolder(object):
             df = self.DatLong
 
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   col="score_name", col_wrap = 3, kind="point")
+                   col="score_name", col_wrap = 3, kind="point", aspect=1.5)
         rotateLabel(fig)
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
 
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   row="score_name", aspect=2, height=4)
+                   row="score_name", aspect=2, height=4, alpha=0.4, jitter=True)
         rotateLabel(fig)  
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
 
-        fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   row="score_name", aspect=2, height=4, kind="violin")
-        rotateLabel(fig)  
+        # fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+        #            row="score_name", aspect=2, height=4, kind="violin")
+        # rotateLabel(fig)  
+        # fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
 
         fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
-                   row="score_name")
+                   row="score_name", alpha=0.4, jitter=True)
         rotateLabel(fig)
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-points-agents.pdf")
 
     def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
         list_classes=None, model_score_name_list =None, ALPHA = 0.2, sdir=None):

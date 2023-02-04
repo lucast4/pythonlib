@@ -9,44 +9,48 @@ class DiagnosticModel(object):
         self.Dat = None
         self.DatAgg = None
 
-    def preprocess_dataset_extract_scores(self, D, LIST_MODELS = ["rand-null-uni"]):
+    def preprocess_dataset_extract_scores(self, D, LIST_MODELS = None,
+        LIST_MOTIFS= None, GET_MODELS=True):
         """ Full pipeline to extract diagnostic features/scores, given a dataset and 
         scorers (models)
         """
 
-        COLS_TO_KEEP = ["taskcat_by_rule", ]
         ## PARAMS
-        GET_MODELS = len(LIST_MODELS)>0
+        COLS_TO_KEEP = ["taskcat_by_rule"]
         animal = "|".join(D.animals())
 
-        # This determines what kinds of scores are collected
-        expt = D.expts()[0]
-        if expt=="gridlinecircle":
-            LIST_MOTIFS = [
-                ("repeat", {"shapekey":"shape",
-                             "shape":"circle",
-                             "nmin":2,
-                             "nmax":4}),
-                ("repeat", {"shapekey":"shape",
-                             "shape":"line",
-                             "nmin":2,
-                             "nmax":4}),
-                ("lolli", {})
-            ]
-            # This determines which models (controls) to get
-            LIST_MODELS = ["alternate", "baseline", "linetocircle", "circletoline", "lolli"]
-            
-        else:
-            LIST_MOTIFS = [
-                ("repeat", {"shapekey":"shape",
-                             "shape":"line-8-4-0",
-                             "nmin":2,
-                             "nmax":6}),
-                ("repeat", {"shapekey":"shape",
-                             "shape":"line-8-3-0",
-                             "nmin":2,
-                             "nmax":6}),
-            ]
+        if LIST_MODELS is None:
+            LIST_MODELS = ["rand-null-uni"] # just random
+
+        if LIST_MOTIFS is None:
+            # This determines what kinds of scores are collected
+            expt = D.expts()[0]
+            if expt=="gridlinecircle":
+                LIST_MOTIFS = [
+                    ("repeat", {"shapekey":"shape",
+                                 "shape":"circle",
+                                 "nmin":2,
+                                 "nmax":4}),
+                    ("repeat", {"shapekey":"shape",
+                                 "shape":"line",
+                                 "nmin":2,
+                                 "nmax":4}),
+                    ("lolli", {})
+                ]
+                # This determines which models (controls) to get
+                LIST_MODELS = ["alternate", "baseline", "linetocircle", "circletoline", "lolli"]
+                
+            else:
+                LIST_MOTIFS = [
+                    ("repeat", {"shapekey":"shape",
+                                 "shape":"line-8-4-0",
+                                 "nmin":2,
+                                 "nmax":6}),
+                    ("repeat", {"shapekey":"shape",
+                                 "shape":"line-8-3-0",
+                                 "nmin":2,
+                                 "nmax":6}),
+                ]
 
         self.Dataset = D.copy()
         self.Params = {

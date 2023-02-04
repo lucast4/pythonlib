@@ -1080,7 +1080,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
     for r in ["LVl1", "lVL1", "VlL1"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
-    for r in ["AnBm2", "AnBm1a"]:
+    for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b"]:
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations(["(AB)n"])
@@ -1103,7 +1103,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
 
 
 def rules_map_rule_to_ruledict_extract_auto(D):
-    """for each rule, get its ruledict
+    """for each related to the the data in this D, get its ruledict
     RETURNS:
     - dicst, rule --> ruledict
     """
@@ -1150,7 +1150,8 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
         ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
-        ("AnBm2"):["ss-rank-AnBm2"] # grammar2
+        ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
+        ("AnBm1b"):["ss-rank-AnBm1b"] # grammar2b, diag and hv lines, both within a single rule
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
     RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
@@ -1193,41 +1194,157 @@ def _rules_related_rulestrings_extract_auto(list_rules):
 #################### CATEGORIZE TASKS BASED ON SEQUENCE FEATURES
 # e..g, ngram (AABBB)
 
-def tasks_categorize_based_on_rule_mult(D, HACK=True):
+# def tasks_categorize_based_on_rule_mult(D, indrule=0):
+#     """
+#     """
+#     # Extract for each rule each tasks' categroyes
+#     from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule, rules_map_rule_to_ruledict_extract_auto
+#     from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+#     # Get list of rules
+#     list_rule = D.grammar_rules_extract_info()["list_rule"]
+#     # list_rule = []
+#     # for rule, ruledict in rules_map_rule_to_ruledict_extract_auto(D).items():
+#     #     if ruledict["categ"]=="ss":
+#     #         # keep it. a shape sequence
+#     #         # list_rulestring.append(ruledict["rulestring"])
+#     #         list_rule.append(rule)
+
+#     # just take the first ruel..
+#     rule = list_rule[indrule]          
+# # for rule in list_rule:
+# #     # rule = "AnBm1a"
+#     OUT, LIST_COLNAMES = tasks_categorize_based_on_rule(D, rule)
+#     # print("ASDASD", list_rule)
+
+#     for col in LIST_COLNAMES:
+#         D.Dat[col] = pd.DataFrame(OUT)[col]
+#     # print(rule)
+#     # print(OUT)
+#     # assert False
+
+#     # Assign mew col
+#     def F(x):
+#         return tuple([x[colname] for colname in LIST_COLNAMES])
+#     D.Dat = applyFunctionToAllRows(D.Dat, F, "taskcat_by_rule")
+#     print("New col: taskcat_by_rule")
+
+def tasks_categorize_based_on_rule_mult(D):
     """
     """
     # Extract for each rule each tasks' categroyes
     from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule, rules_map_rule_to_ruledict_extract_auto
     from pythonlib.tools.pandastools import applyFunctionToAllRows
-    list_rule = []
-    for rule, ruledict in rules_map_rule_to_ruledict_extract_auto(D).items():
-        if ruledict["categ"]=="ss":
-            # keep it. a shape sequence
-            # list_rulestring.append(ruledict["rulestring"])
-            list_rule.append(rule)
 
-    if HACK:
-        # just take the first ruel..
-        rule = list_rule[0]          
-    # for rule in list_rule:
-    #     # rule = "AnBm1a"
-        OUT, LIST_COLNAMES = tasks_categorize_based_on_rule(D, rule)
+    # Get list of rules
+    list_rule = D.grammar_rules_extract_info()["list_rules_exist"]
+    # ALL_OUT = []
+    # ALL_LIST_COL = []
+
+    all_combined = [[] for _ in range(len(D.Dat))]
+    for rule in list_rule:
+
+        list_vals = tasks_categorize_based_on_rule(D, rule)
         # print("ASDASD", list_rule)
-
-        for col in LIST_COLNAMES:
-            D.Dat[col] = pd.DataFrame(OUT)[col]
         # print(rule)
-        # print(OUT)
-        # assert False
+        # print(list_vals)
+        # ALL_OUT.append(OUT)
+        # ALL_LIST_COL.append(LIST_COLNAMES)
 
-    # Assign mew col
-    def F(x):
-        return tuple([x[colname] for colname in LIST_COLNAMES])
-    D.Dat = applyFunctionToAllRows(D.Dat, F, "taskcat_by_rule")
+        assert len(all_combined)==len(list_vals)
+        for ac, val in zip(all_combined, list_vals):
+            if val is not None:
+                ac.append(val)
+
+    # convert all to tuples
+    all_combined = [tuple(x) for x in all_combined]
+
+    if True:
+        D.Dat["taskcat_by_rule"] = all_combined
+        # print(all_combined)
+        # assert False
+        # Assign mew col
+    else:
+        def F(x):
+            return tuple([x[colname] for colname in LIST_COLNAMES])
+        D.Dat = applyFunctionToAllRows(D.Dat, F, "taskcat_by_rule")
     print("New col: taskcat_by_rule")
 
 
-def tasks_categorize_based_on_rule(D, rule):
+# def tasks_categorize_based_on_rule(D, rule, HACK=True):
+#     """ fore ach task, categorize it based on a given rule and on its
+#     features, such as what shapes are invovled. Is liek a more detaield 
+#     (and rule-dependent) version of taskgorups. e.g, if
+#     rule == AnBm, then each task is an ngram, and could be (3,2) meaning
+#     it is A3B2. 
+#     The kinds of categories will depend on the rule (hard coded).
+#     PARAMS:
+#     - rule, string.
+#     RETURNS:
+#     - list of dict, matching each trial in D.
+#     """
+
+#     # prepare the dicts
+#     # OUT = []
+#     OUT = [{} for _ in range(len(D.Dat))]
+
+#     # for a given trial, get what shapes it should be mapped to.
+#     def _extract_shapes_pool(ruledict):
+#         if ruledict["categ"]=="ss": # shape sequence
+#             if ruledict["subcat"]=="rank":
+#                 shapes_pool = ruledict["params_good"]
+#             else:
+#                 print(rd)
+#                 assert False
+#         else:
+#             print(ruledict)
+#             assert False
+#         return shapes_pool
+
+#     # Get ruledict, to decide what features are relevant
+#     map_rule_ruledict = rules_map_rule_to_ruledict_extract_auto(D)
+#     rd = map_rule_ruledict[rule]
+#     LIST_COLNAMES = []
+#     if rd["categ"]=="ss":
+#         # Shape sequence.
+
+#         shapes_pool = _extract_shapes_pool(rd)
+
+#         ## 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
+#         list_ns = []
+#         for ind in range(len(D.Dat)):
+#             tokens = D.taskclass_tokens_extract_wrapper(ind, "task")
+#             shapes = [t["shape"] for t in tokens]
+            
+#             # ignore order. just count how many A, B, C, ... etc
+#             nshapes = []
+#             inds_used = []
+#             for sh in shapes_pool:
+#                 n = sum([sh==x for x in shapes])
+#                 nshapes.append(n)
+#             # shapes left over?
+#             n_left_over = len([x for x in shapes if x not in shapes_pool])
+#             nshapes.append(n_left_over)
+
+#             # list_ns.append(tuple(nshapes))
+#             colname = "ss-shapes_ngram"
+#             OUT[ind][colname] = tuple(nshapes)
+#         LIST_COLNAMES.append(colname)
+#     elif rd["categ"] == "ch":
+#         # Count the chunks
+#         if HACK:
+#             # Ignore for now..
+#             pass
+#             # OUT = []
+#             # LIST_COLNAMES = []
+#     else:
+#         print(rule, rd)
+#         assert False, "not coded"
+
+#     return OUT, LIST_COLNAMES
+
+
+def tasks_categorize_based_on_rule(D, rule, HACK=True):
     """ fore ach task, categorize it based on a given rule and on its
     features, such as what shapes are invovled. Is liek a more detaield 
     (and rule-dependent) version of taskgorups. e.g, if
@@ -1241,8 +1358,8 @@ def tasks_categorize_based_on_rule(D, rule):
     """
 
     # prepare the dicts
-    # OUT = []
-    OUT = [{} for _ in range(len(D.Dat))]
+    OUT = []
+    # OUT = [{} for _ in range(len(D.Dat))]
 
     # for a given trial, get what shapes it should be mapped to.
     def _extract_shapes_pool(ruledict):
@@ -1260,7 +1377,6 @@ def tasks_categorize_based_on_rule(D, rule):
     # Get ruledict, to decide what features are relevant
     map_rule_ruledict = rules_map_rule_to_ruledict_extract_auto(D)
     rd = map_rule_ruledict[rule]
-    LIST_COLNAMES = []
     if rd["categ"]=="ss":
         # Shape sequence.
 
@@ -1283,14 +1399,15 @@ def tasks_categorize_based_on_rule(D, rule):
             nshapes.append(n_left_over)
 
             # list_ns.append(tuple(nshapes))
-            colname = "ss-shapes_ngram"
-            OUT[ind][colname] = tuple(nshapes)
-        LIST_COLNAMES.append(colname)
-
+            OUT.append(tuple(nshapes))
+            # colname = "ss-shapes_ngram"
+            # OUT[ind][colname] = 
+    elif rd["categ"] == "ch":
+        # Count the chunks
+        if HACK:
+            OUT = [None for _ in range(len(D.Dat))]
     else:
         print(rule, rd)
         assert False, "not coded"
 
-    return OUT, LIST_COLNAMES
-
-
+    return OUT

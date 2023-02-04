@@ -26,7 +26,7 @@ def preprocess_dat(D, only_prims_on_grid=True):
         D.filterPandas({"task_kind":["prims_on_grid"]}, "modify")
 
     # 1) preprocess
-    params = ["no_supervision", "only_success", "correct_sequencing"]
+    params = ["no_supervision", "remove_online_abort", "correct_sequencing"]
     D.preprocessGood(params =params)
 
     # Generate tokens
