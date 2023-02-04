@@ -804,7 +804,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
 
 
 
-def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False):
+def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False,
+    flatten_separator="-", col_strings_ignore=None):
     """
     Take a long-form datagrame, and convert into a wide form. 
     PARAMS:
@@ -835,8 +836,10 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
 
     dftmp = pd.pivot_table(data=df, index=index, columns=columns, values=values, aggfunc=aggfunc)
 
+    if col_strings_ignore is None:
+        col_strings_ignore = []
     if flatten_col_names:
-        dftmp.columns = ['-'.join([str(c) for c in col]).strip() for col in dftmp.columns.values]
+        dftmp.columns = [flatten_separator.join([str(c) for c in col if c not in col_strings_ignore]).strip() for col in dftmp.columns.values]
 
     # to reindex and retain indices as new columns
     dftmp = dftmp.reset_index()

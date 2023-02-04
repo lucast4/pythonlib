@@ -123,7 +123,7 @@ class ChunksClassList(object):
         - expt and rule are used for deciding what constitites a "chunk". Leave them as None if
         want to enter other method for deciding chunk
         """
-        from .chunks import find_chunks_hier
+        from pythonlib.dataset.modeling.discrete import find_chunks_hier
 
         self.Task = Task
         self.Expt = expt
@@ -510,3 +510,5 @@ def generate_dummy_chunksclass():
     display(C.search_permutations_chunks())
 
     return C
+
+    

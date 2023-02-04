@@ -11,23 +11,26 @@ See jupyter notebook for development of this code:
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+
 class BehModelHolder(object):
     """
     """
-    def __init__(self, data, dict_modelclass_to_rules, input_ver="default"):
+    def __init__(self, data, input_ver="long_form"):
         """
         Initialize with a dataframe in default format, holding model-beh scores,
         with different scorers(models). 
         PARAMS:
-        - data, wide-form dataframe. each row is a single trial. Must have the following
+        - data, long-form dataframe. each row is a single trial and a specifi score, therefore
+        a trial can span multipel rows (e.g, different models). Must have the following
         columns:
         --- epoch, str, the actual rule for monkey. This usually matches at least one of the rules in
         scorenames
         --- character, str, the name (id) of the task. 
-        --- score_names [multiple cols each a score using a diff model] behmodpost_{rulename}_{modelclass},
-        where rulename is string name of the rule for that model, at least one of the
-        coluns (for ach class) should match the rule of the epoch. modelclass is higher level
-        class of the model, e..g, different hyperparametres.
+        --- agent_kind, the agent whose score is used on that trails, e.g, "model", "monkey", if
+        is a diagnostic score, or "model" if is a score for monkey based on that model (e.g, success_binary)
+        --- agent_rule, the rule for agent. if agent is monkey, this is same as epoch. if model, should be
+        in format of rulestring which is category-subcat-rule.
         --- trialcode (optional), trialcode, to help link back to Dataset
         - dict_modelclass_to_rules, dict mapping from each class to a list of rules existing for
         that class.
@@ -35,38 +38,97 @@ class BehModelHolder(object):
         different kinds of proibe tasks. this is flexible.
         """
 
+        required_columns = ["epoch", "character", "taskgroup"]
+        for col in required_columns:
+            assert col in data.columns, "missing a required column"
+
         if input_ver=="default":
-            self.Dat = data
+            # self.DatWide = data
+            self.DatWide = data
+            assert False, "convert to long and save"
         elif input_ver=="long_form":
-            self._input_data_long_form(data)
+            datawide_trial, datawide_agg = self._input_data_long_form(data)
+            self.DatWide = datawide_trial
+            self.DatWideAgg = datawide_agg
+            self.DatLong = data
         elif input_ver=="mbh":
             self._input_data_from_multiple_behmodel_handler(data)
         else:
             print(input_ver)
             assert False
 
-        if dict_modelclass_to_rules is None:
-            assert False, "write code to autoamtically extract"
-        else:
-            self.DictMclassToRules = dict_modelclass_to_rules
 
+        ## dict mapping from agent_kind to rule
+        from pythonlib.tools.pandastools import grouping_get_inner_items, grouping_print_n_samples
+        map_agent_to_rules = grouping_get_inner_items(self.DatLong, "agent_kind", "agent_rule")
+
+        map_score_rule_agent_to_colname = {}
+        this = grouping_print_n_samples(self.DatLong, ["score_name", "agent_rule", "agent_kind"])
+        for x in this.keys():
+            sn = x[0]
+            r = x[1]
+            ag = x[2]
+            colname = "|".join(x)
+            map_score_rule_agent_to_colname[x]=colname
+
+        self.Map_agent_to_rules = map_agent_to_rules
+        self.Map_score_rule_agent_to_colname = map_score_rule_agent_to_colname
+
+        from pythonlib.tools.pandastools import aggregGeneral
+        self.DatLongAgg = aggregGeneral(self.DatLong, ["character"], values=["score"], nonnumercols=["score_name", "epoch", "agent_kind", "agent_rule"])
+    
         # Sanituy check of data
         self._preprocess_sanity_check()
 
         ### ALIGNMENT - rank, compute all
-        self.analy_compute_alignment_wrapper()
+        if False:
+            self.analy_compute_alignment_wrapper()
 
-        ## Get colnames
-        self.colnames_extract_alignment()
+            ## Get colnames
+            self.colnames_extract_alignment()
+
 
 
     def _preprocess_sanity_check(self):
         print("TODO! _preprocess_sanity_check")
 
-    def _input_data_long_form(self, data):
+    def _input_data_long_form(self, data, ):
         """ Help to melt from long-form to necessary wide form 
         """
-        assert False, "code it"
+
+        from pythonlib.tools.pandastools import pivot_table
+
+        # Decide what kind of data is in each row:
+        from pythonlib.tools.pandastools import grouping_get_inner_items
+        this = grouping_get_inner_items(data, "character", "epoch")
+        INDEX = None
+        EPOCHS_IGNORE = ["IGNORE"]
+        for char, epochs_this_char in this.items():
+            print(char, '--', epochs_this_char)
+            # if any char has multiple epohcs (not named IGNORE),
+            epochs = [e for e in epochs_this_char if e not in EPOCHS_IGNORE]
+            if len(epochs)>1:
+                INDEX = ["character", "epoch"]
+                break
+        if INDEX is None:
+            # Then each char has only one epoch. do aggregate by 
+            INDEX = ["character"]
+
+        data_wide_agg = pivot_table(data, index = INDEX,
+                                      columns=["score_name", "agent_rule", "agent_kind"], 
+                                      values=["score"], 
+                                      flatten_col_names=True, flatten_separator="|",
+                                      col_strings_ignore=["score"])
+
+        # Low-level wide (each row is a trial
+        data_wide_trial = pivot_table(data, index = ["trialcode", "character", "epoch"],
+                              columns=["score_name", "agent_rule", "agent_kind"], 
+                              values=["score"], 
+                              flatten_col_names=True, flatten_separator="|",
+                              col_strings_ignore=["score"])
+
+
+        return data_wide_trial, data_wide_agg
 
     def _input_data_from_multiple_behmodel_handler(self, data):
         """ Input modeling using continuos parses, stored in a 
@@ -101,6 +163,7 @@ class BehModelHolder(object):
 
     def colnames_extract_alignment(self, alignmnet_ver="diff", list_mclass_get=None):
 
+        assert False, "alignnemnt not coded."
         list_colname = []
         for mclass, list_rule in self.DictMclassToRules.items():
             if list_mclass_get is not None:
@@ -123,7 +186,7 @@ class BehModelHolder(object):
         # Get Single dataset
         # D = self.extract_concatenated_dataset()
         if Dat is None:
-            Dat = self.Dat
+            Dat = self.DatWide
 
         # Get list of monkye priors
         if monkey_prior_list is None:
@@ -157,18 +220,18 @@ class BehModelHolder(object):
         # 1) wide-form to long-form (a single column of "scores") (inlcude alignments)
         
         DatWide, _ = summarize_feature(Dat, "epoch", model_score_name_list+list_colnames_alignment, 
-            LIST_COLS_KEEP, newcol_variable="model", newcol_value="score")
+            LIST_COLS_KEEP, newcol_variable="agent_rule", newcol_value="score")
 
         # 1) wide-form to long-form (a single column of "scores")
         _, DatFlat = summarize_feature(Dat, "epoch", model_score_name_list, LIST_COLS_KEEP, 
-            newcol_variable="model", newcol_value="score")
+            newcol_variable="agent_rule", newcol_value="score")
 
         # 1) wide-form to long-form (a single column of "scores") (inlcude alignments)
         if len(list_colnames_alignment)>0:
             _, DatFlatAlignment = summarize_feature(Dat, "epoch", list_colnames_alignment, LIST_COLS_KEEP, 
-                newcol_variable="model", newcol_value="score")
+                newcol_variable="agent_rule", newcol_value="score")
             # 3) Long, agg over tasks
-            DatFlatAlignmentAgg = aggregGeneral(DatFlatAlignment, group = ["character", monkey_prior_col_name, "model"], 
+            DatFlatAlignmentAgg = aggregGeneral(DatFlatAlignment, group = ["character", monkey_prior_col_name, "agent_rule"], 
                                        values=["score"])
         else:
             DatFlatAlignment = None
@@ -179,7 +242,7 @@ class BehModelHolder(object):
                                    values=model_score_name_list)
         
         # 3) Long, agg over tasks
-        DatFlatAgg = aggregGeneral(DatFlat, group = ["character", monkey_prior_col_name, "model"], 
+        DatFlatAgg = aggregGeneral(DatFlat, group = ["character", monkey_prior_col_name, "agent_rule"], 
                                    values=["score"])
 
         return Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg, DatFlatAlignment, DatFlatAlignmentAgg
@@ -234,20 +297,22 @@ class BehModelHolder(object):
 
         # For each row, compute alignment in various ways.
         # 1) Alignment rank
-        for mclass, list_rules in self.DictMclassToRules.items():
-            colthis = f"alignment_rank_{mclass}"
-            self.Dat = applyFunctionToAllRows(self.Dat, lambda x: _alignment(x, mclass, "rank"), colthis)
-            print("DONE", mclass, colthis)
+        # print(self.Map_agent_to_rules)
+        # print(self.Map_score_rule_agent_to_colname)
+        for agent, list_rules in self.Map_agent_to_rules.items():
+            colthis = f"alignment_rank_{agent}"
+            self.DatWide = applyFunctionToAllRows(self.DatWide, lambda x: _alignment(x, agent, "rank"), colthis)
+            print("DONE", agent, colthis)
             
             # 2) Alignment (score diff from mean of others)
-            colthis = f"alignment_diff_{mclass}"
-            self.Dat = applyFunctionToAllRows(self.Dat, lambda x: _alignment(x, mclass, "this_minus_meanothers"), colthis)
-            print("DONE", mclass, colthis)
+            colthis = f"alignment_diff_{agent}"
+            self.DatWide = applyFunctionToAllRows(self.DatWide, lambda x: _alignment(x, agent, "this_minus_meanothers"), colthis)
+            print("DONE", agent, colthis)
             
             # 3) Alignment - score index?
-            colthis = f"alignment_diffindex_{mclass}"
-            self.Dat = applyFunctionToAllRows(self.Dat, lambda x: _alignment(x, mclass, "diffindex"), colthis)
-            print("DONE", mclass, colthis)
+            colthis = f"alignment_diffindex_{agent}"
+            self.DatWide = applyFunctionToAllRows(self.DatWide, lambda x: _alignment(x, agent, "diffindex"), colthis)
+            print("DONE", agent, colthis)
 
         # For each trial, alignment, as rank out of all model scores.
         if False:
@@ -292,11 +357,11 @@ class BehModelHolder(object):
 
         # from pythonlib.dataset.modeling.beh_model_comparison import plots_cross_prior_and_model_anynum
         # plots_cross_prior_and_model_anynum(self)
-        self.plot_score_cross_prior_model(self.Dat)
+        self.plot_score_cross_prior_model(self.DatWide)
 
         # Separate plots,split by taskgroup and by probe
         for split_by in ["taskgroup", "probe"]:
-            self.plot_score_cross_prior_model_splitby(self.Dat, split_by=split_by)
+            self.plot_score_cross_prior_model_splitby(self.DatWide, split_by=split_by)
 
         ############### STUFF PULLED IN FROM  plots_cross_prior_and_model
         # there is only for 2, so uses mod minus mod. here apply those plots for each pair of models...
@@ -314,15 +379,46 @@ class BehModelHolder(object):
         import seaborn as sns
 
         if df is None:
-            df = self.Dat
+            df = self.DatLong
 
-        Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
-            df, "epoch", list_cols_keep=[split_by])[:5]
+        # Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
+        #     df, "epoch", list_cols_keep=[split_by])[:5]
 
         # combine in single plot (all taskgroups)
-        fig = sns.catplot(data=DatFlat, x="epoch", y="score", hue="model", col=split_by, col_wrap=3, kind="bar")
+
+        fig = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+            row=split_by, col="score_name", kind="bar")
+        fig = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+            row=split_by, col="score_name", kind="swarm")
         return fig
 
+    def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup"):
+        """Plot score as function of "split_by" categorical levels, where levels are on
+        x-axis. Useful for comparing across levels.
+        PARAMS;
+        - split_by, variabl eto split by, e.g., "taskgroup", or "taskcat_by_rule"
+        """
+        import seaborn as sns
+        from pythonlib.tools.snstools import rotateLabel
+
+        if df is None:
+            df = self.DatLong
+
+        fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+                   col="score_name", col_wrap = 3, kind="point")
+        rotateLabel(fig)
+
+        fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+                   row="score_name", aspect=2, height=4)
+        rotateLabel(fig)  
+
+        fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+                   row="score_name", aspect=2, height=4, kind="violin")
+        rotateLabel(fig)  
+
+        fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
+                   row="score_name")
+        rotateLabel(fig)
 
     def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
         list_classes=None, model_score_name_list =None, ALPHA = 0.2, sdir=None):
@@ -335,26 +431,26 @@ class BehModelHolder(object):
         --- e..g, "epoch"
         - GROUPING_LEVELS [aka monkey_prior_list]
         """
-        from pythonlib.tools.pandastools import pivot_table
+        # from pythonlib.tools.pandastools import pivot_table
         from pythonlib.tools.plottools import plotScatter45
         import seaborn as sns
         
         # Get Single dataset
-        Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
-            df, monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)[:5]
+        # Dat, DatWide, DatFlat, DatThisAgg, DatFlatAgg = self.extract_concatenated_aggregated_dataset(
+        #     df, monkey_prior_col_name, monkey_prior_list, list_classes, model_score_name_list)[:5]
 
         # 1) Plot score fr all combo of dataset and model
-        fig = sns.catplot(data=DatFlat, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+        fig = sns.catplot(data=self.DatLong, x=monkey_prior_col_name, y="score", hue="agent_rule", aspect=3, kind="bar")
         if sdir:
             fig.savefig(f"{sdir}/meanscore_epoch_by_rule_alltrials.pdf")
         # 2) same, agg over trials
-        fig = sns.catplot(data=DatFlatAgg, x=monkey_prior_col_name, y="score", hue="model", aspect=3, kind="bar")
+        fig = sns.catplot(data=self.DatLongAgg, x=monkey_prior_col_name, y="score", hue="agent_rule", aspect=3, kind="bar")
         if sdir:
             fig.savefig(f"{sdir}/meanscore_epoch_by_rule_allchars.pdf")
 
         # if column exists for binary_tuple then plot
         # to create 'binary_rule_tuple' column: run dataset.modeling.discrete.add_binary_rule_tuple_col
-        if 'binary_rule_tuple' in Dat.columns:
+        if 'binary_rule_tuple' in self.DatWide.columns:
             fig,ax = plt.subplots(figsize=(8,4))
             sns.histplot(data=Dat,x='epoch',hue='binary_rule_tuple',ax=ax,multiple="dodge",shrink=0.8)
             fig,ax = plt.subplots(figsize=(8,4))
@@ -387,7 +483,7 @@ class BehModelHolder(object):
         ALPHA = 0.2
 
         if list_epoch is None:
-            list_epoch = sorted(self.Dat["epoch"].unique().tolist())
+            list_epoch = sorted(self.DatWide["epoch"].unique().tolist())
         monkey_prior_list = list_epoch
         monkey_prior_col_name = "epoch"
         plot_level = "trial"
@@ -445,8 +541,5 @@ class BehModelHolder(object):
         ax.set_title("mod2 - mod1")
         if savedir:
             fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1_largetext.pdf")
-
-
-
 
 

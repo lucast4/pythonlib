@@ -1753,13 +1753,15 @@ class TaskClass(object):
         - ax, 
         """
         import matplotlib.pyplot as plt
-        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes, plotDatStrokesWrapper
 
         if ax is None:
             fig, ax = plt.subplots(1,1)
 
         if ordinal:
-            plotDatStrokes(self.Strokes, ax, clean_ordered_ordinal=True, number_from_zero=True)
+            # plotDatStrokes(self.Strokes, ax, clean_ordered_ordinal=True, number_from_zero=True)
+            plotDatStrokesWrapper(self.Strokes, ax, color="k", mark_stroke_onset=True, 
+                add_stroke_number=True)
         else:
             plotDatStrokes(self.Strokes, ax, clean_task=True)
         return ax

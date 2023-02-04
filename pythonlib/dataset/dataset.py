@@ -1649,12 +1649,12 @@ class Dataset(object):
                     # Only if beh sequence is consistent with at least one acceptable rule 
                     # based on the epoch.
                     bm = self.grammar_wrapper_extract()
-                    self.Dat = self.Dat[(bm.Dat["success_binary"]==True)].reset_index(drop=True)
+                    self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
                 else:
                     print(p)
                     assert False, "dotn know this"
         
-        self.Dat.reset_index(drop=True)
+        self.Dat = self.Dat.reset_index(drop=True)
 
         return params
 
@@ -5133,11 +5133,11 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
-    def _grammar_parses_generate(self, ind, list_rules = None):
+    def _grammar_parses_generate(self, ind, list_rulestring = None):
         """ Generate GrammarDat object and save, for this trial
         PARAMS:
         - ind, index in D.Dat
-        - list_rules, list of str, each a rule that is applied to this task to genereate parses
+        - list_rulestring, list of str, each a rule that is applied to this task to genereate parses
         """
         if not hasattr(self, 'GrammarDict'):
             self.GrammarDict = {}
@@ -5154,7 +5154,7 @@ class Dataset(object):
             self.GrammarDict[ind] = GD
 
         GD = self.GrammarDict[ind]
-        GD.parses_generate_batch(list_rules)
+        GD.parses_generate_batch(list_rulestring)
 
         # Return the grammardict, holding all the parses
         return GD
@@ -5170,22 +5170,22 @@ class Dataset(object):
 
         assert False, 'this is alread in self.Dat["epoch_rule_tasksequencer"] To reextract, see epoch_grouping_reassign_by_tasksequencer'
 
-    def grammar_parses_extract(self, ind, list_rules, fail_if_empty=True):
+    def grammar_parses_extract(self, ind, list_rulestrings, fail_if_empty=True):
         """ Extract set of parses for each rule.
         PARAMS;
-        - list_rules, list of str.
+        - list_rulestrings, list of str <cat>-<subcat>-<rule>
         RETURNS:
         - dict[rule] = parses, each a list of possible orderings
         """
-        GD = self._grammar_parses_generate(ind, list_rules)
+        GD = self._grammar_parses_generate(ind, list_rulestrings)
         outdict = {}
-        for rule in list_rules:
-            parses = GD.ChunksListClassAll[rule].search_permutations_chunks()
+        for rulestring in list_rulestrings:
+            parses = GD.ChunksListClassAll[rulestring].search_permutations_chunks()
             if fail_if_empty and len(parses)==0:
                 print(rule)
                 print(parses)
                 assert False, "epty..."
-            outdict[rule] = parses
+            outdict[rulestring] = parses
         return outdict
 
 
@@ -5195,13 +5195,13 @@ class Dataset(object):
         return self.sequence_extract_beh_and_task(ind, ploton)
 
 
-    def grammar_wrapper_extract(self):
+    def grammar_wrapper_extract(self, return_as_bmh_object=True):
         """ Extract grammar data for each trial
         RETURNS:
         - bm, beh_model_holder, with dataset (rows) matching self.Dat
         """
         from pythonlib.dataset.dataset_analy.grammar import preprocess_dataset
-        bm, _, _ = preprocess_dataset(self)
+        bm, _, _ = preprocess_dataset(self, return_as_bmh_object=return_as_bmh_object)
         return bm
 
     def sequence_extract_beh_and_task(self, ind, ploton=False):
@@ -5394,6 +5394,30 @@ class Dataset(object):
         # else:
         #     assert False
 
+    def plot_strokes(self, strokes, ax=None, single_color=None, 
+            ver="beh", strok_indices=None, add_stroke_number_beh=True):
+        """ Simple low-level helper for plotting strokes
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
+        
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        if ver=="beh":
+            if strok_indices:
+                strokes = [strokes[i] for i in strok_indices]
+            plotDatStrokesWrapper(strokes, ax, color=single_color, 
+                add_stroke_number=add_stroke_number_beh)    
+        elif ver=="task":
+            strokes = self.Dat.iloc[idx]["strokes_task"]
+            if strok_indices:
+                strokes = [strokes[i] for i in strok_indices]
+            plotDatStrokes(strokes, ax, each_stroke_separate=True, 
+                plotver="onecolor", add_stroke_number=False, 
+                mark_stroke_onset=False, pcol=single_color, number_from_zero=False)
+        else:
+            assert False
+
     def plot_single_trial(self, idx, ax=None, single_color=None, 
             ver="beh", strok_indices=None, add_stroke_number_beh=True):
         """ Low-level code to plot a single trial, beh or task strokes, on an axis.
@@ -5401,25 +5425,15 @@ class Dataset(object):
         - single_color, either None (colors by ordinal), or str color code
         - ver, str, {'task', 'beh'}
         """
-        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
         if ver=="beh":
             strokes = self.Dat.iloc[idx]["strokes_beh"]
-            if strok_indices:
-                strokes = [strokes[i] for i in strok_indices]
-            if ax is None:
-                fig, ax = plt.subplots(1,1)
-            plotDatStrokesWrapper(strokes, ax, color=single_color, 
-                add_stroke_number=add_stroke_number_beh)    
         elif ver=="task":
-            stim = self.Dat.iloc[idx]["strokes_task"]
-            if strok_indices:
-                stim = [stim[i] for i in strok_indices]
-            plotDatStrokes(stim, ax, each_stroke_separate=True, 
-                plotver="onecolor", add_stroke_number=False, 
-                mark_stroke_onset=False, pcol=single_color, number_from_zero=False)
+            strokes = self.Dat.iloc[idx]["strokes_task"]
         else:
             assert False
-        return ax
+        return self.plot_strokes(strokes, ax, single_color, ver, strok_indices, 
+            add_stroke_number_beh)
+
 
 
     def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
@@ -5543,7 +5557,7 @@ class Dataset(object):
 
     def plotMultStrokes(self, strokes_list, ncols = 5, titles=None, naked_axes=False, 
         add_stroke_number=True, centerize=False, jitter_each_stroke=False, 
-        titles_on_y=False, SIZE=2.5, is_task=False, number_from_zero=False,
+        titles_on_y=False, SIZE=2.5, is_task=False, number_from_zero=True,
         color_by = "by_order"):
         """ helper to plot multiplie trials when already have strokes extracted)
         Assumes want to plot this like behavior.

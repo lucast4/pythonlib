@@ -29,6 +29,8 @@ class GrammarDat(object):
             """
             D = input_data_dict["dataset"]
             ind = input_data_dict["ind_dataset"]
+            self.Dataset = D
+            self.DatasetInd = ind
 
             Beh = D.Dat.iloc[ind]["BehClass"]
             Task = D.Dat.iloc[ind]["Task"]
@@ -63,6 +65,8 @@ class GrammarDat(object):
         - adds to self.ChunksListClassAll[rule] = parses, where paress
         are list of orderings (chunks)
         """
+
+        assert isinstance(list_rules, list)
         for rule in list_rules:
             if rule in self.ChunksListClassAll.keys():
                 # Then parses already generated. ignore
@@ -77,6 +81,7 @@ class GrammarDat(object):
         Generate and cache parses for this rule, in form of ChunksListClass
         PARAMS:
         - rule_name, string name of rule that will be applied to generate parses.
+        Must be in format of rulestring, <category>-<subcat>-<rule>
         RETURNS:
         """
         from pythonlib.chunks.chunksclass import ChunksClassList
@@ -120,10 +125,47 @@ class GrammarDat(object):
     ############### DIAGNOSTIC MODELING
 
 
+    ################ utils
+    def strokes_extract(self, ind_strokes=None):
+        """ Returns strokes, optioanlly ordered as in ind_strokes
+        """
+        strokes = self.Task.Strokes
+        if ind_strokes is None:
+            ind_strokes = range(len(strokes))        
+        return [strokes[i] for i in ind_strokes]
+
+    def rules_extract(self):
+        """ REturn list of rules (strings), 3-part strings)
+        """
+        return list(self.ChunksListClassAll.keys())
 
     ############### PLOT
     # Plot all parses for each rule, and compare to the beh drawing.
-    
+    def plot_beh_and_parses(self, rulestr, nrand = 20):
+        """ Plot all (or subset) of parses for this rulestring
+        PARAMS:
+        - rulestr, 3-part string,e g. "ch-dir2-(AB)n"
+        RETURNS:
+        - fig1, fig2, for plots of beh and parses
+        """
+
+        # 1) Plot behavior
+        fig1 = self.Dataset.plotSingleTrial(self.DatasetInd, task_add_num=True)
+        # fig1, ax = self.Beh.plotStrokes()
+        # ax.set_title("Behavior")
+        # self.Beh.plotTaskStrokes()
+        # # ax.set_title("Behavior")
+
+        # 2) Plot parses
+        parses = self.parses_generate(rulestr)
+        if len(parses)>nrand:
+            import random
+            parses = random.sample(parses, nrand)
+        list_strokes = [self.strokes_extract(par) for par in parses]
+        fig2, axes2 = self.Dataset.plotMultStrokes(list_strokes)
+        return fig1, fig2
+
+
     
 
 

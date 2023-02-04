@@ -2,7 +2,7 @@
 holds various plots for timecourse, etc.
 """
 
-print("TODO!!!")
+print("TODO!!! Merge this with other learning-related code")
 # Merge this with other learning-related code:
 # - characters
 # - timecourse stuff (see Evernote for where this is located)
@@ -95,9 +95,14 @@ def print_useful_things(dfGramScore):
     display(grouping_get_inner_items(dfGramScore, "block", "epoch_superv"))    
 
 
-def plot_performance_all(dfGramScore, list_blockset, SDIR):
+def plot_performance_all(dfGramScore, list_blockset, SDIR, column_binary_success="success_binary_quick"):
     """ Standard plots summarizing perforamnce, slicing in different ways, includiong
     aggragating to characters (or sticking with trials). Saves automatically.
+    PARAMS:
+    - column_binary_success, str name of column to use for plotting perofrmance (binary success), usualyl
+    either "success_binary_quick" (for the qwuick extraction using matlab code) or 
+    "binary_success" for posthoc based on rukles.
+
     """
     from pythonlib.tools.pandastools import aggregGeneral
 
@@ -117,47 +122,47 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         # sns.catplot(data=dfGramScore, x="block", y="epoch_superv", hue="taskgroup", kind="strip", alpha=0.5, height=10)
         if "block" in dfthis.columns:
             sns.catplot(data=dfthis, x="block", y="epoch_superv", col="taskgroup", col_wrap=2, kind="strip", 
-                        hue="success_binary", alpha=0.5, height=10)
+                        hue=column_binary_success, alpha=0.5, height=10)
 
-        fig = sns.catplot(data=dfthis, x="epoch_superv", y="success_binary", col="taskgroup", col_wrap=2, kind="bar",
+        fig = sns.catplot(data=dfthis, x="epoch_superv", y=column_binary_success, col="taskgroup", col_wrap=2, kind="bar",
                     height=5)
         rotateLabel(fig)
         listfigs.append(fig)
 
-        fig = sns.catplot(data=dfthis, x="epoch_superv", y="success_binary", col="taskgroup", col_wrap=2, height=5)
+        fig = sns.catplot(data=dfthis, x="epoch_superv", y=column_binary_success, col="taskgroup", col_wrap=2, height=5)
         rotateLabel(fig)
         listfigs.append(fig)
 
         try:
-            fig = sns.catplot(data=dfthis, x="epoch_superv", y="success_binary", hue="taskgroup", kind="bar",
+            fig = sns.catplot(data=dfthis, x="epoch_superv", y=column_binary_success, hue="taskgroup", kind="bar",
                         height=5, aspect=1.5)
             rotateLabel(fig)
             listfigs.append(fig)
-    #         fig = sns.catplot(data=dfthis, x="epoch_superv", y="success_binary", hue="taskgroup", 
+    #         fig = sns.catplot(data=dfthis, x="epoch_superv", y=column_binary_success, hue="taskgroup", 
     #                     alpha=0.5, height=5, aspect=1.5)
     #         rotateLabel(fig)
         except:
             pass
         
-        # fig = sns.catplot(data=dfGramScore, x="taskgroup", y="success_binary", col="epoch_superv", col_wrap=2, kind="bar",
+        # fig = sns.catplot(data=dfGramScore, x="taskgroup", y=column_binary_success, col="epoch_superv", col_wrap=2, kind="bar",
         #             hue="epoch_superv", alpha=0.5, height=2, aspect=1.5)
-        fig = sns.catplot(data=dfthis, x="taskgroup", y="success_binary", col="epoch_superv", col_wrap=2, kind="bar",
+        fig = sns.catplot(data=dfthis, x="taskgroup", y=column_binary_success, col="epoch_superv", col_wrap=2, kind="bar",
                           height=2, aspect=1.5)
         rotateLabel(fig)
         listfigs.append(fig)
 
-        fig = sns.catplot(data=dfthis, x="taskgroup", y="success_binary", col="epoch_superv", col_wrap=2, 
+        fig = sns.catplot(data=dfthis, x="taskgroup", y=column_binary_success, col="epoch_superv", col_wrap=2, 
                           alpha=0.7, height=2, aspect=1.5)
         rotateLabel(fig)
         listfigs.append(fig)
 
         try:
-            fig = sns.catplot(data=dfthis, x="taskgroup", y="success_binary", hue="epoch_superv", kind="bar",
+            fig = sns.catplot(data=dfthis, x="taskgroup", y=column_binary_success, hue="epoch_superv", kind="bar",
                               height=5, aspect=1.5)
             rotateLabel(fig)
             listfigs.append(fig)
             
-    #         fig = sns.catplot(data=dfthis, x="taskgroup", y="success_binary", hue="epoch_superv", 
+    #         fig = sns.catplot(data=dfthis, x="taskgroup", y=column_binary_success, hue="epoch_superv", 
     #                           alpha=0.5, height=5, aspect=1.5)
     #         rotateLabel(fig)
         except:
@@ -166,7 +171,7 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
         return listfigs
 
     # How many trial ssuccess/failure?
-    fig = sns.catplot(data=dfGramScore, x="success_binary", y="beh_sequence_wrong", 
+    fig = sns.catplot(data=dfGramScore, x=column_binary_success, y="beh_sequence_wrong", 
                 hue="beh_too_short", col="exclude_because_online_abort", kind="strip", alpha=0.2)
     fig.savefig(f"{savedir}/distribution_success.pdf")
     rotateLabel(fig)
@@ -193,7 +198,7 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
 
     ## The same, but datapt=char (aggregate over trials)
     dfthis = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
-    dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=["success_binary"])
+    dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=[column_binary_success])
 
     ### [All data, datapt=char]
     figs = plot_(dfthisAgg)
@@ -205,29 +210,31 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR):
             (dfGramScore["block"].isin(blocks_keep)) & 
             (dfGramScore["exclude_because_online_abort"]==False)]
         if len(dfthis)>0:
-            dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=["success_binary"])
+            dfthisAgg = aggregGeneral(dfthis, group=["epoch_superv", "taskgroup", "character"], values=[column_binary_success])
             figs = plot_(dfthisAgg)
             for i, f in enumerate(figs):
                 f.savefig(f"{savedir}/successrate-summary-blocks_{_blocks_to_str(blocks_keep)}-datapt_char-{i}.pdf")
     plt.close("all")
 
 
-def plot_performance_timecourse(dfGramScore, list_blockset, SDIR):
+def plot_performance_timecourse(dfGramScore, list_blockset, SDIR,
+        column_binary_success="success_binary_quick"):
     """ Plot perforamcne as function of blocks (not bloques!)
     """
     sdirthis = f"{SDIR}/summary"
     dfthis = dfGramScore[
         (dfGramScore["exclude_because_online_abort"]==False)
     ]
-    # taskgroup", y="success_binary", col="epoch_superv
-    fig = sns.catplot(data=dfthis, x="block", y="success_binary", row="taskgroup", hue="epoch_superv", kind="point", 
+    # taskgroup", y=column_binary_success, col="epoch_superv
+    print(dfthis.columns)
+    fig = sns.catplot(data=dfthis, x="block", y=column_binary_success, row="taskgroup", hue="epoch_superv", kind="point", 
                 aspect=2, alpha=0.4, ci=68)
     fig.savefig(f"{sdirthis}/timecourse-blocks-datapt_trial.pdf")
     rotateLabel(fig)
 
 
 def plot_performance_static_summary(dfGramScore, list_blockset, SDIR, 
-        only_cases_got_first_stroke=False):
+        only_cases_got_first_stroke=False, column_binary_success="success_binary_quick"):
     """ Bar plots of "static" performance, avberaged within
     blocksets (each a contigous set of plots containing probe tasks)
     """
@@ -265,9 +272,9 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
                 inds = (dfthis["block"].isin(blockset)) & (dfthis["taskgroup"]==taskgroup) & (dfthis["epoch_superv"]==epoch_superv)
                 nthis = sum(inds)
                 if nthis>N_MIN:
-    #                 print(dfthis[inds]["success_binary"])
+    #                 print(dfthis[inds][column_binary_success])
     #                 print(sum(inds))
-                    s = f"   {epoch_superv}: --> {100 * np.mean(dfthis[inds]['success_binary']):.0f}% (N={nthis})"
+                    s = f"   {epoch_superv}: --> {100 * np.mean(dfthis[inds][column_binary_success]):.0f}% (N={nthis})"
                     list_textstrings.append(s)
                     print(s)
     # SAVE
@@ -275,19 +282,19 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
     writeStringsToFile(path, list_textstrings)
 
     # 2) Plot bar plot (same infor as in list_textstrings)
-    fig = sns.catplot(data = dfthis, x="taskgroup", y="success_binary", hue = "epoch_superv", kind="bar", ci=68,
+    fig = sns.catplot(data = dfthis, x="taskgroup", y=column_binary_success, hue = "epoch_superv", kind="bar", ci=68,
                row="which_probe_blockset", aspect=2, height=3)
     rotateLabel(fig)
     fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-1.pdf")
 
     # 2) More compact bar plot
-    fig = sns.catplot(data = dfthis, x="which_probe_blockset", y="success_binary", 
+    fig = sns.catplot(data = dfthis, x="which_probe_blockset", y=column_binary_success, 
                 hue = "epoch_superv", kind="bar", ci=68,
                col="taskgroup", col_wrap=3, aspect=2, height=3)
     rotateLabel(fig)
     fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-2.pdf")
 
-def plot_counts_heatmap(dfGramScore, SDIR):
+def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary_quick"):
     """ Heatmap for n trials for each combo of conditions (e.g., epoch|supervsion, and taskgroup)
     i.e. rows are epoch/sup and cols are taskgroup. plots and saves figures.
     """
@@ -298,7 +305,7 @@ def plot_counts_heatmap(dfGramScore, SDIR):
         
         if col2=="taskgroup":
             # then datapt is characters (not trials)
-            dfGramScoreAgg = aggregGeneral(dfGramScore, group=[col1, col2, "character"], values=["success_binary"])
+            dfGramScoreAgg = aggregGeneral(dfGramScore, group=[col1, col2, "character"], values=[column_binary_success])
             df = dfGramScoreAgg
         else:
             df = dfGramScore
@@ -328,7 +335,7 @@ def plot_counts_heatmap(dfGramScore, SDIR):
         dfthis, fig, ax = _plot_counts_heatmat(dfthis, col1, col2)
         fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-taskgroup_{tg}.pdf")
 
-def plot_performance_each_char(dfGramScore, D, SDIR):
+def plot_performance_each_char(dfGramScore, D, SDIR, column_binary_success="success_binary_quick"):
     """ Plot separate fro each characters, organized in different ways
     """
 
@@ -341,19 +348,19 @@ def plot_performance_each_char(dfGramScore, D, SDIR):
             (dfGramScore["exclude_because_online_abort"]==False)
         ]
 
-        fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="epoch_superv", 
+        fig = sns.catplot(data = dfthis, x="character", y=column_binary_success, hue="epoch_superv", 
                     col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
         rotateLabel(fig)
         path = f"{sdirthis}/eachchar-overview-1.pdf"
         fig.savefig(path)
 
-        fig = sns.catplot(data = dfthis, x="character", y="success_binary", hue="block", 
+        fig = sns.catplot(data = dfthis, x="character", y=column_binary_success, hue="block", 
                     col="which_probe_blockset", row="taskgroup", kind="bar", aspect=2)
         rotateLabel(fig)
         path = f"{sdirthis}/eachchar-overview-2.pdf"
         fig.savefig(path)
 
-        fig = sns.catplot(data = dfthis, x="block", y="success_binary", hue="character", 
+        fig = sns.catplot(data = dfthis, x="block", y=column_binary_success, hue="character", 
                     col="taskgroup", row="epoch_superv", kind="bar", aspect=2)
         rotateLabel(fig)
         path = f"{sdirthis}/eachchar-overview-3.pdf"
@@ -361,7 +368,7 @@ def plot_performance_each_char(dfGramScore, D, SDIR):
 
 
 
-def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
+def plot_performance_trial_by_trial(dfGramScore, D, SDIR, column_binary_success="success_binary_quick"):
     """ Plots of timecourse of performance, such as trial by trial
     """
 
@@ -383,12 +390,12 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
         # 2) trial by trial performance
         ax = axes.flatten()[1]
         ax.grid(True)
-        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch_superv", ax=ax, 
+        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch_superv", ax=ax, 
                        alpha = 0.75)
         smwin = 20
         dfthis_rolling = dfthis.rolling(window=smwin, center=True).mean()
-        # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y="success_binary")
-        sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y="success_binary")
+        # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
+        sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
         blockver = "block"
         idx_of_bloque_onsets = []
         for i in np.argwhere(dfthis[blockver].diff().values):
@@ -404,7 +411,7 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
 
         ax = axes.flatten()[2]
         ax.grid(True)
-        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="epoch", style="epoch_superv", ax=ax, 
+        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch", style="epoch_superv", ax=ax, 
                        alpha = 0.75)
 
         ## NOT EXCLUDING ONLINE ABORTS
@@ -412,14 +419,14 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR):
         ax = axes.flatten()[3]
         ax.grid(True)
         ax.set_title('NOT excluding abort trials')
-        sns.scatterplot(data=dfthis, x="trial", y="success_binary", hue="exclude_because_online_abort", style="epoch", ax=ax, 
+        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="exclude_because_online_abort", style="epoch", ax=ax, 
                        alpha = 0.75)
 
         # Plotting reason for failure.
         ax = axes.flatten()[4]
         ax.grid(True)
         ax.set_title('NOT excluding abort trials')
-        sns.scatterplot(data=dfthis, x="trial", y="exclude_because_online_abort", hue="success_binary", style="epoch", ax=ax, 
+        sns.scatterplot(data=dfthis, x="trial", y="exclude_because_online_abort", hue=column_binary_success, style="epoch", ax=ax, 
                        alpha = 0.75)
 
 

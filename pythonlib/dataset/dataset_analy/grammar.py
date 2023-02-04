@@ -19,7 +19,7 @@ rcParams.update({'figure.autolayout': True})
 
 def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule=None,
         DEBUG = False, how_define_correct_order="matlab",
-        reset_grammar_dat = False):
+        reset_grammar_dat = False, return_as_bmh_object=True):
     """ Preprocess Dataset as basis for all subsetquence grammar/learning analyses.
     PARAMS:
     - grammar_recompute_parses, bool, if False, then uses the saved "active chunk" used 
@@ -38,7 +38,8 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from .learning import preprocess_dataset as learn_preprocess
-    from pythonlib.dataset.modeling.discrete import generate_scored_beh_model_data, rules_related_rulestrings_extract_auto
+    from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_long
+    from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
     
     if reset_grammar_dat:
         D.GrammarDict = {}
@@ -59,9 +60,25 @@ def preprocess_dataset(D, grammar_recompute_parses = False, grammar_correct_rule
         ## Test each beh against hypothetical rules (discrete models)
         list_rules = rules_related_rulestrings_extract_auto(D)
 
-    bm = generate_scored_beh_model_data(D, list_rules = list_rules,
-        how_define_correct_order=how_define_correct_order, binary_rule=True)
-    bm.Dat["which_probe_blockset"] = D.Dat["which_probe_blockset"]
+    if return_as_bmh_object==False:
+        # cannot do this...
+        recompute_success_using_acceptable_scorers = False
+    else:
+        recompute_success_using_acceptable_scorers = True
+
+    if False:
+        # OLD, wide from
+        bm = generate_scored_beh_model_data(D, list_rules = list_rules,
+            how_define_correct_order=how_define_correct_order, binary_rule=True,
+            return_as_bmh_object=return_as_bmh_object,
+            recompute_success_using_acceptable_scorers=recompute_success_using_acceptable_scorers)
+        # bm.Dat["which_probe_blockset"] = D.Dat["which_probe_blockset"]
+    else:
+        bm = generate_scored_beh_model_data_long(D, list_rules = list_rules,
+            how_define_correct_order=how_define_correct_order, binary_rule=True,
+            return_as_bmh_object=return_as_bmh_object,
+            recompute_success_using_acceptable_scorers=recompute_success_using_acceptable_scorers)
+        # bm.Dat["which_probe_blockset"] = D.Dat["which_probe_blockset"]
 
     return bm, list_blocksets_with_contiguous_probes, SDIR
 
@@ -82,12 +99,12 @@ def pipeline_generate_and_plot_all(D):
     sdir = f"{savedir}/score_epoch_x_rule_splitby"
     os.makedirs(sdir, exist_ok=True)
 
-    for split_by in ["taskgroup", "isprobe"]:
+    for split_by in ["taskgroup", "probe"]:
         fig = bmh.plot_score_cross_prior_model_splitby(split_by=split_by)
         fig.savefig(f"{sdir}/splitby_{split_by}-trialdat.pdf")
     
     ######### 2) Plot summary
-    dfGramScore = bmh.Dat
+    dfGramScore = bmh.DatLong  
     if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
         plot_performance_all(dfGramScore, list_blockset, SDIR)
         plot_performance_timecourse(dfGramScore, list_blockset, SDIR)
