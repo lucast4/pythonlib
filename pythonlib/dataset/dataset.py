@@ -1728,6 +1728,23 @@ class Dataset(object):
 
         return f"{a}_{e}_{r}"
 
+    def get_sample_rate_alltrials(self):
+        """ 
+        Return sample rate (samp/sec) that is uinque acorss all trials.
+        if multipel trials have different samp rate, this throws error
+        """
+
+        if not hasattr(self, "Fs"):
+            # check umique value all trials.
+            list_fs = []
+            for ind in range(len(self.Dat)):
+                ind_md = self.Dat.iloc[ind]["which_metadat_idx"]
+                fs = self.Metadats[ind_md]["filedata_params"]["sample_rate"]
+                list_fs.append(fs)
+            assert len(list(set(fs)))==1
+            self.Fs = list(set(fs))[0]
+
+        return self.Fs
 
     def get_sample_rate(self, ind):
         """ 
@@ -4881,10 +4898,10 @@ class Dataset(object):
         out_combined, datsegs_behlength, datsegs_tasklength = Beh.alignsim_extract_datsegs_both_beh_task(include_scale=include_scale)
 
         # Assocaite each beh prim with a datseg.
-        primlist = Beh.Strokes
-
-        assert len(primlist) == len(datsegs_behlength)
-        return primlist, datsegs_behlength, datsegs_tasklength, out_combined
+        if False:
+            # These can differ if beh stroke doesnt match task
+            assert len(Beh.Strokes) == len(datsegs_behlength)
+        return Beh.Strokes, datsegs_behlength, datsegs_tasklength, out_combined
 
     def behclass_clean(self):
         """ Clean by removing any trials where all beh strokes fail to m atch even a single
@@ -5608,6 +5625,46 @@ class Dataset(object):
 
         return fig, axes
 
+
+
+    def _extractStrokeVels(self, list_strokes, remove_time_column=True,
+            version = "speed"):
+        """ extract stroke as instantaneous velocities
+        INPUT:
+        - list_inds, list of ints, for which strokes to use. If "all", then gets all.
+        - version, str, in {'vel', 'speed'}, determines which to reutrn
+        RETURN:
+        - list of strokes_vels, which are each list of Nx1, so is
+        actually speed, not vel. if 'vel', then they are (N,3), if 'speed'
+        then (N,2). Remoive one column if remove time.,
+        (None, if strok to oshort to get vel.)
+        """
+        from pythonlib.tools.stroketools import strokesVelocity
+    
+        assert isinstance(list_strokes[0], list)
+        fs = self.get_sample_rate_alltrials()  
+        list_strokes_vel = []
+        for strokes in list_strokes:
+            strokes_vel, strokes_speed = strokesVelocity(strokes, fs, clean=True)
+            
+            if version=="speed":
+                strokes_out = strokes_speed
+                dims = [0]
+            else:
+                strokes_out = strokes_vel
+                dims = [0,1]
+
+            if remove_time_column:
+                strokes_out = [s[:,dims] for s in strokes_out] # remove time
+            
+            for i in range(len(strokes_out)):
+                if any([np.any(np.isnan(sv)) for sv in strokes_out[i]]):
+                    list_strokes_vel.append(None)   
+                else:
+                    list_strokes_vel.append(strokes_out)
+        return list_strokes_vel
+
+
     def extractStrokeVels(self, list_inds):
         """ extract stroke as instantaneous velocities
         INPUT:
@@ -5622,23 +5679,24 @@ class Dataset(object):
   
         if list_inds == "all":
             list_inds = self.Dat.index.tolist()
-
-        list_strokes_vel = []
-        for ind in list_inds:
-            strokes = self.Dat.iloc[ind]["strokes_beh"]
-            fs = self.get_sample_rate(ind)
-            _, strokes_vel = strokesVelocity(strokes, fs, clean=True)
-            strokes_vel = [s[:,0] for s in strokes_vel] # remove time
-            for i in range(len(strokes_vel)):
-                if any([np.isnan(sv) for sv in strokes_vel[i]]):
-                    list_strokes_vel.append(None)   
-                    # print(strokes_vel)
-                    # print(list_inds)
-                    # print(strokes[i])
-                    # assert False
-                else:
-                    list_strokes_vel.append(strokes_vel)
-        return list_strokes_vel
+        list_strokes = self.Dat.iloc[list_inds]["strokes_beh"].tolist()
+        return self._extractStrokeVels(list_strokes)
+        # list_strokes_vel = []
+        # for ind in list_inds:
+        #     strokes = self.Dat.iloc[ind]["strokes_beh"]
+        #     fs = self.get_sample_rate(ind)
+        #     _, strokes_vel = strokesVelocity(strokes, fs, clean=True)
+        #     strokes_vel = [s[:,0] for s in strokes_vel] # remove time
+        #     for i in range(len(strokes_vel)):
+        #         if any([np.isnan(sv) for sv in strokes_vel[i]]):
+        #             list_strokes_vel.append(None)   
+        #             # print(strokes_vel)
+        #             # print(list_inds)
+        #             # print(strokes[i])
+        #             # assert False
+        #         else:
+        #             list_strokes_vel.append(strokes_vel)
+        # return list_strokes_vel
 
 
     def _plot_prepare_strokes(self, which_strokes, idxs, nrand=None, titles=None):

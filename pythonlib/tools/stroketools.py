@@ -360,8 +360,8 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
     - note: speed is first taking norm at each timebin, adn then smoothing then norm,.
 
     RETURNS:
-    strokesvel, which should be same size as strokes
-    strokesspeed, which should be list of Nx2 arrays, where col2 is time.
+    - strokesvel, which should be same size as strokes
+    - strokesspeed, which should be list of Nx2 arrays, where col2 is time.
     the timesteps for both of these outputs will match exactly the time inputs for
     strokes.
 

@@ -3,6 +3,15 @@ import numpy as np
 ### 
 # np.r_ is for quick contaneation.
 
+def bin_values(vals, nbins=8):
+    """ REturn vals, but binned, unofrmly from min to max
+    Values binned between 1 and nbins.
+    PARAMS;
+    - nbins, num bbins.
+    """
+    bins = np.linspace(0.99*np.min(vals), 1.01*np.max(vals), nbins+1)
+    vals_binned = [np.digitize(v, bins) for v in vals]
+    return vals_binned
 
 def rankItems(arr):
 	""" for each item, returns its

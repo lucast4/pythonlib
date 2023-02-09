@@ -66,6 +66,16 @@ def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
     return vector / np.linalg.norm(vector)
 
+def cart_to_polar(x, y):
+    """ convert from cartesiaon to polar coords
+    RETURNS:
+    - theta, norm, the anglea nd legngth of vector
+    """
+
+    theta = get_angle((x,y))
+    norm = np.linalg.norm((x,y))
+    return theta, norm
+
 def angle_between(v1, v2):
     """ Returns the angle in radians between vectors 'v1' and 'v2'::
 
@@ -175,13 +185,17 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
     - bins start from 1...
     - nans will be 
     """
+    from math import pi
     
     if binnames is None:
-        binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}
+        binnames = {i+1:i+1 for i in range(num_angle_bins)}
+        binnames[num_angle_bins+1] = np.nan
+        # print(binnames)
+        # assert False
+        # binnames = {1: 0, 2:1, 3:1, 4:0, 5:np.nan}
         
-    from math import pi
-    if not num_angle_bins==4:
-        assert False, "bin_names will not be accurate. code this"
+    # if not num_angle_bins==4:
+    #     assert False, "bin_names will not be accurate. code this"
 
     assert starting_angle<=0 and starting_angle>=-2*pi, "starting_angle is not between [-2pi,0]"
 

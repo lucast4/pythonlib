@@ -1347,6 +1347,8 @@ class TaskClass(object):
             assert False, "must generate self.Primitives (instead of using Shapes...)"
         else:
             Prims = self.Primitives
+            Rels = self.PlanDat["RelsBeforeRescaleToGrid"]
+            assert len(Prims)==len(Rels)
             # assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
@@ -1357,12 +1359,14 @@ class TaskClass(object):
             # objects = [objects[i] for i in inds_taskstrokes]
             # if Prims is not None:
             Prims = [Prims[i] for i in inds_taskstrokes]
+            Rels = [Rels[i] for i in inds_taskstrokes]
         except Exception as err:
             # print(objects)
             # print(len(objects))
             print(inds_taskstrokes)
             print(len(self.Strokes))
             print(Prims)
+            print(Rels)
             for p in Prims:
                 p.print_summary()
             self.plotStrokes()
@@ -1474,6 +1478,9 @@ class TaskClass(object):
             else:
                 return _shape(i)
 
+
+
+
         ################## GRID METHODS
         if grid_ver in ["on_grid"]:
             # Sanity check that the hard coded things are correct.
@@ -1491,21 +1498,48 @@ class TaskClass(object):
             #         assert False
 
             locations = []
-            for p in Prims:
+            for i, p in enumerate(Prims):
                 prms = p.extract_as("shape", include_scale=include_scale)[1]
                 xloc = prms["x"]
                 yloc = prms["y"]
                 
                 if not isin_close(xloc, xgrid, atol=ATOL)[0] or not isin_close(yloc, ygrid, atol=ATOL)[0]:
-                    self.plotStrokes()
-                    print("---")
-                    print(prms, xgrid, ygrid)
-                    print(isin_close(prms["x"], xgrid, atol=ATOL))
-                    print("---")
-                    assert False
+                    # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
+                    # leads to the x y locations off-grid. Look into the original Relations struct to get the 
+                    # grid loc.
+                    a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
+                    b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim"] # meaning: is relation rel sketchpad.
+                    c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho"] # ones where this fails. add to this list.
+                    d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # only coded for this so far.
+                    e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 # only coded for this so far.
+                    if not d or not e:
+                        print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2])
+                        print(*self.PlanDat["Rels"])
+                        assert False, "are these grid units or continuos? if grid, then use them for the cetner.. if not, then use Relations, not RelsBeforeRescaleToGrid?"
+                    if self.PlanDat["RelsBeforeRescaleToGrid"][i][0]=="translate_xy" and a and b and c and d and e:
+                        # Then is actually on grid!
+                        xind = 0
+                        yind = 0
+                         # 'RelsBeforeRescaleToGrid': [['translate_xy',
+                         #   array(0.),
+                         #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
+                    else:
+                        # not sure why failed...
+                        print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                        self.plotStrokes()
+                        print("---")
+                        print(prms, xgrid, ygrid)
+                        print(isin_close(prms["x"], xgrid, atol=ATOL))
+                        print("---")
+                        print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                        i
+                        assert False, "prob just need to input it."
 
-                xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
-                yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
+                else:
+                    # Good, got grid locations.
+                    xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
+                    yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
+
                 locations.append((xind, yind))
 
             # # 1) assign each object a grid location

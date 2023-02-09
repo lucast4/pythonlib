@@ -509,29 +509,36 @@ def filterPandasMultOrs(df, list_varnames, list_filts, return_as = "inds",
     else:
         assert False
 
-def filter_by_min_n(df, colname, n_min_per_level):
+def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int)):
     """ for each level in df[colname] prune all of its instances if
     the n rows is less than n_min_per_level
     PARAMS;
     - colname, str
     - n_min_per_level, int
+    - types_to_consider, list of types, only prune levels that are type in this list.
+    This is important so that doesnt throw out all numerical data.
     RETURNS:
     - df, a copy of the input, pruned
     """
 
     # n_min_per_level = 40 # min total n trials for level
-
+    from pythonlib.tools.checktools import check_is_categorical
+    
     levels = df[colname].unique().tolist()
 
     indstoremove = []
+
     for lev in levels:
-        n = sum(df[colname]==lev)
-        if n<n_min_per_level:
-            # then remove it
-            inds = df[df[colname]==lev].index.tolist()
-            indstoremove.extend(inds)
-            print(f'REMOVING, n={n} |', lev, ' --------  ', sum(df[colname]==lev))
-        print(lev, ' --------  ', sum(df[colname]==lev))
+        # Skip if this level is numerical
+        if check_is_categorical(lev):
+        # if isinstance(lev, types_to_consider):
+            n = sum(df[colname]==lev)
+            if n<n_min_per_level:
+                # then remove it
+                inds = df[df[colname]==lev].index.tolist()
+                indstoremove.extend(inds)
+                print(f'REMOVING, n={n} |', lev, ' --------  ', sum(df[colname]==lev))
+            print(lev, ' --------  ', sum(df[colname]==lev))
     print('(removing this many indices): ', len(set(indstoremove)))
     df = df.copy()
     df = df.drop(list(set(indstoremove))).reset_index(drop=True)
@@ -1117,7 +1124,7 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
 
 
 def grouping_get_inner_items(df, groupouter="task_stagecategory", 
-    groupinner="index", groupouter_levels=None):
+    groupinner="index", groupouter_levels=None, nrand_each=None):
     """ Return dict of unique items (levels of groupinner), grouped
     by groupouter levels. 
     PARAMS:
@@ -1125,6 +1132,8 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     - groupinner, string, the second grouping. either a column or "index"
     - groupouter_levels, list of values to use for groupouter. if None, then 
     finds and uses all.
+    - nrand_each, int,then gets max this much per levle of groupouter. gets 
+    random, sorted. if None then gets all.
     RETURNS:
     - groupdict, where each key is a level of groupouter, and
     items are the unique values of groupinner that exist for that
@@ -1143,6 +1152,10 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
             itemsinner = dfthisgroup.index.tolist()
         else:
             itemsinner = dfthisgroup[groupinner].unique().tolist()
+        if nrand_each is not None:
+            if len(itemsinner)>nrand_each:
+                import random
+                itemsinner = random.sample(itemsinner, nrand_each)
         groupdict[lev] = itemsinner
     return groupdict
 

@@ -245,7 +245,7 @@ class DatStrokes(object):
         # Note down done preprocessing in params
         self.Params["params_preprocessing"] = params
 
-    def clean_data(self, methods, params):
+    def clean_data(self, methods, params=None):
         """wrapper, legacy"""
         return self.clean_preprocess_data(methods, params)
 
@@ -370,7 +370,8 @@ class DatStrokes(object):
             
 
     ########################## EXTRACTIONS
-    def extract_strokes_example_for_this_shape(self, shape, ver_behtask="task_aligned_single_strok"):
+    def extract_strokes_example_for_this_shape(self, shape, 
+        ver_behtask="task_aligned_single_strok"):
         """ return either beh or task, a single exmaple for this shape.
         Always takes the first index it finds.
         PARAMS:
@@ -382,6 +383,23 @@ class DatStrokes(object):
         assert len(inds)==1
         return self.extract_strokes(inds=inds, ver_behtask=ver_behtask)[0]
 
+
+
+    def extract_strokes_as_velocity(self, inds):
+        """ Returns teh default stroeks (in self.Version) as velocity profiles
+        RETURNS:
+        - list of strok (np array), each (N,3) where columns are (xvel, yvel, time)
+        (or strok can be None, if too short to get velocity)
+        """
+        list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
+        list_strokes_vel = self.Dataset._extractStrokeVels(list_strokes, remove_time_column=False, version="vel")
+        if False:
+            DS.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
+                align_to="first_touch")
+        for strokes in list_strokes_vel:
+            assert len(strokes)==1
+        list_strokes_vel = [strokes[0] for strokes in list_strokes_vel] # convert to list of strok
+        return list_strokes_vel
 
     def extract_strokes(self, version="list_arrays", inds=None, ver_behtask=None):
         """ Methods to extract strokes across all trials
@@ -782,6 +800,24 @@ class DatStrokes(object):
         self.plot_strokes_overlaid(inds, ver_behtask=ver_behtask, ax=ax)
         return fig, ax
 
+    def plotwrap_timecourse_vels_grouped_by_shape(self, n_each, version="vel",
+        also_plot_example_strokes=False):
+        """ Plot velocity timecourse for n_each exmaples for each shape, each a 
+        separate plot. 
+        """
+        list_shape = sorted(self.Dat["shape"].unique().tolist())
+        groupdict = self.find_indices_these_shapes(list_shape, nrand_each=n_each)
+        for shape, inds in groupdict.items():
+            print("here:", shape)
+            list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
+            self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
+                align_to="first_touch")
+
+        if also_plot_example_strokes:
+            self.plot_egstrokes_grouped_by_shape(n_examples=2, color_by=None,
+                list_shape=list_shape)
+
+
     def plot_egstrokes_grouped_by_shape(self, key_subplots = "shape_oriented",
             n_examples = 4, color_by=None, list_shape=None):
         """ Wrapper to make one subplot per shape, either plotting mean stroke (not 
@@ -968,9 +1004,10 @@ class DatStrokes(object):
         fig = plotStroksInGrid(stroklist, ncols=len(labels_in_order), titlelist=titles);
 
     ############################## GROUPING
-    def grouping_get_inner_items(self, groupouter="shape_oriented", groupinner="index"):
+    def grouping_get_inner_items(self, groupouter="shape_oriented", groupinner="index",
+        nrand_each=None):
         from pythonlib.tools.pandastools import grouping_get_inner_items
-        groupdict = grouping_get_inner_items(self.Dat, groupouter, groupinner)
+        groupdict = grouping_get_inner_items(self.Dat, groupouter, groupinner, nrand_each=nrand_each)
         return groupdict
 
 
@@ -1157,6 +1194,84 @@ class DatStrokes(object):
         Cl.plot_heatmap_data(sortver=2)
 
         return Cl
+
+    ############### STROKE TRANSFORMATIONS/COMPTUATIONS/FEATURES
+    def features_compute_velocity_binned(self, twind = (0., 0.2),
+        plot_vel_timecourses = False, plot_histogram=False):
+        """ Get meamn velocity scalars (x and y) by binning velocity 
+        time series.
+        PARAMS:
+        - twind, window, relative to stroke onset, to extract data, in seconds.
+        RETURNS:
+        - new columns in self.Dat, "velmean_x", "velmean_y"
+        NOTE:
+        - 2/6/23 - 
+        # Get first 200ms timewindow
+        # chose this based on visualizing temporal profile of velocities.
+        # - Given velocity and time window, get mean vel
+        """
+        from pythonlib.tools.nptools import bin_values
+
+        # 2) mean velocity in time window.
+        inds = list(range(len(self.Dat)))
+        list_strokes_vel = self.extract_strokes_as_velocity(inds)
+        out = []
+        for strok in list_strokes_vel:
+            tvals = strok[:,2]
+            tvals = tvals-tvals[0] 
+            inds = (tvals>=twind[0]) & (tvals<=twind[1]) # bool mask
+
+            s = strok[inds, :2]
+            velmean = np.mean(s,axis=0) # (x,y)
+
+            out.append({
+                "strok_vel":strok,
+                "velmean_x":velmean[0],
+                "velmean_y":velmean[1],
+            })
+
+        dfvels = pd.DataFrame(out)
+
+        # save it in self.Dat
+        cols_keep = ["velmean_x", "velmean_y"]
+        for col in cols_keep:
+            self.Dat[col] = dfvels[col]
+
+        # convert to polar
+        from pythonlib.tools.vectools import get_angle, bin_angle_by_direction, cart_to_polar
+        list_angles = []
+        list_magn = []
+        for i in range(len(self.Dat)):
+            # vec = [self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"]]
+            a, norm = cart_to_polar(self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"])
+            list_angles.append(a)
+            list_magn.append(norm)    
+        list_angles_binned = bin_angle_by_direction(list_angles, num_angle_bins=8)
+        self.Dat["velmean_th"] = list_angles
+        self.Dat["velmean_thbin"] = list_angles_binned
+        self.Dat["velmean_norm"] = list_magn
+        self.Dat["velmean_normbin"] = bin_values(list_magn, nbins=4)
+
+
+
+        if plot_vel_timecourses:
+            self.plotwrap_timecourse_vels_grouped_by_shape(5, also_plot_example_strokes=True)
+        if plot_histogram:
+            # Plot, duration distribution for all strokes
+            list_dur = []
+            list_strokes_vel = dfvels["strok_vel"].tolist()
+            for i in range(len(list_strokes_vel)):
+                dur = list_strokes_vel[i][-1, 2] - list_strokes_vel[i][0, 2]
+                list_dur.append(dur)
+
+            fig, ax = plt.subplots(1,1)
+            ax.hist(list_dur, bins=20);
+            ax.axvline(0, color="r")
+            ax.set_xlabel("stroke durations (sec)")
+
+            # Joint distribution of velocity scalars
+            import seaborn as sns
+            sns.pairplot(data=DS.Dat, vars=["velmean_x", "velmean_y"], hue="shape", markers=".")
 
     ################ Features
     def features_generate_dataset(self, shape_key = "shape"):
@@ -1444,23 +1559,36 @@ class DatStrokes(object):
 
 
 
-    def find_indices_this_shape(self, shape, return_first_index=False):
+    def find_indices_this_shape(self, shape, return_first_index=False,
+            nrand = None):
         """
-        RETURN Indices with this shape (in the shape_oriented) column
+        Return Indices with this shape (in the shape_oriented) column
+        PARAMS;
+        - nrand, int, then get random, sorted, subsample. if None, then get all.
         RETURNS:
         - list of ints
         """
         tmp = self.find_indices_these_shapes([shape], return_first_index=return_first_index)
-        return tmp[shape]
+        inds = tmp[shape]
+        if nrand is not None:
+            import random
+            if len(inds)>nrand:
+                inds = sorted(random.sample(inds, nrand))
+        return inds
 
-    def find_indices_these_shapes(self, list_shapes, return_first_index=False):
-        """ Return indices for these shapes 
+    def find_indices_these_shapes(self, list_shapes, return_first_index=False,
+        nrand_each = None):
+        """ Return indices for these shapes. Returns the dict with keys in order
+        of input list-shapes
+        PARAMS:
+        - nrand_each, int, then gets this many of each. None gets all
         RETURNS
         - dict, with shape:list of indices
         """
         grouping = self.grouping_get_inner_items(groupouter="shape_oriented", 
-            groupinner="index")
-        grouping = {k:v for k, v in grouping.items() if k in list_shapes}
+            groupinner="index", nrand_each=nrand_each)
+        grouping = {shape:grouping[shape] for shape in list_shapes}
+        # grouping = {k:v for k, v in grouping.items() if k in list_shapes}
         if return_first_index:
             for k, v in grouping.items():
                 grouping[k] = [v[0]]
