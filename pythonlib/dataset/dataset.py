@@ -969,6 +969,22 @@ class Dataset(object):
 
         return list_char, list_score
 
+    def taskgroup_reassign_ignoring_whether_is_probe(self):
+        """ By default taskgroiups only categorize propbe tasks. 
+        Run this to replace "taskgroup" with recoputation of taskgroups, considering all tasks,.
+        taskgrops will not have "-P" as suffix. Uses same methods as deefault, but just use all tasks.
+        RETURNS:
+        - replaces self.Dat["taskgroup"] in place.
+        """
+        from pythonlib.dataset.dataset_preprocess.probes import compute_features_each_probe, taskgroups_assign_each_probe
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        map_char_to_tg = taskgroups_assign_each_probe(self, False)
+        def F(x):
+            return map_char_to_tg[x["character"]]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "taskgroup")
+
+
     def taskgroup_char_ntrials_print_save(self, sdir=None, fname="taskgroup_char_trial"):
         """ Print all the existing tasks in each taskgroup, and thier n trials,
         and save to text file, if sdir is not None, will call file:
@@ -1143,7 +1159,7 @@ class Dataset(object):
         """ Return list of shape strings used in 
         this task, in order of indices in taskstrokes
         """
-        tokens = self.taskclass_tokens_extract(ind, "task")
+        tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
         shapes = [d["shape_oriented"] for d in tokens]
         return shapes
 
@@ -4729,6 +4745,13 @@ class Dataset(object):
     def dat_append_col_by_grp(self, grp_by, new_col_name):
         assert False, "moved to grouping_append_col"
 
+    def grouping_print_n_samples(self, list_groupouter_grouping_vars, Nmin=0, savepath=None):
+        """ Print n trials for each of conjucntive levels, multiple grouping vars.
+        """
+        from pythonlib.tools.pandastools import grouping_print_n_samples
+        return grouping_print_n_samples(self.Dat, list_groupouter_grouping_vars, Nmin, savepath)
+
+
     def grouping_get_inner_items(self, groupouter="task_stagecategory", 
             groupinner="index"):
         """ Return dict of unique items (levels of groupinner), grouped
@@ -5019,6 +5042,13 @@ class Dataset(object):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
         self.Dat["INSTRUCTION_COLOR"] = list_issup
 
+    def supervision_epochs_remove_baseline_trials(self):
+        """ Modifies self.Dat to exlcude rows whos epochs that are basleine, i.e.
+        with "base" or "baseline" in epioch
+        """
+        indskeep = self.Dat[~(self.Dat["epoch"].isin(["base", "baseline"]))].index.tolist()
+        self.subsetDataframe(indskeep)
+        
     def supervision_reassign_epoch_rule_by_color_instruction(self):
 
         # 1) conjunction of color and epoch
@@ -5876,7 +5906,51 @@ class Dataset(object):
             return fig
         # return idxs
 
+    def strokes_to_velocity_speed(self, strokes, ver="vel"):
+        """ Helper to convert strokes to velocities
+        PARAMS;
+        - ver, either "vel" or "speed"
+        RETURNS:
+        - strokes-like, with speed or vel
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse, plotDatStrokesVelSpeed
+        from ..drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.tools.plottools import plotGridWrapper
+        from pythonlib.tools.stroketools import strokesVelocity
 
+        # get sampling rate
+        assert False, "figure out what to use for lowpass_freq"
+        fs = self.get_sample_rate_alltrials()
+        return strokesVelocity(strokes, fs, lowpass_freq=lowpass_freq)[i]
+
+
+    def plot_strokes_timecourse_speed_vel(self, strokes, ax, plotver="speed", 
+            align_to="first_touch", 
+            overlay_stroke_periods=False,
+            nolegend=False, alpha=0.8):
+        """ Helper to plot strokes on ax, represnting either speed or velocity
+        PARAMS;
+        - 
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse, plotDatStrokesVelSpeed
+        from ..drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.tools.plottools import plotGridWrapper
+
+        # get sampling rate
+        fs = self.get_sample_rate_alltrials()
+        if align_to=="first_touch":
+            # make the first touch 0
+            x = strokes[0][0,:]
+            strokes = [s-x for s in strokes]
+        else:
+            assert align_to is None
+
+        # Which plotting function?
+        return plotDatStrokesVelSpeed(strokes, ax, fs, plotver,
+            overlay_stroke_periods=overlay_stroke_periods, nolegend=nolegend,
+            alpha=alpha)
+
+        
     def plotMultStrokesTimecourse(self, strokes_list, idxs=None, plotver="speed",
         return_idxs=False, ncols = 5, titles=None, naked_axes=False, aspect=0.8,
         align_to=None, overlay_stroke_periods=False):
@@ -5985,7 +6059,7 @@ class Dataset(object):
 
         self.plotMultStrokesTimecourse(strokes_list, idxs, plotver, 
             return_idxs=return_idxs, ncols=ncols, 
-            titles=titles, naked_axes=naked_axes, aspect=2)
+            titles=titles, naked_axes=naked_axes, aspect=2, align_to=align_to)
 
 
 
@@ -6552,6 +6626,6 @@ class Dataset(object):
         RETURNS:
         - df, pruned. (Does not modify self.Dat)
         """
-        from pythonlib.tools.pandastools import filterGroupsSoNoGapsInData
-        df = prune_min_ntrials_across_higher_levels(self.Dat, col_low, col_high, min_n_trials=n_min)
+        from pythonlib.tools.pandastools import prune_min_ntrials_across_higher_levels
+        df = prune_min_ntrials_across_higher_levels(self.Dat, col_high, col_low, n_min=n_min)
         return df

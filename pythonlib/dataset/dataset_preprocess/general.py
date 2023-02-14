@@ -880,7 +880,10 @@ def get_rulelist(animal, expt):
     list_expts = extract_expt_metadat(animal=animal, expt=expt, metadat_dir=f"{PATH_DRAWMONKEY_DIR}/expt_metadat") ##CHANGE## metadat_dir if necessary
     rulelist = [e[1] for e in list_expts]
     assert len(rulelist)>0
-    assert len(set(rulelist))==len(rulelist), "some redundant?"
+    if not len(set(rulelist))==len(rulelist):
+        print("rulelist:", rulelist)
+        print(animal, expt)
+        assert False, "some redundant?"
     return rulelist
 
 

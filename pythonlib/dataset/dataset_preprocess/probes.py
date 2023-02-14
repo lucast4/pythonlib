@@ -10,8 +10,13 @@ def extract_epochs(D):
     # shouldn't contribute to the probe kind label.
     """
     list_epochs_ignore = ["baseline", "baseline|0", "baseline|1", "base", "base|0", "base|1"]
+    def _ignore(ep):
+        # Ignore it if it contains the string base (returns True)
+        return "base" in ep
+
     epochs = sorted(D.Dat["epoch"].unique().tolist())
-    epochs = [ep for ep in epochs if ep not in list_epochs_ignore]
+    # epochs = [ep for ep in epochs if ep not in list_epochs_ignore]
+    epochs = [ep for ep in epochs if not _ignore(ep)]
     return epochs
 
 def _extract_concurrent_train_tasks(task_probe, D):
@@ -215,10 +220,12 @@ def _generate_map_taskclass(D):
 
 
 
-def compute_features_each_probe(D):
+def compute_features_each_probe(D, only_do_probes = True):
     """ For each probe task, compute its "features" which indicate ways that it is 
     different from train tasks. This is compuited spearately for each epoch, becuase
     features will depend on what sequence rule is being trained 
+    PARAMS:
+    - only_do_probes, then if not probe, skips you. this defualt.
     RETURNS:
     - dict_probe_features, dict, with keys (epoch, probe_task_name), mapping to tuple of
     features.
@@ -232,7 +239,10 @@ def compute_features_each_probe(D):
 
 
     # 1) get names of all probes
-    list_tasks_probe = sorted(D.Dat[D.Dat["probe"]==1]["character"].unique())
+    if only_do_probes:
+        list_tasks_probe = sorted(D.Dat[D.Dat["probe"]==1]["character"].unique())
+    else:
+        list_tasks_probe = sorted(D.Dat["character"].unique())
 
     mapper_taskname_epoch_to_taskclass = _generate_map_taskclass(D)
     list_epochs = extract_epochs(D)
@@ -278,10 +288,6 @@ def compute_features_each_probe(D):
                     dict_probe_kind[(ep, task_probe)] = "none"
             elif len(list_correct_sequence_unique)==1 and len(epochs_that_have_train_tasks)>1:
                 # Then multipel epochs require the same beh sequence...
-                print(list_correct_sequence_unique)
-                print(list_correct_sequence_unique)
-                print(epochs_that_have_train_tasks)
-                assert False
                 for ep in list_epochs:
                     dict_probe_features[(ep, task_probe)] = {
                         "novel_location_config":False, 
@@ -381,7 +387,7 @@ def compute_features_each_probe(D):
 
     return dict_probe_features, dict_probe_kind, list_tasks_probe
 
-def taskgroups_assign_each_probe(D):
+def taskgroups_assign_each_probe(D, only_give_names_to_probes=True):
     """ Rename each probe's taskgroup based on autoamtically detecting what is
     special about each probe task. Does this in clever fashion by comparing
     to the actual training tasks presaented in each epoch.
@@ -396,7 +402,8 @@ def taskgroups_assign_each_probe(D):
         D.behclass_preprocess_wrapper()
 
     # 1) compute_features_each_probe
-    dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D)
+    _, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D, 
+        only_do_probes=only_give_names_to_probes)
 
     # 2) map from probe_task to categeroy. main point of this step is to combine catgegory names
     # across epochs if they are different names.

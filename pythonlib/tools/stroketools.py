@@ -330,7 +330,78 @@ def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filte
     return strokes_curv
 
 
-def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
+def strokes_bin_timesegments_wrapper(strokes, binsize = 0.01):
+    """ bin strokes into short segments by time, and for each time bin
+    extract mean x, y,
+    PARAMS:
+    - strokes, list of (N,3) arrays, where 3rd column is time in sec
+    - binsize, in sec. aligns (starts at ) 0. NOTE: strokes could be 
+    positon or velcoity.
+    RETURNS:
+    - list of dicts, each a time bin.
+    """
+
+    strokes_array = np.concatenate(strokes, axis=0) # concat
+
+    # get time bins
+    tmin = 0
+    tmax = strokes_array[-1,2] + binsize
+    binedges = np.arange(0, tmax, binsize)-0.0005 # to avoid numerical imprecision at edges
+
+    # collect each time bin, in incraesing order
+    out = []
+    for ed1, ed2 in zip(binedges[:-1], binedges[1:]):
+        
+        # get indices within this
+        inds = (strokes_array[:,2]>=ed1) & (strokes_array[:,2]<ed2)
+        npts = sum(inds)
+        if npts>0:
+            # then keep
+            vel = np.mean(strokes_array[inds, :], axis=0)
+    #         list_angles_binned = bin_angle_by_direction(list_angles, num_angle_bins=8)
+    #         self.Dat["velmean_normbin"] = bin_values(list_magn, nbins=4)
+            t1_actual = np.min(strokes_array[inds, 2])
+            t2_actual = np.max(strokes_array[inds, 2])
+            
+            out.append({
+                "npts":npts,
+                "x":vel[0],
+                "y":vel[1],
+                "t1_bin_inclusive":ed1,
+                "t2_bin_exclusive":ed2,
+                "t1_actual":t1_actual,
+                "t2_actual":t2_actual
+            })
+
+    return out
+
+def strokes_bin_velocity_wrapper(strokes, fs, binsize=0.01, return_as_dataframe=False):
+    """ bin strokes into short segments by time, and for each
+    extract mean velocity, in cartesian and polar coords
+    """
+    from pythonlib.tools.vectools import get_angle, bin_angle_by_direction, cart_to_polar
+
+    # from pythonlib.tools
+    strokes_vel, strokes_speed = strokesVelocity(strokes, fs, clean=True)
+    out = strokes_bin_timesegments_wrapper(strokes, binsize)
+
+    for o in out:
+        a, norm = cart_to_polar(o["x"], o["y"])
+        o["angle"]=a
+        o["length"]=norm
+
+    if return_as_dataframe:
+        import pandas as pd
+        return pd.DataFrame(out)
+    else:
+        return out
+
+
+# def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
+#     fs_new = 30, do_pre_filter=False, clean=False):
+#NOTE: 2/8/23 - changed lowpass_freq to 5, this is what is used for plots generally, which
+# call this function..
+def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     fs_new = 30, do_pre_filter=False, clean=False):
     """ gets velocity and speeds. 
     should first have filtered strokes to ~15-20hz. if not, then 

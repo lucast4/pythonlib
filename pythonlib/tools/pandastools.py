@@ -126,6 +126,10 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
     """
     if nonnumercols is None:
         nonnumercols = []
+    else:
+        # Check they all exist
+        for col in nonnumercols: 
+            assert col in df.columns
     if aggmethod is None:
         aggmethod = ["mean"]
 
@@ -247,7 +251,7 @@ def prune_min_ntrials_across_higher_levels(df, col_high, col_low, n_min):
     """
     return filterGroupsSoNoGapsInData(df, col_low, col_high, min_n_trials=n_min)
 
-def filterGroupsSoNoGapsInData(df, group, colname, values_to_check=None,
+def filterGroupsSoNoGapsInData(df, group, colname, colname_levels_to_check=None,
         min_n_trials = 1):
     """ filter df so that each group has at
     least one item for each of the desired values
@@ -255,29 +259,29 @@ def filterGroupsSoNoGapsInData(df, group, colname, values_to_check=None,
     data which don't have data for all days, for eg...
     -- e.g., this only keeps tasks that have data for
     both epochs:
-        values_to_check = [1,2]
+        colname_levels_to_check = [1,2]
         colname = "epoch"
         group = "unique_task_name"
     # NOTE - index of output will be reset.
     """
 
-    if values_to_check is None:
-        values_to_check = df[colname].unique().tolist()
+    if colname_levels_to_check is None:
+        colname_levels_to_check = df[colname].unique().tolist()
 
     def F(x):
         """ True if has data for all values"""
         checks  = []
 
-        # count n trials for each value
+        # count n trials for each level of colname
         list_n =[]
-        for v in values_to_check:
+        for v in colname_levels_to_check:
             n = sum(x[colname]==v)
             list_n.append(n)
 
         # check if each n is >= than min
         list_good = [n>=min_n_trials for n in list_n]
         return all(list_good)
-        # for v in values_to_check:
+        # for v in colname_levels_to_check:
         #     print(x[colname].values)
         #     checks.append(v in x[colname].values)
         # return all(checks)
@@ -644,7 +648,8 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True,
                 return str(tmp) 
         else:
             return tuple(tmp)
-    df = applyFunctionToAllRows(df, F, new_col_name)    
+    df = applyFunctionToAllRows(df, F, new_col_name)  
+
     if return_col_name:
         return df, new_col_name 
     else:
@@ -751,6 +756,13 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     - rgba_values, (nrows, ncols, 4), where rgba_values[0,1], means rgba value for row 0 col 1.
     """
     from pythonlib.tools.snstools import heatmap
+
+    # If col2 is None, then give a dummy varaible, so that this code runs
+    if col2 is None:
+        # then is really a 1d plot
+        df["dummy"] = 0
+        col2="dummy"
+
     list_cat_1 = sorted(df[col1].unique())
     list_cat_2 = sorted(df[col2].unique())
 
@@ -806,6 +818,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     else:
         fig, ax, rgba_values = None, None, None
 
+    if "dummy" in df.columns:
+        del df["dummy"]
     return dfthis, fig, ax, rgba_values
             
 
@@ -1113,6 +1127,8 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                 # sample size changes... keep how many you have
                 n_examples = len(list_idx)
                 inds = random.sample(list_idx, n_examples)[:n_examples]
+            elif method_if_not_enough_examples== "fail":
+                assert False, "not enough trials "
             else:
                 assert False
         list_inds.extend(inds)
@@ -1160,7 +1176,7 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     return groupdict
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
-    groupinner="index", groupouter_levels=None):
+    groupinner="index", groupouter_levels=None, new_col_name="grp"):
     """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
     Useful if e./g., you want to get all indices for each of the levels in a combo group,
     where the group is defined by conjunction of two columns.
@@ -1174,7 +1190,6 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     """
 
     # 1) Append new grouping variable to each row
-    new_col_name = "grp"
     while new_col_name in df.columns:
         new_col_name+="_"
     df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)

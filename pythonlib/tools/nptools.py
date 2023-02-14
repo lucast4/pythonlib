@@ -3,29 +3,41 @@ import numpy as np
 ### 
 # np.r_ is for quick contaneation.
 
-def bin_values(vals, nbins=8):
+def bin_values(vals, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
+    assert_all_vals_within_bins=True):
     """ REturn vals, but binned, unofrmly from min to max
     Values binned between 1 and nbins.
     PARAMS;
     - nbins, num bbins.
+    - epsilon, scalar, small number to pad, to make sure get all values.
+    RETIURNS:
+    - array, (n,)
     """
-    bins = np.linspace(0.99*np.min(vals), 1.01*np.max(vals), nbins+1)
-    vals_binned = [np.digitize(v, bins) for v in vals]
+    if valmin is None:
+        valmin = np.min(vals)
+    if valmax is None:
+        valmax = np.max(vals)
+
+    bins = np.linspace(valmin-epsilon, valmax+epsilon, nbins+1)
+    vals_binned = np.array([np.digitize(v, bins) for v in vals], dtype=np.int_)
+
+    if assert_all_vals_within_bins:
+        assert np.all((vals_binned>=1) | (vals_binned<=nbins))
     return vals_binned
 
 def rankItems(arr):
-	""" for each item, returns its
-	rank out of all items (0 = smallest);
-	if arr = [3,1,5,0], then
-	returns [2, 1, 3, 0]. 
-	- deals with ties by assigning lower label
-	to the earlyier bvalue
-	"""
-	array = np.array(arr)
-	temp = array.argsort()
-	ranks = np.empty_like(temp)
-	ranks[temp] = np.arange(len(array))
-	return ranks
+    """ for each item, returns its
+    rank out of all items (0 = smallest);
+    if arr = [3,1,5,0], then
+    returns [2, 1, 3, 0]. 
+    - deals with ties by assigning lower label
+    to the earlyier bvalue
+    """
+    array = np.array(arr)
+    temp = array.argsort()
+    ranks = np.empty_like(temp)
+    ranks[temp] = np.arange(len(array))
+    return ranks
 
 
 def sortPop(X, dim, filt):
