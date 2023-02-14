@@ -908,6 +908,23 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         'prot_prims_in_order_AND_directionv2', 
         ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'topright'))] = "AnBmTR"
 
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line', 'circle', 'right'))] = "LCr1" # gridlinecircleGOOD (diego)
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('circle', 'line', 'right'))] = "CLr1" # gridlinecircleGOOD (diego)
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line', 'arcdeep', 'circle', 'right'))] = "LCr2" # gridlinecircleGOOD (diego)
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('circle', 'arcdeep', 'line', 'right'))] = "CLr2" # gridlinecircleGOOD (diego)
+
+    grouping_map_tasksequencer_to_rule[(
+        'shape_chunk_concrete', 
+        ('lolli', 'D', 'R'))] = "LolDR" # gridlinecircleGOOD (diego), lollis (circles down and right)
+
     grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
 
     return grouping_map_tasksequencer_to_rule

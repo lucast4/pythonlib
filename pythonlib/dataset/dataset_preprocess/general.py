@@ -186,7 +186,7 @@ def _groupingParams(D, expt):
 
     elif "neuralbiasdir" in expt:
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
@@ -217,7 +217,7 @@ def _groupingParams(D, expt):
     elif "shapesequence" in expt:
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
     elif "shapedirseq" in expt:
@@ -303,7 +303,7 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = True
     elif "gridlinecircle" in expt:
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
@@ -502,10 +502,20 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         """
         PARAMS:
         - x, [str, nparray, nparay], represnting [shape, leve, rot]
+        -- OR, [str], to be more general/abstract, e.g, [line]
         RETURNS:
         - <shape>-<level>-<rot>, e.g. # line-8-3
+        -- OR <shape>, e.g, line
         """
-        return '-'.join([x[0], str(int(x[1])), str(int(x[2]))])
+        if len(x)==1:
+            assert isinstance(x[0], str) # should be like "line"
+            return x[0]
+        elif len(x)==3:
+            # like [str, nparray, nparay]
+            return '-'.join([x[0], str(int(x[1])), str(int(x[2]))])
+        else:
+            print(x)
+            assert False, "not sure why"
 
     def _index_to_rule(ind):
         tp = D.blockparams_extract_single_taskparams(ind)
@@ -542,12 +552,30 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         elif ver=="prot_prims_in_order_AND_directionv2":
             # TYhen is hierarchcayl, first order by shape, then within shapes order by direction
             list_prims = prms[0]
+            # each prim in list prims could be 3-list, like ['line', 1, 1] or 1-list, ['line']
             list_prims_str = [_convert_to_prim(x) for x in list_prims] # list of strings
             direction = prms[1][0] # topright
             p = tuple(list_prims_str + [direction])
         elif ver=="randomize_strokes":
             assert len(prms)==0
             p = tuple([ver])
+        elif ver=="shape_chunk_concrete":
+            # ver = shape_chunk_concrete
+            # prms = ['lolli', ['D', 'R']]
+            # converts to:
+            # p = ('lolli', 'D', 'R')
+            if not len(prms)==2: 
+                print(prms)
+                assert False, "code up for this"
+
+            chunkname = prms[0] # "lolli"
+            prmsinner = prms[1]
+            assert isinstance(chunkname, str)
+            p = [chunkname]
+            for this in prmsinner:
+                assert isinstance(this, str)
+                p += this
+            p = tuple(p)
         else:
             print(ver)
             print(prms)
