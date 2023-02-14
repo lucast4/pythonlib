@@ -301,6 +301,11 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+    elif "gridlinecircle" in expt:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
 
     elif "dirfullvar" in expt or "dirdir" in expt:
         grouping_reassign = True
