@@ -38,7 +38,7 @@ class BehModelHolder(object):
         different kinds of proibe tasks. this is flexible.
         """
 
-        required_columns = ["epoch", "character", "taskgroup"]
+        required_columns = ["epoch", "character", "taskgroup", "probe"]
         for col in required_columns:
             assert col in data.columns, "missing a required column"
 

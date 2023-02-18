@@ -1656,8 +1656,9 @@ class Dataset(object):
                 elif p=="rescale_to_1":
                     self.rescaleStrokes()
                 elif p=="no_supervision":
-                     # Remove trials with online supervision (e.g, color)
-                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"]=="off|0||0"]
+                    # Remove trials with online supervision (e.g, color)
+                    LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
+                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
                 elif p=="remove_online_abort":
                     # Remove trials with online abort
                     self.Dat = self.Dat[self.Dat["aborted"]==False]
@@ -1666,6 +1667,8 @@ class Dataset(object):
                     # based on the epoch.
                     bm = self.grammar_wrapper_extract()
                     self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
+                elif p=="fixed_tasks_only":
+                    self.Dat = self.Dat[self.Dat["random_task"]==False]
                 else:
                     print(p)
                     assert False, "dotn know this"
@@ -5042,6 +5045,22 @@ class Dataset(object):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
         self.Dat["INSTRUCTION_COLOR"] = list_issup
 
+    def supervision_epochs_merge_these(self, list_epochs, new_epoch_name):
+        """ Converts epochs of names in list_epochs into the epoch newname
+        RETURNS:
+        - modifies "epoch" in self.Dat.
+        """
+
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        def F(x):
+            if x["epoch"] in list_epochs:
+                return new_epoch_name  
+            else:
+                return x["epoch"]
+
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+
     def supervision_epochs_remove_baseline_trials(self):
         """ Modifies self.Dat to exlcude rows whos epochs that are basleine, i.e.
         with "base" or "baseline" in epioch
@@ -5280,6 +5299,16 @@ class Dataset(object):
         bm, _, _ = preprocess_dataset(self, return_as_bmh_object=return_as_bmh_object)
         return bm
 
+    def sequence_tokens_clear_behclass_and_taskclass(self):
+        """ Remove cached tokens, datsegs by deleting them. Useful if you want to reextract them.
+        """
+        for i in range(len(self.Dat)):
+            Task = self.Dat.iloc[i]["Task"]
+            Beh = self.Dat.iloc[i]["BehClass"]
+            if hasattr(Task, "_DatSegs"):
+                del Task._DatSegs
+            if hasattr(Beh, "Alignsim_Datsegs"):
+                del Beh.Alignsim_Datsegs        
     def sequence_extract_beh_and_task(self, ind, ploton=False):
         """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
         task (e.g., taskstroke inds ordered by chunk, and whether there is color

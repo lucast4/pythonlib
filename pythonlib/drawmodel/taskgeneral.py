@@ -1462,6 +1462,10 @@ class TaskClass(object):
             else:
                 return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["max_wh"]
 
+        def _shapeabstract(i):
+            # e.g, "line"
+            return Prims[i].ShapeNotOriented
+
         def _shape(i):
             # return string
             return Prims[i].shape_oriented(include_scale=include_scale)
@@ -1628,6 +1632,7 @@ class TaskClass(object):
 
             # 1) Things that don't depend on grid
             datsegs.append({
+                "shapeabstract":_shapeabstract(i),
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
                 "width":_width(i),
