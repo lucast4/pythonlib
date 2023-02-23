@@ -17,6 +17,7 @@ def debug_eyeball_distance_metric_goodness(D):
         
     # collect data, once for each distance metric
     list_distance_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset"]
+    LIST_RES = []
     for dist in list_distance_ver:
         RES = generate_data(D, list_distance_ver=[dist])
         LIST_RES.append(RES)
@@ -27,14 +28,18 @@ def debug_eyeball_distance_metric_goodness(D):
         plot_example_trials(RES, list_inds=list_inds)
 
 
-def pipeline_generate_and_plot_all(D, do_plots=True):
+def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "character",
+    list_distance_ver=None):
     """
     Full pipeline to generate and plot and save all.
     """
+    
+    if list_distance_ver is None:
+        list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
 
     savedir = D.make_savedir_for_analysis_figures("character_strokiness")
-
-    RES = generate_data(D)
+    
+    RES = generate_data(D, filter_taskkind=filter_taskkind, list_distance_ver=list_distance_ver)
 
     if do_plots: 
         DS = RES["DS"]
@@ -55,8 +60,10 @@ def pipeline_generate_and_plot_all(D, do_plots=True):
 def generate_data(D, which_basis_set="standard_17", 
         which_shapes="all_basis",
         trial_summary_score_ver="clust_sim_max",
-        list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset"),
-        plot_score_hist=False):
+        list_distance_ver=None, 
+        plot_score_hist=False, filter_taskkind = None,
+        ds_clean_methods = None, ds_clean_params = None,
+        ds_filterdict = None):
     """
     Initial data generation: extracts strokes, extracts basis
     set of strokes to compare them to, does similarity matrix
@@ -70,10 +77,20 @@ def generate_data(D, which_basis_set="standard_17",
     """
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
+    if list_distance_ver is None:
+        list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
     ### Generate Strokes data
     DS = DatStrokes(D)
+
+    if ds_clean_methods is not None:
+        DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
+    
     # Filter to just "character" tasks
-    DS.filter_dataframe({"task_kind":["character"]}, True)
+    if filter_taskkind:
+        DS.filter_dataframe({"task_kind":[filter_taskkind]}, True)
+
+    if ds_filterdict is not None:
+        DS.filter_dataframe(ds_filterdict, True)
 
     ### Generate basis set of strokes
     dfstrokes, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(
