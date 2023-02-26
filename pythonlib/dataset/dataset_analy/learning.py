@@ -282,17 +282,26 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
     writeStringsToFile(path, list_textstrings)
 
     # 2) Plot bar plot (same infor as in list_textstrings)
-    fig = sns.catplot(data = dfthis, x="taskgroup", y=column_binary_success, hue = "epoch_superv", kind="bar", ci=68,
-               row="which_probe_blockset", aspect=2, height=3)
-    rotateLabel(fig)
-    fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-1.pdf")
+    try:
+        fig = sns.catplot(data = dfthis, x="taskgroup", y=column_binary_success, hue = "epoch_superv", kind="bar", ci=68,
+                   row="which_probe_blockset", aspect=2, height=3)
+        rotateLabel(fig)
+        fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-1.pdf")
+    except ValueError as err:
+        print("SKIPPING learning plot!!! caught err")
+        print(err)
 
     # 2) More compact bar plot
-    fig = sns.catplot(data = dfthis, x="which_probe_blockset", y=column_binary_success, 
-                hue = "epoch_superv", kind="bar", ci=68,
-               col="taskgroup", col_wrap=3, aspect=2, height=3)
-    rotateLabel(fig)
-    fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-2.pdf")
+    try:
+        fig = sns.catplot(data = dfthis, x="which_probe_blockset", y=column_binary_success, 
+                    hue = "epoch_superv", kind="bar", ci=68,
+                   col="taskgroup", col_wrap=3, aspect=2, height=3)
+        rotateLabel(fig)
+        fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-2.pdf")
+    except ValueError as err:
+        print("SKIPPING learning plot!!! caught err")
+        print(err)
+
 
 def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary_quick"):
     """ Heatmap for n trials for each combo of conditions (e.g., epoch|supervsion, and taskgroup)
