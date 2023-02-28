@@ -1019,7 +1019,10 @@ def rules_map_rulestring_to_ruledict(rulestring):
         categ_matlab = None
         params_matlab = None
         params_good = params
-        assert False, "check that params_ggood is string like R"
+        if not isinstance(params_good, str):
+            print(params)
+            print(substrings)
+            assert False, "check that params_ggood is string like R"
     elif categ=="rand" and subcat=="null":
         # Random beh
         categ_matlab = None
