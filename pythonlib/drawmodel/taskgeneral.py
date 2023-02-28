@@ -984,7 +984,7 @@ class TaskClass(object):
         #     print('-', k)
         #     print(v)
 
-        if T.PlanDat is None or "TaskGridClass" not in T.PlanDat.keys():
+        if T.PlanDat is None or "TaskGridClass" not in T.PlanDat.keys() or len(T.PlanDat["TaskGridClass"])==0:
             return None
         else:
             ###############

@@ -81,7 +81,7 @@ class TaskClass(object):
                 isnew=True
         return isnew
 
-    def info_is_new_objectclass(self,strict=True):
+    def info_is_new_objectclass(self, strict=True):
         """ Is even newer, like early 2022, using ObjectClass 
         to define tasks. Returns True if it is.
         """
@@ -104,7 +104,7 @@ class TaskClass(object):
         if len(self.PlanDat) == 0:
             return False
         if strict==True:
-            if "TaskSetClass" not in self.PlanDat["Info"].keys():
+            if "Info" not in self.PlanDat.keys() or "TaskSetClass" not in self.PlanDat["Info"].keys():
                 return False
         
         return True

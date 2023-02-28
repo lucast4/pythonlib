@@ -179,6 +179,7 @@ def _groupingParams(D, expt):
         features_to_remove_outliers = []
         grouping_levels = ["horiz", "vert"]
         feature_names = ["hdoffline", "num_strokes", "circ", "dist"]     
+        traintest_reassign_method = "fixed"
     elif expt=="character34":
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which

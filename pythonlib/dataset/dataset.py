@@ -73,11 +73,16 @@ def load_dataset(animal, expt, rulelist=None, return_rulelist=False):
     - [if return_rulelist], auto extracted, if rulelist is None. otherwise returns the input.
     """
 
+    assert expt is not None, "if you want to get daily, then use load_dataset_daily_helper"
     if rulelist is None:
         # Then find all the rules automatically
         from pythonlib.dataset.dataset_preprocess.general import get_rulelist
         rulelist = get_rulelist(animal, expt)
         assert len(rulelist)>0
+    # elif isinstance(rulelist, list) and len(rulelist)==1 and isinstance(rulelist[0], str) and str(int(rulelist[0]))==rulelist[0]:
+    #     # Then is dailyy, as rulelist is like ["220321"]
+    #     date = rulelist[0]
+    #     return load_dataset_daily_helper(animal, date)
     else:
         assert isinstance(rulelist, list)
 
@@ -1085,6 +1090,48 @@ class Dataset(object):
         else:
             return out
 
+    def taskclass_find_repeat_trials(self, print_trials=False):
+        """ Find trials that are immediate repeats of the same task (character).
+        ie..,, if do char1, char2, char2, char3, then the third trial will
+        be returned. Only considered to be repeats if have identical epoch, supervision, 
+        and block num.
+        PARAMS:
+        - print_trials, bool, to print info for each trial.
+        RETURNS:
+        - inds, indices of repeated trials
+        """
+
+        # Append column with epoch and block for each trial
+        self.grouping_append_col(["epoch_superv", "block"], "dummy")
+
+        ct = 0
+        char_previous = ""
+        prms_previous = ""
+        inds_repeated_not_first = []
+        for i in range(len(self.Dat)):
+            
+            char = self.Dat.iloc[i]["character"]
+            err = self.Dat.iloc[i]["ErrorCode"]
+            rand = self.Dat.iloc[i]["random_task"]
+            prms = self.Dat.iloc[i]["dummy"]
+
+            # if char == char_previous:
+            if char == char_previous and prms==prms_previous:
+                # Then this is repeat
+                ct +=1
+            else:
+                ct = 0
+            char_previous = char
+            prms_previous = prms
+            
+            if ct>0 and rand==False:
+                # Then this is a repeat (trial 2 +). exclude it
+                inds_repeated_not_first.append(i)
+            
+            if print_trials:
+                print(i, "--", ct, "--", char, "--", prms, "--", err, "--", rand)
+        return inds_repeated_not_first        
+
     def taskclass_extract_los_info_append_col(self):
         """ For each trial, extract its los info and append as 
         new col in D.Dat, called "los_info"
@@ -1602,13 +1649,19 @@ class Dataset(object):
         return pathlist
 
 
-    def preprocessGood(self, ver="modeling", params=None, apply_to_recenter="all"):
+    def preprocessGood(self, 
+            # ver="modeling", 
+            ver = None,
+            params=None, apply_to_recenter="all",
+            frac_touched_min = None):
         """ save common preprocess pipelines by name
         returns a ordered list, which allows for saving preprocess pipeline.
         - ver, string. uses this, unless params given, in which case uses parasm
         - params, list, order determines what steps to take. if None, then uses
         ver, otherwise usesparmas
         """
+        if ver is None and params is None:
+            assert False, "must pass in one"
         if params is None:
             if ver=="modeling":
                 # recenter tasks (so they are all similar spatial coords)
@@ -1667,8 +1720,20 @@ class Dataset(object):
                     # based on the epoch.
                     bm = self.grammar_wrapper_extract()
                     self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
+                elif p=="frac_touched_ok":
+                    assert frac_touched_min is not None
+                    # To see what is good value, try:
+                    # plot_trials_after_slicing_within_range_values(self, colname, minval, 
+                    # maxval, plot_hist=True):
+                    self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
                 elif p=="fixed_tasks_only":
                     self.Dat = self.Dat[self.Dat["random_task"]==False]
+                elif p=="remove_repeated_trials":
+                    # remove trials that repeat the same task immediately after each otehr. only keep the first 
+                    # iter in a set of repeated trials.
+                    inds_repeated = self.taskclass_find_repeat_trials()
+                    inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
+                    self.subsetDataframe(inds_keep)
                 else:
                     print(p)
                     assert False, "dotn know this"
@@ -5508,15 +5573,13 @@ class Dataset(object):
         if ax is None:
             fig, ax = plt.subplots(1,1)
 
+        if strok_indices:
+            strokes = [strokes[i] for i in strok_indices]
+
         if ver=="beh":
-            if strok_indices:
-                strokes = [strokes[i] for i in strok_indices]
             plotDatStrokesWrapper(strokes, ax, color=single_color, 
                 add_stroke_number=add_stroke_number_beh)    
         elif ver=="task":
-            strokes = self.Dat.iloc[idx]["strokes_task"]
-            if strok_indices:
-                strokes = [strokes[i] for i in strok_indices]
             plotDatStrokes(strokes, ax, each_stroke_separate=True, 
                 plotver="onecolor", add_stroke_number=False, 
                 mark_stroke_onset=False, pcol=single_color, number_from_zero=False)
@@ -5539,6 +5602,20 @@ class Dataset(object):
         return self.plot_strokes(strokes, ax, single_color, ver, strok_indices, 
             add_stroke_number_beh)
 
+    def plot_trials_after_slicing_within_range_values(self, colname, minval, 
+        maxval, plot_hist=True):
+        """ Plot example trials that are wihitn this range of values for
+        a given column, e.g,., frac_touched
+        """
+
+        if plot_hist:
+            self.Dat[colname].hist()
+        # d1 = 0.6
+        # d2 = 0.7
+        inds = self.Dat[(self.Dat[colname]>minval) & (self.Dat[colname]<maxval)].index.tolist()
+        print("This many trials found:", len(inds))
+        self.plotMultTrials(inds)
+        self.plotMultTrials(inds, "strokes_task")
 
 
     def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
@@ -6155,6 +6232,11 @@ class Dataset(object):
         fig.add_legend()
         figlist.append(fig)
 
+        nchar = len(self.Dat["character"].unique())
+        ntg = len(self.Dat["taskgroup"].unique())
+        if nchar > 20 or ntg>10:
+            ignore_large_plots=True
+
         if ignore_large_plots==False:
             nchar = len(self.Dat["character"].unique())
             fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="monkey_train_or_test", hue="supervision_stage_new", 
@@ -6189,8 +6271,10 @@ class Dataset(object):
         import seaborn as sns
         ### SCores, rewards, features
         f = "rew_total"
-        fig = sns.catplot(data=self.Dat, x="block", y="rew_total", hue="probe", col="date_sess", col_wrap=3, kind="violin")
-        fig.savefig(f"{savedir}/feat-{f}_byblock-1.pdf")
+        if False:
+            # This plot too large... not needed
+            fig = sns.catplot(data=self.Dat, x="block", y="rew_total", hue="probe", col="date_sess", col_wrap=3, kind="violin")
+            fig.savefig(f"{savedir}/feat-{f}_byblock-1.pdf")
         fig = sns.catplot(data=self.Dat, x="block", y="rew_total", row="probe", col="date_sess", aspect=2, height=2.5)
         fig.savefig(f"{savedir}/feat-{f}_byblock-2.pdf")
 

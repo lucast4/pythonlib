@@ -18,22 +18,15 @@ from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 
-def preprocess_dataset(D):
+def preprocess_dataset(D, remove_repeated_trials=True):
     """ Preprocess Dataset as basis for all subsetquence grammar/learning analyses.
-    PARAMS:
-    - grammar_recompute_parses, bool, if False, then uses the saved "active chunk" used 
-    during the task. This works for training tasks with single correct parse,
-    but not (in general) for testing, which may have multiple correct parses. Deal with latter
-    by recomputing parses using D.grammar_parses_generate. 
-    - grammar_correct_rule, string, must be inputed if you use grammar_recompute_parses.
-    This defined what will be the set of correct orders to compare with beh.
+    PARAMS
+    - remove_repeated_trials, bool, excludes trials that immediately repeat the same task/rule, etc.
+    These are after errors...
     RETURNS:
-    - dfGramScore, dataframe holding each trial, whether is success (beh sequence matches task sequebce,
-    where latter is from the active chunk, and alignemnet is done with alignment matrix.
     - list_blocksets_with_contiguous_probes, list of list of ints, where inner lists hold
     blocks that are continusous and which all have probe tasks. these are useful for making
     separate plots for each. 
-    - SDIR, string path to directory for all saving of grammar.
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
 
@@ -42,6 +35,9 @@ def preprocess_dataset(D):
     # savedir= f"{SDIR}/summary"
     # os.makedirs(savedir, exist_ok=True) 
 
+    if remove_repeated_trials:
+        D.preprocessGood(params = ["remove_repeated_trials"])
+        
     ##### 1) Extract blocksets (contiguous blocks with probe tasks)
     blocks = sorted(D.probes_extract_blocks_with_probe_tasks())
     list_blockset = []
