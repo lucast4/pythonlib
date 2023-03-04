@@ -260,6 +260,7 @@ class DatStrokes(object):
         - Modifies self.Dat
         """
         
+        print("clean_preprocess_data...")
         if methods is None:
             methods = []
         for meth in methods:
@@ -313,9 +314,16 @@ class DatStrokes(object):
                         print("Excluding shape:", shape, "n=", n)
 
                 self.filter_dataframe({"shape_oriented":list_shapes_keep}, True)
+            elif meth=="stroke_too_short":
+                # run this to evaluate what is good length as thershold
+                # self.plot_multiple_after_slicing_within_range_values
+                print("Doing...:", meth)
+                assert "min_stroke_length" in params.keys()
+                self.Dat = self.Dat[self.Dat["distcum"]>=params["min_stroke_length"]].reset_index(drop=True)
             else:
                 print(meth)
                 assert False, "code it"
+        self.Dat = self.Dat.reset_index(drop=True)
 
 
     ######################### PREP THE DATASET
@@ -675,7 +683,8 @@ class DatStrokes(object):
             assert False
 
 
-    def plot_single_overlay_entire_trial(self, ind, ax=None, overlay_beh_or_task="beh"):
+    def plot_single_overlay_entire_trial(self, ind, ax=None, 
+            overlay_beh_or_task="beh", SIZE=2):
         """
         Plot a single stroke, overlaying it on all the strokes from this trial, colored
         and numbered.
@@ -684,7 +693,7 @@ class DatStrokes(object):
         """
 
         if ax is None:
-            fig, ax = plt.subplots(1,1)
+            fig, ax = plt.subplots(1,1, figsize=(SIZE, SIZE))
 
         # plot trial
         inddat = self._dataset_index(ind)
@@ -724,6 +733,22 @@ class DatStrokes(object):
         S = self.Dat.iloc[ind]["Stroke"]
         self.plot_single_strok(S(), ver="beh", ax=ax, color=color)
         return ax
+
+    def plot_multiple_after_slicing_within_range_values(self, colname, minval, 
+        maxval, plot_hist=True):
+        """ Plot example trials that are wihitn this range of values for
+        a given column, e.g,., frac_touched
+        """
+
+        if plot_hist:
+            self.Dat[colname].hist()
+
+        # d1 = 0.6
+        # d2 = 0.7
+        inds = self.Dat[(self.Dat[colname]>minval) & (self.Dat[colname]<maxval)].index.tolist()
+        print("This many trials found:", len(inds))
+        self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="task")
+        self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="beh")
 
     def plot_multiple(self, list_inds, ver_behtask=None, titles=None, ncols=5,
             titles_by_dfcolumn=None, nrand=20):
@@ -773,8 +798,10 @@ class DatStrokes(object):
 
         return ax
 
-    def plot_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
+    def plotshape_singleshape_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
         ver_behtask="beh"):
+    # def plot_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
+    #     ver_behtask="beh"):
         """Plot example strokes overlaid on a single plot.
         PARAMS:
         - shape, if not None, then str, filters to onlyu plot htis hape.
@@ -818,30 +845,40 @@ class DatStrokes(object):
                 list_shape=list_shape)
 
 
-    def plot_egstrokes_grouped_by_shape(self, key_subplots = "shape_oriented",
-            n_examples = 4, color_by=None, list_shape=None):
+    def plotshape_multshapes_egstrokes(self, key_subplots = "shape_oriented",
+            n_examples_total_per_shape = 4, color_by=None, list_shape=None):
+    # def plot_egstrokes_grouped_by_shape(self, key_subplots = "shape_oriented",
+    #         n_examples_total_per_shape = 4, color_by=None, list_shape=None):
         """ Wrapper to make one subplot per shape, either plotting mean stroke (not 
         yet coded) or 
         individual trials
+        PARAMS;
         """
 
         key_to_extract_stroke_variations_in_single_subplot = None
         ver_behtask = "beh"
 
-        return self.plot_egstrokes_grouped_in_subplots(None, key_subplots,
+        return self.plotshape_multshapes_egstrokes_grouped_in_subplots(None, key_subplots,
                                              key_to_extract_stroke_variations_in_single_subplot,
                                              ver_behtask=ver_behtask, ncols=6, SIZE=3, 
-                                              n_examples=n_examples, color_by=color_by,
+                                              n_examples=n_examples_total_per_shape, color_by=color_by,
                                              levels_subplots=list_shape)
 
-    def plot_egstrokes_grouped_in_subplots(self, task_kind=None, 
+    def plotshape_multshapes_egstrokes_grouped_in_subplots(self, task_kind=None, 
         key_subplots="shape_oriented",
         key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
-        n_examples = 2, color_by="order", ver_behtask=None,
+        n_examples = 2, color_by=None, ver_behtask=None,
         filtdict = None, ncols=5, SIZE=4,
         levels_subplots=None):
+    # def plot_egstrokes_grouped_in_subplots(self, task_kind=None, 
+    #     key_subplots="shape_oriented",
+    #     key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
+    #     n_examples = 2, color_by=None, ver_behtask=None,
+    #     filtdict = None, ncols=5, SIZE=4,
+    #     levels_subplots=None):
         """
-        Subplots, organized at multipel levels.
+        Plot all sahpes, each shape a subplot. Can choose to sample across specific levels
+        fora  var (e.g, gridloc), n_examples, for each subplot.
         PARAMS:
         - task_kind, string, indexes into the task_kind column. Leave None to keep any
         --- e..g, {"character", "prims_on_grid"}
@@ -851,6 +888,7 @@ class DatStrokes(object):
         how to extract exabple strokes. e..g, if "gridloc", then strokes will be at
         variable locations in the subplot. This is ignored if task_kind=="character", because
         that doesnt have structured variation in these params.
+        - color_by, {None, 'order'}
         """
         from pythonlib.tools.plottools import subplot_helper
         from pythonlib.tools.pandastools import extract_trials_spanning_variable
@@ -939,8 +977,10 @@ class DatStrokes(object):
             ax.set_title(tit)
         
 
-    def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
+    def plotshape_multshapes_trials_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
             flip_plot=False):
+    # def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
+    #         flip_plot=False):
         """ 
         Plot grid of strokes (sublots), where cols are (e.g.) shapes and rows are
         example trials
