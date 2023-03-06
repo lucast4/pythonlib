@@ -1420,25 +1420,39 @@ class TaskClass(object):
 
         ################ METHODS (doesnt matter if on grid)
         def _orient(i):
-            # Angle, orientation
-            this = Prims[i].extract_as("shape")
-            if this[1]["theta"] is None:
-                return "undef"
+            if False:
+                # Angle, orientation
+                # Old version. stopped working..
+                this = Prims[i].extract_as("shape")
+                if this[1]["theta"] is None:
+                    return "undef"
+                else:
+                    th = this[1]["theta"]
+                    # Prims[i].print_summary()
+                    # assert False, "did not extract theta... this is the case for newer expts."
+                if np.isclose(th, 0.):
+                    return "horiz"
+                elif np.isclose(th, pi):
+                    return "horiz"
+                elif np.isclose(th, pi/2):
+                    return "vert"
+                elif np.isclose(th, 3*pi/2):
+                    return "vert"
+                else:
+                    print(this)
+                    assert False
             else:
-                th = this[1]["theta"]
-                # Prims[i].print_summary()
-                # assert False, "did not extract theta... this is the case for newer expts."
-            if np.isclose(th, 0.):
-                return "horiz"
-            elif np.isclose(th, pi):
-                return "horiz"
-            elif np.isclose(th, pi/2):
-                return "vert"
-            elif np.isclose(th, 3*pi/2):
-                return "vert"
-            else:
-                print(this)
-                assert False
+                if _shape(i)=="line-8-1-0":
+                    return "horiz"
+                elif _shape(i)=="line-8-2-0":
+                    return "vert"
+                else:
+                    return "undef"
+                # elif _shape(i) in ["circle-6-1-0", "arcdeep-4-4-0"]:
+                #     return "undef"
+                # else:
+                #     print(_shape(i))
+                #     assert False, "code it"
 
         # Spatial scales.
         def _width(i):
@@ -1632,6 +1646,7 @@ class TaskClass(object):
 
             # 1) Things that don't depend on grid
             datsegs.append({
+                "orient_string":_orient(i),
                 "shapeabstract":_shapeabstract(i),
                 "shape":_shape(i),
                 "shape_oriented":_shape_oriented(i),
@@ -1938,7 +1953,5 @@ def getSketchpad(TaskList, kind):
     assert np.all(np.diff(tmp, axis=0)==0.) # chekc that all are the same.
     spad = TaskList[0]._Sketchpads[kind]
     return spad
-
-
 
 

@@ -1,6 +1,9 @@
-""" All methods to take in tokens (lsit of dicts) and search for desired motifs (lits of dicts)
+""" All methods to take in tokens (lsit of dicts) and search for desired motifs 
+(lits of dicts), WITH caring about temporal order. 
 Is low-level, so it doenst try to ask what a given rule/model would do. It just takes 
 search keys (at various levels of abstraction) and returns findings.
+
+Can operate without considering the specific order used by monkey (just the abstract tokens).
 
 Combining what used to be in:
 - behaviorclass.py
@@ -67,26 +70,53 @@ def find_motif_in_beh_bykind(tokens, kind, params=None, list_beh_mask=None,
 
             motif[1]["rel_from_prev"] = orientation
 
-            if first_shape=="circle":
-                motif[0]["shape_oriented"] = "circle"
-                if orientation in ["up", "down"]:
-                    motif[1]["shape_oriented"] = "vline"
-                elif orientation in ["left", "right"]:
-                    motif[1]["shape_oriented"] = "hline"
+            if False:
+                # old version, which used human strings for shapes. 
+                if first_shape=="circle":
+                    motif[0]["shape_oriented"] = "circle"
+                    if orientation in ["up", "down"]:
+                        motif[1]["shape_oriented"] = "vline"
+                    elif orientation in ["left", "right"]:
+                        motif[1]["shape_oriented"] = "hline"
+                    else:
+                        print(orientation)
+                        assert False
+                elif first_shape=="line":
+                    motif[1]["shape_oriented"] = "circle"
+                    if orientation in ["up", "down"]:
+                        motif[0]["shape_oriented"] = "vline"
+                    elif orientation in ["left", "right"]:
+                        motif[0]["shape_oriented"] = "hline"
+                    else:
+                        print(orientation)
+                        assert False
                 else:
-                    print(orientation)
-                    assert False
-            elif first_shape=="line":
-                motif[1]["shape_oriented"] = "circle"
-                if orientation in ["up", "down"]:
-                    motif[0]["shape_oriented"] = "vline"
-                elif orientation in ["left", "right"]:
-                    motif[0]["shape_oriented"] = "hline"
-                else:
-                    print(orientation)
                     assert False
             else:
-                assert False
+                # New version.
+                if first_shape=="circle":
+                    motif[0]["shapeabstract"] = "circle"
+                    motif[1]["shapeabstract"] = "line"
+                    if orientation in ["up", "down"]:
+                        motif[1]["orient_string"] = "vert"
+                    elif orientation in ["left", "right"]:
+                        motif[1]["orient_string"] = "horiz"
+                    else:
+                        print(orientation)
+                        assert False
+                elif first_shape=="line":
+                    motif[0]["shapeabstract"] = "line"
+                    motif[1]["shapeabstract"] = "circle"
+                    if orientation in ["up", "down"]:
+                        motif[0]["orient_string"] = "vert"
+                    elif orientation in ["left", "right"]:
+                        motif[0]["orient_string"] = "horiz"
+                    else:
+                        print(orientation)
+                        assert False
+                else:
+                    assert False
+
         else:
             print(kind)
             assert False
@@ -106,9 +136,10 @@ def find_motif_in_beh_bykind(tokens, kind, params=None, list_beh_mask=None,
 
 def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None, 
     list_beh_mask=None, return_as_number_instances=False, 
-    force_no_shared_tokens_across_motifs=False, 
+    force_no_shared_tokens_across_motifs=True, 
     force_no_shared_tokens_across_motifs_usealltokens=False):
-    """ Helper - basically a "for loop" over different parametriazations of
+    """ [GOOD] 
+    Helper - basically a "for loop" over different parametriazations of
     a motif kind (e.g., repeat is the kind, here get repeat 2,3, 4)...
     to search for a kind of motif (flexibly) within datsegs. 
     The most abstract, since will automatically generate many specific motifs,
@@ -138,9 +169,14 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
     a two different lollis must use different tokens. does this by keeping matches that are
     found later.
     """
+
+    assert force_no_shared_tokens_across_motifs==True, "to help me diagnose -- i expect this true, where did I switch off?"
+
+    # assert force_no_shared_tokens_across_motifs==False, 'problem if [0,1], [1,2], [2,3], it keeps only [0,1]. should also keep [2,3]'
     if motifparams_abstract is None:
         motifparams_abstract = {}
     dict_matches = {}
+    tokens = list_beh
 
     def _is_in(match, key, use_all_tokens_in_match=force_no_shared_tokens_across_motifs_usealltokens):
         """
@@ -164,15 +200,49 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
                 if all([m in match_check for m in match]):
                     return True
             else:
+                # print("HERE")
+                # print(key)
+                # print(match_check)
+                # print(match)
                 if any([m in match_check for m in match]):
                     return True                    
         return False
 
     def _remove_motifs_share_tokens(dict_matches, key_this):
+        """
+        Use this if want to make sure you throw out older chunks if find a newer chunk
+        """
         for key_prev in dict_matches.keys():
             if key_prev != key_this:
                 dict_matches[key_prev] = [match for match in dict_matches[key_prev] if not _is_in(match, key_this)]
         return dict_matches
+
+    def _remove_motifs_share_tokens_v2(dict_matches):
+        """ Better, in that it maximizes then num of chunks, doesnt
+        care about order you foudn them.
+        """
+        from pythonlib.chunks.chunks import sample_all_possible_chunks
+
+        # Collect all chunks (groups)
+        list_groups = []
+        for k, v in dict_matches.items():
+            list_groups.extend(v)
+
+        # get the single chunk with no redundant prims which maximizes n chunks.
+        if len(list_groups)>0:
+            list_hier, list_is_grp = sample_all_possible_chunks(list_groups, list(range(max([xx for x in list_groups for xx in x])+1)), 
+                                       append_unused_strokes_as_single_group=False, return_single_grouping_max_n_grps=True)
+            hier = list_hier[0]
+
+            # map this hier back, only keeping if it is in hier
+            dict_matches_new = {}
+            for k, v in dict_matches.items():
+                dict_matches_new[k] = [grp for grp in v if grp in hier]
+        else:
+            dict_matches_new = dict_matches
+
+        return dict_matches_new
+
 
     if motifname=="repeat":
         # find all cases of repeats of the same shape. will make sure doesnt take the same 
@@ -193,7 +263,6 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
         # None to ignore
         # -1, -2, etc. interpreted as last, second-to-last..
 
-        force_no_shared_tokens_across_motifs = True
 
         # construct single token
         token = {shapekey:shape}
@@ -251,25 +320,30 @@ def find_motif_in_beh_wildcard(list_beh, motifname, motifparams_abstract=None,
     elif motifname=="lolli":
         # Find all the lollis, which means all cases of circle to line or line to circle, in any
         # direction (u d l r).
-        # If two lollis share anything (e..g, circle) will still call them 2 lollis.
-        # If want to have them exclusive, do something like what do for repeat above
-        list_orientation = ["up", "down", "left", "right"]
-        list_first_shape = ["circle", "line"]
+        # If two lollis share anything (e..g, circle) will keep only one. does this by findings
+        # best combo across lollis to maximize n lollis.
+        
+        # list_orientation = ["up", "down", "left", "right"]
+        # list_first_shape = ["circle", "line"]
+        list_orientation = motifparams_abstract["list_orientation"]
+        list_first_shape = motifparams_abstract["list_first_shape"]
 
         key_prev = None
         for o in list_orientation:
             for s in list_first_shape:
                 par = {"orientation":o, "first_shape":s}
-                m = find_motif_in_beh_bykind("lolli", par)
+                m = find_motif_in_beh_bykind(tokens, "lolli", par)
 
                 key_this = (o,s)
                 dict_matches[key_this] = m
 
                 # Remove previous lollis that have any overlap with the current
                 # - go thru all previous keys
-                if force_no_shared_tokens_across_motifs:
-                    dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
-                    
+                # if force_no_shared_tokens_across_motifs:
+                #     dict_matches = _remove_motifs_share_tokens(dict_matches, key_this)
+        
+        if force_no_shared_tokens_across_motifs:
+            dict_matches = _remove_motifs_share_tokens_v2(dict_matches)
     else:
         print(motifname)
         assert False, "??"
@@ -307,7 +381,11 @@ def find_motif_in_beh_specific(list_beh, motif, list_beh_mask=None):
     would match motif. e.g., [[0,1], [4,5]]
     """
 
-    assert isinstance(motif, list) and isinstance(list_beh, list)
+    # for t in list_beh:
+    #     print(t)
+    # print(motif)
+    # assert False
+    assert isinstance(motif, list) and isinstance(list_beh, (list, tuple))
     def _motifs_are_same(behstring, motif):
         assert len(behstring)==len(motif)
         for a, b in zip(behstring, motif):

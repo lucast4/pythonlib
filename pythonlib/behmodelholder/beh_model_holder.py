@@ -37,10 +37,20 @@ class BehModelHolder(object):
         --- taskgroup (optional), value that identified how to group tasks, e.g, could mean 
         different kinds of proibe tasks. this is flexible.
         """
+        from pythonlib.tools.pandastools import grouping_get_inner_items, grouping_print_n_samples
 
-        required_columns = ["epoch", "character", "taskgroup", "probe"]
+        required_columns = ["epoch", "character", "probe", "agent_kind", "agent_rule"]
         for col in required_columns:
             assert col in data.columns, "missing a required column"
+
+        if "agent" not in data.columns:
+            # Generate agent
+            from pythonlib.tools.pandastools import applyFunctionToAllRows
+            def F(x):
+                # if x["agent_kind"]=="monkey":
+                return f"{x['agent_kind']}-{x['agent_rule']}"
+            data = applyFunctionToAllRows(data, F, "agent")
+            print("Generated column called 'agent'")
 
         if input_ver=="default":
             # self.DatWide = data
@@ -52,14 +62,13 @@ class BehModelHolder(object):
             self.DatWideAgg = datawide_agg
             self.DatLong = data
         elif input_ver=="mbh":
+            assert False, "not coded"
             self._input_data_from_multiple_behmodel_handler(data)
         else:
             print(input_ver)
             assert False
 
-
         ## dict mapping from agent_kind to rule
-        from pythonlib.tools.pandastools import grouping_get_inner_items, grouping_print_n_samples
         map_agent_to_rules = grouping_get_inner_items(self.DatLong, "agent_kind", "agent_rule")
 
         map_score_rule_agent_to_colname = {}
@@ -80,7 +89,7 @@ class BehModelHolder(object):
         # self.Map_rule_to_colname = Map_rule_to_colname
 
         from pythonlib.tools.pandastools import aggregGeneral
-        self.DatLongAgg = aggregGeneral(self.DatLong, ["character"], values=["score"], nonnumercols=["score_name", "epoch", "agent_kind", "agent_rule"])
+        self.DatLongAgg = aggregGeneral(self.DatLong, ["character", "score_name", "agent"], values=["score"], nonnumercols=["epoch", "agent_kind", "agent_rule"])
     
         # Sanituy check of data
         self._preprocess_sanity_check()
@@ -93,28 +102,32 @@ class BehModelHolder(object):
             self.colnames_extract_alignment()
 
 
-
     def _preprocess_sanity_check(self):
         print("TODO! _preprocess_sanity_check")
 
-    def _input_data_long_form(self, data, ):
-        """ Help to melt from long-form to necessary wide form 
-        """
 
+    def _input_data_long_form(self, data):
+        """ Help to melt from long-form to necessary wide form 
+        RETURNS:
+        - data_wide_trial, data_wide_agg
+        """
         from pythonlib.tools.pandastools import pivot_table
+        from pythonlib.tools.pandastools import grouping_get_inner_items
 
         # Decide what kind of data is in each row:
-        from pythonlib.tools.pandastools import grouping_get_inner_items
         this = grouping_get_inner_items(data, "character", "epoch")
+
         INDEX = None
-        EPOCHS_IGNORE = ["IGNORE"]
-        for char, epochs_this_char in this.items():
-            print(char, '--', epochs_this_char)
-            # if any char has multiple epohcs (not named IGNORE),
-            epochs = [e for e in epochs_this_char if e not in EPOCHS_IGNORE]
-            if len(epochs)>1:
-                INDEX = ["character", "epoch"]
-                break
+        if False:
+            # Stop this, since agent laready differs by epochj.
+            EPOCHS_IGNORE = ["IGNORE"]
+            for char, epochs_this_char in this.items():
+                print(char, '--', epochs_this_char)
+                # if any char has multiple epohcs (not named IGNORE),
+                epochs = [e for e in epochs_this_char if e not in EPOCHS_IGNORE]
+                if len(epochs)>1:
+                    INDEX = ["character", "epoch"]
+                    break
         if INDEX is None:
             # Then each char has only one epoch. do aggregate by 
             INDEX = ["character"]

@@ -22,6 +22,7 @@ class GrammarDat(object):
 
         # Properties
         self.ChunksListClassAll = {} # dict[rulename] = CLC for that rule
+        self.ParsesGenerated = {} # to store parses that have already been gnenerated.
 
         # Input data
         if input_version=="dataset":
@@ -64,6 +65,7 @@ class GrammarDat(object):
         RETURNS:
         - adds to self.ChunksListClassAll[rule] = parses, where paress
         are list of orderings (chunks)
+        OVERWRITES even if alreayd done.
         """
 
         assert isinstance(list_rules, list)
@@ -86,6 +88,9 @@ class GrammarDat(object):
         """
         from pythonlib.chunks.chunksclass import ChunksClassList
         from pythonlib.behavior.behaviorclass import BehaviorClass
+
+        if rule_name in self.ChunksListClassAll.keys():
+            assert False, "already generated. if generate again, might be different (randomized). you want to use parses_extract_generated"
 
         # motifkind = motifname
         # motif_params = motifparams
@@ -113,14 +118,33 @@ class GrammarDat(object):
         self.ChunksListClassAll[rule_name] = CL
 
         # Genreate all concrete parses and return them
-        out = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks")
-        if DEBUG:
-            print(" == Printing all concrete chunks")
-            for o in out:
-                print(o)
-        print("TODO: confirm that no duplicate chunks")
+        return self.parses_extract_generated(rule_name)
+        # out = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks")
+        # if DEBUG:
+        #     print(" == Printing all concrete chunks")
+        #     for o in out:
+        #         print(o)
 
-        return out
+        # return out
+
+    def parses_extract_generated(self, rulestring):
+        """ Extract parses that are already genreated
+        Genrates them if not yet done
+        - First tries getting already-saved parses...
+        """
+
+        # generate clc?
+        if rulestring not in self.ChunksListClassAll.keys():
+            self.parses_generate(rulestring)
+
+        # extract parses? (and cache)
+        if rulestring not in self.ParsesGenerated.keys():
+            CL = self.ChunksListClassAll[rulestring]
+            out = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks")
+            self.ParsesGenerated[rulestring] = out
+
+        return self.ParsesGenerated[rulestring]
+
 
     ############### DIAGNOSTIC MODELING
 
@@ -157,13 +181,19 @@ class GrammarDat(object):
         # # ax.set_title("Behavior")
 
         # 2) Plot parses
-        parses = self.parses_generate(rulestr)
+        parses = self.parses_extract_generated(rulestr)
+        inds = list(range(len(parses)))
         if len(parses)>nrand:
             import random
-            parses = random.sample(parses, nrand)
+            indsthis = random.sample(inds, nrand)
+            # indsthis = list(range(nrand))
+        else:
+            indsthis = inds
+        parses = [parses[i] for i in indsthis]
         list_strokes = [self.strokes_extract(par) for par in parses]
+        # print(parses)
         fig2, axes2 = self.Dataset.plotMultStrokes(list_strokes)
-        return fig1, fig2
+        return fig1, fig2, axes2, indsthis, parses
 
 
     

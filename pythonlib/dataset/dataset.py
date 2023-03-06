@@ -1693,6 +1693,7 @@ class Dataset(object):
                 assert False, "not coded"
         else:
             for p in params:
+                print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
                 if p=="recenter":
                     self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
                 elif p=="interp":
@@ -1734,9 +1735,19 @@ class Dataset(object):
                     inds_repeated = self.taskclass_find_repeat_trials()
                     inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
                     self.subsetDataframe(inds_keep)
+                elif p=="only_dates_with_probes":
+                    # Only keep dates that have at least one probe task. Useful for looking
+                    # at generalziation.
+                    # [OPTIONAL] Only keep days with probe tasks
+                    grpdict = self.grouping_get_inner_items("date", "probe")
+                    dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
+                    print("Dates with probe tasks: ", dates_good)
+                    self.filterPandas({"date":dates_good}, "modify")
                 else:
                     print(p)
                     assert False, "dotn know this"
+                print(f"after: {len(self.Dat)}")
+
         
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -5340,7 +5351,7 @@ class Dataset(object):
         GD = self._grammar_parses_generate(ind, list_rulestrings)
         outdict = {}
         for rulestring in list_rulestrings:
-            parses = GD.ChunksListClassAll[rulestring].search_permutations_chunks()
+            parses = GD.parses_extract_generated(rulestring)
             if fail_if_empty and len(parses)==0:
                 print(rule)
                 print(parses)
@@ -6169,6 +6180,46 @@ class Dataset(object):
 
 
 
+    def plotwrapper_training_task_examples(self, SDIR, niter = 3, nrand = 10):
+        """ Plot grid of example training tasks, separating plots for each 
+        epoch
+
+        """
+        # For each epoch, plot tasks and beh
+        import os
+        sdir = f"{SDIR}/training_task_grid_examples"
+        os.makedirs(sdir, exist_ok=True)
+        print("saving at:", sdir)
+
+        # For each epoch, plot trian tasks.
+        list_epoch = self.Dat["epoch"].unique().tolist()
+        for i in range(niter):
+            for epoch in list_epoch:
+                print(epoch)
+                inds = self.Dat[(self.Dat["probe"] == False) & (self.Dat["epoch"]==epoch)].index.tolist()
+                titles = ["" for _ in range(len(inds))]
+                for j, titlesthis in enumerate([titles, None]):
+                    if j==0:
+                        # randomly sample inds
+                        figbeh, _, indsthis = self.plotMultTrials(inds, "strokes_beh", return_idxs=True, nrand=nrand,
+                                                                naked_axes=True, add_stroke_number=False, titles=titlesthis)
+                    else:
+                        # use the current sampled inds
+                        figbeh, _, _ = self.plotMultTrials(indsthis, "strokes_beh", return_idxs=False, nrand=nrand,
+                                                                naked_axes=True, add_stroke_number=False, titles=titlesthis)
+                    figtask = self.plotMultTrials(indsthis, "strokes_task", return_idxs=False, nrand=nrand,
+                                                           naked_axes=True, add_stroke_number=False, titles=titlesthis)
+
+                    if titlesthis is None:
+                        figbeh.savefig(f"{sdir}/{epoch}-iter_{i}-beh.pdf")
+                        figtask.savefig(f"{sdir}/{epoch}-iter_{i}-task.pdf")
+                    else:
+                        figbeh.savefig(f"{sdir}/{epoch}-iter_{i}-beh-notitles.pdf")
+                        figtask.savefig(f"{sdir}/{epoch}-iter_{i}-task-notitles.pdf")
+                        
+        plt.close("all")   
+
+        
     def plotOverview(self, ignore_large_plots=False):
         """ quick plot of kinds of tasks present across days
         # To visualize the experimental structure:

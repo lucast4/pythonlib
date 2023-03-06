@@ -1,7 +1,8 @@
-from pythonlib.dataset.dataset_analy.motifs_search import find_motif_in_beh_wildcard
+from pythonlib.dataset.dataset_analy.motifs_search_ordered import find_motif_in_beh_wildcard
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 class DiagnosticModel(object):
     """"""
@@ -10,13 +11,13 @@ class DiagnosticModel(object):
         self.DatAgg = None
 
     def preprocess_dataset_extract_scores(self, D, LIST_MODELS = None,
-        LIST_MOTIFS= None, GET_MODELS=True):
+        LIST_MOTIFS= None, GET_MODELS=True, 
+        COLS_TO_KEEP = ("taskcat_by_rule")):
         """ Full pipeline to extract diagnostic features/scores, given a dataset and 
         scorers (models)
         """
 
         ## PARAMS
-        COLS_TO_KEEP = ["taskcat_by_rule"]
         animal = "|".join(D.animals())
 
         if LIST_MODELS is None:
@@ -52,7 +53,8 @@ class DiagnosticModel(object):
                                  "nmax":6}),
                 ]
 
-        self.Dataset = D.copy()
+        self.Dataset = D
+        self.DatasetCopy = D.copy()
         self.Params = {
             "LIST_MODELS":LIST_MODELS,
             "LIST_MOTIFS":LIST_MOTIFS
@@ -70,8 +72,14 @@ class DiagnosticModel(object):
             epoch = D.Dat.iloc[indtrial]["epoch"]
             monkey_train_or_test = D.Dat.iloc[indtrial]["monkey_train_or_test"]
 
+            # print("KISTI MORIFS")
+            # for x in LIST_MOTIFS:
+            #     print(x)
             for motifkind, motif_params in LIST_MOTIFS:
                 
+                # print("HERE")
+                # print("kind", motifkind)
+                # print("paramd", motif_params)
                 # 2) Collect behavior
                 tokens = D.taskclass_tokens_extract_wrapper(indtrial)
                 matches_summary_frac_beh = find_motif_in_beh_wildcard(tokens, motifkind, motif_params, return_as_number_instances=False)
@@ -85,6 +93,8 @@ class DiagnosticModel(object):
                     "agent":f"{animal}-{epoch}",
                     "score_name": _score_name(motifkind, motif_params),
                     "score": ntok_expected_pertrial,
+                    "score_list_matching_parses":"IGNORE",
+                    "parses":"IGNORE",
                     "character": character,
                     "epoch": epoch,
                     "monkey_train_or_test": monkey_train_or_test})
@@ -117,7 +127,7 @@ class DiagnosticModel(object):
                     # 1) Collect all models    
                     for rule_control_model in LIST_MODELS:
                         # collect expected number of tokens in each motif
-                        list_matches = find_motif_in_beh_wildcard_control(D,
+                        list_matches, parses = find_motif_in_beh_wildcard_control(D,
                             motifkind, motif_params, rule_control_model, indtrial,
                             return_as_number_instances=False)
 
@@ -138,6 +148,8 @@ class DiagnosticModel(object):
                             "trialcode":"IGNORE",
                             "taskgroup":"IGNORE", 
                             "epoch": "IGNORE",
+                            "score_list_matching_parses":list_ntok_used,
+                            "parses":parses,
                             "monkey_train_or_test": "IGNORE"})    
 
                         for col in COLS_TO_KEEP:
@@ -180,70 +192,246 @@ class DiagnosticModel(object):
         dfall_agg = aggregGeneral(dfall, group=["score_name", "character", "agent_kind", "agent_rule"], 
                       values=["score"], nonnumercols=[])
 
+        # Conventions
+        if "score_value" in dfall.columns:
+            map_old_to_new = {
+                "score_value":"score",
+                # "score_name":"diagfeat",
+            }
+            dfall = dfall.rename(map_old_to_new, axis=1)
+
         ### SAVE
         self.Dat = dfall
         self.DatAgg = dfall_agg
 
 
-    def plot_summary_character(self, character=None, indtrial=None):
+    def grammardat_extract(self, character):
+        """ Return the GD for this char, picking one example trial
+        """
+        dfthis = self.Dat[(self.Dat["character"]==character)]
+        this = dfthis["indtrial"].unique().tolist()
+        # assert len(this)==1
+        indtrial = this[0]
+        # Plot each parse, overlay the scores
+        GD = self.Dataset.GrammarDict[indtrial]
+        return GD
+
+    def rulestring_extract_model_rules(self):
+        """ Return list of rulestrings for models
+        applies tot his character
+        """
+        # return self.grammardat_extract(character).rules_extract()
+        return self.Params["LIST_MODELS"]
+
+    def plotwrapper_example_allcharacter(self, SDIR):
+        """ Wrapper to make all useful plots across all rulestrings and characters,
+        such as beh, image, parases, and scores. Makes ~6 plots for each character.
+        """
+
+        import os
+        sdir = f"{SDIR}/example_char_beh_parses_drawings"
+        os.makedirs(sdir, exist_ok=True)
+
+        list_char = sorted(self.Dat["character"].unique().tolist())
+        list_rule = self.rulestring_extract_model_rules()
+
+        for char in list_char:
+            fig1, fig2, fig3, fig4, fig5 = self.plot_example_character_beh_scores(char)
+            fig1.savefig(f"{sdir}/{char}|taskimage.pdf")
+            fig2.savefig(f"{sdir}/{char}|beh_strokes.pdf")
+            fig3.savefig(f"{sdir}/{char}|beh_discrete.pdf")
+            fig4.savefig(f"{sdir}/{char}|scores_raw.pdf")
+            fig5.savefig(f"{sdir}/{char}|scores_mean.pdf")
+
+            for rulestring in list_rule:
+                figbehtask, figparses = self.plot_example_character_model_parses(rulestring, char)
+                figparses.savefig(f"{sdir}/{char}|parses|{rulestring}.pdf")
+            plt.close("all")
+
+    def plot_example_character_model_parses(self, rulestring, character):
+        """ Plot model parses, along with scores (for each score name) for
+        each pasrses
+        PARAMS:
+        - rulestring, e.g, "chmult-dirdir-LolDR"
+        """
+
+        # 1) extract rows for this char and model
+        # char = list_char[0]
+        agent_kind = "model"
+
+        # Get parses and scores
+        parsesdict = self.parses_scores_extract(rulestring, character)
+
+        # Plot 
+        dfthis = self.Dat[(self.Dat["character"]==character) & (self.Dat["agent"]==f"{agent_kind}-{rulestring}")]
+        this = dfthis["indtrial"].unique().tolist()
+        assert len(this)==1
+        indtrial = this[0]
+        # Plot each parse, overlay the scores
+        GD = self.Dataset.GrammarDict[indtrial]
+        figbehtask, figparses, axes2, list_ind_parses, parses_plotted = GD.plot_beh_and_parses(rulestring, nrand=10)
+
+        # titles the plots with thier score
+        # def _get_score_this_parse(parse):
+        #     scoresthis = []
+        #     list_scorenames = []
+        #     for sn, scores in parsesdict.items():
+        #         sc = scores[indparse]["score"]
+        #         assert scores[indparse]["parse"] == parses_plotted[indparse] # ensure they are matched (plotted and scores)
+        #         scoresthis.append(sc)
+        #         list_scorenames.append(sn)
+        #     return scoresthis, list_scorenames
+
+        list_titles =[]
+        # print("HERE")
+        # print(list_ind_parses)
+        # print(parsesdict)
+        # print(parsesdict.keys())
+        list_scorenames = self.scorenames_extract()
+        for par in parses_plotted:
+            list_sc = []
+            for scorename in list_scorenames:
+                score = parsesdict[(scorename, tuple(par))]
+                list_sc.append(score)
+            # sthis, list_scorenames = _get_score_this_parse(indparse)
+            list_titles.append("|".join([str(s) for s in list_sc]))
+
+        for i, (ax, title) in enumerate(zip(axes2.flatten(), list_titles)):
+            ax.set_title(f"score:{title}")      
+            if i==0:
+                ax.set_ylabel(list_scorenames)
+
+        return figbehtask, figparses
+
+
+    def plot_example_character_beh_scores(self, character=None, indtrial=None):
+        """ Plot each beh trial for this char, along with 
+        scores for each model and monkey.
+        """
+
         from pythonlib.tools.pandastools import filterPandas
+        from pythonlib.tools.snstools import rotateLabel
         
         D = self.Dataset
         dfall = self.Dat
         SIZE=3# for drawings
 
-        if indtrial is None:    
+        if indtrial is None and character is None:
+            # Pick a random trial, to use its character    
             indtrial = random.choice(dfall["indtrial"].tolist())
-        
-        if character is not None:
+            character = D.Dat.iloc[indtrial]["character"]    
+        elif character is not None:
             assert indtrial is None
-            charname = character 
             assert isinstance(character, str)
-        else:
-            charname = D.Dat.iloc[indtrial]["character"]    
+        elif indtrial is not None:
             assert isinstance(indtrial, int)
+            character = D.Dat.iloc[indtrial]["character"]    
+        else:
+            assert False
             
-        list_trials = D.Dat[D.Dat["character"]==charname].index.tolist()
+        list_trials = D.Dat[D.Dat["character"]==character].index.tolist()
         
-        if indtrial is None:
-            indtrial = list_trials[0]
             
-        # Run
-        list_epochs = D.Dat[D.Dat["character"]==charname]["epoch"].tolist()
-        list_strokes_beh = D.Dat[D.Dat["character"]==charname]["strokes_beh"].tolist()
+        ## Extract information
+        list_epochs = D.Dat[D.Dat["character"]==character]["epoch"].tolist()
+        list_strokes_beh = D.Dat[D.Dat["character"]==character]["strokes_beh"].tolist()
+        list_tc = D.Dat[D.Dat["character"]==character]["trialcode"].tolist()
+
+        list_title_beh = [f"{ep}|{tc}" for ep, tc in zip(list_epochs, list_tc)]
+
         list_Beh = D.behclass_extract(list_trials)
         list_strokes_task = [Beh.extract_strokes("task_after_alignsim") for Beh in list_Beh]
 
         # Collect all scores as titles
         list_titles = []
-        for indthis in list_trials:
+        for i, indthis in enumerate(list_trials):
             list_score_names, list_score_values = self._get_list_scores(indthis)
-            title = " ".join([f"{self._shorthand(n)}={v[0]:.1f}" for n,v in zip(list_score_names, list_score_values)])
+            if i==0:
+                # title = "|".join([f"{self._shorthand(n)}={v[0]:.1f}" for n,v in zip(list_score_names, list_score_values)])
+                title = "|".join([f"{n[-5:]}={v[0]:.1f}" for n,v in zip(list_score_names, list_score_values)])
+            else:
+                title = "|".join([str(v) for v in list_score_values])
             list_titles.append(title)
 
+        # 1) Plot the task image
+        if indtrial is None:
+            # pick a random case of the task
+            indtrial = list_trials[0]
+        fig1 = D.plotSingleTrial(indtrial, ["task"], task_add_num=True, number_from_zero=True)
 
         # - plot all trials to confirm
-        fig1 = D.plotSingleTrial(indtrial, task_add_num=True, number_from_zero=True)
-        fig2, _ = D.plotMultStrokesByOrder(list_strokes_beh, titles=list_epochs, plotkwargs={"number_from_zero":True}, SIZE=SIZE);
-        fig3, _ = D.plotMultStrokesByOrder(list_strokes_task, titles=list_titles, plotkwargs={"number_from_zero":True}, SIZE=SIZE);
+        fig2, _ = D.plotMultStrokesByOrder(list_strokes_beh, titles=list_title_beh, plotkwargs={"number_from_zero":True}, SIZE=SIZE);
+        fig3, _ = D.plotMultStrokesByOrder(list_strokes_task, titles=list_titles, titles_on_y=False, 
+            plotkwargs={"number_from_zero":True}, SIZE=SIZE);
 
 
         # TODO: plot the aligned parse (two rows, beh vs. parse)
-        df_matches = filterPandas(dfall, {"character":[charname]})
-        fig4 = sns.catplot(data=df_matches, hue="agent", y="score", x="score_name", aspect=1.5)
-        # fig4 = sns.catplot(data=df_matches, hue="agent_rule", y="score", x="score_name", row="agent_kind", aspect=1.5)
+        df_matches = filterPandas(dfall, {"character":[character]})
+        fig4 = sns.catplot(data=df_matches, hue="agent", y="score", x="score_name", aspect=1.5, height=3, jitter=True, alpha=0.7)
+        rotateLabel(fig4)
         fig5 = sns.catplot(data=df_matches, hue="agent_rule", y="score", x="score_name", row="agent_kind",
-                    kind="point", aspect=1.5, height=2)
+                    kind="point", aspect=1.5, height=3)
+        rotateLabel(fig5)
 
         if False:
-            df_matches = filterPandas(dfall_agg, {"character":[charname]})
+            df_matches = filterPandas(dfall_agg, {"character":[character]})
             sns.catplot(data=df_matches, hue="agent_rule", y="score", x="score_name", row="agent_kind", aspect=1.5)
             sns.catplot(data=df_matches, hue="agent_rule", y="score", x="score_name", row="agent_kind",
                         kind="point", aspect=1.5, height=2)
         
         return fig1, fig2, fig3, fig4, fig5
             
-            
+    #################### HELPERS.
+    # def slice_:
+    #     # Extract all parses for a given rule and model and their scores.
+    def parses_scores_extract(self, model_rule_string, character, agent_kind = "model"):
+        """
+        get dict, holding score for each parse. Uses parses that are already genreated.
+        PARAMS:
+        - model_rule_string, e.g.,, "ss-rankdir-CLr2"
+        - character, string
+        RETURNS:
+        - dict, keys are tuple of (scorenmaes, parse), and values are scores
+        e.g,:
+            {('ntokens-repeat-line', (3, 1, 2, 0, 4)): 2,
+             ('ntokens-repeat-line', (1, 2, 3, 4, 0)): 2,
+             ('ntokens-repeat-line', (1, 0, 3, 2, 4)): 0,
+             ('ntokens-repeat-line', (0, 4, 3, 2, 1)): 1,
+         """
+
+        D = self.Dataset
+
+        # Extract parses
+        dfthis = self.Dat[(self.Dat["character"]==character) & (self.Dat["agent"]==f"{agent_kind}-{model_rule_string}")]
+        # this = dfthis["indtrial"].unique().tolist()
+        # assert len(this)==1
+        # indtrial = this[0]
+        # parses = D.grammar_parses_extract(indtrial, [model_rule_string])[model_rule_string]
+
+        # Get scores for each parse
+        list_scorename = dfthis["score_name"].tolist()
+        list_scores_matching_parses = dfthis["score_list_matching_parses"].tolist()
+        list_parses = dfthis["parses"].tolist()
+        # # sanity check
+        # for list_sc in list_scores_matching_parses:
+        #     assert len(list_sc)==len(parses), "one score for each parse"
+
+        # Collect all into dict, and do sanity check
+        score_parse_dict = {}
+        for sn, scores, parses in zip(list_scorename, list_scores_matching_parses, list_parses):
+            assert len(scores)==len(parses)
+            # score_parse_dict[sn] = []
+            # for sc, pa in zip(scores, parses):
+            #     score_parse_dict[sn].append({
+            #         "score":sc,
+            #         "parse":pa
+            #     })
+            # score_parse_dict[sn] = []
+            for sc, pa in zip(scores, parses):
+                score_parse_dict[(sn, tuple(pa))] = sc
+        
+        return score_parse_dict           
+
 
     def _get_list_scores(self, indtrial, agent_kind = "monkey"):
         """
@@ -262,6 +450,22 @@ class DiagnosticModel(object):
             list_score_values.append(dfthis["score"].values)
         return list_score_names, list_score_values
 
+    def print_parses_summary_this(self, rulestr, char):
+        """ Print summary of parses fro this rule and char
+        """
+        # CLC
+        GD = self.grammardat_extract(char)
+        GD.parses_extract_generated(rulestr)
+        CLC = GD.ChunksListClassAll[rulestr]
+        CLC.print_summary()        
+
+        # Score for across each parse.
+        parses_dict = self.parses_scores_extract(rulestr, char)
+        print(parses_dict)
+
+
+    def scorenames_extract(self):
+        return sorted(self.Dat["score_name"].unique().tolist())
 
     # shorten them to add to title
     def _shorthand(self, scorename):
@@ -283,7 +487,7 @@ def find_motif_in_beh_wildcard_control(D, motifname, motifparams,
                                                 DEBUG=False):
     """
     RETURNS:
-    - list_matches
+    - list_matches, len of parses.
     (None, None) if this rule_control_model doesnt have any parses for this trial's task
     """
     # 1) get parses
@@ -303,7 +507,7 @@ def find_motif_in_beh_wildcard_control(D, motifname, motifparams,
             display(matches)
             BehFake.alignsim_plot_summary()
 
-    return list_matches
+    return list_matches, parses
 
 # Sample  a single ordering of tokens that does alternation
 # 

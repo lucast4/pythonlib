@@ -13,22 +13,21 @@ import pandas as pd
 #     """
 
 
-def generate_diagnostic_model_data(D, LIST_MOTIFS=None):
-    """ Convert from diagnostic model results to BM.
+def generate_diagnostic_model_data(D, LIST_MODELS=None, LIST_MOTIFS=None,
+    COLS_TO_KEEP = ("taskcat_by_rule")):
+    """ From Dataset, genberate DiagnosticModel, and also convert to BM.
     See grammar.diagnostic_model
+    - Diagnostic means scores are counting num instances of given motifs (seuqnece).
+    PARAMS:
+    - LIST_MODELS, list of rulestrings (sdaf-asdfa-asdf)
+    - LIST_MODELS, list of dicts, each a set of params for findings motifs (for scoring)
     """
     
     from pythonlib.grammar.diagnostic_model import DiagnosticModel
     
     DM = DiagnosticModel()
-    DM.preprocess_dataset_extract_scores(D, LIST_MOTIFS=LIST_MOTIFS)
-
-    map_old_to_new = {
-        "score_value":"score",
-        # "score_name":"diagfeat",
-    }
-    DM.Dat = DM.Dat.rename(map_old_to_new, axis=1)
-
+    DM.preprocess_dataset_extract_scores(D, LIST_MODELS=LIST_MODELS, 
+        LIST_MOTIFS=LIST_MOTIFS, COLS_TO_KEEP=COLS_TO_KEEP)
     BM = BehModelHolder(DM.Dat, input_ver="long_form")
     return BM, DM
 

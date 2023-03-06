@@ -34,18 +34,24 @@ def check_all_strokes_used(chunks, nstrokes):
         return False
 
 
-def sample_a_group_list(list_groups, list_possible_inds):
-    """ get all ways of sampling groups, given sets of groups. 
+def sample_a_group_list(list_groups, list_possible_inds, sort_method="as_input", 
+    append_unused_strokes_as_single_group=True):
+    """ get all ways of sampling groups (ie generating chunks), given sets of groups. 
     IN:
     - list_groups, list of all n-tuples (circle, line), which are groups.
-    e.g., [[1,2], [0,2], [1,2,3]]
+    e.g., [[1,2], [0,2], [1,2,3]]. is same type as chunks
     - list_possible_inds, list of inds for all objects in storkes.
     --- usually just range(len(strokes))
+    - sort_method, how to sort groups within a chunk. "as_input" maintains input order.
+    - append_unused_strokes_as_single_group, then appends unused strokes as as single list.
     OUT:
-    - chunk, list of list of ints,a single  randomly sampled chunk that maximizes use of lollis.
+    - chunk, list of list of ints,a single  randomly sampled chunk that maximizes use of lollis. The extra inds
+    will be appended to end as a list of ints.
+    - isgroup, list, same length as chunks, saying if each innner group is appended extra strukes (false) or not (true).
     NOTE:
     - will use each obj (int) once and onlye once.
-    - will be sorted, since assumes temporal order doesnt matter.
+    - will be sorted, since assumes temporal order doesnt matter, and this allows trakcign unique cases
+    by defualt uses the input order for sorting, and places extra prims at the end as a single list of ints.
     """
     import random
 
@@ -61,6 +67,7 @@ def sample_a_group_list(list_groups, list_possible_inds):
 
     items_selected = []
     groups_selected = []
+    isgroup = []
     eligible_groups = [gp for gp in list_groups if _is_eligible(gp, items_selected)]
     eligible_singles = []
     
@@ -75,25 +82,58 @@ def sample_a_group_list(list_groups, list_possible_inds):
         # update eligible lolli
         eligible_groups = [gp for gp in list_groups if _is_eligible(gp, items_selected)]
 
-    groups_selected = sorted(groups_selected)    
+    if sort_method=="alpha":
+        # alphabetical
+        groups_selected = sorted(groups_selected)    
+    elif sort_method=="as_input":
+        # sort so matches input order
+        groups_selected_sorted = []
+        for g in list_groups:
+            if g in groups_selected:
+                groups_selected_sorted.append(g)
+        assert len(groups_selected_sorted)==len(groups_selected)
+        groups_selected = groups_selected_sorted
+
+    # Markwhether is group
+    isgroup = [True for _ in range(len(groups_selected))]
 
     # conver to chunk, always list of lollis (sorted) and then remianing inds
-    inds_extra = [i for i in list_possible_inds if i not in items_selected]
-    chunk = sort_chunk(groups_selected + inds_extra)
-    return chunk
+    if append_unused_strokes_as_single_group:
+        inds_extra = [i for i in list_possible_inds if i not in items_selected]
+        if len(inds_extra)>0:
+            groups_selected.append(inds_extra)
+            isgroup.append(False)
 
-def sample_all_possible_chunks(list_groups, list_possible_inds, nfailstoabort=10, maxsearch=1000):
+    return groups_selected, isgroup
+
+
+def sample_all_possible_chunks(list_groups, list_possible_inds, append_unused_strokes_as_single_group, 
+    nfailstoabort=10, maxsearch=1000, return_single_grouping_max_n_grps=False):
     """
     Get list of possible chunks consisetent with input groupings. First samples groups from list_groups
     without replacement, until get a complete chunk (using each stroke once). Then repeats to find more chunks
     unitl cannot find any new ones nfailstoabort times in a row.
+    - iterative, where samples chunks (i.e., groups witin list_groups), until cannot sample any more, then
+    the remaining concatenates into "extra prims". the order across groups is retained as in the input list_groups,
+    but the order within the "extra" prims is not (is ranked).
     IN:
     - list_groups, list of groups, where each group is a list of inds specifying objects that group together
     --- e.g., [[0,1], [0,3], [2,4]] could be 3 lollis.
     - list_possible_inds, usualyl just list(range(len(strokes)))
+    - return_single_grouping_max_n_grps, bool, if True, then returns just a single chunk, the one with
+    most inner lists. returns same type as if this were False.
     OUT:
-    - list_chunks, list of hierarchices/chunks, i.e, all unique ways of chunking.
+    - list_chunks, list of hierarchices/chunks, i.e, all unique ways of chunking. Does not return  multiple
+    that is diff order of same thing. 
     --- chunks with same structure but different order will be considered the same (ordering by sorting as tuples)
+    - list_list_is_chunk, list of list of bool, each bool maching len of chunks, indicating if that
+    was an orignal group (True) or extra strokes (False).
+    EG:
+        list_groups = [[0,1], [1,2], [2,3]]
+        lip = range(5)
+        sample_all_possible_chunks(list_groups, lip)
+        [[[0, 1], [2, 3], [4]], 
+        [[1, 2], [0, 3, 4]]]
     """
 
     def _chunk_already_selected(list_chunks, chunk):
@@ -104,21 +144,34 @@ def sample_all_possible_chunks(list_groups, list_possible_inds, nfailstoabort=10
 
     nfail_in_a_row = 0
     list_chunks = []
+    list_list_is_chunk = [] # list of list of bool, where each bool says whether that grp is from list_groups (True) or extra prims (False)
     ct = 0
     while nfail_in_a_row<nfailstoabort:
         
-        chunk = sample_a_group_list(list_groups, list_possible_inds)
-        
+        chunk, list_is_chunk = sample_a_group_list(list_groups, list_possible_inds, 
+            append_unused_strokes_as_single_group=append_unused_strokes_as_single_group)
+
         if _chunk_already_selected(list_chunks, chunk):
             nfail_in_a_row+=1
         else:
             list_chunks.append(chunk)
+            list_list_is_chunk.append(list_is_chunk)
             nfail_in_a_row=0
         ct+=1
         if ct>maxsearch:
             print("breaking while in sample_all_possible_chunks, > maxsearch: ",  maxsearch)
             break
-    return list_chunks
+
+    if return_single_grouping_max_n_grps:
+        # then find the single grouping that maximizes the number of extracted chunks
+        # find the one with most chunks. if there are ties, picks the first one.
+        list_n = [len(ch) for ch in list_chunks]
+        nmax = max(list_n)
+        ind = list_n.index(nmax)
+        list_chunks = [list_chunks[ind]]
+        list_list_is_chunk = [list_list_is_chunk[ind]]
+
+    return list_chunks, list_list_is_chunk
 
 
 ################### LOW-LEVEL TOOLS WITH CHUNKS (WORKING WITH STROKES, USUALLY)
@@ -393,4 +446,38 @@ def fixed_order_for_this_hier(hier, top_level_allow_reorder=True,
     fixed_order[0] = not top_level_allow_reorder
     fixed_order[1] = [not bottom_level_allow_reorder for _ in range(len(hier))]
     return fixed_order
+
+def hier_append_unused_strokes(hier, fixed_order, n_strokes_total):
+    """ GIven a hier that doesnt use all strokes in task, complete it by appending the
+    extra strokes as a isngle group, allowing for random sampling/ordering of that group.
+    REturns copy...
+    PARAMS:
+    - heir, list of list of ints
+    - fixed_order, see below.
+    - n_strokes_total, int, n total strokes.
+    # e.g., 
+#     hier_append_unused_strokes([[0,1], [3,4]], {0:False, 1:[False, True]}, 6)
+    # rteturns: ([[0, 1], [3, 4], [2, 5]], {0: False, 1: [False, True, False]})
+    """
+    
+    from pythonlib.chunks.chunks import sample_all_possible_chunks
+    import copy
+    
+    inds_all = list(range(n_strokes_total))
+    lh, lg = sample_all_possible_chunks(hier, inds_all, 
+        append_unused_strokes_as_single_group=True)
+    # print(lh, len(lh))
+    assert len(lh)==1
+    hier_new = lh[0]
+    
+    assert len(lg)==1
+    is_group = lg[0]
+    
+    assert len(fixed_order[1])==len(is_group)-1
+    assert is_group[-1]==False
+    
+    fixed_order_new = copy.deepcopy(fixed_order)
+    fixed_order_new[1].append(is_group[-1]) # False
+    
+    return hier_new, fixed_order_new
 

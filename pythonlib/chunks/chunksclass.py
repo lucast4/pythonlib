@@ -209,7 +209,8 @@ class ChunksClassList(object):
         ChunksClass
         --- list_of_flattened_chunks, each inner list is a flattened chunk.
         RETURNS:
-        - out (structure depends on return_ver). If no parses, returns []
+        - out (structure depends on return_ver). Ensures no reduntant chunks.
+        If no parses, returns []
         """
         out = []
         for C in self.ListChunksClass:
@@ -227,6 +228,12 @@ class ChunksClassList(object):
             else:
                 print(return_ver)
                 assert False
+
+        # 1) make sure no redundant ones.
+        if return_ver in ["list_of_chunks", "list_of_flattened_chunks"]:
+            out = [tuple(o) for o in out]
+            out = list(set(out))
+            # assert(len(out)==len(list(set(out))))
 
         return out
 
