@@ -41,7 +41,9 @@ class BehModelHolder(object):
 
         required_columns = ["epoch", "character", "probe", "agent_kind", "agent_rule"]
         for col in required_columns:
-            assert col in data.columns, "missing a required column"
+            if col not in data.columns:
+                print(col)
+                assert False, "missing a required column"
 
         if "agent" not in data.columns:
             # Generate agent
