@@ -91,8 +91,13 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 
     if doplots:
         for split_by in ["taskgroup", "probe"]:
-            fig = bmh.plot_score_cross_prior_model_splitby(split_by=split_by)
-            fig.savefig(f"{sdir}/splitby_{split_by}-trialdat.pdf")
+            # Old plots
+            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(split_by=split_by)
+            fig1.savefig(f"{sdir}/splitby_{split_by}-trialdat-1.pdf")
+            fig2.savefig(f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+
+            # New plots
+            bmh.plot_score_cross_prior_model_splitby_v2(split_by=split_by, savedir=sdir)
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  

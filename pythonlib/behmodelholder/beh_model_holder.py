@@ -406,11 +406,11 @@ class BehModelHolder(object):
 
         # combine in single plot (all taskgroups)
 
-        fig = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+        fig1 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
             row=split_by, col="score_name", kind="bar")
-        fig = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+        fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
             row=split_by, col="score_name", kind="swarm")
-        return fig
+        return fig1, fig2
 
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
             savedir=None):
