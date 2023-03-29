@@ -11,6 +11,7 @@ NOTE: currently uses beh variation of DS.
 
 """
 import matplotlib.pyplot as plt
+import numpy as np
 
 def preprocess_dataset(D, doplots=False):
 
@@ -42,14 +43,21 @@ def plotscore_all(DS, SAVEDIR):
     ##### Extract scores of stroke quality (how well beh stroke matches task stroke)
     DS.prep_compute_beh_task_strok_distances()
 
+    if False:
+        print("Starting length, before remove nan rows:", len(DS.Dat))
+        DS.Dat = DS.Dat.dropna(axis=0)
+        print("After removing:", len(DS.Dat))
 
     fig = sns.catplot(data=DS.Dat, x="shape_oriented", y="dist_beh_task_strok", aspect=2.5, row="gridloc")
     rotateLabel(fig)
     fig.savefig(f"{savedir}/scatter_shape_loc_1.pdf")
 
-    fig = sns.catplot(data=DS.Dat, x="shape_oriented", hue="gridloc", y="dist_beh_task_strok", aspect=2.5, kind="bar")
-    rotateLabel(fig)
-    fig.savefig(f"{savedir}/bars_shape_loc_1.pdf")
+    try:
+        fig = sns.catplot(data=DS.Dat, x="shape_oriented", hue="gridloc", y="dist_beh_task_strok", aspect=2.5, kind="bar")
+        rotateLabel(fig)
+        fig.savefig(f"{savedir}/bars_shape_loc_1.pdf")
+    except Exception as err:
+        pass
 
     # Does score depend onlocation?
     # Plot distributions of scores for each prim
