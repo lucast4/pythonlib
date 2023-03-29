@@ -59,6 +59,12 @@ def _groupingParams(D, expt):
     mapper_taskset_to_category = {}
     mapper_auto_rename_probe_taskgroups = False
 
+    # # - Merge epochs names into a single new name
+    # epoch_merge_dict = {
+    #   "LCr2":["LCr1", "LCr2"]
+    # }
+    epoch_merge_dict = {}
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -307,13 +313,21 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+        epoch_merge_dict = {
+            "LCr2":["LCr1", "LCr2"]
+        }
 
     elif "dirfullvar" in expt or "dirdir" in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
-        
+
+    elif "rowcol" in expt:
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = False
     else:
         # pass, just use defaults
         pass
@@ -363,7 +377,7 @@ def _groupingParams(D, expt):
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
-        mapper_auto_rename_probe_taskgroups
+        mapper_auto_rename_probe_taskgroups, epoch_merge_dict
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
         mapper_character_to_category=None, append_probe_status=True,
@@ -564,19 +578,25 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # ver = shape_chunk_concrete
             # prms = ['lolli', ['D', 'R']]
             # converts to:
-            # p = ('lolli', 'D', 'R')
+            # p = ('lolli', ('D', 'R'))
             if not len(prms)==2: 
                 print(prms)
                 assert False, "code up for this"
 
             chunkname = prms[0] # "lolli"
             prmsinner = prms[1]
+            if len(prms)>2:
+                print(prms)
+                assert False, "code it, "
             assert isinstance(chunkname, str)
             p = [chunkname]
-            for this in prmsinner:
-                assert isinstance(this, str)
-                p += this
+            p.append(tuple(prmsinner))
             p = tuple(p)
+        elif ver in ["cols_direction", "rows_direction"]:
+            # prms == ['down', 'right']
+            for this in prms:
+                assert isinstance(this, str)
+            p = tuple(prms)
         else:
             print(ver)
             print(prms)
@@ -640,7 +660,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print(len(D.Dat))
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
-        mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups\
+        mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict \
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
@@ -821,6 +841,14 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         return (x["epoch"], x["supervision_stage_concise"])
     D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
 
+
+    # Merge epochs;
+    if len(epoch_merge_dict)>0:
+        print("MERGING EPOCHS...")
+        for epoch_new, list_epoch_old in epoch_merge_dict.items():
+            print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
+            D.supervision_epochs_merge_these(list_epoch_old, epoch_new)        
+            
     # Since epoch might change...
     D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
 
