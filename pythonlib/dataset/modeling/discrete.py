@@ -70,6 +70,26 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         'shape_chunk_concrete', 
         ('lolli', ('D', 'R')))] = "LolDR" # gridlinecircleGOOD (diego), lollis (circles down and right)
 
+    grouping_map_tasksequencer_to_rule[(
+        'rows_direction', 
+        ('down','right')
+        )] = "rowsDR" # rowcol1, Pancho, rows (down across, right within)
+    
+    grouping_map_tasksequencer_to_rule[(
+        'rows_direction', 
+        ('up','left')
+        )] = "rowsUL" # 
+
+    grouping_map_tasksequencer_to_rule[(
+        'cols_direction', 
+        ('right','down')
+        )] = "colsRD" # 
+
+    grouping_map_tasksequencer_to_rule[(
+        'cols_direction', 
+        ('left', 'up')
+        )] = "colsLU" # 
+
     grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
 
     return grouping_map_tasksequencer_to_rule

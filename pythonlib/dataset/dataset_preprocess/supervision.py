@@ -212,9 +212,14 @@ def extract_supervision_params(D, ind):
                 VISUALFB_METH = "all"
             elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
                 VISUALFB_METH = "control_pts"
+            elif p == [['not_touched', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0], ['no_isolated_pts', {}, 'or', 1, 1]]:
+                # Unusual. 
+                VISUALFB_METH = "all_and_control_pts_respawn"
             elif p == [['always_vis', {}, 'and', 0]] and c == [['not_touched', {}, 'and', 0]]:
                 VISUALFB_METH = "control_pts_norespawn"
             else:
+                print(p)
+                print(c)
                 assert False
     else:
         # Older., liolke gridlinecirlce.
@@ -268,7 +273,10 @@ def extract_supervision_params(D, ind):
         CONTROL_SIZE = allparams["control_pts"]["size_mult"]
         CONTROL_COLOR_DIFF = allparams["control_pts"]["color_diff"]
         CONTROL_VISIBLE = CONTROL_SIZE>1 or np.any(CONTROL_COLOR_DIFF!=0)
-        CONTROL_GEN_METHOD = allparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
+        if "ControlPts" in allparams["task_objectclass"]["Params"].keys():
+            CONTROL_GEN_METHOD = allparams["task_objectclass"]["Params"]["ControlPts"]["generate_method"]
+        else:
+            CONTROL_GEN_METHOD = "not_sure"
     else:
         CONTROL_SIZE = "not_sure"
         CONTROL_COLOR_DIFF = "not_sure"
@@ -345,6 +353,9 @@ def extract_supervision_params(D, ind):
         if spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'all_strokes']:
             SCREENPOST_DYNAMIC_VER = "all_strokes"
         elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'active_chunk']:
+            SCREENPOST_DYNAMIC_VER = "flash_active_chunk"
+        elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100.]:
+            # Previuosly, default was active_chunk
             SCREENPOST_DYNAMIC_VER = "flash_active_chunk"
         elif spd["on"]==1 and spd_ver=="flash_in_order" and bpthis["dynamic_params"] == [100., 'strokes_notdone']:
             SCREENPOST_DYNAMIC_VER = "flash_missed_taskstrokes"

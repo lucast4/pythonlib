@@ -1719,6 +1719,7 @@ class Dataset(object):
                 elif p=="correct_sequencing":
                     # Only if beh sequence is consistent with at least one acceptable rule 
                     # based on the epoch.
+                    assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
                     bm = self.grammar_wrapper_extract()
                     self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
                 elif p=="frac_touched_ok":
@@ -5372,6 +5373,7 @@ class Dataset(object):
         - bm, beh_model_holder, with dataset (rows) matching self.Dat
         """
         from pythonlib.dataset.dataset_analy.grammar import preprocess_dataset
+        assert False, "either (i) rename this so is clear this is the matlab rules, or (ii) rewrite this to use generate_scored_beh_model_data_long"
         bm, _, _ = preprocess_dataset(self, return_as_bmh_object=return_as_bmh_object)
         return bm
 
