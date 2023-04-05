@@ -59,6 +59,9 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         PLOT_RANDOM_GRID_EXAMPLES= False
 
         FILT_ONLY_TEST = False
+
+        PLOT_DRAWINGS_ORDERED_BY_SCORE = True
+
     elif savelocation=="main":
         # To avoid making large plots.
 
@@ -83,6 +86,9 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
 
         # FILT_ONLY_TEST = True # only test tasks, train leads to huge plots.
         FILT_ONLY_TEST = False # only test tasks, train leads to huge plots.
+
+        PLOT_DRAWINGS_ORDERED_BY_SCORE = False
+
     else:
         print(savelocation)
         assert False
@@ -392,6 +398,9 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
 
                             plt.close("all")
 
+    if PLOT_DRAWINGS_ORDERED_BY_SCORE:
+        plot_drawings_ordered_by_score(D, SDIR_MAIN)
+
     ####### Random train tasks that were repeated.
     if PLOT_TRAIN_REPEATED:
         print("DOING: PLOT_TRAIN_GRID")
@@ -613,6 +622,48 @@ def plot_all_drawings_in_grid(Dthis, SAVEDIR_FIGS, MAX_COLS = 150, MAX_ROWS = 5,
         figbeh.savefig(f"{sdirthis}/{cat}-beh.pdf");
         figtask.savefig(f"{sdirthis}/{cat}-task.pdf");
                 
+
+
+def plot_drawings_ordered_by_score(D, SAVEDIR_FIGS):
+    """ Sort characters by score, then plot them ordered by score.
+    Plot the top and bottom 20. plot 10 random trials.
+    """
+
+    from pythonlib.tools.listtools import unique_input_order
+    from pythonlib.dataset.plots import plot_beh_grid_flexible_helper
+    from pythonlib.tools.expttools import writeDictToYaml
+
+    sdirthis = f"{SAVEDIR_FIGS}/chars_sorted_by_score"
+    os.makedirs(sdirthis, exist_ok=True)
+
+    # for each char, get its score
+    dict_tasks_scores = D.grouping_get_inner_items("character", "score_final")
+
+    # sort by score
+    tmp = [(task, np.mean(scores)) for task, scores in dict_tasks_scores.items()]
+    tmp = sorted(tmp, key=lambda x: x[1])
+
+    # take the top 20 and bottom 20
+    row_levels = [t[0] for t in tmp]
+    row_levels_sub = row_levels[:20] + row_levels[-20:]
+    row_levels_sub = unique_input_order(row_levels_sub)
+
+    # Save text file of the scores
+    dict_tasks_scores = {char:dict_tasks_scores[char] for char in row_levels} # sort
+    path = f"{sdirthis}/dict_tasks_scores.yaml"
+    writeDictToYaml(dict_tasks_scores, path)
+
+    # Plot grid of tasks
+    for titles_each_cell in ["score_final", "epoch"]:
+    #     titles_each_cell = "epoch"
+        figbeh, figtask = plot_beh_grid_flexible_helper(D, row_group="character", col_group="trial", row_levels=row_levels_sub, 
+                                     max_cols = 10, max_rows=40, strokes_by_order=True, titles_each_cell=titles_each_cell)
+        figbeh.savefig(f"{sdirthis}/title_{titles_each_cell}-beh.pdf");
+        figtask.savefig(f"{sdirthis}/title_{titles_each_cell}-task.pdf");
+        plt.close("all")
+
+
+
 ############## PRINT THINGS
 def print_save_task_information(D, SDIR_MAIN):
     """ Print into text file summary of tasks presented across experiment, broken down

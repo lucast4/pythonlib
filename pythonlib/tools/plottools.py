@@ -199,7 +199,7 @@ def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
 
 
 
-def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
+def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', edgecolor='none', **kwargs):
     """
     Create a plot of the covariance confidence ellipse of `x` and `y`
 
@@ -240,6 +240,7 @@ def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
         width=ell_radius_x * 2,
         height=ell_radius_y * 2,
         facecolor=facecolor,
+        edgecolor=edgecolor,
         **kwargs)
 
     # Calculating the stdandard deviation of x from
@@ -314,36 +315,54 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue"):
     return ax
 
 
-def plotScatterXreduced(X, dims_to_take, nplot = 20, ax=None, 
+def plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None, 
                        color="k", textcolor="r", alpha=0.05,
-                       plot_text_over_examples=False, return_inds_text=False):
+                       plot_text_over_examples=False, return_inds_text=False, 
+                       SIZE=7, overlay_mean=False,
+                       text_to_plot = None):
     """ 
-    Scatter plot of X, picking out 2 dimensions. useful is X is output after
-    dim reduction. 
-    INPUT:
-    - X, array, shape N x D, where N is n samp, D is dim.
-    - dims_to_take, list, which 2 dims to take, e.g., [0, 1]
+    GOOD - scatter plot of X, taking oclumns of X as vectors.
+    PARAMSL
+    - X, (N, m) where m>=2
+    - dims_to_take, list of 2 ints, the dimensions to plot,.
+    - n_overlay_text, int, overlays text for this many random pts.
     """
     import random
+
+    # assert labels is None, "not codede, use plotScatterOverlay"
+    if dims_to_take is None:
+        dims_to_take = [0,1]
     assert len(dims_to_take)==2
 
     Xfit = X[:,dims_to_take]
 
     # 1) Scatter plot all trials
     if ax is None:
-        fig, ax = plt.subplots(figsize=(15,15))
+        fig, ax = plt.subplots(figsize=(SIZE,SIZE))
     else:
         fig = None
     ALPHA = Xfit.shape[0]/500
     ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
 
+    if overlay_mean:
+        xmean = np.mean(Xfit[:,0])
+        ymean = np.mean(Xfit[:,1])
+        ax.plot(xmean, ymean, 's', color=color, markersize=10)
+        confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
+
     # === pick out random indices, highlight them in the plot, and plot them
-    if plot_text_over_examples:
-        indsrand = random.sample(range(Xfit.shape[0]),nplot)
+    if plot_text_over_examples and text_to_plot is None:
+        # plot rand examples, text of ther indices
+        indsrand = random.sample(range(Xfit.shape[0]), nplot)
         indsrand = sorted(indsrand)
 
         for i in indsrand:
             ax.text(Xfit[i,0], Xfit[i,1], i, color=textcolor, fontsize=10)
+    elif plot_text_over_examples and not text_to_plot is None:
+        # then text_to_plot is a vector of length Xfit.
+        assert isinstance(text_to_plot, list) and len(text_to_plot)==Xfit.shape[0]
+        for i in range(Xfit.shape[0]):
+            ax.text(Xfit[i,0], Xfit[i,1], text_to_plot[i], color=textcolor, fontsize=7)
     else:
         indsrand = None
 
@@ -354,7 +373,8 @@ def plotScatterXreduced(X, dims_to_take, nplot = 20, ax=None,
 
 
 def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
-    downsample_auto=True):
+    downsample_auto=True, ax=None, SIZE=8, overlay_mean=False,
+    ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
@@ -362,7 +382,6 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     Will color differnetly by label.
     - downsample_auto, then subsamples in case there are too many datapts
     """
-    
     if downsample_auto:
         import random
         thresh = 20000
@@ -377,51 +396,55 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     labellist = set(labels)
     pcols = makeColors(len(labellist), cmap="rainbow")
 
+    if text_to_plot is not None:
+        assert len(text_to_plot)==X.shape[0]
+
     # Plot
     if ver=="overlay":
         for i, l in enumerate(labellist):
             inds = [i for i, lab in enumerate(labels) if lab==l]
             Xthis = X[inds]
+            if text_to_plot is not None:
+                text_to_plot_this = [text_to_plot[i] for i in inds]
             if i==0:
                 # initiate a plot
-                fig, ax = plotScatterXreduced(Xthis, dimsplot, ax=None,
-                                              color=pcols[i], textcolor=pcols[i], alpha=alpha)
+                fig, ax = plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                              color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
+                                              plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
             else:
                 plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                              color=pcols[i], textcolor=pcols[i], alpha=alpha)
+                                              color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
+                                              plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
         ax.legend(labellist)
 
-    elif ver=="separate":
-        fig, axes = plt.subplots(len(labellist), 1, figsize=(8, 8*len(labellist)))
+        return fig, ax
+
+    elif ver in ["separate", "separate_no_background"]:
+        n = len(labellist)
+        nrows = int(np.ceil(n/ncols_separate))
+        fig, axes = plt.subplots(nrows, ncols_separate, figsize=(SIZE*ncols_separate, SIZE*nrows))
         for i, (l, ax) in enumerate(zip(labellist, axes.flatten())):
             inds = [i for i, lab in enumerate(labels) if lab==l]
             Xthis = X[inds]
+
+            if text_to_plot is not None:
+                text_to_plot_this = [text_to_plot[i] for i in inds]
             # initiate a plot
-            plotScatterXreduced(X, dimsplot, ax=ax,
-                                          color="k", textcolor="k", alpha=alpha/5)
+            if ver=="separate":
+                # Then genreate a background of all pts first.
+                plotScatterXreduced(X, dimsplot, ax=ax,
+                                              color="k", textcolor="k", alpha=alpha/5)
             plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                          color=pcols[i], textcolor=pcols[i], alpha=alpha)
+                                          color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
+                                          plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
             ax.set_title(f"label: {l}")
 
-    elif ver=="separate_no_background":
-        fig, axes = plt.subplots(len(labellist), 1, figsize=(8, 8*len(labellist)))
-        if len(labellist)==1:
-            axes =  [axes]
-        
-        for i, (l, ax) in enumerate(zip(labellist, axes)):
-            inds = [i for i, lab in enumerate(labels) if lab==l]
-            Xthis = X[inds]
-            # initiate a plot
-#             plotScatter(X, None, dimsplot, ax=ax,
-#                                           color="k", textcolor="k", alpha=alpha/5)
-            plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                          color=pcols[i], textcolor=pcols[i], alpha=alpha)
-            ax.set_title(f"label: {l}")        
+        return fig, axes
+
     else:
         print(ver)
         assert False
         
-    return fig, ax
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
     means=False, labels=None, alpha=0.8):
@@ -437,11 +460,17 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     ax.plot(x, y, "x", alpha=alpha)
 
     # ax.set_axis("square")
-    minimum = np.min((ax.get_xlim(),ax.get_ylim()))
-    maximum = np.max((ax.get_xlim(),ax.get_ylim()))
+    minimum = np.min([np.min(x), np.min(y)])
+    maximum = np.max([np.max(x), np.max(y)])
+    
+
+    # minimum = np.min((ax.get_xlim(),ax.get_ylim()))
+    # maximum = np.max((ax.get_xlim(),ax.get_ylim()))
     ran = maximum - minimum
     MIN = minimum - 0.1*ran
     MAX = maximum + 0.1*ran
+    # MIN = minimum
+    # MAX = maximum
     if dotted_lines=="unity":
         ax.plot([MIN, MAX], [MIN, MAX], '--k', alpha=0.5)
     elif dotted_lines=="plus":
@@ -465,7 +494,6 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
         if plot_string_ind:
             for i, (xx, yy) in enumerate(zip(x,y)):
                 ax.text(xx, yy, i)
-
 
 
     ax.set_xlim(MIN, MAX)
@@ -595,6 +623,10 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
 
     if titles is not None:
         assert isinstance(titles, list)
+    else:
+        # give it dummy. will not actually use
+        titles = ["dummy" for _ in range(len(data))]
+
     if cols is None or rows is None:
         # get so rows is 0, 1, 2, ... and cols is 0,0,0,...
         cols = []
@@ -625,13 +657,14 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         xlabels = [None for _ in range(len(data))]
 
     # Package all variables that should not be broken apart
-    allvars = [[d, r, c, xl] for d, r, c, xl in zip(data, rows, cols, xlabels)]
+    allvars = [[d, r, c, xl, ti] for d, r, c, xl, ti in zip(data, rows, cols, xlabels, titles)]
     def unpack(allvars):
         data = [t[0] for t in allvars]
         rows = [t[1] for t in allvars]
         cols = [t[2] for t in allvars]
         xlabels = [t[3] for t in allvars]
-        return data, rows, cols, xlabels
+        titles = [t[4] for t in allvars]
+        return data, rows, cols, xlabels, titles
 
     if max_n_per_grid is not None:
         assert isinstance(max_n_per_grid, int)
@@ -640,7 +673,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         import random
         # tmp = [[d, r, c] for d, r, c in zip(data, rows, cols)]
         random.shuffle(allvars)
-        data, rows, cols, xlabels = unpack(allvars)
+        data, rows, cols, xlabels, titles = unpack(allvars)
         # data = [t[0] for t in tmp]
         # rows = [t[1] for t in tmp]
         # cols = [t[2] for t in tmp]
@@ -664,6 +697,9 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     mincol = min(cols)
     for col, row in zip(cols, rows):
         done[(row, col)] = 0
+
+    if all([t=="dummy" for t in titles]):
+        titles = None
 
     for i, (dat, col, row, xl) in enumerate(zip(data, cols, rows, xlabels)):
         if max_n_per_grid is not None:
@@ -715,9 +751,9 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
                     if row==0:
                         ax.set_title(col_labels[col])
 
-                if row_labels:
-                    if col==0:
-                        ax.set_ylabel(row_labels[row])
+            if row_labels:
+                if col==0:
+                    ax.set_ylabel(row_labels[row])
 
             if naked_axes:
                 ax.set_yticklabels([])

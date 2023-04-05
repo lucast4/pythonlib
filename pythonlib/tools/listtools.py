@@ -272,3 +272,19 @@ def indices_into_original_list_after_concat(list_of_lists):
         ct = ct+len(xx)
 
     return idxs
+
+def unique_input_order(mylist):
+    """ list set(mylist) but returns
+    in the order inputed.
+    e.g., 
+    mylist = [0,4,3,4, 2,4,0, 'cow'] -->
+        [0, 4, 3, 2, 'cow']
+    """
+    
+#     mylist_uniq = list(set(mylist))
+    mylist_uniq = []
+    for item in mylist:
+        if item not in mylist_uniq:
+            mylist_uniq.append(item)
+    
+    return mylist_uniq

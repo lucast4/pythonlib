@@ -8,7 +8,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
     col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
-    max_cols = 40, max_rows=40, plot_task=True, xlabels = None):
+    max_cols = 40, max_rows=40, plot_task=True, xlabels = None, titles_each_cell="score_final"):
     """ in each grid position, plots a single trial; (e.. strokes)
     df must have two columns, row and col, which indicate where to plot each
     trial.
@@ -38,6 +38,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
     strokeslist = df[strokes_ver].values
     rowlist = df["row"].values
     collist = df["col"].values
+    titles = df[titles_each_cell].values.tolist()
 
     if plotfuncbeh is None:
         if strokes_by_order:
@@ -48,7 +49,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
                 force_onsets_same_col_as_strokes=True, naked=True)
 
     figbeh = plotGridWrapper(strokeslist, plotfuncbeh, collist, rowlist, origin="top_left", max_n_per_grid=max_n_per_grid,
-        col_labels = col_labels, row_labels=row_labels, xlabels=xlabels)
+        col_labels = col_labels, row_labels=row_labels, xlabels=xlabels, titles=titles)
 
 
     # Also plot tasks
@@ -66,7 +67,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
 def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell="score_final"):
     """ [GOOD] flexible helper, can choose what variable to group by.
     INPUTS:
     - row_group and col_group are what variable to group trials by along rows or columns. e..g,
@@ -122,8 +123,9 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
     assert trialcode_list_1 == trialcode_list_2
 
     # if labels too long, prune
-    col_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in col_labels]
-    row_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in row_labels]
+    if False:
+        col_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in col_labels]
+        row_labels = [t[:10] + ".." + t[-5:] if isinstance(t, str) and len(t)>14 else t for t in row_labels]
 
     # tasknames too long, so prune for plotting
     # tasklist_titles = [t[:10] + ".." + t[-5:] for t in tasklist]
@@ -140,13 +142,13 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
     
     figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, plotfuncbeh=plotfuncbeh, 
         col_labels=col_labels, row_labels=row_labels, xlabels = trialcode_list_1,
-        max_cols=max_cols, max_rows=max_rows, **plotkwargs)
+        max_cols=max_cols, max_rows=max_rows, titles_each_cell=titles_each_cell, **plotkwargs)
 
     return figbeh, figtask
 
 def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell="score_final"):
     """ 
     see _plot_beh_grid_flexible_helper
     """
@@ -155,7 +157,7 @@ def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = 
     dfthis = D.Dat
     return _plot_beh_grid_flexible_helper(dfthis, row_group, col_group, row_levels, 
         col_levels, max_n_per_grid, plotfuncbeh, max_cols, max_rows, plot_task, 
-        plotkwargs, strokes_by_order, xlabel_trialcode)
+        plotkwargs, strokes_by_order, xlabel_trialcode, titles_each_cell)
 
 
 def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, plotkwargs = {},
