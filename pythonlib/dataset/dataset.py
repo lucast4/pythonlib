@@ -1235,6 +1235,57 @@ class Dataset(object):
         #     C = CLC.find_chunk(model, index)
         #     return C
 
+    def objectclass_summarize_rule_failures(self, ploton=False, sdir=None):
+        """ Returns a dict summarizing which rules were failed
+        for each trial (1 means failed, 0 means success)
+        PARAMS;
+        - sdir, if not None, saves figure and text file summary/
+        RETURNS:
+        - DictRuleFailures, dict, each item has indtrial and each rule as keys.
+        - dffails, same but dataframe
+        """
+        # Across all trials, collect rule failure stats
+        import pandas as pd
+
+        if sdir is not None:
+            ploton=True
+
+        DictRuleFailures = []
+        for ind in range(len(self.Dat)):
+            O = self.taskclass_extract_objectclass(ind)
+            
+            this = {}
+            this["indtrial"] = ind
+            this["trialcode"] = self.Dat.iloc[ind]["trialcode"]
+            for i, x in enumerate(O["RuleList"]):
+                rulename = x[0]
+                nfails = O["RuleFailureTracker"][i]
+                
+                # collect
+                this[rulename] = int(nfails>0)
+            
+            DictRuleFailures.append(this)
+
+        dffails = pd.DataFrame(DictRuleFailures)
+
+        if ploton:
+            import seaborn as sns
+            cols_keep = [col for col in dffails.columns if not col in ["trialcode", "indtrial"]]
+            dfthis = dffails.loc[:, cols_keep]
+            fig, ax = plt.subplots(1,1, figsize=(20, 3))
+            sns.heatmap(data=dfthis.T, vmin=0, vmax=1, ax=ax)           
+            if sdir is not None:
+                fig.savefig(f"{sdir}/rule_failures_objectclass.pdf")
+    
+        if sdir is not None:
+            # save a text file
+            dffails.to_csv(f"{sdir}/rule_failures_objectclass.txt", sep=' ')
+
+        return DictRuleFailures, dffails
+
+
+
+
     def objectclass_wrapper_extract_sequence_chunk_color(self, ind, plot_summary=False):
         """ Helps to extract all relevant info this trial regarding online 
         supervision of chunking and sequencing, looking mainly into ObjectClass
@@ -4833,7 +4884,7 @@ class Dataset(object):
 
 
     def grouping_get_inner_items(self, groupouter="task_stagecategory", 
-            groupinner="index"):
+            groupinner="index", sort_keys=False):
         """ Return dict of unique items (levels of groupinner), grouped
         by groupouter levels. 
         PARAMS:
@@ -4849,7 +4900,7 @@ class Dataset(object):
         date2:<list of strings ....}
         """
         from pythonlib.tools.pandastools import grouping_get_inner_items
-        return grouping_get_inner_items(self.Dat, groupouter, groupinner)
+        return grouping_get_inner_items(self.Dat, groupouter, groupinner, sort_keys=sort_keys)
 
     ################# EXTRACT DATA AS OTHER CLASSES
     def behclass_preprocess_wrapper(self):
@@ -5473,6 +5524,15 @@ class Dataset(object):
                 print("dont know this: ", k)
 
         return suff
+
+    def save(self, savedir):
+        """ saves dataset (the entire object) in
+        savedir/dataset_beh.pkl
+        """
+        import pickle
+        path = f"{savedir}/dataset_beh.pkl"
+        with open(path, "wb") as f:
+            pickle.dump(self, f)        
 
     def save_state(self, SDIR_MAIN, SDIR_SUB, add_tstamp = True):
         """

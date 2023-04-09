@@ -852,6 +852,21 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # Since epoch might change...
     D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
 
+    # if taskgroup name is too long, then prune it. otherwise can lead to seaborn plotting errors...
+    def F(x):
+        if len(x["task_stagecategory"])>36:
+            return x["task_stagecategory"][:15] + "+" + x["task_stagecategory"][-15:]
+        else:
+            return x["task_stagecategory"]
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "task_stagecategory")
+
+    def F(x):
+        if len(x["taskgroup"])>36:
+            return x["taskgroup"][:15] + "+" + x["taskgroup"][-15:]
+        else:
+            return x["taskgroup"]
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "taskgroup")
+
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 

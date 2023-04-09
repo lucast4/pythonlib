@@ -8,7 +8,7 @@ from pythonlib.tools.pandastools import applyFunctionToAllRows
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
     col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
-    max_cols = 40, max_rows=40, plot_task=True, xlabels = None, titles_each_cell="score_final"):
+    max_cols = 40, max_rows=40, plot_task=True, xlabels = None, titles_each_cell=None):
     """ in each grid position, plots a single trial; (e.. strokes)
     df must have two columns, row and col, which indicate where to plot each
     trial.
@@ -38,7 +38,10 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
     strokeslist = df[strokes_ver].values
     rowlist = df["row"].values
     collist = df["col"].values
-    titles = df[titles_each_cell].values.tolist()
+    if titles_each_cell is not None:
+        titles = df[titles_each_cell].values.tolist()
+    else:
+        titles = None
 
     if plotfuncbeh is None:
         if strokes_by_order:
@@ -67,7 +70,7 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
 def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell="score_final"):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell=None):
     """ [GOOD] flexible helper, can choose what variable to group by.
     INPUTS:
     - row_group and col_group are what variable to group trials by along rows or columns. e..g,
@@ -148,7 +151,7 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
 
 def plot_beh_grid_flexible_helper(D, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell="score_final"):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell=None):
     """ 
     see _plot_beh_grid_flexible_helper
     """

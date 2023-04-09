@@ -341,11 +341,13 @@ def aggregThenReassignToNewColumn(df, F, groupby, new_col_name,
     e.g., if all rows split into two groups (0, 1), then apply function, then 
     each 0 row will get the same new val in new_col_name, and so on.
     - F, function to apply to each group.
-    - groupby, hwo to group
+    - groupby, list of str hwo to group
     - new_col_name, what to call new col.
     output will be same size as df, but with extra column.
     - If groupby is [], then will apply to all rows
     """
+
+    assert isinstance(groupby, (list, tuple))
 
     if new_col_name in df.columns:
         del df[new_col_name]
@@ -737,7 +739,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         agg_method = "counts", val_name = "val", ax=None, 
         norm_method=None,
         annotate_heatmap=True, zlims=(None, None),
-        diverge=False):
+        diverge=False, dosort_colnames=True,
+        list_cat_1 = None, list_cat_2 = None):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
@@ -763,8 +766,15 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         df["dummy"] = 0
         col2="dummy"
 
-    list_cat_1 = sorted(df[col1].unique())
-    list_cat_2 = sorted(df[col2].unique())
+    if list_cat_1 is None:
+        list_cat_1 = df[col1].unique()
+
+    if list_cat_2 is None:
+        list_cat_2 = df[col2].unique()
+
+    if dosort_colnames:
+        list_cat_1 = sorted(list_cat_1)
+        list_cat_2 = sorted(list_cat_2)
 
     arr = np.zeros((len(list_cat_1), len(list_cat_2)))
     for i, val1 in enumerate(list_cat_1):
@@ -1140,7 +1150,7 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
 
 
 def grouping_get_inner_items(df, groupouter="task_stagecategory", 
-    groupinner="index", groupouter_levels=None, nrand_each=None):
+    groupinner="index", groupouter_levels=None, nrand_each=None, sort_keys=False):
     """ Return dict of unique items (levels of groupinner), grouped
     by groupouter levels. 
     PARAMS:
@@ -1161,6 +1171,10 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     """
     if groupouter_levels is None:
         groupouter_levels = df[groupouter].unique()
+
+    if sort_keys:
+        groupouter_levels = sorted(groupouter_levels)
+        
     groupdict = {}
     for lev in groupouter_levels:
         dfthisgroup = df[df[groupouter]==lev]

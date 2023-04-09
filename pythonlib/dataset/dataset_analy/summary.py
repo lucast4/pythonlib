@@ -201,6 +201,9 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     print("DOING: print_save_task_information")
     print_save_task_information(D, SDIR_MAIN)
 
+    # save reason for failures.
+    D.objectclass_summarize_rule_failures(SDIR_MAIN)
+
     #### PLOT OVERVIEW OF EXPERIMENT
     if PLOT_OVERVIEW:
         print("DOING: PLOT_OVERVIEW")
