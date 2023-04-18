@@ -299,6 +299,19 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
         mapper_auto_rename_probe_taskgroups = True            
 
+    elif "shapecolor" in expt:
+        # 10/17/22 - e..g, dircolro3b    
+        # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        # mapper_taskset_to_category = {
+        #     ("neuralbiasdir", 30, tuple([5, 15, 20, 25, 30])): "train_test_same", # same beh, test blocks only (fb on)
+        #     ("neuralbiasdir", 31, tuple([2, 12])): "train_test_same", # 
+        #     ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
+        #     ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
+        mapper_auto_rename_probe_taskgroups = True            
+
     elif "charstrokeseq" in expt:
         grouping_reassign = False
 
