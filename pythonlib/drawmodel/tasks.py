@@ -1189,6 +1189,11 @@ class TaskClass(object):
         if "Strokes" in dat.keys():
             del dat["Strokes"]
 
+        if len(dat["RuleFailureTracker"].shape)==0:
+            # then is a scalar, put into an array.
+            # shape from () --> (1,)
+            dat["RuleFailureTracker"] = np.array([dat["RuleFailureTracker"]])
+
         # store
         self.ObjectClass = dat
 
