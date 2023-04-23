@@ -48,7 +48,13 @@ def check_objects_identical(obj1, obj2, PRINT=False):
             return False
         else:
             pass
-    elif isinstance(obj1, (int, str)):
+    elif isinstance(obj1, (int, str, float)):
+        if not obj1==obj2:
+            if PRINT:
+                print('obj1',obj1)
+                print('obj2',obj2)
+            return False
+    elif obj1 is None:
         if not obj1==obj2:
             if PRINT:
                 print('obj1',obj1)

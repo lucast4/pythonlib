@@ -1155,7 +1155,8 @@ class Dataset(object):
         T = self.Dat.iloc[ind]["Task"]
         return T.get_grid_ver()
 
-    def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", plot=False):
+    def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", 
+            plot=False, return_as_tokensclass=False):
         """ [GOOD] REturn tokens (lsit of dict) for this trial, in any order,
         and with aligned indices into beh strokes.
         PARAMS:
@@ -1199,7 +1200,11 @@ class Dataset(object):
         if plot:
             self.sequence_extract_beh_and_task(ind, ploton=True)
 
-        return tokens
+        if return_as_tokensclass:
+            from pythonlib.drawmodel.tokens import Tokens
+            return Tokens(tokens)
+        else:
+            return tokens
 
 
     def taskclass_shapes_extract(self, ind):
@@ -1556,6 +1561,9 @@ class Dataset(object):
         def F(x):
             return f"{x['date']}-{x['session']}"
         self.Dat = applyFunctionToAllRows(self.Dat, F, 'date_sess')
+
+        # fix a problem, sholdnt throw out epoch name
+        self.supervision_epochs_extract_orig()
 
         ####
         self.Dat = self.Dat.reset_index(drop=True)
@@ -5078,6 +5086,18 @@ class Dataset(object):
         print(trials_bad)
         self.subsetDataframe(trials_good)
 
+    def behclass_check_if_tokens_extracted(self):
+        """
+        Returns True if all BehClass for each trial already has
+        datsegs (tokens) extracted.
+        """
+        if "BehClass" not in self.Dat.columns:
+            return False
+        for ind in range(len(self.Dat)):
+            Beh = self.Dat.iloc[ind]["BehClass"]
+            if Beh.Alignsim_Datsegs is None:
+                return False
+        return True
 
     ################# Supervision params
     # ie params that online guide supervision
@@ -5172,6 +5192,27 @@ class Dataset(object):
         for ind in range(len(self.Dat)):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
         self.Dat["INSTRUCTION_COLOR"] = list_issup
+
+    def supervision_epochs_extract_orig(self):
+        """ Extracts original name (e.g, AnBmTR|0 --> AnBmTR) before appended color
+        superv info. This is a hacky solution to the original problem of not saving these names
+        RETURNS:
+        - places in self.Dat["epoch_orig"]
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            if isinstance(x["epoch"], str):
+                ind = x["epoch"].find("|")
+                if ind>=0:
+                    # then has | --> remove it.
+                    return x["epoch"][:ind]
+                else:
+                    return x["epoch"]
+            else:
+                return x["epoch"]
+        # print(self.Dat["epoch_orig"])
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch_orig")
+        print("Extracted into self.Dat[epoch_orig]")
 
     def supervision_epochs_merge_these(self, list_epochs, new_epoch_name):
         """ Converts epochs of names in list_epochs into the epoch newname
@@ -5338,7 +5379,7 @@ class Dataset(object):
         # list_rule = 
         # dict_rules_consistent_with_each_rule = {}
 
-        list_rules_exist = self.Dat["epoch"].unique().tolist()
+        list_rules_exist = self.Dat["epoch_orig"].unique().tolist()
 
         # For each existing rule, get ruledicts consistent with it
         dict_ruledicts_consistent_with_each_existing_rule = {}

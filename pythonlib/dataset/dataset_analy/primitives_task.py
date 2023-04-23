@@ -1,4 +1,6 @@
-""" Analyses that care about primitives used in the task, e.g,, 
+""" 
+OLD
+Analyses that care about primitives used in the task, e.g,, 
 prims in grid, extract each prim, and plot information about the beh strokes
 assigned to that prim
 

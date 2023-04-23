@@ -1,4 +1,5 @@
 """ 
+OLD
 Analysis of primitives, categorization, etc. 
 Related to nbotebook dataset --> analy_primitives_081721
 """

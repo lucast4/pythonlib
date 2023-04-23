@@ -39,7 +39,7 @@ def plotscore_all(DS, SAVEDIR):
 
     # Compute similarity for all data
     ##### Extract scores of stroke quality (how well beh stroke matches task stroke)
-    DS.prep_compute_beh_task_strok_distances()
+    DS.distgood_compute_beh_task_strok_distances()
 
     if False:
         print("Starting length, before remove nan rows:", len(DS.Dat))
