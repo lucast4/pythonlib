@@ -93,6 +93,14 @@ def generate_data(D, which_basis_set="standard_17",
         DS.filter_dataframe(ds_filterdict, True)
 
     ### Generate basis set of strokes
+    if D.animals()==["Pancho"]:
+        which_basis_set = "standard_17"
+    elif D.animals()==["Diego"]:
+        which_basis_set = "diego_all_minus_open_to_left"
+    else:
+        print(D.animals())
+        assert False
+        
     dfstrokes, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(
         which_basis_set=which_basis_set, which_shapes=which_shapes)
 
@@ -427,7 +435,9 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
     shapes, vals, fig, ax = convert_to_1d_dataframe_hist(DS.Dat, "clust_sim_max_colname", True)
     fig.savefig(f"{sdir}/hist_n_matches.pdf")
 
-    fig = DS.plot_examples_grid("clust_sim_max_colname", col_levels=shapes, nrows=5)
+    # fig = DS.plot_examples_grid("clust_sim_max_colname", col_levels=shapes, nrows=5)
+    fig = DS.plotshape_multshapes_trials_grid("clust_sim_max_colname", 
+        col_levels=shapes, nrows=5)
     fig.savefig(f"{sdir}/drawings_examplegrid_sorted_by_nmatches.pdf")
 
     # Plot the basis set stroke
@@ -436,8 +446,8 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
     fig, axes = DS.plot_multiple_strok(list_strok_basis_sorted, overlay=False, ncols=len(list_strok_basis_sorted), titles=shapes);
     fig.savefig(f"{sdir}/drawings_examplegrid_sorted_by_nmatches-basis.pdf")
 
-    figholder = DS.plot_egstrokes_grouped_by_shape(key_subplots = "clust_sim_max_colname",
-                n_examples = 5, color_by=None, list_shape=None);
+    figholder = DS.plotshape_multshapes_egstrokes(key_subplots = "clust_sim_max_colname",
+                n_examples_total_per_shape = 5, color_by=None, list_shape=None);
 
     for i, x in enumerate(figholder):
         fig = x[0]
