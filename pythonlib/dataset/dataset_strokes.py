@@ -1689,6 +1689,7 @@ class DatStrokes(object):
         """
         import os
 
+        print("TODO: Extract and save plots of each indiv stroke to be sure all are good trials.")
         sdir, path = self._stroke_shape_cluster_database_path(suffix=suffix)
         os.makedirs(sdir, exist_ok=overwrite_ok)
 
@@ -1735,9 +1736,18 @@ class DatStrokes(object):
         # dfstrokes = DS.stroke_shape_cluster_database_load("Pancho", "priminvar3g", 221217, None)
         if which_basis_set=="standard_17":
             dfstrokes = self.stroke_shape_cluster_database_load("Pancho", "priminvar4", 220918, None)
+            SHAPES_EXCLUDE = []
         elif which_basis_set=="diego_all_minus_open_to_left":
             # All except those three prims that open to the left. he struggled in rig.
-            dfstrokes = self.stroke_shape_cluster_database_load("Diego", "primsingridall1c", 230418, None)
+
+            # Ingnore this one becuase it is missing lines.
+            # dfstrokes = self.stroke_shape_cluster_database_load("Diego", "primsingridall1c", 230418, None)
+
+            # This one was the last one in rig before took long break doing grid tasks.
+            # Looks almost identical to above. It includes the 3 tasks that open to left, but here
+            # code exludes therm
+            dfstrokes = self.stroke_shape_cluster_database_load("Diego", "primsingridrand6b", 230223, None)
+            SHAPES_EXCLUDE = ["V-2-1-0", "arcdeep-4-1-0", "usquare-1-1-0", "dot-2-1-0"]
         else:
             print(which_basis_set)
             assert False
@@ -1746,9 +1756,11 @@ class DatStrokes(object):
         if which_shapes=="current_dataset":
             # v1: Use the shapes in the ground truth tasks.
             list_shape_basis = DS.Dat["shape"].unique().tolist()
+            list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
         elif which_shapes=="all_basis":
             # use all within the basis set
             list_shape_basis = sorted(dfstrokes["shape"].unique().tolist())
+            list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
         elif which_shapes=="hand_enter":
             assert hand_entered_shapes is not None
             list_shape_basis = hand_entered_shapes

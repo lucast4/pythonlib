@@ -1222,83 +1222,10 @@ class TaskClass(object):
         - datsegs, return it from self._tokens_generate() or tokens_reorder()
         """
 
-        grid_ver = "on_grid"
-        for dseg in datsegs:
-            if dseg["gridloc"] is None:
-                grid_ver = "on_rel"
-        
-        def _location(i):
-            xloc, yloc = datsegs[i]["gridloc"]
-            return xloc, yloc
-
-        def _posdiffs(i, j):
-            # return xdiff, ydiff, 
-            # in grid units.
-            pos1 = _location(i)
-            pos2 = _location(j)
-            return pos2[0]-pos1[0], pos2[1] - pos1[1]
-
-        def _direction(i, j):
-            # only if adjacnet on grid.
-            xdiff, ydiff = _posdiffs(i,j)
-            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
-                return "up"
-            elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
-                return "down"
-            elif xdiff ==-1. and np.isclose(ydiff, 0.):
-                return "left"
-            elif xdiff ==1. and np.isclose(ydiff, 0.):
-                return "right"
-            else:
-                return "far"
-
-        def _relation_from_previous(i):
-            # relation to previous stroke
-            if i==0:
-                return "start"
-            else:
-                return _direction(i-1, i)
-
-        def _horizontal_or_vertical(i, j):
-            xdiff, ydiff = _posdiffs(i,j)
-            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
-                assert False, "strokes are on the same grid location, decide what to call this"
-            elif np.isclose(xdiff, 0.):
-                return "vertical"
-            elif np.isclose(ydiff, 0.):
-                return "horizontal"
-            else: # xdiff, ydiff are both non-zero
-                return "diagonal" 
-
-        def _horiz_vert_move_from_previous(i):
-            if i==0:
-                return "start"
-            else:
-                return _horizontal_or_vertical(i-1, i)
-
-
-        for i, dseg in enumerate(datsegs):
-            # 2) Things that depend on grid
-            if grid_ver=="on_grid":
-                # Then this is on grid, so assign grid locations.
-                dseg["rel_from_prev"] = _relation_from_previous(i)
-                # dseg["rel_to_next"] = _relation_to_following(i)
-                dseg["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
-                # dseg["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
-            elif grid_ver=="on_rel":
-                # Then this is using relations, not spatial grid.
-                # give none for params
-                # dseg["gridloc"] = None
-                dseg["rel_from_prev"] = None
-                # datsegs[-1]["rel_to_next"] = None
-                dseg["h_v_move_from_prev"] = None
-                # datsegs[-1]["h_v_move_to_next"] = None
-            else:
-                print(grid_ver)
-                assert False, "code it"
-
-        return datsegs
-
+        from pythonlib.drawmodel.tokens import Tokens
+        Tk = Tokens(datsegs)
+        Tk.sequence_context_relations_calc()
+        return Tk.Tokens
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
             track_order=True, hack_is_gridlinecircle=False, include_scale=True):
