@@ -3,6 +3,27 @@ from operator import itemgetter
 import numpy as np
 # import torch
 
+def sort_mixed_type(mylist):
+    """ Sort, works even if elements in mylist are mixed type.
+    PROBLEMS:
+    if an element is a lsit of lsits. will then depend on input order.
+    eg: these are different
+        sort_mixed_type(['start', 'end', [[2]], [[None]], [1,2], (1,2), (99, 99)])
+        sort_mixed_type(['start', 'end', [[None]], [[2]], [1,2], (1,2), (99, 99)])
+    """
+
+    def key(x):
+        try:
+            if isinstance(x, list):
+                return (0, hash(tuple(x)))
+            else:
+                return (0, hash(x))
+        except TypeError as err:
+            # Place at back
+            return (1, '')
+
+    return sorted(mylist, key=lambda x: key(x))
+
 def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
     """gets N random permutations from muylist, no
     replacement. works by shuffling, taking first one, and

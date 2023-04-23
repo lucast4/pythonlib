@@ -8,6 +8,7 @@ will check that the output df is same as input (for matching columns).
 
 import pandas as pd
 import numpy as np
+from pythonlib.tools.listtools import sort_mixed_type
 
 
 def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
@@ -124,19 +125,27 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
     first encountered value.
     - aggmethod, list of str, applies each of these agg methods.
     """
+    
+    assert isinstance(values, list)
+    assert isinstance(group, list)
+
     if nonnumercols is None:
         nonnumercols = []
     else:
-        # Check they all exist
+        # Check they all exist and has a single unique item
         for col in nonnumercols: 
-            assert col in df.columns
+            groupdict = grouping_append_and_return_inner_items(df, group, 
+                groupinner=col, new_col_name="dummy")
+            for k, v in groupdict.items():
+                assert len(v)==1, "nonnumercols takes the first. this is wrong if there are multipel..."
+
     if aggmethod is None:
         aggmethod = ["mean"]
 
-    agg = {c:aggmethod for c in df.columns if c in values }
+    agg = {c:aggmethod for c in df.columns if c in values}
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
     
-    print(agg)
+    # print(agg)
 
     df = df.groupby(group).agg(agg).reset_index()
     # df.columns = df.columns.to_flat_index()
@@ -1201,7 +1210,10 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     - groupouter_levels, see grouping_get_inner_items
     RETURNS:
     - groupdict, see grouping_get_inner_items
+    NOTE: does NOT modify df.
     """
+
+    assert not isinstance(groupinner, list)
 
     # 1) Append new grouping variable to each row
     while new_col_name in df.columns:
@@ -1214,7 +1226,8 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     
     return groupdict
 
-def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None):
+def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
+        save_convert_keys_to_str = False, save_as="dict"):
     """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
     e.g., if goruping is [shape, location, size]: prints:
     ('Lcentered-3-0', (-1, -1), 'rig3_3x3_small') 58
@@ -1231,19 +1244,38 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
     - list_groupouter_grouping_vars, list of str
     - savepath, include extension, saves as yaml
     - Nmin, int, skips any cases that have fewer than Nmin samples.
+    - print_value_not_n, then etracts not n, but the actual values (list)
     RETURNS:
     - outdict, dict[level]=n
     """
     outdict = {}
     out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
-    for k in sorted(out.keys()):
+    # out[grp] = list_indices.
+    for k in sort_mixed_type(out.keys()):
         n = len(out[k])
         if n>Nmin:
+            # if print_value_not_n:
+            #     print(k)
+            #     print(out)
+            #     assert False
+            #     outdict[k] = out[k]
+            # else:
             outdict[k] = n
 
     if savepath is not None:
-        from .expttools import writeDictToYaml
-        writeDictToYaml(outdict, savepath)
+        if save_as=="dict":
+            from .expttools import writeDictToYaml
+            if save_convert_keys_to_str:
+                outdict = {str(k):v for k, v in outdict.items()}
+            writeDictToYaml(outdict, savepath)
+        elif save_as in ["txt", "text"]:
+            # Then each is a string line, write to text
+            from .expttools import writeStringsToFile
+            lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
+            writeStringsToFile(savepath, lines)
+        else:
+            print(save_as)
+            assert False
         print("Saved to: ", savepath)
 
     for k, v in outdict.items():
@@ -1316,3 +1348,130 @@ def concat(list_df):
 
     return df_all
 
+
+def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
+    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None):
+    """ Helper to extract dataframe (i) appending a new column
+    with ocnjucntions of desired vars, and (ii) keeping only 
+    levels of this vars (vars_others) that has at least n trials for 
+    each level of a var of interest (var).
+    PARAMS:
+    - var, str, the variabiel you wisht ot use this dataset to compute 
+    moudlation for.
+    - vars_others, list of str, variables that conjucntion will define a 
+    new goruping var.
+    - levels_var, either list of items, for each must have at least n_min.
+    if None, then takes the unique levels.
+    - n_min, min n trials desired for each level of var. will only keep
+    conucntions of (vars_others) which have at least this many for each evel of
+    var.
+    - lenient_allow_data_if_has_n_levels, either None (ignore) or int, in which case
+    is more leneint. keeps a given level of vars_others if it has >= this many
+    levels of var which has >=n_min datapts. usually requires _all_ levels of vars_others
+    to have >=n_min datapts.
+    EG:
+    - you wish to ask about shape moudlation for each combaiton of location and 
+    size. then var = shape and vars_others = [location, size]
+    RETURNS:
+    - dataframe, with new column "vars_others", concated across all levels of varothers
+    - dict, level_of_varothers:df_sub
+    EXAMPLE:
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+
+        dftest = {
+            'a':[1,2,3,1,2,3,1,2,3,1 ,2, 3],
+            'b':[1,1,1,2,2,2,3,3,3, 3, 3, 3],
+            'c':['a','a','a','b','b','b','c','c','c', 'c', 'c', 'c']
+        }
+        import pandas as pd
+        dfthis = pd.DataFrame(dftest)
+
+        extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
+    """
+
+    # 1) Append conjucntions
+    var_conj_of_others = "vars_others"
+    df = append_col_with_grp_index(df, vars_others, new_col_name=var_conj_of_others, use_strings=False)
+    
+    # 2_ get for each conjunction of other variables
+    levels_others = df[var_conj_of_others].unique().tolist()
+    try:
+        levels_others = sorted(levels_others, key=lambda x: hash(tuple(x)))
+    except TypeError as err:
+        pass
+        # print("not sorting (TypeError): ", levels_others)
+
+    # 3) check each sub datfarme
+    list_dfthis = []
+    dict_dfthis = {} # level:df
+    
+    for lev in levels_others:
+
+        # get data
+        dfthis = df[(df[var_conj_of_others] == lev)]
+        good = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
+            lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
+            PRINT=PRINT)
+        if good:
+            # keep
+            list_dfthis.append(dfthis)
+            dict_dfthis[lev] = dfthis
+
+    # merge
+    if len(list_dfthis)==0:
+        return pd.DataFrame([]), {}
+    else:
+        return pd.concat(list_dfthis).reset_index(drop=True), dict_dfthis
+
+# only keep if this has all the levels
+def check_data_has_all_levels(dfthis, var, levels_to_check=None, 
+    n_trials_min=5, lenient_allow_data_if_has_n_levels=None,
+    PRINT=False):
+    """ Retuirns True if this dataframe as at least n_trials_min for each
+    level of var
+    PARAMS:
+    - var, str, column in dfthis
+    - levels_to_check, either list of categorival levles of var, or None (to get all of them)
+    - n_trials_min, int
+    """
+    
+    if levels_to_check is None:
+        levels_to_check = dfthis[var].unique().tolist()
+    assert isinstance(levels_to_check, list)
+
+    if lenient_allow_data_if_has_n_levels is None:
+        STRICT = True
+    else:
+        STRICT = False
+
+    list_n = []
+    for lev in levels_to_check:
+        n = len(dfthis[dfthis[var]==lev])
+        list_n.append(n)
+        if PRINT:
+            print(lev, ' -- ', n)
+        if STRICT:
+            if n<n_trials_min:
+                return False
+
+    if STRICT:
+        # Then you have suceeded iof havent failed aboev.
+        return True
+    else:
+
+        passes = [nthis >= n_trials_min for nthis in list_n] #  whether enogh trials for each level of var: [True, False, ...]
+        npass = sum(passes)
+        good = npass >= lenient_allow_data_if_has_n_levels
+
+        if PRINT:
+            print("----")
+            print(good)
+            print(list_n)
+            print(lenient_allow_data_if_has_n_levels)
+            print(n_trials_min)
+            print(npass)
+
+        if npass >= lenient_allow_data_if_has_n_levels:
+            return True
+        else:
+            return False

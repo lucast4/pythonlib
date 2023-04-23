@@ -19,7 +19,10 @@ def ttest_paired(x1, x2=None, ignore_nan=False):
         nan_policy = 'propagate'
     return stats.ttest_rel(x1, x2, nan_policy=nan_policy)
 
-
+def zscore(val, vals_dist):
+    """ zscore val relative to the vals_dist distribtion"""
+    return (val - np.mean(vals_dist)) / np.std(vals_dist)
+    
 def statsTtestPaired(df1, df2, varname, pairedon="human"):
     """ttest between two variables, assume it is paired at level of human (i.e, eachhuman 1pt each var pts)"""
     df12 = pd.merge(df1, df2, on=pairedon)
