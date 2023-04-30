@@ -155,8 +155,8 @@ class Tokens(object):
 
             #### Context
             if i==0:
-                loc_prev = (0, np.nan) # tuple, so that is same type as gridloc
-                shape_prev = (0, np.nan)
+                loc_prev = (0, "START") # tuple, so that is same type as gridloc
+                shape_prev = "START"
             else:
                 loc_prev = tokens[i-1]["gridloc"]
                 shape_prev = tokens[i-1]["shape"]
@@ -164,8 +164,8 @@ class Tokens(object):
             dseg["CTXT_shape_prev"] = shape_prev
 
             if i==len(tokens)-1:
-                loc_next = (np.nan, 0)
-                shape_next = (np.nan, 0)
+                loc_next = ("END", 0)
+                shape_next = "END"
             else:
                 loc_next = tokens[i+1]["gridloc"]
                 shape_next = tokens[i+1]["shape"]
