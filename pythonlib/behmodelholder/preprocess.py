@@ -4,6 +4,7 @@ a single kind of BMH
 
 from .beh_model_holder import BehModelHolder
 import pandas as pd
+import numpy as np
 
 # def dataframe_reshape_long_to_wide(df):
 #     """ Convert from long-form (each row is a trial x model) to 
@@ -344,6 +345,11 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
             print(list_order_correct)
             print(success_binary, beh_too_short, beh_got_first_stroke, beh_sequence_wrong)
         
+        if "which_probe_blockset" in D.Dat.columns:
+            which_probe_blockset = D.Dat.iloc[ind]["which_probe_blockset"]
+        else:
+            which_probe_blockset = np.nan
+
         ########## [END] CONSIDER EXCEPTIONs
         for rule in list_rules:
             parses = parsesdict[rule]
@@ -365,11 +371,11 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "exclude_because_online_abort":exclude_because_online_abort,
                 "epoch":D.Dat.iloc[ind]['epoch'],
                 "block": D.Dat.iloc[ind]["block"],
-                "datind":ind,
+                # "datind":ind,
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
                 "taskgroup":D.Dat.iloc[ind]["taskgroup"],
                 "character":D.Dat.iloc[ind]["character"],
-                "which_probe_blockset":D.Dat.iloc[ind]["which_probe_blockset"],
+                "which_probe_blockset":which_probe_blockset,
                 "parsesdict":parsesdict
             })
 
@@ -442,7 +448,7 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
 
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data_matlabrule(D, binary_rule=False, 
-        DEBUG=False, return_as_bmh_object=True):
+        DEBUG=False, return_as_bmh_object=True, remove_repeated_trials=False):
     """High-level extraction for each trial whether it was success given the matlab objectclass
     sequence. Does not try to extract new parses. binary success on each trial
     PARAMS:
@@ -450,9 +456,9 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
     """
     from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
 
-    if "which_probe_blockset" not in D.Dat.columns:
-        from pythonlib.dataset.dataset_analy.learning import preprocess_dataset as learn_preprocess
-        learn_preprocess(D)
+    # if "which_probe_blockset" not in D.Dat.columns:
+    #     from pythonlib.dataset.dataset_analy.learning import preprocess_dataset as learn_preprocess
+    #     learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
     ################## Generate behclass
     D.behclass_preprocess_wrapper()
@@ -524,6 +530,11 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
         # exclude cases where beh was too short, but order was correct
         exclude_because_online_abort = beh_too_short and not beh_sequence_wrong
 
+        if "which_probe_blockset" in D.Dat.columns:
+            which_probe_blockset = D.Dat.iloc[ind]["which_probe_blockset"]
+        else:
+            which_probe_blockset = np.nan
+
         results.append({
             "agent_kind":"model",
             "agent_rule":epoch_i, 
@@ -538,11 +549,11 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
             "exclude_because_online_abort":exclude_because_online_abort,
             "epoch":D.Dat.iloc[ind]['epoch'],
             "block": D.Dat.iloc[ind]["block"],
-            "datind":ind,
+            # "datind":ind,
             "trialcode":D.Dat.iloc[ind]["trialcode"],
             "taskgroup":D.Dat.iloc[ind]["taskgroup"],
             "character":D.Dat.iloc[ind]["character"],
-            "which_probe_blockset":D.Dat.iloc[ind]["which_probe_blockset"],
+            "which_probe_blockset":which_probe_blockset
         })
 
         LIST_success_binary.append(success_binary)

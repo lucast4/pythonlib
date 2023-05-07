@@ -138,6 +138,7 @@ class Dataset(object):
 
         # Initialize things
         self._ParserPathBase = None
+        self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
         
     def initialize_dataset(self, ver, params):
         """ main wrapper for loading datasets of all kinds, including
@@ -1719,6 +1720,9 @@ class Dataset(object):
         - params, list, order determines what steps to take. if None, then uses
         ver, otherwise usesparmas
         """
+
+        assert self.LockPreprocess==False, "need to unlock, or make a copy then unlock."
+
         if ver is None and params is None:
             assert False, "must pass in one"
         if params is None:

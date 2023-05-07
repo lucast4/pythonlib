@@ -199,7 +199,7 @@ class ChunksClassList(object):
 
     ########## PERMUTATIONS
     def search_permutations_chunks(self, return_ver="list_of_flattened_chunks", 
-        max_perms=100):
+        max_perms=10000):
         """ Return unique permutations of each Chunk. If num possible
         perms is less than max_perms, then returns all.
         PARAMS:

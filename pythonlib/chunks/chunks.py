@@ -324,7 +324,7 @@ def hier_is_flat(hier):
                 return False
     return True
 
-def search_permutations_chunks(chunks_hier, fixed_order, max_perms=1000):
+def search_permutations_chunks(chunks_hier, fixed_order, max_perms=10000):
     """ Returns all permutatoins of chunks or hierarchy, while folliwng 
     fixed_order rules
     PARAMS:

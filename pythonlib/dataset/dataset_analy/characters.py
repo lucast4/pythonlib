@@ -217,6 +217,21 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     os.makedirs(sdir, exist_ok=True)
     print("Saving figures at:", sdir)
     
+    ## COrrelation between online scores (e.g, strokiness) and offline computed strokiness
+    # sdir = f"{savedir}/corr_scores"
+    # import os
+    # os.makedirs(sdir, exist_ok=True)
+    list_blocks = sorted(D.Dat["block"].unique().tolist())
+    vars_to_compare = ["rew_total", "strokinessv2", "pacman", "hausdorff", "ft_decim", "numstrokesorig", "ft_minobj", "frac_strokes", "shortness", "score_final"]
+    vars_to_compare = [var for var in vars_to_compare if var in D.Dat.columns]
+    for bk in list_blocks:
+        df = D.Dat[D.Dat["block"]==bk]
+        if sum(~df[scorename].isna())>0:
+            fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
+            fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+
+        plt.close("all")
+
 
     ## Score for each trial by block and date
     fig = sns.catplot(data=D.Dat, x="block", y=scorename, aspect=2, row="date")
@@ -256,12 +271,22 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
         inds, chars = extract_trials_spanning_variable(D.Dat, "character", list_char)
         assert chars == list_char
 
+        if len(inds)<60:
+            indsthis = inds
+            charsthis = chars
+            list_score_this = list_score
+        else:
+            indsthis = inds[:30] + inds[-30:]
+            charsthis = chars[:30] + chars[-30:]
+            list_score_this = list_score[:30] + list_score[-30:]
+
         # -- plot
-        fig, axes, idxs = D.plotMultTrials2(inds, titles=chars, SIZE=3);
+        fig, axes, idxs = D.plotMultTrials2(indsthis, titles=charsthis, SIZE=3);
         fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-        fig, axes, idxs = D.plotMultTrials2(inds, "strokes_task", titles=list_score);
+        fig, axes, idxs = D.plotMultTrials2(indsthis, "strokes_task", titles=list_score_this);
         fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
 
+        plt.close("all")
 
     # which carhacters best
     fig = sns.catplot(data=D.Dat, y="character", x=scorename, height=10, hue="block",
@@ -285,20 +310,6 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
 
     plt.close("all")
     
-    ## COrrelation between online scores (e.g, strokiness) and offline computed strokiness
-    # sdir = f"{savedir}/corr_scores"
-    # import os
-    # os.makedirs(sdir, exist_ok=True)
-    list_blocks = sorted(D.Dat["block"].unique().tolist())
-    vars_to_compare = ["rew_total", "strokinessv2", "pacman", "score_final"]
-    vars_to_compare = [var for var in vars_to_compare if var in D.Dat.columns]
-    for bk in list_blocks:
-        df = D.Dat[D.Dat["block"]==bk]
-        if sum(~df[scorename].isna())>0:
-            fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
-            fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
-
-
     ### Change in score over trials (each char one slope)
     list_char_alpha = sorted(D.Dat["character"].unique().tolist())
         
@@ -589,3 +600,5 @@ def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=Fa
         plt.xticks(rotation=45);
 
         fig.savefig(f"{sdir}/waterfall_hist-Nprims_{Nprims}.pdf")
+
+        plt.close("all")

@@ -1146,8 +1146,9 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                 inds = [None for _ in range(n_examples)]
             elif method_if_not_enough_examples=="prune_subset":
                 # sample size changes... keep how many you have
-                n_examples = len(list_idx)
-                inds = random.sample(list_idx, n_examples)[:n_examples]
+                # n_examples = len(list_idx)
+                # inds = random.sample(list_idx, n_examples)[:n_examples]
+                inds = list_idx
             elif method_if_not_enough_examples== "fail":
                 assert False, "not enough trials "
             else:
@@ -1391,6 +1392,22 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
     """
 
+    assert n_min is not None
+
+    # make a copy, becuase will have to append to this dataframe
+    df = df.copy()
+
+    # Want to use entier data for this site? or do separately for each level of a given
+    # conjunction variable.
+    if vars_others is None:
+        # then place a dummy variable so that entire thing is one level
+        vars_others = ["dummy_var"]
+        assert "dummy_var" not in df.columns
+        df.loc[:, "dummy_var"] = "IGNORE"
+        REMOVE_DUMMY = True
+    else:
+        REMOVE_DUMMY = False
+
     # 1) Append conjucntions
     var_conj_of_others = "vars_others"
     df = append_col_with_grp_index(df, vars_others, new_col_name=var_conj_of_others, use_strings=False)
@@ -1410,6 +1427,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
 
         # get data
         dfthis = df[df[var_conj_of_others] == lev]
+
         good = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
             lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
             PRINT=PRINT)
@@ -1419,6 +1437,9 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             # keep
             list_dfthis.append(dfthis)
             dict_dfthis[lev] = dfthis
+
+    if REMOVE_DUMMY:
+        del df["dummy_var"]
 
     # merge
     if len(list_dfthis)==0:
@@ -1437,7 +1458,10 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     - levels_to_check, either list of categorival levles of var, or None (to get all of them)
     - n_trials_min, int
     """
-    
+        
+    assert len(dfthis)>0
+    # print(levels_to_check)
+
     if levels_to_check is None:
         levels_to_check = dfthis[var].unique().tolist()
     assert isinstance(levels_to_check, list)
@@ -1451,8 +1475,10 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     # PRINT = True
     list_n = []
     for lev in levels_to_check:
-        n = len(dfthis[dfthis[var]==lev])
+        dfthisthis = dfthis[dfthis[var]==lev]
+        n = len(dfthisthis)
         list_n.append(n)
+        assert n>0
         if PRINT:
             print(lev, ' -- ', n)
         if STRICT:

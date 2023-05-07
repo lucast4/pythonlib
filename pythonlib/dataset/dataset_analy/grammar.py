@@ -13,6 +13,7 @@ import pandas as pd
 from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 from matplotlib import rcParams
 from .learning import print_useful_things, plot_performance_all, plot_performance_timecourse, plot_performance_static_summary, plot_counts_heatmap, plot_performance_each_char, plot_performance_trial_by_trial
+from .learning import preprocess_dataset as learn_preprocess
 
 
 rcParams.update({'figure.autolayout': True})
@@ -46,7 +47,7 @@ def preprocess_dataset_matlabrule(D):
     return bm
 
 def pipeline_generate_and_plot_all(D, which_rules="matlab", 
-    reset_grammar_dat=False, doplots=True):
+    reset_grammar_dat=False, doplots=True, remove_repeated_trials=True):
     """ Entire pipeline to extract data and plot, for 
     a single dataset
     PARAMS:
@@ -54,20 +55,19 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     parsesa nd ask if beh is compativle iwth any of the "same-rule" parses.
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
-    from .learning import preprocess_dataset as learn_preprocess
     from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_long
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
 
     if reset_grammar_dat:
         D.GrammarDict = {}
 
+    # 1) Get learning metaparams
+    list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
+
     ################## Create save directiory
     SDIR = D.make_savedir_for_analysis_figures("grammar")
     savedir= f"{SDIR}/summary"
     os.makedirs(savedir, exist_ok=True) 
-
-    # 1) Get learning metaparams
-    list_blocksets_with_contiguous_probes = learn_preprocess(D)
 
     # grammar_recompute_parses = False # just use the matlab ground truth
     if which_rules=="matlab":

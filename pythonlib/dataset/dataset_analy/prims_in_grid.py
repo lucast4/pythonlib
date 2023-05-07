@@ -127,7 +127,7 @@ def plotscore_all(DS, SAVEDIR):
 
         plt.close("all")
 
-def plotdrawings_all(DS, SAVEDIR):
+def plotdrawings_all(DS, SAVEDIR, n_examples = 3):
     """ Summary plots that are drawings, eg., xample 
     strokes for each location 
     """
@@ -143,7 +143,6 @@ def plotdrawings_all(DS, SAVEDIR):
     # Plot n exmaples for each shape/location combo
     list_taskkind = DS.Dat["task_kind"].unique().tolist()
 
-    n_examples = 3
     key_to_extract_stroke_variations_in_single_subplot = "gridloc"
     n_iter = 3
     for tk in list_taskkind:
@@ -155,6 +154,11 @@ def plotdrawings_all(DS, SAVEDIR):
                 fig.savefig(f"{savedir}/egstrokes_shape_location--taskkind_{tk}-iter_{i}_{j}.pdf")
 
             plt.close("all")
+
+    # Plot velocities
+    savedir = f"{SAVEDIR}/velocities"
+    os.makedirs(savedir, exist_ok=True)
+    DS.plotwrap_timecourse_vels_grouped_by_shape(5, savedir=savedir, also_plot_example_strokes=True)
 
     if False:
         # Condition on a given shape

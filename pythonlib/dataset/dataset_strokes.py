@@ -915,7 +915,7 @@ class DatStrokes(object):
         return fig, ax
 
     def plotwrap_timecourse_vels_grouped_by_shape(self, n_each, version="vel",
-        also_plot_example_strokes=False):
+        also_plot_example_strokes=False, savedir=None):
         """ Plot velocity timecourse for n_each exmaples for each shape, each a 
         separate plot. 
         """
@@ -924,13 +924,22 @@ class DatStrokes(object):
         for shape, inds in groupdict.items():
             print("here:", shape)
             list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
-            self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
+            fig = self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
                 align_to="first_touch")
 
+            if savedir is not None:
+                fig.savefig(f"{savedir}/{shape}.pdf")
+                plt.close("all")
+
         if also_plot_example_strokes:
-            self.plotshape_multshapes_egstrokes(n_examples_total_per_shape=2, color_by=None,
+            figholder = self.plotshape_multshapes_egstrokes(n_examples_total_per_shape=2, color_by=None,
                 list_shape=list_shape)
 
+            for i, X in enumerate(figholder):
+                fig = X[0]
+                fig.savefig(f"{savedir}/egstrokes-{i}.pdf")
+                plt.close("all")
+            
 
     def plotshape_multshapes_egstrokes(self, key_subplots = "shape_oriented",
             n_examples_total_per_shape = 4, color_by=None, list_shape=None):
@@ -1010,7 +1019,8 @@ class DatStrokes(object):
                 if len(list_idx)>=n_examples:
                     inds = random.sample(list_idx, n_examples)[:n_examples]
                 else:
-                    inds = [None for _ in range(n_examples)]
+                    inds = list_idx
+                    # inds = [None for _ in range(n_examples)] # dont plot
                 list_inds = inds
             else:
                 # 1) get all unique values for a given key
@@ -1023,7 +1033,8 @@ class DatStrokes(object):
                 vals_vary = self.Dat[key_to_extract_stroke_variations_in_single_subplot].unique().tolist()
                 vals_vary = [v for v in vals_vary if not bad(v)]
                 list_inds, _ = extract_trials_spanning_variable(self.Dat, 
-                    key_to_extract_stroke_variations_in_single_subplot, vals_vary, n_examples, filtdict)
+                    key_to_extract_stroke_variations_in_single_subplot, vals_vary, 
+                    n_examples, filtdict)
 
             # 3) pull out these examples and plot
             list_inds = [i for i in list_inds if i is not None]
