@@ -309,3 +309,20 @@ def unique_input_order(mylist):
             mylist_uniq.append(item)
     
     return mylist_uniq
+
+def list_roll(mylist, shift):
+    """ Like np.roll but for lists. does not spruiously
+    convert list of tuples into list of lists.
+    PARAMS:
+    - mylist, list
+    - shift, int, how much to shift to right. 0 means no shift. 
+    e.g.,,:
+        x = [1,2,3,4,5]
+        list_roll(x, 2) --> [4, 5, 1, 2, 3]
+        list_roll(x, 6) --> [5, 1, 2, 3, 4] (becuase 6%5=1)
+        list_roll(x, -2) --> [3, 4, 5, 1, 2] 
+        list_roll(x, -7) --> [3, 4, 5, 1, 2] 
+    """
+    assert isinstance(mylist, list)
+    shift = shift%len(mylist)
+    return mylist[-shift:] + mylist[:-shift]

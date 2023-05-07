@@ -125,7 +125,9 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
     first encountered value.
     - aggmethod, list of str, applies each of these agg methods.
     """
-    
+        
+    if aggmethod is not None:
+        assert isinstance(aggmethod, list)
     assert isinstance(values, list)
     assert isinstance(group, list)
 
@@ -1350,7 +1352,7 @@ def concat(list_df):
 
 
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
-    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None):
+    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -1395,11 +1397,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     
     # 2_ get for each conjunction of other variables
     levels_others = df[var_conj_of_others].unique().tolist()
-    try:
-        levels_others = sorted(levels_others, key=lambda x: hash(tuple(x)))
-    except TypeError as err:
-        pass
-        # print("not sorting (TypeError): ", levels_others)
+    levels_others = sort_mixed_type(levels_others)
+    # except TypeError as err:
+    #     pass
+    #     # print("not sorting (TypeError): ", levels_others)
 
     # 3) check each sub datfarme
     list_dfthis = []
@@ -1408,10 +1409,12 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     for lev in levels_others:
 
         # get data
-        dfthis = df[(df[var_conj_of_others] == lev)]
+        dfthis = df[df[var_conj_of_others] == lev]
         good = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
             lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
             PRINT=PRINT)
+        if DEBUG:
+            print(lev, var, levels_var, good)
         if good:
             # keep
             list_dfthis.append(dfthis)
@@ -1444,6 +1447,8 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     else:
         STRICT = False
 
+    # print("HERERERE:", levels_to_check, len(dfthis))
+    # PRINT = True
     list_n = []
     for lev in levels_to_check:
         n = len(dfthis[dfthis[var]==lev])

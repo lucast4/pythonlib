@@ -1775,6 +1775,19 @@ class Dataset(object):
                 elif p=="remove_online_abort":
                     # Remove trials with online abort
                     self.Dat = self.Dat[self.Dat["aborted"]==False]
+                elif p=="correct_sequencing_binary_score":
+                    # correct sequence matching at lesat one of the grammar parses.
+                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                    # if "success_binary_quick" in self.Dat.columns:
+                    #     del self.Dat["success_binary_quick"] # to be sure this reflects outcome of next step
+                    # self.grammar_successbinary_score_parses(False)
+                    self.Dat = self.Dat[self.Dat["success_binary_quick"]==True]
+                elif p=="one_to_one_beh_task_strokes":
+                    # must use exactyl 
+                    list_good = []
+                    for i in range(len(self.Dat)):
+                        list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
+                    self.Dat = self.Dat[list_good]
                 elif p=="correct_sequencing":
                     # Only if beh sequence is consistent with at least one acceptable rule 
                     # based on the epoch.
@@ -1806,8 +1819,8 @@ class Dataset(object):
                 else:
                     print(p)
                     assert False, "dotn know this"
+                self.Dat = self.Dat.reset_index(drop=True)
                 print(f"after: {len(self.Dat)}")
-
         
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -5050,7 +5063,8 @@ class Dataset(object):
         each task stroke gotten by beh. [in order of BEH, but num of TASK]
         - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
         order that they are gotten (based on alignsim). Each tuple: 
-        (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes,
+        (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes indiicating
+        for which beh strkes this task stroke was the first task stroke the bhe stroke touched,
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
         """
 
@@ -5395,7 +5409,11 @@ class Dataset(object):
 
 
     # def grammar_rules_extract_rul
-
+    def grammar_grammardict_return(self, ind):
+        """
+        """
+        tc = self.Dat.iloc[ind]["trialcode"]
+        return self.GrammarDict[tc]
 
     def _grammar_parses_generate(self, ind, list_rulestring = None):
         """ Generate GrammarDat object and save, for this trial
@@ -5406,7 +5424,9 @@ class Dataset(object):
         if not hasattr(self, 'GrammarDict'):
             self.GrammarDict = {}
 
-        if ind not in self.GrammarDict.keys():
+        tc = self.Dat.iloc[ind]["trialcode"]
+
+        if tc not in self.GrammarDict.keys():
             # Generate a new GD
             from pythonlib.grammar.GrammarDat import GrammarDat
 
@@ -5415,9 +5435,9 @@ class Dataset(object):
                 "ind_dataset":ind
             }
             GD = GrammarDat(input_data_dict, input_version = "dataset")
-            self.GrammarDict[ind] = GD
+            self.GrammarDict[tc] = GD
 
-        GD = self.GrammarDict[ind]
+        GD = self.GrammarDict[tc]
         GD.parses_generate_batch(list_rulestring)
 
         # Return the grammardict, holding all the parses
@@ -5458,6 +5478,75 @@ class Dataset(object):
         """
         return self.sequence_extract_beh_and_task(ind, ploton)
 
+    def grammar_successbinary_print_summary(self):
+        """
+        Useful printing for each trial, sanity checks as well, for success_binayr,
+        which I think could be eitehr matlab sequence or parses, based on which code was run
+        """
+
+        print("ind, isprobe, SUCCESS, nbeh, ntask, one_to_one")
+        for ind in range(len(self.Dat)):
+            SUCCESS = self.Dat.iloc[ind]["success_binary_quick"]
+        # D.sequence_extract_beh_and_task(ind, True) 
+            nbeh = len(self.Dat.iloc[ind]["strokes_beh"])
+            ntask = len(self.Dat.iloc[ind]["strokes_task"])
+            isprobe = self.Dat.iloc[ind]["probe"]
+            one_to_one = self.sequence_compute_one_to_one_beh_to_task(ind)
+            if SUCCESS and nbeh>ntask:
+                print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one, " *** (success, but too MANY strokes)")
+                assert one_to_one==False
+            elif SUCCESS and nbeh<ntask:
+                print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one, " ### (success, but too FEW strokes)")
+                assert one_to_one==False
+            elif SUCCESS and nbeh==ntask:
+                print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one)
+                assert one_to_one==True
+            elif not SUCCESS and nbeh>=ntask:
+                print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one, " !!! (fail, but got lots of beh strokes ...) ")
+                # assert one_to_one==False
+            else:
+                # Then not success...
+                print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one)
+
+    def grammar_successbinary_score_parses(self, print_summary=False):
+        """ Good, determine if beh is success based on matching any of the possible
+        parses given each trial's rule.
+        PARAMS:
+        - print_summary, bool, then useful printing for each trial, sanity checks as well.
+        RETURNS:
+        - bm, object holding results.
+        - appends columns to self.Dat, including success_binary_quick
+        """
+        from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
+
+        # 1) Score each trial based on parses
+        bm = preprocess_dataset_recomputeparses(self)
+
+        # D.sequence_extract_beh_and_task(230, True)
+        if print_summary:
+            self.grammar_successbinary_print_summary()
+
+        return bm
+
+    def grammar_successbinary_score_matlab(self, print_summary=False):
+        """ Good, score each trial based on the ground truth matlab sequence, a singel
+        determistic sequence.
+        PARAMS:
+        - print_summary, bool, then useful printing for each trial, sanity checks as well.
+        RETURNS:
+        - bm, object holding results.
+        - appends columns to self.Dat, including success_binary_quick
+        """
+        from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_matlabrule
+
+        # 1) Score each trial based on parses
+        bm = preprocess_dataset_matlabrule(self)
+
+        # D.sequence_extract_beh_and_task(230, True)
+        if print_summary:
+            self.grammar_successbinary_print_summary()
+
+        return bm
 
     def grammar_wrapper_extract(self, return_as_bmh_object=True):
         """ Extract grammar data for each trial
@@ -5479,6 +5568,33 @@ class Dataset(object):
                 del Task._DatSegs
             if hasattr(Beh, "Alignsim_Datsegs"):
                 del Beh.Alignsim_Datsegs        
+
+
+    def sequence_compute_one_to_one_beh_to_task(self, ind):
+        """ Compute whether one to one mappibng between beh and task strokes.
+        i.e, each beh stroke matehd to a singel task stroke, and vice versa.
+        alsop means must have gotten all strokes
+        """
+
+        # Get task strokes in order of gotten, and for each get the
+        # beh strokes for which this task stroek was the first gotten
+        # e.g,
+        # [[0], [1], [], [2], [3]] means 3rd task stroke was not gotten, or it
+        # was gotten along with 2nd task stroke byt the 2nd beh stroke.
+        this = [t[0] for t in self.behclass_extract_beh_and_task(ind)[3]] 
+        n_beh = len(self.Dat.iloc[ind]["strokes_beh"])
+        n_task = len(self.Dat.iloc[ind]["strokes_task"])
+
+        matches = all([len(t)==1 for t in this]) # eahc task stroke gotten is matched to its own beh stroke
+        same_n_strokes = n_task == len(this) # got all task strokes.
+        
+        one_to_one = matches and same_n_strokes
+
+        if one_to_one:
+            # NOTE: it is not true the other way round...
+            assert n_beh == n_task
+        return one_to_one
+
     def sequence_extract_beh_and_task(self, ind, ploton=False):
         """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
         task (e.g., taskstroke inds ordered by chunk, and whether there is color
