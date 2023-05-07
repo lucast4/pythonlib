@@ -67,6 +67,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         ('circle', 'arcdeep', 'line', 'right'))] = "CLr2" # gridlinecircleGOOD (diego)
 
     grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line', 'arcdeep', 'circle', 'downright'))] = "LCr3" # linecirclerow1/2 (diego)
+
+    grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
         ('lolli', ('D', 'R')))] = "LolDR" # gridlinecircleGOOD (diego), lollis (circles down and right)
 
