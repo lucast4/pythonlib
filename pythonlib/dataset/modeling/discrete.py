@@ -345,6 +345,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     # -- [[1,0],[2,3],[4]],
     # -- [[1,0],[3,2],[4]]
     def _get_all_shape_ind_perms(shape_inds):
+        import itertools
         result = []
         for l in shape_inds:
             subresult = itertools.permutations(l)
@@ -565,6 +566,15 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # Random sampling
         list_hier = [list(range(len(objects)))]
 
+    elif ruledict["categ"]=="preset":
+        # Each task has a defined sequence in its matlab code (tasksequencer).
+        # e..g, rndstr was this, where a random sequence was sampled for eash task.
+        # I.e. only a single specific sequence
+
+        print(tokens)
+        print(Task)
+        assert False
+
     else:
         print(rulestring)
         print(ruledict)
@@ -708,7 +718,12 @@ def rules_map_rulestring_to_ruledict(rulestring):
                 categ_matlab = key[0] # e.g., prot_prims_in_order
                 params_matlab = key[1] # e.g., ('line-8-3', 'V-2-4', 'Lcentered-4-3')
                 FOUND = True
-        assert FOUND, "did not find this val"
+        if not FOUND:
+            for key, val in grouping_map_tasksequencer_to_rule.items():
+                print(key, val)
+            print(params)
+            print(rulestring)
+            assert FOUND, "did not find this val"
         return categ_matlab, params_matlab
     
     def _convert_shape_string(s):
@@ -769,7 +784,7 @@ def rules_map_rulestring_to_ruledict(rulestring):
         list_shapestring_good = [_convert_shape_string(shapestring) for shapestring in params_matlab]
         params_good = list_shapestring_good
 
-    if categ=="ss" and subcat in ["rankdir", "rankdir_nmax2"]:
+    elif categ=="ss" and subcat in ["rankdir", "rankdir_nmax2"]:
         # Sequence of sahpes, with direction fixed within a shape, e.g, line to circle in
         # gridlinecircled3, where first do lines to right, then circles to right.
 
@@ -870,6 +885,10 @@ def rules_map_rulestring_to_ruledict(rulestring):
         categ_matlab = None
         params_matlab = None
         params_good = params
+    elif categ=="preset" and subcat=="null":
+        categ_matlab = None
+        params_matlab = None
+        params_good = params
     else:
         print(categ, subcat)
         assert False, "code it"
@@ -951,13 +970,19 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2"]:
+    for r in ["LCr2", "CLr2", "AnBmTR"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
         # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
         # order across lollis (direction) and appending extra prims (any order)
         DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
+    for r in ["rndstr"]:
+        # Each task has a defined sequence in its matlab code (tasksequencer).
+        # e..g, rndstr was this, where a random sequence was sampled for eash task.
+        # I.e. only a single specific sequence
+        DICT_RULESTRINGS_CONSISTENT[r] = [f"preset-null-{r}"]
+
 
     # print(DICT_RULESTRINGS_CONSISTENT[r])
     # assert False
@@ -1001,7 +1026,8 @@ def rules_related_rulestrings_extract_auto(D):
     (i) the groundt truth rules in D< and (ii) related rules that
     are alternative huypotjeses to those rules
     """
-    list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
+    # list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
+    list_rules = D.Dat["epoch_orig"].unique().tolist()
     return _rules_related_rulestrings_extract_auto(list_rules)
 
 def _rules_related_rulestrings_extract_auto(list_rules):
@@ -1024,12 +1050,14 @@ def _rules_related_rulestrings_extract_auto(list_rules):
 
     DICT_RELATED_RULES = {
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
-        ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
+        ("LVl1", "lVL1", "VlL1", "llV1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1")),
         ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b"):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
-        ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"] #  gridlinecircle3
+        ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
+        ("AnBmTR"):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
+        ("rndstr"): ["preset-null-rndstr"] #  
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
     RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
@@ -1227,6 +1255,9 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         # Count the chunks
         if HACK:
             OUT = [None for _ in range(len(D.Dat))]
+    elif rd["rulestring"] == "preset-null-rndstr":
+        # Nothing to categorize them by. this is arbitrary pretermined sequence
+        OUT = [None for _ in range(len(D.Dat))]
     else:
         print(rule, rd)
         assert False, "not coded"
