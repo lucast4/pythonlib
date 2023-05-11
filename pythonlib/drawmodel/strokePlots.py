@@ -523,10 +523,10 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
         for i, s in enumerate(strokes):
             for j in range(tdim):
                 if i==0:
-                    ax.plot(s[:,tdim], s[:,j], ".b-", color=color[j], label=f"dim{j}", alpha=alpha)
+                    ax.plot(s[:,tdim], s[:,j], ".-", color=color[j], label=f"dim{j}", alpha=alpha)
                     # ax.plot(s[:,tdim], s[:,1], ".r-", color=col2, label='y')
                 else:
-                    ax.plot(s[:,tdim], s[:,j], ".b-", color=color[j], alpha=alpha)
+                    ax.plot(s[:,tdim], s[:,j], ".-", color=color[j], alpha=alpha)
                     # ax.plot(s[:,tdim], s[:,1], ".r-", color=col2)
 
         # elif plotver=="speed":
