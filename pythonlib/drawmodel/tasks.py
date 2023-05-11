@@ -1221,7 +1221,7 @@ class TaskClass(object):
             return C
 
 
-    def planclass_extract_all(self):
+    def planclass_extract_all(self, DEBUG=False):
         """ Wrapper to extract all planclass info.
         Also extracts "Objects" based on plan (e.g,, motifs that are touching are 
         actually a single object)
@@ -1274,6 +1274,50 @@ class TaskClass(object):
         # dat["ChunksList"]
         # for chunk in dat["ChunksList"]:
 
+
+        # Convert to hier and flips to list of list. This solves issue where they can be list of arrays with different dimensinoalitys, () or (1), which fails 
+        # when try to index into array latter. Solve by converting all to list(array of shape (N,))
+        # i.e., Chunkslist:
+        # ChunksList [['default', [array(1.), array(2.), array(3.), array([4., 5., 6.])], [array(0.), array(0.), array(0.), array([0., 0., 0.])], {'color': [array([0.07714286, 0.07714286, 0.44214286]), array([0.655, 0.205, 0.205]), array([0.365, 0.   , 0.365]), array([0.53332996, 0.40376795, 0.44890529])]}, array([0., 0., 0., 1.])]]
+        # convert this ([array(1.), array(2.), array(3.), array([4., 5., 6.])]) to :
+        # ... [[1], [2], [3], [4,5,6]] ...
+        # THis solves indexing problem that might arise below.
+        # Fix so that each ch in chunks are same shape
+
+        def _arr_to_list(x):
+            if len(x.shape)==0:
+                # array(1.) --> array([1])
+                return np.array([int(x)])
+            else:
+                # array([1,2]) --> array([1,2])
+                return np.array([int(xx) for xx in x])
+        
+        for chunkset in dat["ChunksList"]:
+            chname = chunkset[0] # str
+            hier = chunkset[1] # list of arr
+            flips = chunkset[2]
+
+            if DEBUG:
+                print("Starting hier:", hier)
+            hier = [_arr_to_list(x) for x in hier]
+            flips = [_arr_to_list(x) for x in flips]
+            if DEBUG:
+                print("Ending hier:", hier)
+
+            # Reassign
+            chunkset[1] = hier
+            chunkset[2] = flips
+
+        #     for i, x in hier:
+
+        #     print(hier)
+        #     print(flips)
+        #     assert False
+        #     print("CHUNKS FOR ", chname)
+        #         # print(x)
+        #         # print(x.shape)
+        #         # print(list(x))
+        # assert False
         ############################################################
         # Extract shapes and their params
         dat["shapes"] = [x[0] for x in dat["Prims"]]      
@@ -1313,6 +1357,15 @@ class TaskClass(object):
             do_reflects = []
             list_shapes = []
             list_prims = []
+
+            if DEBUG:
+                for k, v in dat.items():
+                    print(k, v)
+                print(dat["Prims"])
+                print(len(self.Strokes))
+                for ch in chunks:
+                    print("here", ch)
+
             for ch in chunks:
                 
                 # Get the prim index for the first prim in this concat. many features are tied
