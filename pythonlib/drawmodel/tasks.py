@@ -1510,6 +1510,7 @@ class TaskClass(object):
     def tasksetclass_summary(self):
         """ Return summayr of the tasksetclass used in dragmonkey to generate this
         task. only appliues for newer tasks. 
+        These are general params used for the TSC, _NOT_ params speciric to this task.
         RETurns dict holding TSC params.
         """
         if self.info_is_new_objectclass():

@@ -966,6 +966,57 @@ class TaskClass(object):
 
         return grid_ver
 
+    def get_grid_xy(self, hack_is_gridlinecircle=False):
+        """ [GOOD} Return the x and y values for the grid. 
+        Helps deal with outliers
+        RETURNS:
+        - xgrid, np array of coordinates of each x grid value
+        - ygrid
+        - grid_ver, string
+        """
+
+        # Grid ver
+        grid_ver = self.get_grid_ver()
+        
+        # - grid spatial params 
+        get_grid = True
+        if hack_is_gridlinecircle:
+            xgrid = np.linspace(-1.7, 1.7, 3)
+            ygrid = np.linspace(-1.7, 1.7, 3)
+            get_grid = False
+
+            centersthis = []
+            for p in Prims:
+                prms = p.extract_as("shape")[1]
+                centersthis.append([prms["x"], prms["y"]])
+
+                if prms["x"] is None:
+                    assert False, "this is probably gridlinecirlce lolli? 210829 Need to extract x/y loc. see notes here"
+                    # This is becuase concatted, so doesnt extract the xy locations. 
+                    # See this code in self.primitives_extract_final():
+                        # if shape is None and prms is None:
+                        # Prim.input_prim("prototype_prim_abstract", {}, 
+                        #         traj = traj)
+                    # Do: 
+
+            # grid_ver = "on_grid"
+            grid_ver = self._get_grid_ver_manual(xgrid, ygrid, centersthis)          
+            # assert grid_ver=="on_grid"      
+
+        if get_grid:
+            # Look for this saved
+            gridparams = self.get_grid_params()
+            # xgrid = gridparams["grid_x"]
+            # ygrid = gridparams["grid_y"]
+            xgrid = gridparams["grid_x_actual_after_rel"]
+            ygrid = gridparams["grid_y_actual_after_rel"]
+
+            # for key, val in gridparams.items():
+            #     print('--', key, val)
+            # # print(gridparams)
+            # assert False
+
+        return xgrid, ygrid, grid_ver
 
     def get_grid_params(self, also_return_each_kind_of_params=False):
         """ What is the grid structure (if any) for this task?
@@ -1033,9 +1084,12 @@ class TaskClass(object):
 
 
             ##################
-            # 3. Extract the actual relations used
+            # 3. Extract the actual relations used (across all tasks using this TSC)
             # - if grid, then these are the centers
             # - if char, then these are the delta relations (usualyl [0,0])
+            # NOTE: Potential problem, the extracted grid is specific to this TSC, so if multiple TSC
+            # in a single dataset, then might have different gridloc-actualloc mapping. This I plan to solved
+            # in the wrapper extracting behclass, for it to check that all grids are same across tasks.
             if tsc is not None and "tsc_params" in tsc.keys() and tsc["tsc_params"] is not None:
                 rel_xy_values = []
                 rels_list_of_dict = []
@@ -1067,8 +1121,7 @@ class TaskClass(object):
                             ys = [ys]
                         for x in xs:
                             for y in ys:
-                                pt = np.array([x, y])
-                                rel_xy_values.append(pt)
+                                rel_xy_values.append(np.array([x, y]))
 
                         # save this rel
                         rels_list_of_dict.append(relation_struct)
@@ -1080,8 +1133,8 @@ class TaskClass(object):
                 # - get all possible x and y locations (just to define grid, even if
                 # takss were only on seubset of loations)
                 xyall = np.stack(rel_xy_values) # (npts, 2)
-                xs = np.sort(np.unique(xyall[:,0])) 
-                ys = np.sort(np.unique(xyall[:,1]))
+                xs = np.sort(np.unique(xyall[:,0].round(decimals=3))) 
+                ys = np.sort(np.unique(xyall[:,1].round(decimals=3)))
                 # for k, v in gridparams_background.items():
                 #     print('---', k, v)
                 if False:
@@ -1154,10 +1207,15 @@ class TaskClass(object):
                 return gridparams
 
     def tokens_generate(self, params = None, inds_taskstrokes=None, 
-        track_order=True, hack_is_gridlinecircle=False, assert_computed=False,
-        include_scale=False):
+        track_order=True, hack_is_gridlinecircle=False, assert_computed=True,
+        include_scale=False, input_grid_xy=None):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
+        PARAMS:
+        - assert_computed, bool, by default True, so that you explciitly turn this off 
+        when you want to recompute it, useful to make sure correct params are used when 
+        you do recompute
+        - input_grid_xy, see inner
         """
 
         if params is None:
@@ -1177,7 +1235,8 @@ class TaskClass(object):
         else:
             # Generate from scratch
             datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
-                hack_is_gridlinecircle=hack_is_gridlinecircle, include_scale=include_scale)
+                hack_is_gridlinecircle=hack_is_gridlinecircle, 
+                include_scale=include_scale, input_grid_xy=input_grid_xy)
             self._DatSegs = datsegs
             return self._DatSegs
 
@@ -1228,7 +1287,8 @@ class TaskClass(object):
         return Tk.Tokens
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
-            track_order=True, hack_is_gridlinecircle=False, include_scale=True):
+            track_order=True, hack_is_gridlinecircle=False, include_scale=True,
+            input_grid_xy = None):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
         generates and caches. To reorder, see tokens_reorder]
@@ -1244,6 +1304,9 @@ class TaskClass(object):
         features.
         - hack_is_gridlinecircle, for gridlinecirlce epxeirments, hacked the grid...
         for both "gridlinecircle", "chunkbyshape2"
+        - input_grid_xy, either None (extracts grid params for this task auto), or a 
+        list of two arrays [gridx, gridy] where each array is sorted (incresaing) scalar coordinates
+        for each grid location.
         RETURNS:
         - datsegs, list of dicts, each a token.
         """
@@ -1301,46 +1364,17 @@ class TaskClass(object):
 
         ############# Some grid params for this task
         # - was this on grid?
-        grid_ver = self.get_grid_ver()
-
-        # - grid spatial params 
-        get_grid = True
-
-        if hack_is_gridlinecircle:
-            xgrid = np.linspace(-1.7, 1.7, 3)
-            ygrid = np.linspace(-1.7, 1.7, 3)
-            get_grid = False
-
-            centersthis = []
-            for p in Prims:
-                prms = p.extract_as("shape")[1]
-                centersthis.append([prms["x"], prms["y"]])
-
-                if prms["x"] is None:
-                    assert False, "this is probably gridlinecirlce lolli? 210829 Need to extract x/y loc. see notes here"
-                    # This is becuase concatted, so doesnt extract the xy locations. 
-                    # See this code in self.primitives_extract_final():
-                        # if shape is None and prms is None:
-                        # Prim.input_prim("prototype_prim_abstract", {}, 
-                        #         traj = traj)
-                    # Do: 
-
-            # grid_ver = "on_grid"
-            grid_ver = self._get_grid_ver_manual(xgrid, ygrid, centersthis)          
-            # assert grid_ver=="on_grid"      
-
-        if get_grid:
-            # Look for this saved
-            gridparams = self.get_grid_params()
-            # xgrid = gridparams["grid_x"]
-            # ygrid = gridparams["grid_y"]
-            xgrid = gridparams["grid_x_actual_after_rel"]
-            ygrid = gridparams["grid_y_actual_after_rel"]
-
-            # for key, val in gridparams.items():
-            #     print('--', key, val)
-            # # print(gridparams)
-            # assert False
+        # grid_ver = self.get_grid_ver()
+        if input_grid_xy is None:
+            xgrid, ygrid, grid_ver = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
+        else:
+            _, _, grid_ver = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
+            assert len(input_grid_xy)==2
+            assert isinstance(input_grid_xy, (list, tuple))
+            xgrid = input_grid_xy[0]
+            ygrid = input_grid_xy[1]
+            assert np.all(np.diff(xgrid)>0)
+            assert np.all(np.diff(ygrid)>0)
 
         nver = len(ygrid)
         nhor = len(xgrid)
@@ -1484,25 +1518,10 @@ class TaskClass(object):
                     # Good, got grid locations.
                     xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
                     yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
-
+                
+                # print("locations:", xloc, yloc)
+                # print("locations(grid):", xind, yind)
                 locations.append((xind, yind))
-
-            # # 1) assign each object a grid location
-            # locations = []
-            # for o in objects:
-            #     xloc = o[1]["x"]
-            #     yloc = o[1]["y"]
-
-            #     # print(xloc, xgrid)
-            #     # print(yloc, ygrid)
-            #     # print(isin_close(yloc, ygrid))
-            #     # print(isin_close(yloc, ygrid)[1])
-            #     # print(isin_close(yloc, ygrid)[1].shape)
-            #     # print(isin_close(yloc, ygrid)[1][0])
-            #     xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
-            #     yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
-            #     locations.append((xind, yind))
-
             
             def _posdiffs(i, j):
                 # return xdiff, ydiff, 
