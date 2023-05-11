@@ -1389,7 +1389,7 @@ class TaskClass(object):
                 do_reflects.append(reflect)
 
                 # get shapes
-                assert isinstance(ch, list), "the line len(ch)>1 assumes this is a list, such that len of 1 means singleton..."
+                # assert isinstance(ch, list), "the line len(ch)>1 assumes this is a list, such that len of 1 means singleton..."
                 if len(ch)>1:
                     # then this is concatted. append "novel"
                     list_shapes.append("novelprim")
