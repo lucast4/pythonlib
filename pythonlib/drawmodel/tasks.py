@@ -1221,7 +1221,7 @@ class TaskClass(object):
             return C
 
 
-    def planclass_extract_all(self):
+    def planclass_extract_all(self, DEBUG=False):
         """ Wrapper to extract all planclass info.
         Also extracts "Objects" based on plan (e.g,, motifs that are touching are 
         actually a single object)
@@ -1274,6 +1274,50 @@ class TaskClass(object):
         # dat["ChunksList"]
         # for chunk in dat["ChunksList"]:
 
+
+        # Convert to hier and flips to list of list. This solves issue where they can be list of arrays with different dimensinoalitys, () or (1), which fails 
+        # when try to index into array latter. Solve by converting all to list(array of shape (N,))
+        # i.e., Chunkslist:
+        # ChunksList [['default', [array(1.), array(2.), array(3.), array([4., 5., 6.])], [array(0.), array(0.), array(0.), array([0., 0., 0.])], {'color': [array([0.07714286, 0.07714286, 0.44214286]), array([0.655, 0.205, 0.205]), array([0.365, 0.   , 0.365]), array([0.53332996, 0.40376795, 0.44890529])]}, array([0., 0., 0., 1.])]]
+        # convert this ([array(1.), array(2.), array(3.), array([4., 5., 6.])]) to :
+        # ... [[1], [2], [3], [4,5,6]] ...
+        # THis solves indexing problem that might arise below.
+        # Fix so that each ch in chunks are same shape
+
+        def _arr_to_list(x):
+            if len(x.shape)==0:
+                # array(1.) --> array([1])
+                return np.array([int(x)])
+            else:
+                # array([1,2]) --> array([1,2])
+                return np.array([int(xx) for xx in x])
+        
+        for chunkset in dat["ChunksList"]:
+            chname = chunkset[0] # str
+            hier = chunkset[1] # list of arr
+            flips = chunkset[2]
+
+            if DEBUG:
+                print("Starting hier:", hier)
+            hier = [_arr_to_list(x) for x in hier]
+            flips = [_arr_to_list(x) for x in flips]
+            if DEBUG:
+                print("Ending hier:", hier)
+
+            # Reassign
+            chunkset[1] = hier
+            chunkset[2] = flips
+
+        #     for i, x in hier:
+
+        #     print(hier)
+        #     print(flips)
+        #     assert False
+        #     print("CHUNKS FOR ", chname)
+        #         # print(x)
+        #         # print(x.shape)
+        #         # print(list(x))
+        # assert False
         ############################################################
         # Extract shapes and their params
         dat["shapes"] = [x[0] for x in dat["Prims"]]      
@@ -1313,6 +1357,15 @@ class TaskClass(object):
             do_reflects = []
             list_shapes = []
             list_prims = []
+
+            if DEBUG:
+                for k, v in dat.items():
+                    print(k, v)
+                print(dat["Prims"])
+                print(len(self.Strokes))
+                for ch in chunks:
+                    print("here", ch)
+
             for ch in chunks:
                 
                 # Get the prim index for the first prim in this concat. many features are tied
@@ -1336,17 +1389,18 @@ class TaskClass(object):
                 do_reflects.append(reflect)
 
                 # get shapes
-                if len(ch)>0:
+                assert isinstance(ch, list), "the line len(ch)>1 assumes this is a list, such that len of 1 means singleton..."
+                if len(ch)>1:
                     # then this is concatted. append "novel"
                     list_shapes.append("novelprim")
-                else:
-                    list_shapes.append(prim[0])
-
-                if len(ch)>0:
-                    # then this is concatted. append "novel"
                     list_prims.append("novelprim")
                 else:
+                    list_shapes.append(prim[0])
                     list_prims.append(prim)
+
+                # if len(ch)>1:
+                #     # then this is concatted. append "novel"
+                # else:
 
             dat["CentersAfterConcat"] = centers
             dat["ReflectsAfterConcat"] = do_reflects
@@ -1437,12 +1491,25 @@ class TaskClass(object):
         from pythonlib.chunks.chunksclass import ChunksClassList
         chunkslist = []
         for this in dat["ChunksList"]:
-            
+            # "this" represents all chunks for this task (e..g, "default" chunks)
+
+            # print(len(this))
+            # for x in this:
+            #     print(x)
+            # print(this[4])
             if len(this)>4 and np.any(this[4]==1):
                 # Then skip, since this was used for concatting, and iwll not match the 
                 # num strokes. 
-                continue
+                # .e.g, this[0:4] = 
+                    # default
+                    # [array([1]), array([2]), array([3]), array([4, 5, 6])]
+                    # [array([0]), array([0]), array([0]), array([0, 0, 0])]
+                    # {'color': [array([0.07714286, 0.07714286, 0.44214286]), array([0.655, 0.205, 0.205]), array([0.365, 0.   , 0.365]), array([0.53332996, 0.40376795, 0.44890529])]}
+                    # [0. 0. 0. 1.]
+                # The problem is that this refers to strokes 4 5 and 6, which don't exist now, since they were already cocnated, (ie..
+                # 4,5,6 were the matlab instructiuons there for how to concat.
 
+                continue
             ch = []
 
             # just giving variables here note-taking purpose
@@ -1465,6 +1532,12 @@ class TaskClass(object):
             # Note: color is actually better in objectclass, acurate online)
 
             chunkslist.append(ch)
+
+        # if DOPRINT:
+        #     print("HERE", chunkslist)
+        #     for c in chunkslist:
+        #         print(c)
+        #     assert False
 
         del dat["ChunksList"]
 

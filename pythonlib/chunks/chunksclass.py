@@ -285,7 +285,7 @@ class ChunksClass(object):
         self._preprocess()
 
 
-    def _preprocess(self):
+    def _preprocess(self, DEBUG=False):
         """ run once
         """
         import numpy as np
@@ -293,21 +293,40 @@ class ChunksClass(object):
         def _clean(input_list):
             assert len(input_list)>0
             output_list = []
+
+            if DEBUG:
+                print("---")
+                print(input_list)
+
             for i, c in enumerate(input_list):
+                if DEBUG:
+                    print("CHUNKSCLASS:", i, c)
+
                 if isinstance(c, int):
                     output_list.append([c])
                 elif isinstance(c, np.ndarray) and len(c.shape)==0:
                     output_list.append([int(c)])
-                elif isinstance(c, np.ndarray) and len(c)>1:
+                elif isinstance(c, np.ndarray) and len(c)>0:
+                    # array([1])
+                    # array([1, 2])
                     output_list.append([int(cc) for cc in c])
+                # elif isinstance(c, np.ndarray) and len(c)==1:
+                #     print([int(cc) for cc in c])
+                #     # print(c.shape)
+                #     # print(len(c))
+                #     assert False    
                 elif isinstance(c, np.float64):
                     # THis is like 3.0. check it is int, then convert to list.
                     assert np.floor(c) == c
                     output_list.append([int(c)])
-                else:
-                    assert isinstance(c, list)
+                elif isinstance(c, list):
                     assert isinstance(c[0], int)
-                    output_list.append(c)
+                    output_list.append([int(c)])
+                else:
+                    print(c)
+                    print(type(c))
+                    print(len(c))
+                    assert False
             return output_list
 
         # 1) no ints, make sure all items are lists.

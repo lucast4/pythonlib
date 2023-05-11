@@ -1337,8 +1337,16 @@ class TaskClass(object):
             assert False, "must generate self.Primitives (instead of using Shapes...)"
         else:
             Prims = self.Primitives
-            Rels = self.PlanDat["RelsBeforeRescaleToGrid"]
-            assert len(Prims)==len(Rels)
+            # Rels = self.PlanDat["RelsBeforeRescaleToGrid"]
+            # for k, v in self.PlanDat.items():
+            #     print(k, '---', v)
+            # print(1)
+            # for x in Prims:
+            #     print(x)
+            # print(1)
+            # for x in Rels:
+            #     print(x)
+            assert len(Prims)==len(self.PlanDat["ShapesAfterConcat"]), "just a sanity check, nothing special about ShapesAfterConcat"
             # assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
@@ -1349,14 +1357,14 @@ class TaskClass(object):
             # objects = [objects[i] for i in inds_taskstrokes]
             # if Prims is not None:
             Prims = [Prims[i] for i in inds_taskstrokes]
-            Rels = [Rels[i] for i in inds_taskstrokes]
+            # Rels = [Rels[i] for i in inds_taskstrokes]
         except Exception as err:
             # print(objects)
             # print(len(objects))
             print(inds_taskstrokes)
             print(len(self.Strokes))
             print(Prims)
-            print(Rels)
+            # print(Rels)
             for p in Prims:
                 p.print_summary()
             self.plotStrokes()
