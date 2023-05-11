@@ -146,7 +146,6 @@ class ChunksClassList(object):
 
 
         # - Make one ChunksClass instance for each chunk:
-        # list_shapes = Task.tokens_generate({"expt":expt}, track_order=False)
         list_shapes = [s for s in Task.Shapes]
         # e.g., [['line-3-0', {'x': -1.146, 'y': 0.05, 'sx': None, 'sy': None, 'theta': None, 'order': None}], ['V-4-0', {'x': 0.05, 'y': -1.146, 'sx': None, 'sy': None, 'theta': None, 'order': None}], ['Lcentered-3-0', {'x': 1.246, 'y': -2.342, 'sx': None, 'sy': None, 'theta': None, 'order': None}]]
         for chunks, hier, fixedorder in zip(list_chunks, list_hier, list_fixed_order):
