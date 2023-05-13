@@ -115,3 +115,7 @@ def stringify(arr, remove_decimels=True):
         # out.append(f"{val[0]:.0f}|{val[1]:.0f}")
     return out
 
+def unique_tol(arr, decimels=4):
+    """ get unique, alowoing for tolerance, based on roudning decimels
+    """
+    return np.unique(arr.round(decimels=decimels))

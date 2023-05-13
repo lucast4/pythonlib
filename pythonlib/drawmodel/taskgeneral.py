@@ -202,7 +202,7 @@ class TaskClass(object):
             
             PrimsList = self.PlanDat["primitives"]
             Features = O["Features_Active"]
-            list_shapes_1 = Features["shapes"] # these are not correct. ie, calls a "V" an "L"...
+            list_shapes_1 = Features["shapes"] # MATLAB: these are not correct. ie, calls a "V" an "L"...
             list_shapes_2 = P["ShapesAfterConcat"] # These are correct
             # list_shapes_3 = [p.Shape for p in PrimsList] # These should match list_shapes_2
             list_prims_plandat = P["PrimsAfterConcat"]
@@ -217,9 +217,17 @@ class TaskClass(object):
 
                 # Shapes signals whtehr this was concated (novel_prim)
                 shape = list_shapes_2[i]
-                if shape=="novelprim":
+                if shape[:9]=="novelprim":
                     # Then this is concatted. Use the new prim name
-                    shape = list_shapes_1[i] # e.g, "-line-line..."
+
+                    if False:
+                        # PREVIOUSLY:
+                        shape = list_shapes_1[i] # e.g, "-line-line..."
+                        # list_shapes_2[i] # novelprim
+                    else:
+                        # UPDATED:
+                        # shape = list_shapes_1[i] # e.g, "-line-line..."
+                        shape = list_shapes_2[i] # novelprim-4603624566784205119
 
                     # then not defined:
                     scale = None
@@ -228,7 +236,7 @@ class TaskClass(object):
                     # scale = O["Features_Active"]["prot_level"][i]
                     # rotation = O["Features_Active"]["prot_rot"][i]
 
-                    assert len(PrimsList)>len(list_shapes_1), "this expected if this is concatted"
+                    assert len(PrimsList)>len(list_shapes_2), "this expected if this is concatted"
                 else:
                     # Then use plandat, just like before.
                     scale = int(list_prims_plandat[i][1][1])

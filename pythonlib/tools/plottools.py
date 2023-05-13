@@ -701,6 +701,15 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
     if all([t=="dummy" for t in titles]):
         titles = None
 
+    # convert to strings, as this can break code later.
+    if titles is not None:
+        for i, tit in enumerate(titles):
+            if isinstance(tit, tuple):
+                try:
+                    titles[i] = "-".join([str(x) for x in tit])
+                except Exception as err:
+                    titles[i] = "TUPLE"
+
     for i, (dat, col, row, xl) in enumerate(zip(data, cols, rows, xlabels)):
         if max_n_per_grid is not None:
             if done[(row, col)]==max_n_per_grid:

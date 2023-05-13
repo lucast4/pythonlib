@@ -31,7 +31,8 @@ class GrammarDat(object):
             D = input_data_dict["dataset"]
             ind = input_data_dict["ind_dataset"]
             self.Dataset = D
-            self.DatasetInd = ind
+            # self.DatasetInd = ind
+            self.DatasetTrialcode = D.Dat.iloc[ind]["trialcode"]
 
             Beh = D.Dat.iloc[ind]["BehClass"]
             Task = D.Dat.iloc[ind]["Task"]
@@ -174,6 +175,8 @@ class GrammarDat(object):
         """
 
         # 1) Plot behavior
+        assert False, "convert from self.DatasetTrialcode to ind"
+        
         fig1 = self.Dataset.plotSingleTrial(self.DatasetInd, task_add_num=True)
         # fig1, ax = self.Beh.plotStrokes()
         # ax.set_title("Behavior")

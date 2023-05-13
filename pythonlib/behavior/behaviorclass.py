@@ -29,7 +29,7 @@ class BehaviorClass(object):
 
         # self.Dataset = None
         self.Datrow = None
-        self.IndDataset = None
+        # self.IndDataset = None
         self.Expt = None
         self.Strokes = None # holds strokes as strokeclass
         self.StrokesVel = None
@@ -157,7 +157,6 @@ class BehaviorClass(object):
                 "character":D.Dat.iloc[ind]["character"]}
 
             # self.Dataset = D.copy() # must copy, or else if modify D, the ind doesnt match anymore.
-            # self.IndDataset = ind
             self.Datrow = D.Dat.iloc[ind]
 
             #### easier access to some variables
@@ -277,7 +276,7 @@ class BehaviorClass(object):
         - strokes_vels, same shape as strokes.
         NOTE: only runs if self.StrokesVel is None
         """
-
+        assert False, 'input trialcode, not ind'
 
         if self.StrokesVel is None:
             from pythonlib.tools.stroketools import strokesVelocity
@@ -351,7 +350,6 @@ class BehaviorClass(object):
         """
 
         # print(self.Dataset)
-        # return self.Dataset.Dat.iloc[self.IndDataset]["Task"]
         return self.Datrow["Task"]
 
 
@@ -449,7 +447,7 @@ class BehaviorClass(object):
             self.Alignsim_Datsegs = None
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
-            include_scale=True):
+            include_scale=True, input_grid_xy=None):
         """
         [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
@@ -467,6 +465,12 @@ class BehaviorClass(object):
             if self.Alignsim_Datsegs is not None:
                 return self.Alignsim_Datsegs
 
+        # If you are computing, then you should pass in input_grid_xy
+        if input_grid_xy is None:
+            print("recompute:", recompute)
+            print("self.Alignsim_Datsegs:", self.Alignsim_Datsegs)
+            assert False, "to make sure all tasks in this dataset have same grid..."
+
         if expt is None:
             expt = self.Expt
             assert expt is not None
@@ -477,14 +481,12 @@ class BehaviorClass(object):
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
 
-        # Task = self.Dataset.Dat.iloc[self.IndDataset]["Task"]
         Task = self.task_extract()
         hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
         Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
-            include_scale=include_scale) # generate the defualt order
-        # Task.tokens_generate(params) # generate the defualt order
+            assert_computed=False,
+            include_scale=include_scale, input_grid_xy=input_grid_xy) # generate the defualt order
         datsegs = Task.tokens_reorder(inds_taskstrokes)
-        # datsegs = Task.tokens_generate(params, inds_taskstrokes)
 
         if plot_print_on:
             for x in datsegs:
@@ -511,7 +513,7 @@ class BehaviorClass(object):
         """        
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        datsegs_tasklength = self.alignsim_extract_datsegs(include_scale=include_scale)
+        datsegs_tasklength = self.alignsim_extract_datsegs(include_scale=include_scale) 
         datsegs_behlength = [datsegs_tasklength[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
 
 

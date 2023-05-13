@@ -3,6 +3,23 @@ from operator import itemgetter
 import numpy as np
 # import torch
 
+def stringify_list(li):
+    """ 
+    list --> list of str
+    """
+        
+    out = []
+    for x in li:
+        if isinstance(x, list):
+            out.extend(stringify_list(x))
+#         elif isinstance(x, np.ndarray):
+#             from pythonlib.tools.nptools import stringify
+#             out.extend(stringify(x))
+        else:
+            out.append(str(x))
+    return out
+
+
 def sort_mixed_type(mylist):
     """ Sort, works even if elements in mylist are mixed type.
     PROBLEMS:
@@ -326,3 +343,4 @@ def list_roll(mylist, shift):
     assert isinstance(mylist, list)
     shift = shift%len(mylist)
     return mylist[-shift:] + mylist[:-shift]
+

@@ -69,13 +69,17 @@ class DatStrokes(object):
 
         D = self.Dataset
         if D.behclass_check_if_tokens_extracted() ==False:
-            # Generate all beh calss
-            D.behclass_generate_alltrials()
-            # For each compute datsegs
-            D.behclass_alignsim_compute()
+            D.behclass_preprocess_wrapper()
+            # # Generate all beh calss
+            # D.behclass_generate_alltrials()
+            # # For each compute datsegs
+            # D.behclass_alignsim_compute()
 
         # Prune cases where beh did not match any task strokes.
         D.behclass_clean()
+
+        # Sanity check that all gridloc are relative the same grid (across trials).
+        D.taskclass_tokens_sanitycheck_gridloc_identical()
 
     def _extract_strokes_from_dataset(self, version="beh", include_scale=True, 
             tokens_extract_keys=None, tokens_get_relations=True):
@@ -295,6 +299,7 @@ class DatStrokes(object):
         if methods is None:
             methods = []
         for meth in methods:
+            print(f"len of DS.Dat = {len(self.Dat)}, before running... {meth}")
             if meth=="remove_if_multiple_behstrokes_per_taskstroke":
                 # Only keep trials with good behavior
                 # - takes at most one beh strok to get this task strok.
@@ -354,6 +359,8 @@ class DatStrokes(object):
             else:
                 print(meth)
                 assert False, "code it"
+
+            print("New len: ", len(self.Dat))
         self.Dat = self.Dat.reset_index(drop=True)
 
 
@@ -1239,7 +1246,7 @@ class DatStrokes(object):
         rescale_strokes_ver=None, distancever="euclidian_diffs", 
         return_as_Clusters=False, labels_for_Clusters=None, labels_for_basis=None):
         """ Low-level code to compute the similarity matrix between list of strokes
-        and basis set
+        and basis set. Autoatmically recenters strokes to onset.
         PARAMS:
         - strokes_data, list of strok
         - strokes_basis, list of strok, (columns)

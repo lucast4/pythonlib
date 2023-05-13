@@ -19,6 +19,8 @@ def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     RETURN:
     - dfout, without modifying in place.
     """
+
+    df1 = df1.copy() # becuase dont want to set value on a slice, need to copy.
     df1["index_copy"] = df1.index # save old indices.
     dfout = df1.merge(df2, how=how, on=on) # 
     # dfout = df1.merge(df2, how=how, on=on, validate="one_to_one") # 
@@ -641,7 +643,10 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True,
     - df, but with new col. either values as string or tuples
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
- 
+    
+    for x in grp:
+        assert not isinstance(x, (list, tuple)), "leads to errors. you prob want to flatten grp"
+
     # add a column, which is grp index
     def F(x):
         tmp = [x[g] for g in grp]
@@ -1364,7 +1369,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     - vars_others, list of str, variables that conjucntion will define a 
     new goruping var.
     - levels_var, either list of items, for each must have at least n_min.
-    if None, then takes the unique levels.
+    if None, then takes the unique levels across entire df
     - n_min, min n trials desired for each level of var. will only keep
     conucntions of (vars_others) which have at least this many for each evel of
     var.
@@ -1393,6 +1398,9 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     """
 
     assert n_min is not None
+
+    if DEBUG:
+        PRINT = True
 
     # make a copy, becuase will have to append to this dataframe
     df = df.copy()
@@ -1457,6 +1465,9 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     - var, str, column in dfthis
     - levels_to_check, either list of categorival levles of var, or None (to get all of them)
     - n_trials_min, int
+    - lenient_allow_data_if_has_n_levels, None or int. if None, then must have at least n_trials_min for 
+    each level in levels_to_check. if int, then only need to have at least n_trials_min for 
+    lenient_allow_data_if_has_n_levels many levels.
     """
         
     assert len(dfthis)>0
@@ -1464,6 +1475,10 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
 
     if levels_to_check is None:
         levels_to_check = dfthis[var].unique().tolist()
+    # else:
+    #     # check that each level exists in dfthis
+    #     for lev in levels_to_check:
+    #         assert lev in dfthis[var].tolist(), "you passed in levels_to_check that doesnt exist"
     assert isinstance(levels_to_check, list)
 
     if lenient_allow_data_if_has_n_levels is None:
@@ -1471,14 +1486,12 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     else:
         STRICT = False
 
-    # print("HERERERE:", levels_to_check, len(dfthis))
-    # PRINT = True
     list_n = []
     for lev in levels_to_check:
         dfthisthis = dfthis[dfthis[var]==lev]
         n = len(dfthisthis)
         list_n.append(n)
-        assert n>0
+        # assert n>0
         if PRINT:
             print(lev, ' -- ', n)
         if STRICT:
@@ -1489,18 +1502,13 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
         # Then you have suceeded iof havent failed aboev.
         return True
     else:
-
         passes = [nthis >= n_trials_min for nthis in list_n] #  whether enogh trials for each level of var: [True, False, ...]
         npass = sum(passes)
         good = npass >= lenient_allow_data_if_has_n_levels
 
         if PRINT:
             print("----")
-            print(good)
-            print(list_n)
-            print(lenient_allow_data_if_has_n_levels)
-            print(n_trials_min)
-            print(npass)
+            print(f"{good}, because {npass}/{lenient_allow_data_if_has_n_levels} passed... ({list_n}) >= {n_trials_min}")
 
         if npass >= lenient_allow_data_if_has_n_levels:
             return True

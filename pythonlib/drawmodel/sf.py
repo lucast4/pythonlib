@@ -131,6 +131,7 @@ def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever,
                            normalize_by_range=True, range_norm=[2,145],
                            DEBUG=False)
     else:
+        print(distancever)
         assert False
 
     return similarity_matrix

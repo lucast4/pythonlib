@@ -1149,12 +1149,72 @@ class Dataset(object):
         # for x in tmp_sorted:
         #     print(x)        
 
+    def taskclass_get_grid_xy_over_all_tasks(self):
+        """ return gridxy that is union over all tasks.
+        RETURNS:
+        - gridx, np array of scalars, sorted increasing
+        - gridy, np array of scalars, sorted increasing
+        """
+        # Get grid across all tasks.
+        # Generate new grid based on all tasks in dataset
+        xs = np.array([])
+        ys = np.array([])
+        for ind in range(len(self.Dat)):
+            T = self.Dat.iloc[ind]["Task"]
+            xgrid, ygrid, grid_ver = T.get_grid_xy()
+            if grid_ver=="on_grid":
+                xs = np.append(xs, xgrid)
+                ys = np.append(ys, ygrid)
+                
+        xgrid = np.sort(np.unique(xs.round(decimals=3)))
+        ygrid = np.sort(np.unique(ys.round(decimals=3)))
+
+        assert len(xgrid)<8, "this is weird, numerical precision?"
+        assert len(ygrid)<8, "this is weird, numerical precision?"
+        assert np.all(np.diff(xgrid)>0.5), "weird, numerical precision?"
+        assert np.all(np.diff(ygrid)>0.5)    
+
+        return xgrid, ygrid    
+
     def taskclass_get_grid_ver(self, ind):
         """ return string naem of grid
         """
 
         T = self.Dat.iloc[ind]["Task"]
         return T.get_grid_ver()
+
+    def taskclass_tokens_sanitycheck_gridloc_identical(self):
+        """ Check that each tasks gridloc:loc mapping is the same
+        This can fail if different datasets with different TSC, since
+        gridloc is defined relative to all tasks within a dataset
+        RETURNS:
+        - throws error if fails
+        """
+        # Sanity check that all grids are aligned across tasks
+        map_gridloc_loc_x = {}
+        map_gridloc_loc_y = {}
+        for ind in range(len(self.Dat)):
+            tokens = self.taskclass_tokens_extract_wrapper(ind)
+            for tok in tokens:
+                x = tok["Prim"].extract_as("params")["cnr_x"]
+                y = tok["Prim"].extract_as("params")["cnr_y"]
+                xgrid = tok["gridloc"][0]
+                ygrid = tok["gridloc"][1]
+                
+                if xgrid in map_gridloc_loc_x.keys():
+                    assert np.isclose(map_gridloc_loc_x[xgrid], x)
+                else:
+                    map_gridloc_loc_x[xgrid] = x
+                    
+                if ygrid in map_gridloc_loc_y.keys():
+                    assert np.isclose(map_gridloc_loc_y[ygrid], y)
+                else:
+                    map_gridloc_loc_y[ygrid] = y
+        
+        print("Success! all gridloc identical!")     
+        print("These are the x and y mappings, gridloc:loc")
+        print(map_gridloc_loc_x)
+        print(map_gridloc_loc_y)   
 
     def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", 
             plot=False, return_as_tokensclass=False):
@@ -1184,7 +1244,7 @@ class Dataset(object):
 
         if which_order=="task":
             Task = self.Dat.iloc[ind]["Task"]
-            tokens = Task.tokens_generate()
+            tokens = Task.tokens_generate(assert_computed=True)
         elif which_order=="beh":
             tokens = self.behclass_extract_beh_and_task(ind)[1]
         elif which_order=="beh_firsttouch":
@@ -1725,6 +1785,7 @@ class Dataset(object):
 
         if ver is None and params is None:
             assert False, "must pass in one"
+
         if params is None:
             if ver=="modeling":
                 # recenter tasks (so they are all similar spatial coords)
@@ -1754,77 +1815,84 @@ class Dataset(object):
             else:
                 print(ver)
                 assert False, "not coded"
-        else:
-            for p in params:
-                print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
-                if p=="recenter":
-                    self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
-                elif p=="interp":
-                    self.interpolateStrokes()
-                elif p=="interp_spatial_int":
-                    self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
-                        pts_or_interval="int")
-                    self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
-                        pts_or_interval="int")
-                elif p=="subsample":
-                    self.subsampleTrials()
-                elif p=="spad_edges":
-                    self.recomputeSketchpadEdges()
-                elif p=="rescale_to_1":
-                    self.rescaleStrokes()
-                elif p=="no_supervision":
-                    # Remove trials with online supervision (e.g, color)
-                    LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
-                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
-                elif p=="remove_online_abort":
-                    # Remove trials with online abort
-                    self.Dat = self.Dat[self.Dat["aborted"]==False]
-                elif p=="correct_sequencing_binary_score":
-                    # correct sequence matching at lesat one of the grammar parses.
-                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
-                    # if "success_binary_quick" in self.Dat.columns:
-                    #     del self.Dat["success_binary_quick"] # to be sure this reflects outcome of next step
-                    # self.grammar_successbinary_score_parses(False)
-                    self.Dat = self.Dat[self.Dat["success_binary_quick"]==True]
-                elif p=="one_to_one_beh_task_strokes":
-                    # must use exactyl 
-                    list_good = []
-                    for i in range(len(self.Dat)):
-                        list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
-                    self.Dat = self.Dat[list_good]
-                elif p=="correct_sequencing":
-                    # Only if beh sequence is consistent with at least one acceptable rule 
-                    # based on the epoch.
-                    assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
-                    bm = self.grammar_wrapper_extract()
-                    self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
-                elif p=="frac_touched_ok":
-                    assert frac_touched_min is not None
-                    # To see what is good value, try:
-                    # plot_trials_after_slicing_within_range_values(self, colname, minval, 
-                    # maxval, plot_hist=True):
-                    self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
-                elif p=="fixed_tasks_only":
-                    self.Dat = self.Dat[self.Dat["random_task"]==False]
-                elif p=="remove_repeated_trials":
-                    # remove trials that repeat the same task immediately after each otehr. only keep the first 
-                    # iter in a set of repeated trials.
-                    inds_repeated = self.taskclass_find_repeat_trials()
-                    inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
-                    self.subsetDataframe(inds_keep)
-                elif p=="only_dates_with_probes":
-                    # Only keep dates that have at least one probe task. Useful for looking
-                    # at generalziation.
-                    # [OPTIONAL] Only keep days with probe tasks
-                    grpdict = self.grouping_get_inner_items("date", "probe")
-                    dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
-                    print("Dates with probe tasks: ", dates_good)
-                    self.filterPandas({"date":dates_good}, "modify")
-                else:
-                    print(p)
-                    assert False, "dotn know this"
-                self.Dat = self.Dat.reset_index(drop=True)
-                print(f"after: {len(self.Dat)}")
+
+        # Do each preprocess step in params.
+        for p in params:
+            print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
+            if p=="recenter":
+                self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
+            elif p=="interp":
+                self.interpolateStrokes()
+            elif p=="interp_spatial_int":
+                self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
+                    pts_or_interval="int")
+                self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
+                    pts_or_interval="int")
+            elif p=="subsample":
+                self.subsampleTrials()
+            elif p=="spad_edges":
+                self.recomputeSketchpadEdges()
+            elif p=="rescale_to_1":
+                self.rescaleStrokes()
+            elif p=="no_supervision":
+                # Remove trials with online supervision (e.g, color)
+                LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
+                self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
+            elif p=="remove_online_abort":
+                # Remove trials with online abort
+                self.Dat = self.Dat[self.Dat["aborted"]==False]
+            elif p=="correct_sequencing_binary_score":
+                # correct sequence matching at lesat one of the grammar parses.
+                assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                # if "success_binary_quick" in self.Dat.columns:
+                #     del self.Dat["success_binary_quick"] # to be sure this reflects outcome of next step
+                # self.grammar_successbinary_score_parses(False)
+                self.Dat = self.Dat[self.Dat["success_binary_quick"]==True]
+            elif p=="one_to_one_beh_task_strokes":
+                # must use exactyl 
+                list_good = []
+                for i in range(len(self.Dat)):
+                    list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
+                self.Dat = self.Dat[list_good]
+            elif p=="correct_sequencing":
+                # Only if beh sequence is consistent with at least one acceptable rule 
+                # based on the epoch.
+                assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
+                bm = self.grammar_wrapper_extract()
+                self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
+            elif p=="frac_touched_ok":
+                assert frac_touched_min is not None
+                # To see what is good value, try:
+                # plot_trials_after_slicing_within_range_values(self, colname, minval, 
+                # maxval, plot_hist=True):
+                self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
+            elif p=="fixed_tasks_only":
+                self.Dat = self.Dat[self.Dat["random_task"]==False]
+            elif p=="remove_repeated_trials":
+                # remove trials that repeat the same task immediately after each otehr. only keep the first 
+                # iter in a set of repeated trials.
+                inds_repeated = self.taskclass_find_repeat_trials()
+                inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
+                self.subsetDataframe(inds_keep)
+            elif p=="only_dates_with_probes":
+                # Only keep dates that have at least one probe task. Useful for looking
+                # at generalziation.
+                # [OPTIONAL] Only keep days with probe tasks
+                grpdict = self.grouping_get_inner_items("date", "probe")
+                dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
+                print("Dates with probe tasks: ", dates_good)
+                self.filterPandas({"date":dates_good}, "modify")
+            elif p=="probes_only":
+                # only probe trials
+                self.Dat = self.Dat[self.Dat["probe"]==1]
+            elif p=="sanity_gridloc_identical":
+                # Sanity check that all gridloc are relative the same grid (across trials).
+                self.taskclass_tokens_sanitycheck_gridloc_identical()
+            else:
+                print(p)
+                assert False, "dotn know this"
+            self.Dat = self.Dat.reset_index(drop=True)
+            print(f"after: {len(self.Dat)}")
         
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -4979,14 +5047,24 @@ class Dataset(object):
         
         print("stored in self.Dat[BehClass]")
 
-    def behclass_tokens_extract_datsegs(self):
+    def behclass_tokens_extract_datsegs(self, use_global_grid=True):
         """ Extract, single time, all task datsegs toekns.
+        PARAMS:
+        - use_global_grid, bool, if True, then gets gridx and gridx across
+        all tasks in this dataset. otherwise uses the grid specific to each
+        task.
         """
+
+        if use_global_grid:
+            input_grid_xy = self.taskclass_get_grid_xy_over_all_tasks()
+        else:
+            input_grid_xy = None
+
         print("Running D.behclass_tokens_extract_datsegs")
         # if expt==""
         for i in range(len(self.Dat)):
             Beh = self.Dat.iloc[i]["BehClass"]
-            Beh.alignsim_extract_datsegs()
+            Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy)
             if i%200==0:
                 print(i)
 
@@ -5608,11 +5686,14 @@ class Dataset(object):
         """
 
         # 1) Get beh sequence (i.e., sequence of taskstroke inds, based on order gotten by beh)
-        # Beh.alignsim_compute(remove_bad_taskstrokes=True)
         taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
         if ploton:
             Beh = self.Dat.iloc[ind]["BehClass"]
-            Beh.alignsim_extract_datsegs(plot_print_on=True);
+            # Beh.alignsim_extract_datsegs(plot_print_on=True);
+            datsegs = Beh.Alignsim_Datsegs
+            for x in datsegs:
+                print(x)
+            Beh.alignsim_plot_summary()
 
             print("*** Behavior order: ", taskstroke_inds_beh_order)
             # print(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
@@ -5643,6 +5724,14 @@ class Dataset(object):
 
         return gramdict
 
+
+    #################
+    def seqcontext_preprocess(self):
+        """ Extract new columns into self.Dat, for each trial noting sequence 
+        context inforamtion ,such as n strokes, shape of first stroke, etc
+        """
+        from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
+        preprocess_dataset(self)
 
     ################ SAVE
     def make_savedir_for_analysis_figures(self, analysis_name):

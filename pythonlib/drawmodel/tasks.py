@@ -1220,6 +1220,52 @@ class TaskClass(object):
             C = CLC.find_chunk(model, index)
             return C
 
+    def planclass_inputed_plan_extract(self, ind):
+        """ GIven the final index of this prim (e.g,, after concatting)
+        return the original inputted prims and rels (i.e, in the plan
+        cell array) inputed to PlanClass() in matlab
+        RETURNS:
+        - prim_entry, list holding info for this prim
+        - rel_entry, list, info for the rel that mods this prim
+        """
+        # Extract the original direct entry of this prim
+        prim_entry = self.PlanDat["Plan"][2*ind]
+        rel_entry = self.PlanDat["Plan"][1+2*ind]
+        return prim_entry, rel_entry
+
+    def planclass_inputed_plan_extract_novelprims(self):
+        """ For each novelprim in this task, extract its low-level 
+        prim entry
+        RETURNS:
+        - dict[index for prim]: prim_entry, where 
+        prim_entry = 
+            ['novel_prim',
+             ['direct_chunk_entry',
+              [['line', ['prot', array(9.), array(2.)]],
+               ['translate_xy', array(0.), ['center', 'center', array([0., 0.])]],
+               ['line', ['prot', array(9.), array(3.)]],
+               ['translate_xy', array(-1.), ['end2', 'end1', array([0., 0.])]],
+               ['line', ['prot', array(9.), array(1.)]],
+               ['translate_xy', array(-1.), ['end2', 'end1', array([0., 0.])]]]]]
+        """
+
+        # Find novelprims
+        inds_novel = []
+        ShapesAfterConcat = self.PlanDat["ShapesAfterConcat"]
+        dict_novelprims = {}
+        for i in range(len(ShapesAfterConcat)):
+            if ShapesAfterConcat[i][:9]=="novelprim":
+                inds_novel.append(i)
+                # Extract the original direct entry of this prim
+
+                prim_entry, _ = self.planclass_inputed_plan_extract(i)
+                assert prim_entry[0] == "novel_prim", "sanity check, I assume this data structure"
+                assert prim_entry[1][0] == "direct_chunk_entry", "sanity check, I assume this data structure"
+                list_subprims = prim_entry[1][1][::2] # e..g, [['line', ['prot', array(9.), array(2.)]], ['line', ['prot', array(9.), array(3.)]], ['line', ['prot', array(9.), array(1.)]]]
+                list_subrels = prim_entry[1][1][1::2] # e..g, [['translate_xy', array(0.), ['center', 'center', array([0., 0.])]], ['translate_xy', array(-1.), ['end2', 'end1', array([0., 0.])]], translate_xy', array(-1.), ['end2', 'end1', array([0., 0.])]]]
+
+                dict_novelprims[i] = (list_subprims, list_subrels)
+        return dict_novelprims
 
     def planclass_extract_all(self, DEBUG=False):
         """ Wrapper to extract all planclass info.
@@ -1409,70 +1455,7 @@ class TaskClass(object):
         assert len(dat["ReflectsAfterConcat"])==len(self.Strokes), 'bug above'
         assert len(dat["CentersAfterConcat"])==len(self.Strokes), 'bug above'
 
-        for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
-            shape = prim[0]
-            params = prim[1]
 
-            primkind = params[0] # e.g., prot, abstract, motif
-            scale = params[1]
-            rotation = params[2]
-            if len(params)>=4:
-                col = params[3] # not using here... (color)
-            else:
-                col = np.nan
-            if len(params)>=5:
-                reflect = params[4] # 1 means reflect.
-            else:
-                reflect = np.array(0.)
-
-            # if i>len(self.Strokes)-1:
-            #     for k, v in dat.items():
-            #         print("---")
-            #         print(k)
-            #         print(v)
-            #     print(dat["Prims"])
-            #     print("===", params)
-            #     print(len(self.Strokes))
-            #     print(i)
-            #     print("****************8")
-            #     self.objectclass_extract_all()
-            #     print(self.ObjectClass)
-            #     assert False
-
-            if True:
-                # Stop collecting traj, beacuse self.Strokes is after concating, while
-                # i iterates over each base prim (before concat). Look in to ObjectClass for
-                # infor about each stroke.
-
-                # look into objectClass for strokes.
-                traj = None
-            else:
-                traj = self.Strokes[i]
-
-            assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
-            # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
-
-            Prim = PrimitiveClass()
-            Prim.input_prim("prototype_prim_abstract", {
-                    "shape":shape,
-                    "scale":scale,
-                    "rotation":rotation,
-                    "reflect":reflect,
-                    "x":loc[0],
-                    "y":loc[1]}, 
-                    traj = traj)
-            dat["primitives"].append(Prim)
-
-        # Sanity checks
-        # - Base prims should correspond to objects
-        if False:
-            if self.Objects is not None:
-                for o, p in zip(self.Objects, dat["primitives"]):
-                    if False:
-                        # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
-                        assert o["obj"] == p.Shape
-                    assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
-                    assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
 
         # - nstrokes here should match nstrokes extracted elsewhere
         if False:
@@ -1576,6 +1559,95 @@ class TaskClass(object):
 
         # store
         self.PlanDat = dat
+
+        # If any novel prims, assign them hash (unique shape)
+        dict_novel_prims = self.planclass_inputed_plan_extract_novelprims()
+        for indprim, params in dict_novel_prims.items():
+            from pythonlib.tools.listtools import stringify_list
+            list_subprims, list_subrels = params[0], params[1]
+            hashnum = hash(tuple(stringify_list(list_subprims) + stringify_list(list_subrels)))
+            shapenew = f"novelprim-{hashnum}"
+
+            # print(dat["ShapesAfterConcat"])
+            # print(indprim)
+            # print(shapenew)
+            # assert False, 'shoudl insert here?'
+            assert dat["ShapesAfterConcat"][indprim][:9]=="novelprim"
+            dat["ShapesAfterConcat"][indprim] = shapenew
+
+
+        # Genreate prims
+        # for i, (shapenew, prim, loc) in enumerate(zip(dat["ShapesAfterConcat"], dat["Prims"], dat["CentersActual"])):
+        #     shape = prim[0]
+
+        #     if not shape==shapenew:
+        #         # shapenew should only be different if this is a novel prim,m it is novelprim-<hashnum>
+        #         print(shape, shapenew)
+        #         assert shapenew[:9]=="novelprim", "shape or shapenew, which is correct?"
+        for i, (prim, loc) in enumerate(zip(dat["Prims"], dat["CentersActual"])):
+            shape = prim[0]
+            params = prim[1]
+            primkind = params[0] # e.g., prot, abstract, motif
+            scale = params[1]
+            rotation = params[2]
+            if len(params)>=4:
+                col = params[3] # not using here... (color)
+            else:
+                col = np.nan
+            if len(params)>=5:
+                reflect = params[4] # 1 means reflect.
+            else:
+                reflect = np.array(0.)
+
+            # if i>len(self.Strokes)-1:
+            #     for k, v in dat.items():
+            #         print("---")
+            #         print(k)
+            #         print(v)
+            #     print(dat["Prims"])
+            #     print("===", params)
+            #     print(len(self.Strokes))
+            #     print(i)
+            #     print("****************8")
+            #     self.objectclass_extract_all()
+            #     print(self.ObjectClass)
+            #     assert False
+
+            if True:
+                # Stop collecting traj, beacuse self.Strokes is after concating, while
+                # i iterates over each base prim (before concat). Look in to ObjectClass for
+                # infor about each stroke.
+
+                # look into objectClass for strokes.
+                traj = None
+            else:
+                traj = self.Strokes[i]
+
+            assert params[0]=="prot", "I assume everything in dat[prims] is baseprim..."
+            # tform = {"x":loc[0], "y":loc[1], "th":rot, "sx":scale, "sy":scale, "order":
+
+            Prim = PrimitiveClass()
+            Prim.input_prim("prototype_prim_abstract", {
+                    "shape":shape,
+                    # "shape":shapenew,
+                    "scale":scale,
+                    "rotation":rotation,
+                    "reflect":reflect,
+                    "x":loc[0],
+                    "y":loc[1]}, 
+                    traj = traj)
+            dat["primitives"].append(Prim)
+
+        # Sanity checks
+        # - Base prims should correspond to objects
+        if False:
+            if self.Objects is not None:
+                for o, p in zip(self.Objects, dat["primitives"]):
+                    if False:
+                        # actually these could differ, since obj can be L while p.Shape is more accurately Lcentered
+                        assert o["obj"] == p.Shape
+                    assert np.isclose(o["tform"]["x"], p.ParamsConcrete["x"])
+                    assert np.isclose(o["tform"]["y"], p.ParamsConcrete["y"])
 
         return dat
 
