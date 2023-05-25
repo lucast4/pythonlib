@@ -41,6 +41,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         N = ["updnsamp", 1.5] then up or down samples (here up by 1.5)
         N = ["fsnew", 1000, 125] then targets new fs 1000, assuming
         N = ["interval", interval], for spatial,
+        N = ["input_times", (ntimes, )array], to get at these specific times.
         initially 125.
         - base, 
         -- index, then replaces time with index before interpolating.
@@ -75,6 +76,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                 # get new timepoints
                 t = strok[:,2]
                 nold = len(t)
+                COMPUTE_TNEW = True
                 if N[0]=="npts":
                     nnew = N[1]
                 elif N[0]=="updnsamp":
@@ -92,12 +94,16 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                     # print(total)
                     # print(nnew)
                     # assert False
+                elif N[0]=="input_times":
+                    tnew = N[1] # (m,) array
+                    assert max(tnew)<=max(t), "interpolation timepoints must be within the data"
+                    assert min(tnew)>=min(t), "interpolation timepoints must be within the data"
+                    COMPUTE_TNEW=False
                 else:
                     print(N)
                     assert False, "not coded"
-                tnew = np.linspace(t[0], t[-1], nnew)
-    #             print(t)
-    #             print(tnew)
+                if COMPUTE_TNEW:
+                    tnew = np.linspace(t[0], t[-1], nnew)
 
                 strokinterp = np.empty((len(tnew), 3))
                 strokinterp[:,2] = tnew
@@ -120,7 +126,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                 strokes_interp[i] = strokes[i][[0, -1], :]
 
         if plot_outcome:
-            fig, axes = plt.subplots(1,2, figsize=(12,6))
+            fig, axes = plt.subplots(2,2, figsize=(8,8))
             ax = axes.flatten()[0]
             for s in strokes:
                 ax.plot(s[:,0], s[:,1], "-o")
@@ -130,6 +136,16 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
             for s in strokes_interp:
                 ax.plot(s[:,0], s[:,1], "-o")
             ax.set_title('after interpolation')
+
+            ax = axes.flatten()[2]
+            for s in strokes:
+                ax.plot(s[:,2], s[:,0], "-.", label="orig_x", alpha=0.5)
+                ax.plot(s[:,2], s[:,1], "-.", label="orig_y", alpha=0.5)
+            for s in strokes_interp:
+                ax.plot(s[:,2], s[:,0], "-x", label="interp_x", alpha=0.5)
+                ax.plot(s[:,2], s[:,1], "-x", label="interp_y", alpha=0.5)
+
+            ax.legend()
     
         return strokes_interp
 
