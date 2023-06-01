@@ -356,6 +356,13 @@ class DatStrokes(object):
                 print("Doing...:", meth)
                 assert "min_stroke_length" in params.keys()
                 self.Dat = self.Dat[self.Dat["distcum"]>=params["min_stroke_length"]].reset_index(drop=True)
+            elif meth=="beh_task_dist_too_large":
+                # prune strokes that are outliers.
+                # inds = DS.Dat[DS.Dat["dist_beh_task_strok"]>37].index.tolist()
+                # DS.plot_multiple(inds);
+                print("Doing...:", meth)
+                assert "min_beh_task_dist" in params.keys()
+                self.Dat = self.Dat[self.Dat["dist_beh_task_strok"]<=params["min_beh_task_dist"]].reset_index(drop=True)
             else:
                 print(meth)
                 assert False, "code it"
@@ -532,6 +539,7 @@ class DatStrokes(object):
         RETUNS:
         - either df rows, or list of ints (can be empty if doesnt exist)
         """
+        assert False, "never use ind_dataset instead use trialcode"
         tc = self.Dataset.Dat.iloc[ind_dataset]["trialcode"]
         rows = self.Dat[self.Dat["dataset_trialcode"] == tc]
         if return_rows:
@@ -576,6 +584,8 @@ class DatStrokes(object):
         - list_vals, list of values, or None, if this dataset has no strokes in self
         """
         
+        assert False, "never use ind_dataset instead use trialcode"
+
         inds = self._dataset_index_here_given_dataset(ind_dataset)
         if len(inds)==0:
             return None
@@ -595,6 +605,13 @@ class DatStrokes(object):
 
             return df[column].values.tolist()
 
+    def dataset_replace_dataset(self, DatNew):
+        """Replace entirely the beh dataset
+        NOTE: confirmed that all indexing should still work, since it 
+        uses trialcodes 
+        """
+        self.Dataset = DatNew
+        
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
         for ind indexing into the strokes (DatsetStrokes.Dat)
@@ -602,7 +619,7 @@ class DatStrokes(object):
         - ind, index in to self (NOT into Dataset)
         """
         return self._dataset_index(ind, True)[colname].tolist()[0]
-
+ 
     def dataset_append_column(self, colname):
         """ Append a column to self.Dat from original datsaet.
         Overwrites if it already exists
@@ -610,6 +627,44 @@ class DatStrokes(object):
         valsthis = [self.dataset_extract(colname, i) for i in range(len(self.Dat))]
         self.Dat[colname] = valsthis
         print(f"Appended {colname} to self.Dat")
+
+
+    def dataset_slice_by_trialcode_strokeindex(self, list_trialcode, list_stroke_index,
+            df=None, assert_exactly_one_each=True):
+        """ Returns self.Dat, sliced to subset of rows, matching exactly the inputed
+        list_trialcode and list_strokeindex.
+        PARAMS;
+        - list_trialcode, list of str,
+        - list_stroke_index, list of int, matching len of list_trialcode
+        - df, optional, if None, uses self.Dat
+        RETURNS:
+        - dfslice, maatching exaxflty one to one the input, (if assert_exactly_one_each True)
+        NOTE: also appends column called trialcode_strokeidx to df if doesnt already exist
+        """
+        from pythonlib.tools.pandastools import slice_by_row_label
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+
+        assert len(list_trialcode)==len(list_stroke_index)
+        assert isinstance(list_trialcode[0], str)
+        assert isinstance(list_stroke_index[0], int)
+
+        if df is None:
+            df = self.Dat
+
+        # sp.DS.grouping_append_and_return_inner_items(["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx")
+        if "trialcode_strokeidx" not in df.columns:
+            # - first, append a new colum that is the conjunction of trialcode and stroke index
+            df = append_col_with_grp_index(df, ["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
+                                                 use_strings=False)
+
+        # - slice DS.Dat using desired (trialcode, strokeindex)
+        list_keys = [(tc, si) for tc, si in zip(list_trialcode, list_stroke_index)]
+
+        # get slice
+        dfslice = slice_by_row_label(df, "trialcode_strokeidx", list_keys, assert_exactly_one_each=assert_exactly_one_each)
+
+        return dfslice
+
 
 
     def dataset_slice_by(self, key, list_vals, return_index=False):
@@ -1156,7 +1211,8 @@ class DatStrokes(object):
         return groupdict
 
 
-    def grouping_append_and_return_inner_items(self, list_grouping_vars=None):
+    def grouping_append_and_return_inner_items(self, list_grouping_vars=None,
+        new_col_name="grp"):
         """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
         Useful if e./g., you want to get all indices for each of the levels in a combo group,
         where the group is defined by conjunction of two columns.
@@ -1174,7 +1230,7 @@ class DatStrokes(object):
             list_grouping_vars = ["shape_oriented", "gridloc"]
 
         groupdict = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
-            "index")
+            "index", new_col_name=new_col_name)
 
         return groupdict
 
