@@ -8,6 +8,30 @@ import pandas as pd
 import numpy as np
 from pythonlib.dataset.dataset_analy.motifs_search_unordered import find_object_groups_new
 
+####### 
+MAP_EPOCHKIND_EPOCH = {
+    "direction":["D", "U", "R", "L", "TR"],
+    "shape":["LVl1", "lVL1", "VlL1", "llV1"],
+    "(AB)n":["(AB)n", "LolDR"],
+    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "LCr1", "CLr1", "LCr3"],
+    "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
+    "ranksup":["rndstr", "rank"]
+}
+
+MAP_EPOCH_EPOCHKIND = {}
+for epochkind, list_epoch in MAP_EPOCHKIND_EPOCH.items():
+    for epoch in list_epoch:
+        assert epoch not in MAP_EPOCH_EPOCHKIND.keys()
+        MAP_EPOCH_EPOCHKIND[epoch] = epochkind
+        
+        # also, any of these with |0 appended are the same
+        MAP_EPOCH_EPOCHKIND[f"{epoch}|0"] = epochkind
+        # but a 1 means is color rank supervision
+        MAP_EPOCH_EPOCHKIND[f"{epoch}|1"] = "ranksup"
+
+
+
 def _get_default_grouping_map_tasksequencer_to_rule():
     """ Dict that maps tasksequencer params (which in matlab
     dictates the sequencing rule for each block) to a string name for the 
@@ -243,6 +267,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 return e['x']
             else:
                 print(e)
+                assert False
 
         def _getY(e):
             if isinstance(e, list) and len(e)==2:
@@ -251,6 +276,21 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 return e['y']
             else:
                 print(e)
+                assert False
+
+        def _getXY(e):
+            """ on diagoanl, where tr is positive
+            """
+            if isinstance(e, list) and len(e)==2:
+                # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+                x = e[1]['x']
+                y = e[1]['y']
+                return x + y # projection onto (1,1)
+            elif isinstance(e, dict):
+                return e['x'] + e['y']
+            else:
+                print(e)
+                assert False
 
         # print("TODO: break ties")
         # print("OBJECTS:", objects)
@@ -268,6 +308,9 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         elif direction in ['down', 'D']:
             # sort by descending y
             return sorted(objects, reverse=True, key=_getY)
+        elif direction in ["TR", "topright"]:
+            # top right
+            return sorted(objects, key=_getXY)
         else:
             print(direction)
             assert False, 'invalid direction'
@@ -493,7 +536,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
 
     elif ruledict["categ"] == "ch" and ruledict["subcat"] == "dir2":
         # Concrete chunk, with direction across chunks fixed, but
-        # direction within variable (i.e., chunk_mask)
+        # direction within being variable (i.e., chunk_mask)
         # Dir across chunks is defined by param
 
         paramsthis = {
@@ -503,19 +546,18 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
             "orientation":ruledict["params_good"][1]
         }
         list_groups, left_over = find_object_groups_new(Task, paramsthis)
-        
 
         # 1) Get all hierarchices, holding hcyunks constaint
         list_possible_inds = list(range(len(tokens)))
-        list_hier, list_is_grp = sample_all_possible_chunks(list_groups, list_possible_inds)
-
+        list_hier, list_is_grp = sample_all_possible_chunks(list_groups, 
+            list_possible_inds, append_unused_strokes_as_single_group=False)
+ 
         # Reorder each of the hier by direction in space
-        direction = ruledict["params_good"][2]
-
+        direction = ruledict["params_good"][2] # across chunks
 
         list_hier_reordered = []
         for hier in list_hier:
-            hier_reordered = direction_this_hier(hier)
+            hier_reordered = direction_this_hier(Task, hier, direction)
             # locations = [_mean_loc(inds_taskstrokes) for inds_taskstrokes in hier]
             # locations = _get_sequence_on_dir(locations, direction)
             # hier_reordered = [x["inds_taskstrokes"] for x in locations]
@@ -585,13 +627,17 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         assert False, "code up rule"
 
     ### Clean up the chunks
-    list_hier = [clean_chunk(hier) for hier in list_hier]
+    list_hier = [clean_chunk(hier) for hier in list_hier] 
 
     ### Expand chunks and fixed order to match number of identified hiers
     list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
+    # print("list_fixed_order")
+    # print(list_fixed_order)
+    # print(ruledict, hier)
     if list_fixed_order is None:
         # Get autoamtically
         list_fixed_order = [_fixed_order_for_this_hier(ruledict, hier) for hier in list_hier]   
+    # print(list_fixed_order)
 
     # sanity check
     for hier, fo in zip(list_hier, list_fixed_order):
@@ -625,6 +671,11 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         inds_used = [xx for x in hier for xx in x]
         inds_not_used = [ind for ind in inds_all if ind not in inds_used]
         if len(inds_not_used)>0:
+            # print("----")
+            # print(hier)
+            # print(inds_used)
+            # print(inds_not_used)
+            # assert False
             if False:
                 # replace this with a random parse
                 h, c, f = _random_parse(tokens)
@@ -655,6 +706,8 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 list_hier[i] = hier_new
                 list_fixed_order[i] = fo_new
                 # fo[1].append(lg[0][-1]) # False
+    # print(list_fixed_order)
+    # assert False
 
 
     # Sanity checks: Should always be something
@@ -677,9 +730,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     assert isinstance(list_hier[0][0], list)
 
     return list_chunks, list_hier, list_fixed_order 
-
-
-
 
 
 # def map_epoch_rule_to_acceptable_rulestrings(list_epoch_rule):
@@ -966,7 +1016,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
     assert isinstance(list_rules, list)
 
     DICT_RULESTRINGS_CONSISTENT = {}
-    for r in ["D", "U", "R", "L"]:
+    for r in ["D", "U", "R", "L", "TR"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
     for r in ["LVl1", "lVL1", "VlL1"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
@@ -1085,7 +1135,11 @@ def _rules_related_rulestrings_extract_auto(list_rules):
 
     list_rules_related =[]
     for rulethis in list_rules:
-        list_rules_related.extend(_find_related_rules(rulethis))
+        rules_related = _find_related_rules(rulethis)
+        list_rules_related.extend(rules_related)
+    #     print(rulethis, rules_related)
+    # assert FAlse
+
 
     # 3) combine
     # list_rules_all = list_rules + list_rules_related

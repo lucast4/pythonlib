@@ -84,6 +84,7 @@ def find_object_groups_new(Task, params):
     if params["rule"]=="concrete_chunk":
         # Replaces lolli (more general version)
         # concrete chunk is grouping of defined shape/locations. spatially defined, (i.e,, any temporal order)
+        from pythonlib.tools.stringtools import decompose_string
         shapes_in_order = params["shapes_in_order"]
         orientation = params["orientation"]
         
@@ -92,6 +93,22 @@ def find_object_groups_new(Task, params):
             print(shapes_in_order)
             assert False, "# not coded yet, assuming length 2"
         
+        sh = shapes_in_order[0]
+        n = len(decompose_string(sh)) 
+        if n==1:
+            # abstract
+            def _shape_helper(i):
+                """ String name of shape of i"""
+                return objects[i]["shapeabstract"]
+        elif n==4:
+            # orietnted
+            def _shape_helper(i):
+                """ String name of shape of i"""
+                return objects[i]["shape_oriented"]
+        else:
+            print(sh)
+            assert False
+
         list_groups = [] # 
         for i in range(len(objects)):
             for j in range(len(objects)):

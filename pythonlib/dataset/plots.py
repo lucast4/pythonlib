@@ -93,8 +93,8 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
         if group in ["trial", "trial_shuffled"]:
             # then should be trialnum, based on the other group
             assert other_group is not None
-            from pythonlib.tools.pandastools import append_col_with_index_in_group
-            dfthis = append_col_with_index_in_group(dfthis, other_group, colname = new_col_name,
+            from pythonlib.tools.pandastools import append_col_with_index_number_in_group
+            dfthis = append_col_with_index_number_in_group(dfthis, other_group, colname = new_col_name,
                 randomize = group=="trial_shuffled")
             labels = range(0, max(dfthis[new_col_name])+1)
             trialcode_list = dfthis["trialcode"].to_list()

@@ -320,8 +320,9 @@ class ChunksClass(object):
                     assert np.floor(c) == c
                     output_list.append([int(c)])
                 elif isinstance(c, list):
+                    # e..g, [0]
                     assert isinstance(c[0], int)
-                    output_list.append([int(c)])
+                    output_list.append([int(cc) for cc in c])
                 else:
                     print(c)
                     print(type(c))

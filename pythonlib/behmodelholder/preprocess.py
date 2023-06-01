@@ -235,8 +235,11 @@ def _add_binary_rule_tuple_col(df, rule_cols):
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False, 
     how_define_correct_order="epoch", DEBUG=False, return_as_bmh_object=True):
-    """High-level extraction for each trial its parses under each given rule, and evaluate whether this
-    trials' beahvhiro was correct/incorrect (compoaring to these rules)
+    """High-level extraction for each trial its parses under each given rule, including
+    rules that are not conssteitnw with a trials' ecpoh (i.e., get all rules, regardless
+    of epoch) [column = "score"], and also and evaluate whether this trials' beahvhiro 
+    was correct/incorrect (compoaring to only those rules taht are aligned with
+    this trials' epoch --> column = "success_binary_quick").
     DOES NOT use the matlab objectclass sequence.
     PARAMS:
     - list_rules, list of rules trings  (a-b-c). see grammar module for geetting these auto.
@@ -244,7 +247,10 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     trials whats its ground truth rule. If None, assumes identity.
     - binary_rule, bool, whether to get for eahc trial a binary code for bollean rules
     - how_define_correct_order, str, in {'matlab', 'epoch'}, whether to definde each trials' 
-    correct sequence using the saved sequen inematlab or recomputed based on rules\
+    correct sequence using the saved sequen inematlab or recomputed based on rules
+    RETURNS:
+    - df, with important columns score and success_binary_quick
+    --- one row for conjunction of trial x rule (in list_rules).
     """
     from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
 
@@ -261,7 +267,9 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     for ind in range(len(D.Dat)):
         if ind%100==0:
             print("trial #", ind)
-        
+        if DEBUG:
+            print("---- Trial ", ind)
+
         # rename value in 'epoch' to rulename, if applicable
         epoch_i = D.Dat.iloc[ind]['epoch']
 
@@ -276,14 +284,20 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
             order_correct = gramdict["taskstroke_inds_correct_order"]
             assert order_correct is not None, "not defined in matlab ObjectClass.. you must recompute, useing grammar_recompute_parses"
             list_order_correct = [order_correct] # only a single correct order
+            assert False, "use ...matlabrule"
         elif how_define_correct_order=="epoch":
             # 1) get all the acceptable rules
             from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
             list_rule_strings = _rules_consistent_rulestrings_extract_auto([epoch_i], return_as_dict=False)[0] # list of rulestrings
             list_order_correct = []
+            if DEBUG:
+                print("Current epoch: ", epoch_i)
+                print("...collecting all correct parses for rulestrings aliggned with this epoch...")
             for rule_string in list_rule_strings:
                 parses = parsesdict[rule_string] # list of tuples of ints
                 list_order_correct.extend(parses)
+                if DEBUG:
+                    print(f"Correct sequences for rulestring {rule_string}: {parses}")
             # # use the rule
             # if epoch_i not in parsesdict.keys():
             #     print(parsesdict)
@@ -340,9 +354,9 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
 
         if DEBUG:
         # if success_binary==False and beh_sequence_wrong==False:
-            print(ind)
-            print(taskstroke_inds_beh_order)
-            print(list_order_correct)
+            print("taskstroke_inds_beh_order:", taskstroke_inds_beh_order)
+            print("list_order_correct:", list_order_correct)
+            print("success_binary, beh_too_short, beh_got_first_stroke, beh_sequence_wrong:")
             print(success_binary, beh_too_short, beh_got_first_stroke, beh_sequence_wrong)
         
         if "which_probe_blockset" in D.Dat.columns:
@@ -361,10 +375,10 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "agent_rule":rule, 
                 # "epoch":epoch_i,
                 "score_name":"binsucc",
-                "score":taskstroke_inds_beh_order in parses,
+                "score":tuple(taskstroke_inds_beh_order) in parses,
                 "probe":D.Dat.iloc[ind]["probe"],
                 "epoch_superv":D.Dat.iloc[ind]["epoch_superv"],
-                "success_binary_quick":success_binary,
+                "success_binary_quick":success_binary, # success if match any of the rules that are aligned with this epoch.
                 "beh_sequence_wrong":beh_sequence_wrong,
                 "beh_too_short":beh_too_short,
                 "beh_got_first_stroke":beh_got_first_stroke,

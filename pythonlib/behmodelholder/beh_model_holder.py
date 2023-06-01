@@ -52,8 +52,7 @@ class BehModelHolder(object):
                 # if x["agent_kind"]=="monkey":
                 return f"{x['agent_kind']}-{x['agent_rule']}"
             data = applyFunctionToAllRows(data, F, "agent")
-            print("Generated column called 'agent'")
-
+            print("Generated column called 'agent', which connects agent_kind-rule")
         if input_ver=="default":
             # self.DatWide = data
             self.DatWide = data
@@ -74,6 +73,7 @@ class BehModelHolder(object):
         map_agent_to_rules = grouping_get_inner_items(self.DatLong, "agent_kind", "agent_rule")
 
         map_score_rule_agent_to_colname = {}
+        print("n samples for conjunctions of score_name, agent_rule, agent_kind:")
         this = grouping_print_n_samples(self.DatLong, ["score_name", "agent_rule", "agent_kind"])
         # Map_rule_to_colname = {}
         for x in this.keys():
@@ -90,8 +90,10 @@ class BehModelHolder(object):
         self.Map_score_rule_agent_to_colname = map_score_rule_agent_to_colname
         # self.Map_rule_to_colname = Map_rule_to_colname
 
+        # Aggregate so each row is conjucntion of (character", "score_name", "agent", "epoch)
         from pythonlib.tools.pandastools import aggregGeneral
-        self.DatLongAgg = aggregGeneral(self.DatLong, ["character", "score_name", "agent"], values=["score"], nonnumercols=["epoch", "agent_kind", "agent_rule"])
+        self.DatLongAgg = aggregGeneral(self.DatLong, ["character", "score_name", "agent", "epoch"], 
+            values=["score"], nonnumercols=["agent_kind", "agent_rule"])
     
         # Sanituy check of data
         self._preprocess_sanity_check()

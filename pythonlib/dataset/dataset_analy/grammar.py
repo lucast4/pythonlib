@@ -19,7 +19,7 @@ from .learning import preprocess_dataset as learn_preprocess
 rcParams.update({'figure.autolayout': True})
 
 ## OLD, before changed it to make sure it only works with  matlab rules (not new parses)
-def preprocess_dataset_recomputeparses(D):
+def preprocess_dataset_recomputeparses(D, DEBUG=False):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
@@ -31,7 +31,7 @@ def preprocess_dataset_recomputeparses(D):
     # - get rules autoamticlaly.
     list_rules = rules_related_rulestrings_extract_auto(D)
 
-    bm = generate_scored_beh_model_data_long(D, list_rules = list_rules)
+    bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG)
 
     return bm
 
@@ -55,7 +55,6 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     parsesa nd ask if beh is compativle iwth any of the "same-rule" parses.
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
-    from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_long
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
 
     if reset_grammar_dat:
