@@ -301,6 +301,80 @@ def get_xticklabels(fig):
     return out
             
 
+def heatmap_mat(datamat, ax=None, annotate_heatmap=True, zlims=(None, None),
+        robust=False, diverge=False):
+    """ 
+    Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
+    in df
+    PARAMS:
+    - df, wideform dataframe to plot, should be in 2d shape, with rows and columns, the sahpe of 
+    the resulting plot. df.Index are rows (from top to bottom), and df.columns are columns
+    (left to right). See pandastools.convert_to_2d_dataframe to convert from long-form
+    to this wideform.
+    - annotate_heatmap, bool, whether puyt text in cell indicating the values
+    - diverge, if True, then centers the heat
+    RETURNS:
+    - fig, 
+    - ax, 
+    - rgba_values, (nrows, ncols, 4), where rgba_values[0,1], means rgba value for row 0 col 1.
+    """
+
+    # NOTE, from neural plot heatmap..
+    # sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
+    #    robust=robust, vmin=zlims[0], vmax=zlims[1])
+
+    # make a copy, with these columns
+#     list_cat_1 = df.index.tolist()
+#     list_cat_2 = df.columns.tolist()
+
+    if datamat.shape[1]>10:
+        w = datamat.shape[1]/15*5
+    else:
+        w = 5
+
+    if ax is None:
+        fig, ax = plt.subplots(1,1, figsize=(w, 5))
+    else:
+        fig = None
+
+    # compute zlims here, just so you can extract colors accruately below.
+    z1, z2 = zlims
+    if z1 is None:
+        z1 = datamat.min()
+    if z2 is None:
+        z2 = datamat.max()
+    if diverge:
+        # then center at 0
+        z = np.max(np.abs([z1, z2]))
+        z1 = -z
+        z2 = z
+
+    if diverge:
+        # center at 0, and use diverging palletee
+        # 
+        # center = 0
+        # cmap = sns.color_palette("vlag")
+        cmap = sns.diverging_palette(220, 20, as_cmap=True)
+
+    else:
+        # center = None
+        cmap = sns.color_palette("rocket", as_cmap=True)
+        # cmap = sns.color_palette
+
+    sns.heatmap(datamat, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
+        robust=robust, cmap=cmap)
+
+    # Return the colors
+    from matplotlib.colors import Normalize
+    # Normalize data
+    norm = Normalize(vmin=z1, vmax=z2)
+    
+#     print(norm(datamat))
+    rgba_values = cmap(norm(datamat))
+
+    return fig, ax, rgba_values
+
+
 def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False):
     """ 

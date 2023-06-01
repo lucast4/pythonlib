@@ -975,21 +975,28 @@ class Dataset(object):
 
         return list_char, list_score
 
-    def taskgroup_reassign_ignoring_whether_is_probe(self):
+    def taskgroup_reassign_ignoring_whether_is_probe(self, CLASSIFY_PROBE_DETAILED=True, PRINT=False):
         """ By default taskgroiups only categorize propbe tasks. 
         Run this to replace "taskgroup" with recoputation of taskgroups, considering all tasks,.
         taskgrops will not have "-P" as suffix. Uses same methods as deefault, but just use all tasks.
+        PARAMS:
+        - CLASSIFY_PROBE_DETAILED, if True, then appends suffixes indicating ways in which probes are (e..g, extrpolation).
         RETURNS:
         - replaces self.Dat["taskgroup"] in place.
         """
         from pythonlib.dataset.dataset_preprocess.probes import compute_features_each_probe, taskgroups_assign_each_probe
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-        map_char_to_tg = taskgroups_assign_each_probe(self, False)
+        if PRINT:
+            print("- Beginning taskgroups:")
+            print(self.Dat["taskgroup"].value_counts())
+        map_char_to_tg = taskgroups_assign_each_probe(self, False, CLASSIFY_PROBE_DETAILED=CLASSIFY_PROBE_DETAILED)
         def F(x):
             return map_char_to_tg[x["character"]]
         self.Dat = applyFunctionToAllRows(self.Dat, F, "taskgroup")
-
+        if PRINT:
+            print("- Ending taskgroups (after reassign):")
+            print(self.Dat["taskgroup"].value_counts())
 
     def taskgroup_char_ntrials_print_save(self, sdir=None, fname="taskgroup_char_trial"):
         """ Print all the existing tasks in each taskgroup, and thier n trials,
@@ -1093,9 +1100,9 @@ class Dataset(object):
 
     def taskclass_find_repeat_trials(self, print_trials=False):
         """ Find trials that are immediate repeats of the same task (character).
-        ie..,, if do char1, char2, char2, char3, then the third trial will
+        ie..,, if do char1, char2, char2, char3, then the third trial (char2) will
         be returned. Only considered to be repeats if have identical epoch, supervision, 
-        and block num.
+        and block num (and character, of course).
         PARAMS:
         - print_trials, bool, to print info for each trial.
         RETURNS:
@@ -1169,10 +1176,19 @@ class Dataset(object):
         xgrid = np.sort(np.unique(xs.round(decimals=3)))
         ygrid = np.sort(np.unique(ys.round(decimals=3)))
 
-        assert len(xgrid)<8, "this is weird, numerical precision?"
-        assert len(ygrid)<8, "this is weird, numerical precision?"
-        assert np.all(np.diff(xgrid)>0.5), "weird, numerical precision?"
-        assert np.all(np.diff(ygrid)>0.5)    
+        try:
+            assert len(xgrid)<8, "this is weird, numerical precision?"
+            assert len(ygrid)<8, "this is weird, numerical precision?"
+            assert np.all(np.diff(xgrid)>0.1), "weird, numerical precision?"
+            assert np.all(np.diff(ygrid)>0.1)    
+        except AssertionError as err:
+            print(xgrid)
+            print(ygrid)
+            print(xs)
+            print(ys)
+            print(np.diff(xgrid))
+            print(np.diff(ygrid))
+            raise err
 
         return xgrid, ygrid    
 
@@ -1195,26 +1211,29 @@ class Dataset(object):
         map_gridloc_loc_y = {}
         for ind in range(len(self.Dat)):
             tokens = self.taskclass_tokens_extract_wrapper(ind)
+            # print(ind, len(tokens))
             for tok in tokens:
-                x = tok["Prim"].extract_as("params")["cnr_x"]
-                y = tok["Prim"].extract_as("params")["cnr_y"]
-                xgrid = tok["gridloc"][0]
-                ygrid = tok["gridloc"][1]
-                
-                if xgrid in map_gridloc_loc_x.keys():
-                    assert np.isclose(map_gridloc_loc_x[xgrid], x)
-                else:
-                    map_gridloc_loc_x[xgrid] = x
+                if tok["gridloc"] is not None:
+                    x = tok["Prim"].extract_as("params")["cnr_x"]
+                    y = tok["Prim"].extract_as("params")["cnr_y"]
+                    # chars are None
+                    xgrid = tok["gridloc"][0]
+                    ygrid = tok["gridloc"][1]
                     
-                if ygrid in map_gridloc_loc_y.keys():
-                    assert np.isclose(map_gridloc_loc_y[ygrid], y)
-                else:
-                    map_gridloc_loc_y[ygrid] = y
-        
+                    if xgrid in map_gridloc_loc_x.keys():
+                        assert np.isclose(map_gridloc_loc_x[xgrid], x)
+                    else:
+                        map_gridloc_loc_x[xgrid] = x
+                        
+                    if ygrid in map_gridloc_loc_y.keys():
+                        assert np.isclose(map_gridloc_loc_y[ygrid], y)
+                    else:
+                        map_gridloc_loc_y[ygrid] = y
+            
         print("Success! all gridloc identical!")     
         print("These are the x and y mappings, gridloc:loc")
-        print(map_gridloc_loc_x)
-        print(map_gridloc_loc_y)   
+        print("x...", map_gridloc_loc_x)
+        print("y...", map_gridloc_loc_y)   
 
     def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", 
             plot=False, return_as_tokensclass=False):
@@ -1815,87 +1834,112 @@ class Dataset(object):
             else:
                 print(ver)
                 assert False, "not coded"
+        
+        self.Dat = self.Dat.reset_index(drop=True)
 
         # Do each preprocess step in params.
         for p in params:
             print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
-            if p=="recenter":
-                self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
-            elif p=="interp":
-                self.interpolateStrokes()
-            elif p=="interp_spatial_int":
-                self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
-                    pts_or_interval="int")
-                self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
-                    pts_or_interval="int")
-            elif p=="subsample":
-                self.subsampleTrials()
-            elif p=="spad_edges":
-                self.recomputeSketchpadEdges()
-            elif p=="rescale_to_1":
-                self.rescaleStrokes()
-            elif p=="no_supervision":
-                # Remove trials with online supervision (e.g, color)
-                LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
-                self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
-            elif p=="remove_online_abort":
-                # Remove trials with online abort
-                self.Dat = self.Dat[self.Dat["aborted"]==False]
-            elif p=="correct_sequencing_binary_score":
-                # correct sequence matching at lesat one of the grammar parses.
-                assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
-                # if "success_binary_quick" in self.Dat.columns:
-                #     del self.Dat["success_binary_quick"] # to be sure this reflects outcome of next step
-                # self.grammar_successbinary_score_parses(False)
-                self.Dat = self.Dat[self.Dat["success_binary_quick"]==True]
-            elif p=="one_to_one_beh_task_strokes":
-                # must use exactyl 
-                list_good = []
-                for i in range(len(self.Dat)):
-                    list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
-                self.Dat = self.Dat[list_good]
-            elif p=="correct_sequencing":
-                # Only if beh sequence is consistent with at least one acceptable rule 
-                # based on the epoch.
-                assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
-                bm = self.grammar_wrapper_extract()
-                self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
-            elif p=="frac_touched_ok":
-                assert frac_touched_min is not None
-                # To see what is good value, try:
-                # plot_trials_after_slicing_within_range_values(self, colname, minval, 
-                # maxval, plot_hist=True):
-                self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
-            elif p=="fixed_tasks_only":
-                self.Dat = self.Dat[self.Dat["random_task"]==False]
-            elif p=="remove_repeated_trials":
-                # remove trials that repeat the same task immediately after each otehr. only keep the first 
-                # iter in a set of repeated trials.
-                inds_repeated = self.taskclass_find_repeat_trials()
-                inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
-                self.subsetDataframe(inds_keep)
-            elif p=="only_dates_with_probes":
-                # Only keep dates that have at least one probe task. Useful for looking
-                # at generalziation.
-                # [OPTIONAL] Only keep days with probe tasks
-                grpdict = self.grouping_get_inner_items("date", "probe")
-                dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
-                print("Dates with probe tasks: ", dates_good)
-                self.filterPandas({"date":dates_good}, "modify")
-            elif p=="probes_only":
-                # only probe trials
-                self.Dat = self.Dat[self.Dat["probe"]==1]
-            elif p=="sanity_gridloc_identical":
-                # Sanity check that all gridloc are relative the same grid (across trials).
-                self.taskclass_tokens_sanitycheck_gridloc_identical()
-            else:
-                print(p)
-                assert False, "dotn know this"
-            self.Dat = self.Dat.reset_index(drop=True)
-            print(f"after: {len(self.Dat)}")
+            if len(self.Dat)>0:
+                if p=="recenter":
+                    self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
+                elif p=="interp":
+                    self.interpolateStrokes()
+                elif p=="interp_spatial_int":
+                    self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
+                        pts_or_interval="int")
+                    self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
+                        pts_or_interval="int")
+                elif p=="subsample":
+                    self.subsampleTrials()
+                elif p=="spad_edges":
+                    self.recomputeSketchpadEdges()
+                elif p=="rescale_to_1":
+                    self.rescaleStrokes()
+                elif p=="no_supervision":
+                    # Remove trials with online supervision (e.g, color)
+                    LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
+                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
+                elif p=="remove_online_abort":
+                    # Remove trials with online abort
+                    self.Dat = self.Dat[self.Dat["aborted"]==False]
+                elif p=="correct_sequencing_binary_score":
+                    # correct sequence matching at lesat one of the grammar parses.
+                    # strict, only if complete entire trial, and is correct sequnece. i..e
+                    # if correct so far, but online abort, then exclude.
+                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                    inds_keep = []
+                    for i in range(len(self.Dat)):
+                        res = self.sequence_score_wrapper(i)
+                        if res in ["sequence_correct"]:
+                            inds_keep.append(i)
+                    self.subsetDataframe(inds_keep)
+                elif p=="wrong_sequencing_binary_score":
+                    # incorrect sequencing. actually seuqenceing wrong, so does not include if failure is just due to onmien abort.
+                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                    inds_keep = []
+                    for i in range(len(self.Dat)):
+                        res = self.sequence_score_wrapper(i)
+                        if res in ["sequence_incorrect_online_abort", "sequence_incorrect_but_no_abort"]:
+                            inds_keep.append(i)
+                    self.subsetDataframe(inds_keep)
+                elif p=="one_to_one_beh_task_strokes":
+                    # must use exactyl 
+                    list_good = []
+                    for i in range(len(self.Dat)):
+                        list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
+                    self.Dat = self.Dat[list_good]
+                elif p=="beh_strokes_at_least_one":
+                    # then only keep trials where at least one beh stroke was made
+                    list_good = []
+                    for i in range(len(self.Dat)):
+                        list_good.append(len(self.Dat.iloc[i]["strokes_beh"])>0)
+                    self.Dat = self.Dat[list_good]
+                elif p=="correct_sequencing":
+                    # Only if beh sequence is consistent with at least one acceptable rule 
+                    # based on the epoch.
+                    assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
+                    bm = self.grammar_wrapper_extract()
+                    self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
+                elif p=="frac_touched_ok":
+                    assert frac_touched_min is not None
+                    # To see what is good value, try:
+                    # plot_trials_after_slicing_within_range_values(self, colname, minval, 
+                    # maxval, plot_hist=True):
+                    self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
+                elif p=="fixed_tasks_only":
+                    self.Dat = self.Dat[self.Dat["random_task"]==False]
+                elif p=="remove_repeated_trials":
+                    # remove trials that repeat the same task immediately after each otehr. only keep the first 
+                    # iter in a set of repeated trials.
+                    inds_repeated = self.taskclass_find_repeat_trials()
+                    inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
+                    self.subsetDataframe(inds_keep)
+                elif p=="only_dates_with_probes":
+                    # Only keep dates that have at least one probe task. Useful for looking
+                    # at generalziation.
+                    # [OPTIONAL] Only keep days with probe tasks
+                    grpdict = self.grouping_get_inner_items("date", "probe")
+                    dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
+                    print("Dates with probe tasks: ", dates_good)
+                    self.filterPandas({"date":dates_good}, "modify")
+                elif p=="probes_only":
+                    # only probe trials
+                    self.Dat = self.Dat[self.Dat["probe"]==1]
+                elif p=="sanity_gridloc_identical":
+                    # Sanity check that all gridloc are relative the same grid (across trials).
+                    self.taskclass_tokens_sanitycheck_gridloc_identical()
+                elif p=="taskgroup_reassign_simple_neural":
+                    # Reassign values to column "taskgroup" so values are simple, they ignore probe
+                    # (since this is present in column "probes") and ignore suffixes (e..g,
+                    # E or I, without n strokes..)
+                    self.taskgroup_reassign_ignoring_whether_is_probe(CLASSIFY_PROBE_DETAILED=False)                
+                else:
+                    print(p)
+                    assert False, "dotn know this"
+                self.Dat = self.Dat.reset_index(drop=True)
+                print(f"after: {len(self.Dat)}")
         
-        self.Dat = self.Dat.reset_index(drop=True)
-
         return params
 
 
@@ -4948,6 +4992,7 @@ class Dataset(object):
         
         return strokes_beh_list, strokes_task_list, Dthis    
 
+
     ############# DAT dataframe manipualtions
     def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
         """ append column with index after applying grp_by, 
@@ -4969,6 +5014,7 @@ class Dataset(object):
     def dat_append_col_by_grp(self, grp_by, new_col_name):
         assert False, "moved to grouping_append_col"
 
+        
     def grouping_print_n_samples(self, list_groupouter_grouping_vars, Nmin=0, savepath=None):
         """ Print n trials for each of conjucntive levels, multiple grouping vars.
         """
@@ -4977,7 +5023,9 @@ class Dataset(object):
 
 
     def grouping_get_inner_items(self, groupouter="task_stagecategory", 
-            groupinner="index", sort_keys=False):
+            groupinner="index", sort_keys=False,
+            n_min_each_conj_outer_inner=1,
+            take_top_n_inner=None):
         """ Return dict of unique items (levels of groupinner), grouped
         by groupouter levels. 
         PARAMS:
@@ -4993,7 +5041,9 @@ class Dataset(object):
         date2:<list of strings ....}
         """
         from pythonlib.tools.pandastools import grouping_get_inner_items
-        return grouping_get_inner_items(self.Dat, groupouter, groupinner, sort_keys=sort_keys)
+        return grouping_get_inner_items(self.Dat, groupouter, groupinner, sort_keys=sort_keys,
+            n_min_each_conj_outer_inner=n_min_each_conj_outer_inner,
+            take_top_n_inner=take_top_n_inner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
     def behclass_preprocess_wrapper(self):
@@ -5289,6 +5339,21 @@ class Dataset(object):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
         self.Dat["INSTRUCTION_COLOR"] = list_issup
 
+    def supervision_epochs_extract_epochkind(self):
+        """ adds a column to D.Dat, which is epochkind, a category of epoch, such as
+        "direction" for any direction rule. These are currently hand coded.
+        """
+        from pythonlib.dataset.modeling.discrete import MAP_EPOCH_EPOCHKIND
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        def F(x):
+            return MAP_EPOCH_EPOCHKIND[x["epoch"]]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "epochkind")
+
+        print("Updated self.Dat with new column: epochkind")
+
+        
+
     def supervision_epochs_extract_orig(self):
         """ Extracts original name (e.g, AnBmTR|0 --> AnBmTR) before appended color
         superv info. This is a hacky solution to the original problem of not saving these names
@@ -5310,21 +5375,42 @@ class Dataset(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch_orig")
         print("Extracted into self.Dat[epoch_orig]")
 
-    def supervision_epochs_merge_these(self, list_epochs, new_epoch_name):
+    def supervision_epochs_merge_these(self, list_epochs, new_epoch_name,
+            key="epoch", assert_list_epochs_exist=True):
         """ Converts epochs of names in list_epochs into the epoch newname
+        PARAMS:
+        - assert_list_epochs_exist, check that each epoch actuall exists. useful sanity
+        check.
         RETURNS:
         - modifies "epoch" in self.Dat.
         """
 
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
+        if assert_list_epochs_exist:
+            for epoch in list_epochs:
+                if sum(self.Dat[key]==epoch)==0:
+                    print("---")
+                    print("The epochs that exist:")
+                    print(self.Dat["epoch"].unique())
+                    print("The epochs you requested:")
+                    print(list_epochs)
+                    assert False, "you made mistake in list_epochs?"
+
+        assert isinstance(list_epochs, list)
+        # assert isinstance(new_epoch_name, str)
+        
+        print(f"Mergin these {key}'s .. ")
+        print(list_epochs)
+        print(f"Into this new {key}:", new_epoch_name)
+
         def F(x):
-            if x["epoch"] in list_epochs:
+            if x[key] in list_epochs:
                 return new_epoch_name  
             else:
-                return x["epoch"]
+                return x[key]
 
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+        self.Dat = applyFunctionToAllRows(self.Dat, F, key)
 
     def supervision_epochs_remove_baseline_trials(self):
         """ Modifies self.Dat to exlcude rows whos epochs that are basleine, i.e.
@@ -5453,6 +5539,67 @@ class Dataset(object):
                 color_is_considered_instruction=color_is_considered_instruction))            
         self.Dat["supervision_online"] = list_issup
         print("ADded new column: supervision_online")
+
+
+    ############## EPOCHSET stuff
+    def epochset_extract_common_epoch_sets(self, trial_label = "char_seq", epoch_label="epoch",
+        n_min_each_conj_outer_inner=1, n_max_epochs=None, epochset_col_name="epochset",
+        PRINT = False,
+        merge_sets_with_only_single_epoch=False,
+        merge_sets_with_only_single_epoch_name = tuple(["LEFTOVER"])
+        ):
+        """
+        PARAMS:
+        - trial_label, int, how to label each trial, i.e., what variable to use for grouping trials, e..g
+        if "character", then groups trials by character,
+        - n_max_epochs, int or None. if int, then for each <trial_label> this is the max num epochs it can have.
+        if have more, then keeps the top n (n_max_epochs) based on n trials.
+        - merge_sets_with_only_single_epoch, bool, if True, then any epochset that has only one level of epoch, 
+        collect those and combine into a single epochset. this way you don't throw them out. new epochset
+        name is "LEFTOVER"
+        """
+        # - classify each task based on which epochs it spans
+
+        # - For each char_seq, get its list of epochs that it is present in
+        groupdict = self.grouping_get_inner_items(trial_label, epoch_label, 
+            n_min_each_conj_outer_inner=n_min_each_conj_outer_inner, take_top_n_inner=n_max_epochs)
+        # - make the epoch set hashable, and sorted
+        groupdict = {charseq:tuple(sorted(epoch_set)) for charseq, epoch_set in groupdict.items()}
+
+        if PRINT:
+            list_epochsets_unique = sorted(set([x for x in list(groupdict.values())]))
+            print("Unique classes of epochs spanned by individual tasks:")
+            print(list_epochsets_unique)
+
+        # - For each trial, map to one of these sets )
+        def F(x):
+            epoch_set = groupdict[x[trial_label]]
+            return epoch_set
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        self.Dat = applyFunctionToAllRows(self.Dat, F, epochset_col_name)
+        print(f"Defined new column: {epochset_col_name}")
+        if PRINT:
+            print("... value_counts:")
+            print(self.Dat[epochset_col_name].value_counts())
+
+        if merge_sets_with_only_single_epoch:
+            print("... merge_sets_with_only_single_epoch... ")
+            # Collect all the epochsets that have only one epoch, then merge them.
+            # Beucase they would be useless (thrown out) if only one epoch.
+            var = "epoch"
+            groupdict = self.grouping_get_inner_items("epochset", var)
+
+            list_epochsets_with_only_one_epoch = []
+            for epochset, epochs_within_this_epochset in groupdict.items():
+                if len(epochs_within_this_epochset)==1:
+                    list_epochsets_with_only_one_epoch.append(epochset)
+                    print(epochset, "only has one epoch!: ", epochs_within_this_epochset)
+
+            # Merge these all into one new epochset
+            self.supervision_epochs_merge_these(list_epochsets_with_only_one_epoch, 
+                merge_sets_with_only_single_epoch_name, "epochset")
+        print("Final epochsets:")
+        print(self.Dat["epochset"].value_counts())
 
     ############### PROBES stuff
     def probes_extract_blocks_with_probe_tasks(self):
@@ -5590,7 +5737,7 @@ class Dataset(object):
                 # Then not success...
                 print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one)
 
-    def grammar_successbinary_score_parses(self, print_summary=False):
+    def grammar_successbinary_score_parses(self, print_summary=False, DEBUG=False):
         """ Good, determine if beh is success based on matching any of the possible
         parses given each trial's rule.
         PARAMS:
@@ -5602,12 +5749,25 @@ class Dataset(object):
         from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
 
         # 1) Score each trial based on parses
-        bm = preprocess_dataset_recomputeparses(self)
+        bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG)
 
         # D.sequence_extract_beh_and_task(230, True)
         if print_summary:
             self.grammar_successbinary_print_summary()
 
+        if DEBUG:
+            # For each trial, print its semantic outcome
+            for i in range(len(self.Dat)):
+                tc = self.Dat.iloc[i]["trialcode"]
+                print(i, tc, self.sequence_score_wrapper(i))
+
+            # pick a speicfic trial and plot and print it.
+            ind = 783
+            tc = self.Dat.iloc[ind]["trialcode"]
+            bm.DatLong[bm.DatLong["trialcode"] == tc]
+
+            self.sequence_extract_beh_and_task(ind, True)
+            
         return bm
 
     def grammar_successbinary_score_matlab(self, print_summary=False):
@@ -5650,6 +5810,99 @@ class Dataset(object):
                 del Task._DatSegs
             if hasattr(Beh, "Alignsim_Datsegs"):
                 del Beh.Alignsim_Datsegs        
+
+    def sequence_char_taskclass_assign_char_seq(self, ver="task_matlab"):
+        """ Assign a new column "char_seq" which is conjunction of character 
+        and sequence, either beh sequence or task (groud truth matlab) sequene.
+        This useful if want to find common beh across epochs, and there is variability 
+        in how a character is done, or when considering "random rank" seuqqence epochs
+        PARAMS
+        - ver, how to define sequnce. 
+        --- beh, the beh sequence on the trial
+        --- task_matlab, the matlab objectclass sequence
+        RETURNS:
+        - new column (char_seq) for each trial
+        """
+
+        # for any trial, get its (task, sequence) tuple
+        def _get_char_sequence(ind):
+            char = self.Dat.iloc[ind]["character"]
+            if ver=="task_matlab":
+                sequence = tuple(self.sequence_extract_beh_and_task(ind)["taskstroke_inds_correct_order"])
+            else:
+                print(ver)
+                assert False, "code it!!"
+            return (char, sequence)
+
+        # - append new column charseq
+        list_charseq = []
+        for i in range(len(self.Dat)):
+            list_charseq.append(_get_char_sequence(i))
+            
+        self.Dat["char_seq"] = list_charseq      
+        print(f".. Appended new column 'char_seq', version: {ver}")
+
+
+    def sequence_score_wrapper(self, ind, PRINT=False):
+        """ [GOOD] For this trial (ind), return a semantic wrapper of the behavior, based on 
+        what has already been computed and saved in D.Dat, for seuqence accuracy either
+        relative to parses or matlab
+        RETURNS:
+        - outcome, a string that is interpretable.
+        """
+
+        # signature of the trial
+        a = self.Dat.iloc[ind]["success_binary_quick"]
+        b = self.Dat.iloc[ind]["beh_sequence_wrong"]
+        c = self.Dat.iloc[ind]["beh_too_short"]
+        d = self.Dat.iloc[ind]["exclude_because_online_abort"]
+        e = self.Dat.iloc[ind]["aborted"]
+
+        # assign it one and only one outcome
+        beh_tuple = (a,b,c,d,e)
+
+        online_abort_but_sequence_correct_so_far = beh_tuple == (False, False, True, True, True)
+        online_abort_but_sequence_correct_complete = beh_tuple == (False, False, False, True, True)
+        sequence_correct = (beh_tuple == (True, False, False, False, False)) or (beh_tuple == (True, False, False, False, True)) # online abort is rare, but can happen due to hotkey
+        sequence_incorrect_online_abort = (beh_tuple == (False, True, True, False, True)) or (beh_tuple == (False, True, False, False, True))
+        sequence_incorrect_but_no_abort = (beh_tuple == (False, True, True, False, False)) or (beh_tuple == (False, True, False, False, False))
+        done_early_but_sequence_correct_so_far = beh_tuple == (False, False, True, True, False) # e.g., pressed done button early.
+
+        # make sure one and only one outcome
+        if sum([online_abort_but_sequence_correct_so_far, 
+             online_abort_but_sequence_correct_complete, 
+             sequence_correct,
+             sequence_incorrect_online_abort, 
+             sequence_incorrect_but_no_abort,
+             done_early_but_sequence_correct_so_far])!=1:
+            print([online_abort_but_sequence_correct_so_far, 
+                     online_abort_but_sequence_correct_complete, 
+                     sequence_correct,
+                     sequence_incorrect_online_abort, 
+                     sequence_incorrect_but_no_abort,
+                     done_early_but_sequence_correct_so_far])
+            print(a,b,c,d,e)
+            print(ind)
+            print(self.Dat.iloc[ind]["trialcode"])
+            self.sequence_extract_beh_and_task(ind, True)
+            assert False
+
+        if online_abort_but_sequence_correct_so_far:
+            return "online_abort_but_sequence_correct_so_far"
+        elif online_abort_but_sequence_correct_complete:
+            return "online_abort_but_sequence_correct_complete"
+        elif sequence_correct:
+            return "sequence_correct"
+        elif sequence_incorrect_online_abort:
+            return "sequence_incorrect_online_abort" 
+        elif sequence_incorrect_but_no_abort:
+            # usually is probes
+            return "sequence_incorrect_but_no_abort"
+        elif done_early_but_sequence_correct_so_far:
+            # usually is probes
+            return "done_early_but_sequence_correct_so_far"
+        else:
+            assert False
 
 
     def sequence_compute_one_to_one_beh_to_task(self, ind):
@@ -5732,6 +5985,14 @@ class Dataset(object):
         """
         from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
         preprocess_dataset(self)
+
+        # also extract gridsize
+        list_gridsize = []
+        for i in range(len(self.Dat)):
+            T = self.Dat.iloc[i]["Task"]
+            list_gridsize.append(T.PlanDat["TaskGridClass"]["Gridname"])
+        self.Dat["gridsize"] = list_gridsize
+        print("Appended columns gridsize!")
 
     ################ SAVE
     def make_savedir_for_analysis_figures(self, analysis_name):
@@ -6549,20 +6810,20 @@ class Dataset(object):
         figlist = []
 
         fig = sns.catplot(data=self.Dat, x="tvalday", y="taskgroup", hue="task_stagecategory", 
-            row="expt", col="epoch")
+            row="expt", col="epoch", alpha=0.5)
         figlist.append(fig)
 
         fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="monkey_train_or_test", 
-            row="date", col="epoch")
+            row="date", col="epoch", alpha=0.5)
         rotateLabel(fig)
         figlist.append(fig)
 
         fig = sns.catplot(data=self.Dat, x="block", y="taskgroup", hue="monkey_train_or_test", 
-            row="date", col="epoch", aspect=2)
+            row="date", col="epoch", aspect=2, alpha=0.5)
         figlist.append(fig)
 
         fig = sns.catplot(data=self.Dat, x="tvalday", y="taskgroup", hue="monkey_train_or_test", 
-            row="task_stagecategory", col="epoch", aspect=2)
+            row="task_stagecategory", col="epoch", aspect=2, alpha=0.5)
         figlist.append(fig)
 
         # fig = sns.catplot(data=self.Dat, x="task_stagecategory", y="taskgroup", hue="online_abort", 
@@ -6575,23 +6836,23 @@ class Dataset(object):
 
         # One supblot for each date-session, block vs. trial (colored by epoch)
         fig = sns.FacetGrid(self.Dat, col="date_sess", hue="epoch", col_wrap=2, sharey=True, sharex=True, aspect=2, height=4)
-        fig.map(sns.scatterplot, "trial", "block")
+        fig.map(sns.scatterplot, "trial", "block", alpha=0.5)
         fig.add_legend()
         figlist.append(fig)
         figlist.append(fig)
 
         fig = sns.FacetGrid(self.Dat, row = "monkey_train_or_test", col="date_sess", hue="epoch", sharey=True, sharex=True, aspect=2, height=4)
-        fig.map(sns.scatterplot, "trial", "supervision_stage_new")
+        fig.map(sns.scatterplot, "trial", "supervision_stage_new", alpha=0.5)
         fig.add_legend()
         figlist.append(fig)
 
         fig = sns.FacetGrid(self.Dat, row = "monkey_train_or_test", col="date_sess", hue="epoch", sharey=True, sharex=True, aspect=2, height=4)
-        fig.map(sns.scatterplot, "trial", "supervision_stage_new")
+        fig.map(sns.scatterplot, "trial", "supervision_stage_new", alpha=0.5)
         fig.add_legend()
         figlist.append(fig)
 
         fig = sns.FacetGrid(self.Dat, row = "taskgroup", col="date_sess", hue="supervision_stage_new", sharey=True, sharex=True, aspect=2, height=4)
-        fig.map(sns.scatterplot, "trial", "block")
+        fig.map(sns.scatterplot, "trial", "block", alpha=0.5)
         fig.add_legend()
         figlist.append(fig)
 

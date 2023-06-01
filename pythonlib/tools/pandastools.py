@@ -136,12 +136,17 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
     if nonnumercols is None:
         nonnumercols = []
     else:
-        # Check they all exist and has a single unique item
+        # Check they all exist and has a single unique item per level of group
         for col in nonnumercols: 
             groupdict = grouping_append_and_return_inner_items(df, group, 
                 groupinner=col, new_col_name="dummy")
             for k, v in groupdict.items():
-                assert len(v)==1, "nonnumercols takes the first. this is wrong if there are multipel..."
+                if len(v)!=1:
+                    print(col)
+                    print(group)
+                    print(k)
+                    print(v)
+                    assert False, "nonnumercols takes the first. this is wrong if there are multipel levels for any nonnumercol..."
 
     if aggmethod is None:
         aggmethod = ["mean"]
@@ -700,7 +705,7 @@ def append_col_after_applying_to_group(df, groupby, cols_to_use, F, newcol):
     return df
 
 
-def append_col_with_index_in_group(df, groupby, colname="trialnum_chron", randomize=False):
+def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
     e.g, if groupby has 2 levels (A and B), then this gives all rows with level A an index.
     e.g.. like trial numbers for a given condition/task.
@@ -849,7 +854,46 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     return dfthis, fig, ax, rgba_values
             
 
+def unpivot(df, id_vars, value_vars, var_name, value_name):
+    """ Convert from wide-form to long-form.
+    PARAMS:
+    - id_vars, list of str, grouping variable defining new rows.
+    - value_vars, list of str, values for these columns will be stacked vertically.
+    Thus nrows = len(value_vars)*len(df)
+    - var_name, str, what to call the new column for which the values are value_vars
+    - value_name, str, what to call the new column holding the values
+        chan    var     var_others  event   val_kind    val_method  bregion     val     val_interaction     val_others
+        0   2   epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    0.000854    0.014409    0.010222
+        1   2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    0.002288    0.005289    0.004021
+        2   277     epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     0.001375    0.013763    0.007092
+        3   277     epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     0.160906    0.018665    0.020233  
 
+            chan    var     var_others  event   val_kind    val_method  bregion     anova_source    peta2
+        0   2   epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val     0.0008541354921786013
+        1   277     epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val     0.0013754887892285677
+        2   2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val     0.0022879608882661736
+        3   277     epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val     0.160906210839649
+        4   2   epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val_others  0.010222271105982818
+        5   277     epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val_others  0.007092412522261568
+        6   2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val_others  0.004020582538782944
+        7   277     epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val_others  0.020232822456417488
+        8   2   epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val_interaction     0.014408870995814671
+        9   277     epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val_interaction     0.013762569757076468
+        10  2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val_interaction     0.005289383533117516
+        11  277     epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val_interaction     0.018665206122281126
+    """
+    df_melt = pd.melt(df, id_vars=id_vars, 
+            value_vars=value_vars)
+    
+    # NOTE: the reason do this insead of passing var_name into pd.melt is if do that then sometimes end with bug if
+    # var_name already exists as a column name.
+    df_melt[var_name] = df_melt["variable"]
+    df_melt = df_melt.drop("variable", axis=1)
+
+    df_melt[value_name] = df_melt["value"]
+    df_melt = df_melt.drop("value", axis=1)
+
+    return df_melt
 
 def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=False,
     flatten_separator="-", col_strings_ignore=None):
@@ -1167,7 +1211,11 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
 
 
 def grouping_get_inner_items(df, groupouter="task_stagecategory", 
-    groupinner="index", groupouter_levels=None, nrand_each=None, sort_keys=False):
+    groupinner="index", groupouter_levels=None, nrand_each=None, 
+    sort_keys=False,
+    n_min_each_conj_outer_inner=1,
+    take_top_n_inner=None,
+    DEBUG=False):
     """ Return dict of unique items (levels of groupinner), grouped
     by groupouter levels. 
     PARAMS:
@@ -1177,6 +1225,11 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     finds and uses all.
     - nrand_each, int,then gets max this much per levle of groupouter. gets 
     random, sorted. if None then gets all.
+    - n_min_each_conj_outer_inner, int, if any conj of outer and inner has fewre
+    than this many cases, then excludes. e.g. if is (task, epoch), then ignores
+    epochs where < this many cases of this task. using 1 means ignore.
+    - take_top_n_inner, if not None, then is int, caps n inner for each outer by this, 
+    by taking the n with max n trials
     RETURNS:
     - groupdict, where each key is a level of groupouter, and
     items are the unique values of groupinner that exist for that
@@ -1197,8 +1250,31 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         dfthisgroup = df[df[groupouter]==lev]
         if groupinner=="index":
             itemsinner = dfthisgroup.index.tolist()
+            assert n_min_each_conj_outer_inner==1, "doesnt work for index, each index is already uinque.."
         else:
             itemsinner = dfthisgroup[groupinner].unique().tolist()
+            if n_min_each_conj_outer_inner>1:
+                if DEBUG:
+                    print("-----")
+                    print("N, each inner, for outer:", lev, " ... ")
+                    for it in itemsinner:
+                        print(it, "-->", sum(dfthisgroup[groupinner]==it))
+                itemsinner = [it for it in itemsinner if sum(dfthisgroup[groupinner]==it)>=n_min_each_conj_outer_inner]
+                if DEBUG:
+                    print("Keeping these items: ", itemsinner, "(ie those with n >= ", n_min_each_conj_outer_inner, ")")
+            if take_top_n_inner is not None and len(itemsinner)>take_top_n_inner:
+                # get n for each item
+                if DEBUG:
+                    print("------")
+                    print("Starting items.. too many: ", itemsinner)
+                itemsinner_n = [sum(dfthisgroup[groupinner]==it) for it in itemsinner]
+                _inds = np.argsort([-n for n in itemsinner_n])[:take_top_n_inner]
+                itemsinner = [itemsinner[i] for i in _inds]
+                if DEBUG:
+                    print("sample size: ", itemsinner_n)
+                    print("idnices in order of incresaing n:", _inds)
+                    print("new items:", itemsinner)
+
         if nrand_each is not None:
             if len(itemsinner)>nrand_each:
                 import random
@@ -1228,14 +1304,21 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
         new_col_name+="_"
     df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)
 
-
     # 2) Get dict of eaceh group
     groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
     
     return groupdict
 
+def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
+    """ Returns the min and max n across conjjunctiosn of list_groupouter_grouping_vars
+    """
+    dftmp = df.groupby(list_groupouter_grouping_vars).count()
+    nmax = np.max(np.max(dftmp, axis=0))
+    nmin = np.min(np.min(dftmp, axis=0))
+    return nmin, nmax
+
 def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
-        save_convert_keys_to_str = False, save_as="dict"):
+        save_convert_keys_to_str = False, save_as="dict", sorted_by_keys=True):
     """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
     e.g., if goruping is [shape, location, size]: prints:
     ('Lcentered-3-0', (-1, -1), 'rig3_3x3_small') 58
@@ -1280,11 +1363,21 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             # Then each is a string line, write to text
             from .expttools import writeStringsToFile
             lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
+            if sorted_by_keys:
+                lines = sorted(lines)
+            header = "|".join(list_groupouter_grouping_vars)
+            lines = [header] + lines
+            print(lines)
             writeStringsToFile(savepath, lines)
         else:
             print(save_as)
             assert False
         print("Saved to: ", savepath)
+
+    if sorted_by_keys:
+        list_keys = list(outdict.keys())
+        list_keys = sorted(list_keys)
+        outdict = {k:outdict[k] for k in list_keys}
 
     for k, v in outdict.items():
         print(k, ':    ', v)
@@ -1319,22 +1412,53 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     - colname, str, the column in which to compare lables
     - rowvalues, list of items (labels) to comapre. the 
     returned df will have rows exactly matching these values.
-    NOTE: error if rowvalues contains value not in df
+    - prune_to_value_exist_in_df, if true, then keeps only rowvalues that exist in df.
+    otherwise: error if rowvalues contains value not in df
     NOTE: if a value occurs in multipel rows, it extracts all rows.
     - assert_exactly_one_each, if True, then each val in rowvalues
-    matches exactly one and only one.
+    matches exactly one and only one. Can be confident that the OUTPUT
+    matches input rowvalues exactly
     EG:
     df = pd.DataFrame({'A': [5,6,3,4, 5], 'B': [1,2,3,5, 6]})
     list_of_values = [3, 6, 5]
     df.set_index('A').loc[list_of_values].reset_index()
-    """
+    """ 
 
-    if assert_exactly_one_each:
-        for val in rowvalues:
-            assert sum(df[colname]==val)==1
+    # print(rowvalues)
+    # print(len(rowvalues))
+    # for x in rowvalues:
+    #     print(x, type(x))
+    # assert False
+
+    assert isinstance(colname, str)
+    assert isinstance(rowvalues, list)
+
+    # the dataframe must have each value in rowvalues.
+    tmp = df[colname].tolist()
+    for v in rowvalues:
+        if v not in tmp:
+            print(v)
+            assert False, "this item in rowvalues does not exist in df[colname]"
+
     dfout = df.set_index(colname).loc[rowvalues]
     if reset_index:
         dfout = dfout.reset_index()
+
+    if assert_exactly_one_each:
+        if not dfout[colname].tolist() == rowvalues:
+            # figure out whihc one is incorrect
+            for i, val in enumerate(rowvalues):
+                if dfout.iloc[i][colname] != val:
+                    print(i, val)
+                    print(dfout.iloc[i][colname])
+                    assert False
+        # # Check that each row of the outcome has rowval mathing the input.
+        # for i, val in enumerate(rowvalues):
+        #     if not dfout.iloc[i][colname] == val:
+        #         print(dfout.iloc[i][colname], type(dfout.iloc[i][colname]))
+        #         print(val, type(val))
+        #         assert False
+
     return dfout
 
 
@@ -1357,8 +1481,134 @@ def concat(list_df):
     return df_all
 
 
+def conjunction_vars_prune_to_balance_stupid():
+    """ See conjunction_vars_prune_to_balance(), which is the good code,
+    here is bad version, which just find all levels of one var
+    that starts out having all levls of other var.
+    """ 
+    assert False, "clean up the code...."
+    PRUNE_TO_BALANCE_VARIABLES = True
+    PLOT = True
+    if PRUNE_TO_BALANCE_VARIABLES:
+
+        if False:
+            # print all conjunctions
+            from pythonlib.tools.pandastools import grouping_print_n_samples
+            for lev, dftmp in dict_levels.items():
+                print("-- LEVEL OF OTHERVAR: ", lev)
+                grpdict = grouping_print_n_samples(dftmp, ["vars_others", var])
+            #     print(lev, len(dftmp))
+
+        from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+        dfcounts, _, _, _ = convert_to_2d_dataframe(dfthis, "vars_others", var, PLOT);
+
+        import numpy as np
+        x = np.all(dfcounts>0, axis=1) # the othervars that have data across all levels
+        list_othervars_good = x[x==True].index.tolist()
+        print(list_othervars_good)
+
+        # prune df to only keep these othervars
+        dfthis = dfthis[dfthis["vars_others"].isin(list_othervars_good)]    
+        
+        if PLOT:
+            _, _, _, _ = convert_to_2d_dataframe(dfthis, "vars_others", var, PLOT);
+
+def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
+    """
+    Given two variables, prune df that that each level of var1 has 
+    the same levels of var2 (not sample size, but simpl,y whether has it).
+    First converts df to 2d (var1 vs var2) then does this in a greedy way,
+    by considering all row and cols, giving each a score (low means low N and
+    low num levels of the other varibale), removing the row or col with lowests core,
+    and iterating until good.
+    NOTE: is possible that df is returned empty...
+    PARAMS
+    - var1, var2, strings, variables to consider
+    RETURNS:
+    - copy of dfthis, balanced.
+    - dfcounts, the final 2d dataframe
+    """
+    import numpy as np
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+    def _evaluate_data_size(dfcounts):
+        """ Helper for summarizing size of this 2d dataframe"""
+        n_othervar = len(dfcounts)
+        n_var = len(dfcounts.columns)
+        n_dat = int(dfcounts.sum().sum())
+
+        return n_dat, n_var, n_othervar
+
+    def _score_each_level(which_axis, dfcounts):
+        """ returns pandas series for this axis, with score....
+        (see docs above). Low means low N and low n levels of other var"""
+        if which_axis==var1:
+            AXIS = 0
+        elif which_axis==var2:
+            AXIS = 1
+
+        # score for n data
+        tmp1 = np.sum(dfcounts, axis=AXIS)
+        tmp1 = tmp1/np.sum(tmp1)
+
+        # score for n levels of other var.
+        tmp2 = np.sum(dfcounts>0, axis=AXIS)
+        tmp2 = tmp2/np.sum(tmp2)
+
+        # return sum of scores.
+        return tmp1 + tmp2
+
+    # Convert to 2d frame
+    dfcounts, _, _, _ = convert_to_2d_dataframe(dfthis, var2, var1, PLOT);
+
+    while np.all(dfcounts>0)==False: # Then there is still imbalance.
+        scores_others = _score_each_level(var2, dfcounts)
+        scores_var =  _score_each_level(var1, dfcounts)
+
+        if min(scores_others)<=min(scores_var):
+            # remove the level of var2 that has the lowest score
+            indexnum_to_remove = scores_others.argmin()
+            lev_to_remove = scores_others.index[indexnum_to_remove]
+            axis_to_remove = var2
+            AXIS = 0
+        else:
+            # remove the level of var1 that has the lowest score
+            indexnum_to_remove = scores_var.argmin()
+            lev_to_remove = scores_var.index[indexnum_to_remove]
+            axis_to_remove = var1
+            AXIS = 1
+
+        if PLOT:
+            print(f"Dropping from {axis_to_remove}, level {lev_to_remove}, which is index {indexnum_to_remove}")
+
+        # prune one col/row, and then repeat until good.
+        dfcounts = dfcounts.drop(lev_to_remove, axis = AXIS)
+
+    # plot heatmap
+    if PLOT:
+        from pythonlib.tools.snstools import heatmap
+        heatmap(dfcounts);
+
+    # Prune dfthis
+    vars_keep = dfcounts.columns.tolist()
+    othervars_keep = dfcounts.index.tolist()
+
+    dfthisout = dfthis[
+        (dfthis[var1].isin(vars_keep)) & 
+        (dfthis[var2].isin(othervars_keep))
+    ].copy().reset_index(drop=True)
+
+    # evaluate
+    if PLOT:
+        print("evaluation (ndat, nvar, nothervar):", _evaluate_data_size(dfcounts))
+        assert len(dfthisout)==_evaluate_data_size(dfcounts)[0]    
+
+    return dfthisout, dfcounts
+
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
-    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False):
+    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
+    prune_levels_with_low_n=True):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -1377,6 +1627,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     is more leneint. keeps a given level of vars_others if it has >= this many
     levels of var which has >=n_min datapts. usually requires _all_ levels of vars_others
     to have >=n_min datapts.
+    - prune_levels_with_low_n, bool, then removes levles with n data < n_min. 
     EG:
     - you wish to ask about shape moudlation for each combaiton of location and 
     size. then var = shape and vars_others = [location, size]
@@ -1397,7 +1648,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
     """
 
-    assert n_min is not None
+    assert isinstance(vars_others, list)
+    if len(df)==0:
+        return pd.DataFrame([]), {}
+
+    assert n_min is not None, "not coded. just make this one"
 
     if DEBUG:
         PRINT = True
@@ -1433,18 +1688,29 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     
     for lev in levels_others:
 
+        if PRINT:
+            print("---- getting this level (othervar):", lev)
         # get data
         dfthis = df[df[var_conj_of_others] == lev]
 
-        good = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
+        good, levels_passing = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
             lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
-            PRINT=PRINT)
+            PRINT=PRINT) 
         if DEBUG:
             print(lev, var, levels_var, good)
         if good:
-            # keep
+            # keep, first pruning to just the levels that passed
+            # print(len(dfthis))
+            # print(dfthis[var].value_counts())
+            # print(levels_passing)
+            if prune_levels_with_low_n:
+                dfthis = dfthis[dfthis[var].isin(levels_passing)]
+                if PRINT:
+                    print(f"n for each level of {var}, for the othervar level {lev}")
+                    for _lev in levels_passing:
+                        print(_lev, "...", sum(dfthis[var]==_lev))
             list_dfthis.append(dfthis)
-            dict_dfthis[lev] = dfthis
+            dict_dfthis[lev] = dfthis.copy()
 
     if REMOVE_DUMMY:
         del df["dummy_var"]
@@ -1468,6 +1734,10 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     - lenient_allow_data_if_has_n_levels, None or int. if None, then must have at least n_trials_min for 
     each level in levels_to_check. if int, then only need to have at least n_trials_min for 
     lenient_allow_data_if_has_n_levels many levels.
+    RETURNS:
+    - passing, bool
+    - levels_passing, list of levels that pass, only applies if lenient_allow_data_if_has_n_levels is not None,
+    otherwise returns None.
     """
         
     assert len(dfthis)>0
@@ -1494,15 +1764,22 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
         # assert n>0
         if PRINT:
             print(lev, ' -- ', n)
-        if STRICT:
-            if n<n_trials_min:
-                return False
 
     if STRICT:
-        # Then you have suceeded iof havent failed aboev.
-        return True
+        if any([n<n_trials_min for n in list_n]):
+            if PRINT:
+                print(f"Skipping {var} becuase using strict mode, and at least one level is note nough data...")
+                print("n across levels: ", list_n)
+                print("min allowed n:", n_trials_min)
+        # if n<n_trials_min:
+            return False, None
+        else:
+            # Then you have suceeded iof havent failed aboev.
+            return True, levels_to_check
     else:
+        # Not strict, make sure at least some levels pass n_min.
         passes = [nthis >= n_trials_min for nthis in list_n] #  whether enogh trials for each level of var: [True, False, ...]
+        levels_passing = [lev for n, lev in zip(list_n, levels_to_check) if n>=n_trials_min]
         npass = sum(passes)
         good = npass >= lenient_allow_data_if_has_n_levels
 
@@ -1511,6 +1788,31 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
             print(f"{good}, because {npass}/{lenient_allow_data_if_has_n_levels} passed... ({list_n}) >= {n_trials_min}")
 
         if npass >= lenient_allow_data_if_has_n_levels:
-            return True
+            return True, levels_passing
         else:
-            return False
+            return False, levels_passing
+
+
+def sort_rows_by_trialcode(dfthis):
+    """ return copy of dfthis, rows sorted so that trialcode is increaseing downwards.
+    This helps by converting trialcode string to tuple.
+    Appends column "trialcode_tuple" as intermediate step.
+    """
+    from pythonlib.tools.stringtools import decompose_string
+
+    def tc_to_tupleints(tc):
+        """ 
+        tc "2022-1-10" --> tupleints (2022, 1, 10)
+        """
+        this = decompose_string(tc, "-")
+        return [int(x) for x in this]
+
+
+    # 1) apopoend column 
+    def F(x):
+        return tc_to_tupleints(x["trialcode"])
+    dfthis = applyFunctionToAllRows(dfthis, F, "trialcode_tuple")
+    
+    # 2) sort
+    return dfthis.sort_values(by="trialcode_tuple").reset_index(drop=True)
+

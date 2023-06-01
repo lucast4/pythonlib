@@ -150,10 +150,18 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     ax.legend(handles=handles, framealpha=alpha)
 
 
-def makeColors(numcol, alpha=1, cmap="jet", ploton=False):
-    """ gets evensly spaced colors. currntly uses jet map
+def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):
+    """ turbo. see below for reason.
+    PREVIOUSLY: gets evensly spaced colors. currntly uses jet map.
     PREVIOUSLY: plasma
     """
+
+    # These, in order from best to worst, in comining (i) separation and (ii) not fading out(eg. yellow).
+    # turbo
+    # brg
+    # nipy_spectral
+    # rainbow
+
     import matplotlib.pylab as pl
     import matplotlib.cm as cm
     if True:
@@ -280,7 +288,8 @@ def saveMultToPDF(path, figs):
         pdf.savefig(fig, dpi=100, bbox_inches='tight')
     pdf.close()
 
-def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue"):
+def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue",
+        alpha_fill = 0.2):
     """ Draw plot with error band and extra formatting to match seaborn style
     - pass eitehr yerr (symmetric) or ylowupp, a list of [yupper, ylower], or neither,
     if no plot error
@@ -304,9 +313,9 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue"):
 
     ax.plot(x, y, label='', color=color)
     if a or b:
-        ax.plot(x, lower, color=color, alpha=0.1)
-        ax.plot(x, upper, color=color, alpha=0.1)
-        ax.fill_between(x, lower, upper, alpha=0.2, color=color)
+        ax.plot(x, lower, color=color, alpha=alpha_fill/2)
+        ax.plot(x, upper, color=color, alpha=alpha_fill/2)
+        ax.fill_between(x, lower, upper, alpha=alpha_fill, color=color)
     # ax.set_xlabel('timepoint')
     # ax.set_ylabel('signal')
     ax.spines['top'].set_visible(False)
@@ -856,3 +865,16 @@ def move_legend_outside_axes(ax):
     - ax, already should hav elegend defiened
     """
     ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+def share_axes(axes, which="x"):
+    """
+    MAke these axes have shared axis, will be scalred based on the lasrgest axis.
+    """
+    
+    if which=="x":
+        axes.flatten()[0].get_shared_x_axes().join(axes.flatten()[0], *axes.flatten()[1:])
+    elif which=="y":
+        axes.flatten()[0].get_shared_y_axes().join(axes.flatten()[0], *axes.flatten()[1:])
+    else:
+        print(which)
+        assert False

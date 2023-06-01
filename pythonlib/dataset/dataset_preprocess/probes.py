@@ -153,7 +153,7 @@ def _check_equidistant_from_first_stroke(ind, D):
         
 
 def _classify_probe_task(novel_location_config, equidistant, novel_location_shape_combo, 
-        more_n_strokes):
+        more_n_strokes, detailed=True):
     """ map from params to name that describes this probe task.
     Can use name as taskgroup
     """
@@ -163,26 +163,27 @@ def _classify_probe_task(novel_location_config, equidistant, novel_location_shap
     else:
         s = "I"
 
-    if novel_location_config:
-        s += "_cfig"
+    if detailed:
+        if novel_location_config:
+            s += "_cfig"
 
-    if equidistant:
-        s += "_eq"
+        if equidistant:
+            s += "_eq"
 
-    if novel_location_shape_combo:
-        s += "_locsh"
+        if novel_location_shape_combo:
+            s += "_locsh"
 
-    if more_n_strokes:
-        s += "_nstrk"
+        if more_n_strokes:
+            s += "_nstrk"
 
-    # if novel_location_config and equidistant:
-    #     return "E_cfig_eq"
-    # elif novel_location_config and not equidistant:
-    #     return "E_cfig"
-    # elif not novel_location_config and equidistant:
-    #     return "I_eq"
-    # else:
-    #     return "I"
+        # if novel_location_config and equidistant:
+        #     return "E_cfig_eq"
+        # elif novel_location_config and not equidistant:
+        #     return "E_cfig"
+        # elif not novel_location_config and equidistant:
+        #     return "I_eq"
+        # else:
+        #     return "I"
 
     return s
     
@@ -220,7 +221,8 @@ def _generate_map_taskclass(D):
 
 
 
-def compute_features_each_probe(D, only_do_probes = True):
+def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILED=True,
+    PRINT=False):
     """ For each probe task, compute its "features" which indicate ways that it is 
     different from train tasks. This is compuited spearately for each epoch, becuase
     features will depend on what sequence rule is being trained 
@@ -298,8 +300,9 @@ def compute_features_each_probe(D, only_do_probes = True):
                     dict_probe_kind[(ep, task_probe)] = "same_beh"
             else:
                 for ep, tasks_this_epoch in train_tasks_per_epoch.items():
-                    
-                    print("probe task in epoch: ", task_probe, ep)
+                        
+                    if PRINT:
+                        print("probe task in epoch: ", task_probe, ep)
                     ### COLLECT FEATURES
                     # 1) probe is a unique location config?
                     list_same_config = []
@@ -366,7 +369,7 @@ def compute_features_each_probe(D, only_do_probes = True):
 
                     ### GIVE PROBE TASK CATEGORY A NAME
                     c = _classify_probe_task(novel_location_config, equidistant, 
-                        novel_location_shape_combo, more_n_strokes)
+                        novel_location_shape_combo, more_n_strokes, detailed=CLASSIFY_PROBE_DETAILED)
 
                     ### SAVE
                     dict_probe_features[(ep, task_probe)] = {
@@ -387,7 +390,7 @@ def compute_features_each_probe(D, only_do_probes = True):
 
     return dict_probe_features, dict_probe_kind, list_tasks_probe
 
-def taskgroups_assign_each_probe(D, only_give_names_to_probes=True):
+def taskgroups_assign_each_probe(D, only_give_names_to_probes=True, CLASSIFY_PROBE_DETAILED=True):
     """ Rename each probe's taskgroup based on autoamtically detecting what is
     special about each probe task. Does this in clever fashion by comparing
     to the actual training tasks presaented in each epoch.
@@ -402,9 +405,13 @@ def taskgroups_assign_each_probe(D, only_give_names_to_probes=True):
         D.behclass_preprocess_wrapper()
 
     # 1) compute_features_each_probe
-    _, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D, 
-        only_do_probes=only_give_names_to_probes)
+    dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D, 
+        only_do_probes=only_give_names_to_probes, CLASSIFY_PROBE_DETAILED=CLASSIFY_PROBE_DETAILED)
 
+    # print(dict_probe_features)
+    # print(dict_probe_kind)
+    # print(list_tasks_probe)
+    # assert False
     # 2) map from probe_task to categeroy. main point of this step is to combine catgegory names
     # across epochs if they are different names.
     # epochs = D.Dat["epoch"].unique().tolist()
