@@ -120,6 +120,24 @@ def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
         else:
             return None
 
+def count_n_files_in_dir(dirpath, ext=None):
+    """ 
+    Count number of files that exist in dirpath, with extension
+    ext (or ignore extgnesion if None)
+    PARAMS:
+    - ext, str, e.g., txt (dont give the period)
+    RETURNS:
+    - n, int
+    - list_paths, list of str, full paths of all files found
+    """
+    import glob
+    if ext:
+        list_paths = glob.glob(f"{dirpath}/*.{ext}")
+    else:
+        list_paths = glob.glob(f"{dirpath}/*")
+
+    return len(list_paths), list_paths
+
 def checkIfDirExistsAndHasFiles(dirname):
     """ returns (exists?, hasfiles?), 
     - hasfiles is obviously always False if exists
@@ -394,6 +412,8 @@ def get_common_path(pathlist):
 def load_yaml_config(path, make_if_no_exist=False):
     """ 
     Load a file.yaml into an output dict
+    RETURNS:
+    - a dict, if the file empty, will be emty dict.
     NOTE:
     - path should have .yaml extension.
     """
@@ -407,6 +427,9 @@ def load_yaml_config(path, make_if_no_exist=False):
 
     with open(path) as file:
         outdict = yaml.load(file, Loader=yaml.FullLoader)
+
+    if outdict is None:
+        outdict = {}
     return outdict
 
 def update_yaml_dict(path, key, val, allow_duplicates=True):

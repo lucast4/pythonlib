@@ -5015,11 +5015,12 @@ class Dataset(object):
         assert False, "moved to grouping_append_col"
 
         
-    def grouping_print_n_samples(self, list_groupouter_grouping_vars, Nmin=0, savepath=None):
+    def grouping_print_n_samples(self, list_groupouter_grouping_vars, Nmin=0, savepath=None,
+        save_as="txt"):
         """ Print n trials for each of conjucntive levels, multiple grouping vars.
         """
         from pythonlib.tools.pandastools import grouping_print_n_samples
-        return grouping_print_n_samples(self.Dat, list_groupouter_grouping_vars, Nmin, savepath)
+        return grouping_print_n_samples(self.Dat, list_groupouter_grouping_vars, Nmin, savepath, save_as=save_as)
 
 
     def grouping_get_inner_items(self, groupouter="task_stagecategory", 

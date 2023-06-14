@@ -219,7 +219,7 @@ def random_inds_uniformly_distributed(vals, ntoget):
     PARAMS:
     - vals, array of numbers
     RETURNS:
-    - list of indices into original vals.
+    - list of indices into original vals [NOT THE VALUES THEMSELVES]
     """
     assert ntoget<=len(vals)
     inds = np.argsort(vals)

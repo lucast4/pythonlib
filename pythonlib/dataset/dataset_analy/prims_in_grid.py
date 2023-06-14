@@ -21,6 +21,24 @@ def preprocess_dataset(D, doplots=False):
 
     DS = DatStrokes(D)
 
+    # Some params and metadat to save
+
+    # SAVE the conjunctions of shape and loc that were gotten
+    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
+    D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch.txt"
+    D.grouping_print_n_samples(["aborted", "epoch", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+    path = f"{SAVEDIR}/shape_loc_grouping-by_character.txt"
+    D.grouping_print_n_samples(["aborted", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_character.txt"
+    D.grouping_print_n_samples(["aborted", "epoch", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+    path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
+    D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
+
     if doplots:
         plotscore_all(DS, SAVEDIR)
         plotdrawings_all(DS, SAVEDIR)
