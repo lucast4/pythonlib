@@ -346,6 +346,35 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
+    elif expt in ["primsingridvar2", "primsingridvar2b", "primsingridvar3"]:
+        # Then epochs are a group of blocks. manually enter them here.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["manual_by_block"]
+        if expt=="primsingridvar2":
+            map_epoch_to_block = {
+                "oneloc_varyshp":[2, 4, 6],
+                "oneshp_varyloc":[8, 10, 12]
+            }
+        elif expt=="primsingridvar2b":
+            map_epoch_to_block = {
+                "varyloc_varyshp":[14],
+                "novary":[16, 18, 20],
+                "oneloc_varyshp":[2,4,6],
+                "oneshp_varyloc":[8,10,12],
+            }
+        elif expt=="primsingridvar3":
+            map_epoch_to_block = {
+                "singleprim":[2],
+                "oneloc_varyshp":[9, 16, 23],
+                "oneshp_varyloc":[30, 37, 44],
+                "varyloc_varyshp":[51],
+            }
+        else:
+            assert False
+
+        grouping_reassign_params_in_order = [map_epoch_to_block]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = False
     else:
         # pass, just use defaults
         pass
@@ -372,7 +401,7 @@ def _groupingParams(D, expt):
     
     if grouping_reassign:
         # Rename epochs, applying reassignment methods in order
-        for grmeth in grouping_reassign_methods_in_order:
+        for i, grmeth in enumerate(grouping_reassign_methods_in_order):
             if grmeth=="tasksequencer":
                 # Look into objectclass tasksequencer.
                 print(" ")
@@ -384,10 +413,31 @@ def _groupingParams(D, expt):
             elif grmeth=="color_instruction":
                 print(" ")
                 D.supervision_reassign_epoch_rule_by_color_instruction()
+            elif grmeth=="manual_by_block":
+                # get a mapping from block to epoch.
+                map_epoch_to_block = grouping_reassign_params_in_order[i]
+                # Generate map from block to epoch.
+                map_block_to_epoch = {}
+                for ep, list_bk in map_epoch_to_block.items():
+                    for bk in list_bk:
+                        assert bk not in map_block_to_epoch.keys(), "block is not allowed to be present in multipel epochs"
+                        map_block_to_epoch[bk] = ep
+                print("[preprocess.general] map_block_to_epoch:")
+                print(map_block_to_epoch)
+                # Assert that every block is accounted for
+                for bk in D.Dat["block"].unique().tolist():
+                    if bk not in map_block_to_epoch.keys():
+                        print(map_block_to_epoch)
+                        print(D.Dat["block"].unique().tolist())
+                        assert False, "this block doesnt have an epoch assigned yet... give it..."
+                        
+                # now reassing each blcokt o a new epoch.
+                def F(x):
+                    return map_block_to_epoch[x["block"]]
+                D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
             else:
                 print(grmeth)
                 assert False
-
 
     if grouping_levels is None:
         # Then you did not enter it manually. extract it

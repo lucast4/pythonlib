@@ -24,6 +24,7 @@ def preprocess_dataset(D, doplots=False):
     # Some params and metadat to save
 
     # SAVE the conjunctions of shape and loc that were gotten
+    D.seqcontext_preprocess()
     path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
     D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 

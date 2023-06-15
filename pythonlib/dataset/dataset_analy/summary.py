@@ -204,6 +204,12 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     # save reason for failures.
     D.objectclass_summarize_rule_failures(True, sdir=SDIR_MAIN)
 
+    # Print conjucntions of epochs, tasks, etc.
+    path = f"{SDIR_MAIN}/trialcount-epoch_character.txt"
+    D.grouping_print_n_samples(["aborted", "epoch", "character"], savepath = path)
+    path = f"{SDIR_MAIN}/trialcount-character_epoch.txt"
+    D.grouping_print_n_samples(["aborted", "character", "epoch"], savepath = path)
+
     #### PLOT OVERVIEW OF EXPERIMENT
     if PLOT_OVERVIEW:
         print("DOING: PLOT_OVERVIEW")

@@ -800,7 +800,6 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     arr = np.zeros((len(list_cat_1), len(list_cat_2)))
     for i, val1 in enumerate(list_cat_1):
         for j, val2 in enumerate(list_cat_2):
-            
             dfsub = df[(df[col1] == val1) & (df[col2] == val2)]
             if agg_method=="counts":
                 # get counts
@@ -1429,7 +1428,7 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     # for x in rowvalues:
     #     print(x, type(x))
     # assert False
-
+    from pythonlib.tools.exceptions import NotEnoughDataException
     assert isinstance(colname, str)
     assert isinstance(rowvalues, list)
 
@@ -1437,8 +1436,9 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     tmp = df[colname].tolist()
     for v in rowvalues:
         if v not in tmp:
-            print(v)
-            assert False, "this item in rowvalues does not exist in df[colname]"
+            # print(v)
+            # print("this item in rowvalues does not exist in df[colname]")
+            raise NotEnoughDataException
 
     dfout = df.set_index(colname).loc[rowvalues]
     if reset_index:
@@ -1514,7 +1514,38 @@ def conjunction_vars_prune_to_balance_stupid():
         if PLOT:
             _, _, _, _ = convert_to_2d_dataframe(dfthis, "vars_others", var, PLOT);
 
-def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
+def drop_using_position_index(dfthis, index, axis):
+    """ Returns a copy of dfthis, removing a single position index.
+    This is useful when index is not numerical., SOmetimes runs into 
+    bugs when the index values are tuples
+    PARAMS:
+    - dfthis
+    - index, int position on either axis
+    - axis, 0 or 1, row or col
+    RETURNS:
+    - dfthis copy
+    NOTE: does NOT reset index, since this would destroy index type.
+    """
+
+
+    if axis==0:
+        n = len(dfthis.index)
+    elif axis==1:
+        n = len(dfthis.columns)
+    else:
+        assert False
+    inds = np.ones(n, dtype=bool)
+    inds[index] = False
+
+    if axis==0:
+        return dfthis.iloc[inds, :]
+    elif axis==1:
+        return dfthis.iloc[:, inds]
+    else:
+        assert False
+
+def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
+    prefer_to_drop_which=None):
     """
     Given two variables, prune df that that each level of var1 has 
     the same levels of var2 (not sample size, but simpl,y whether has it).
@@ -1525,12 +1556,16 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
     NOTE: is possible that df is returned empty...
     PARAMS
     - var1, var2, strings, variables to consider
+    - prefer_to_drop_which, int {1, 2, None}, if 1, then prefereably drops levels from
+    var1. Does this by having stronger penalty on scores for var1. the value of the
+    penalty is emporical
     RETURNS:
     - copy of dfthis, balanced.
     - dfcounts, the final 2d dataframe
     """
     import numpy as np
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
+    DIVISOR = 4
 
     def _evaluate_data_size(dfcounts):
         """ Helper for summarizing size of this 2d dataframe"""
@@ -1540,9 +1575,10 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
 
         return n_dat, n_var, n_othervar
 
-    def _score_each_level(which_axis, dfcounts):
+    def _score_each_level(which_axis, dfcounts, DIVISOR):
         """ returns pandas series for this axis, with score....
-        (see docs above). Low means low N and low n levels of other var"""
+        (see docs above). Low is bad. means low N and low n levels of other var,
+        and should preferably prune"""
         if which_axis==var1:
             AXIS = 0
         elif which_axis==var2:
@@ -1557,14 +1593,39 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
         tmp2 = tmp2/np.sum(tmp2)
 
         # return sum of scores.
-        return tmp1 + tmp2
+        score = tmp1 + tmp2
+
+        if prefer_to_drop_which==1:
+            if which_axis==var1:
+                score = score/DIVISOR
+        elif prefer_to_drop_which==2:
+            if which_axis==var2:
+                score = score/DIVISOR
+        else:
+            assert prefer_to_drop_which is None
+
+        return score
 
     # Convert to 2d frame
     dfcounts, _, _, _ = convert_to_2d_dataframe(dfthis, var2, var1, PLOT);
+    nlev_var1 = len(dfcounts.columns)
+    nlev_var2 = len(dfcounts)
+
+    if prefer_to_drop_which==1:
+        # (nlev_var2/nlev_var1) is to make the scale same across the two vars.
+        # the multiplier is to further penalize this var. if this is 3, then means that
+        # you only choose to drop the "var you dont prefer to drop" if it is 
+        # at lesat 3 times worse than the var you prefer to drop.
+        DIVISOR = 3*(nlev_var2/nlev_var1) # 
+    elif prefer_to_drop_which==2:
+        DIVISOR = 3*(nlev_var1/nlev_var2) # 
+    else:
+        assert prefer_to_drop_which is None
+        DIVISOR = 1
 
     while np.all(dfcounts>0)==False: # Then there is still imbalance.
-        scores_others = _score_each_level(var2, dfcounts)
-        scores_var =  _score_each_level(var1, dfcounts)
+        scores_others = _score_each_level(var2, dfcounts, DIVISOR)
+        scores_var =  _score_each_level(var1, dfcounts, DIVISOR)
 
         if min(scores_others)<=min(scores_var):
             # remove the level of var2 that has the lowest score
@@ -1580,10 +1641,26 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
             AXIS = 1
 
         if PLOT:
+            print("---")    
+            print(AXIS, lev_to_remove)
+            display(dfcounts)
+            if False:
+                print("scores_var1:", scores_var.tolist())
+                print("scores_var2:", scores_others.tolist())
             print(f"Dropping from {axis_to_remove}, level {lev_to_remove}, which is index {indexnum_to_remove}")
 
         # prune one col/row, and then repeat until good.
-        dfcounts = dfcounts.drop(lev_to_remove, axis = AXIS)
+        # print("DUPLICATEED:", dfcounts.columns.duplicated())
+        # print("DUPLICATEED:", dfcounts.index.duplicated())
+        # DFTHIS_EVENT.index.duplicated()
+        # print(dfcounts.columns)
+        if False:
+            # fails if index values are tuples
+            dfcounts = dfcounts.drop(lev_to_remove, axis = AXIS)    
+        else:
+            print(11)
+            dfcounts = drop_using_position_index(dfcounts, indexnum_to_remove, axis = AXIS)    
+
 
     # plot heatmap
     if PLOT:
@@ -1606,9 +1683,34 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False):
 
     return dfthisout, dfcounts
 
+def extract_with_levels_of_var(df, var, levels=None):
+    """
+    Split df into multiple smaller mutually exclusive dataframes,
+    each with a particular level fo var
+    PARAMS:
+    - var, column in df
+    - levels, list of values of var, or None to use all.
+    RETURNS:
+    - dict_levs, dict[lev] = df_sub
+    - levels, list of levels in dict.keys()
+    """
+
+    assert len(df)>0
+    if levels is None:
+        levels = sort_mixed_type(df[var].unique().tolist())
+
+    assert len(levels)>0
+
+    dict_levs = {}
+    for lev in levels:
+        dict_levs[lev] = df[df[var]==lev].copy().reset_index(drop=True)
+
+    return dict_levs, levels
+
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
     n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
-    prune_levels_with_low_n=True):
+    prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
+    balance_prefer_to_drop_which=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -1628,6 +1730,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     levels of var which has >=n_min datapts. usually requires _all_ levels of vars_others
     to have >=n_min datapts.
     - prune_levels_with_low_n, bool, then removes levles with n data < n_min. 
+    - balance_no_missed_conjunctions, bool, if True, then makes sure the resulting
+    dfthis is "square" in that each level of var has at least some data for
+    each level of vars_others. Does this in an interative fashion, removing levels
+    from var or vars_others that have the least impact on data.
     EG:
     - you wish to ask about shape moudlation for each combaiton of location and 
     size. then var = shape and vars_others = [location, size]
@@ -1648,7 +1754,6 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
     """
 
-    assert isinstance(vars_others, list)
     if len(df)==0:
         return pd.DataFrame([]), {}
 
@@ -1669,12 +1774,12 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         df.loc[:, "dummy_var"] = "IGNORE"
         REMOVE_DUMMY = True
     else:
+        assert isinstance(vars_others, list)
         REMOVE_DUMMY = False
 
     # 1) Append conjucntions
     var_conj_of_others = "vars_others"
     df = append_col_with_grp_index(df, vars_others, new_col_name=var_conj_of_others, use_strings=False)
-    
     # 2_ get for each conjunction of other variables
     levels_others = df[var_conj_of_others].unique().tolist()
     levels_others = sort_mixed_type(levels_others)
@@ -1717,9 +1822,20 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
 
     # merge
     if len(list_dfthis)==0:
-        return pd.DataFrame([]), {}
+        dfout = pd.DataFrame([])
+        dict_dfthis = {}
     else:
-        return pd.concat(list_dfthis).reset_index(drop=True), dict_dfthis
+        dfout = pd.concat(list_dfthis).reset_index(drop=True)
+
+    if balance_no_missed_conjunctions:
+        # 2) balance (var, othervars)
+        # print("Starting len:", len(dfthis))
+        dfout, _ = conjunction_vars_prune_to_balance(dfout, var, "vars_others", 
+            prefer_to_drop_which=balance_prefer_to_drop_which,
+            PLOT=DEBUG);
+        # print("Ending len:", len(dfthis))
+
+    return dfout, dict_dfthis
 
 # only keep if this has all the levels
 def check_data_has_all_levels(dfthis, var, levels_to_check=None, 
