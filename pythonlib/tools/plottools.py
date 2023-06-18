@@ -144,10 +144,18 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     """
     import matplotlib.patches as mpatches
     handles = []
+    # prune length of lables
+    def _prune(lab):
+        if isinstance(lab, str) and len(lab)>20:
+            return lab[:20]
+        else:
+            return lab
+    labels = [_prune(lab) for lab in labels]
+
     for lab, col in zip(labels, colors):
         this = mpatches.Patch(color=col, label=lab, alpha=alpha)
         handles.append(this)
-    ax.legend(handles=handles, framealpha=alpha)
+    ax.legend(handles=handles, framealpha=alpha, fontsize=8)
 
 
 def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):
@@ -278,6 +286,10 @@ def get_correlated_dataset(n, dependency, mu, scale):
     # return x and y of the new, correlated dataset
     return scaled_with_offset[:, 0], scaled_with_offset[:, 1]
 
+def savefig(fig, path):
+    """ helper to save without clipping axis labels
+    """
+    fig.savefig(path, bbox_inches="tight")
 
 def saveMultToPDF(path, figs):
     """ saved multiple figs (list of fig obejcts)

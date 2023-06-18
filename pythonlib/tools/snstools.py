@@ -8,10 +8,20 @@ def rotateLabel(ax, rotation=45, horizontalalignment="right"):
     """ seaborn, maek sure to add labels for catplot
     ax = sns.catplot(...)
     """
-    for a in ax.axes.flat:
-        a.set_xticklabels(a.get_xticklabels(), rotation=rotation, 
-            horizontalalignment=horizontalalignment)
 
+    fig = ax
+
+    # PRoblem, this sometimes deltes it, I think
+    # for a in fig.axes.flat:
+    #     a.set_xticklabels(a.get_xticklabels(), rotation=rotation, 
+    #         horizontalalignment=horizontalalignment)
+
+    # This works...
+    for ax in fig.axes.flat:
+    #     ax.set_xticks(ax.get_xticks(), rotation=45)
+        list_text = [this.get_text() for this in ax.get_xticklabels()]
+        if len(list_text)>0:
+            ax.set_xticklabels(list_text,rotation=rotation, horizontalalignment="right")
 
 def addLabel(ax):
     """ seaborn, maek sure to add labels for catplot"""

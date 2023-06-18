@@ -1710,7 +1710,7 @@ def extract_with_levels_of_var(df, var, levels=None):
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
     n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
-    balance_prefer_to_drop_which=None):
+    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -1834,6 +1834,21 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             prefer_to_drop_which=balance_prefer_to_drop_which,
             PLOT=DEBUG);
         # print("Ending len:", len(dfthis))
+
+    if len(dfout)>0 and PRINT_AND_SAVE_TO is not None:
+        # print and save text of sampel size fo alll concuutison
+        from pythonlib.tools.expttools import writeStringsToFile
+        levels_var = sort_mixed_type(dfout[var].unique().tolist())
+        list_s = []
+        for lev_other, dftmp in dict_dfthis.items():
+            list_s.append(f"LEVEL OTHER: {lev_other}")
+            for lev in levels_var:
+                n = sum(dftmp[var]==lev)
+                if n>0:
+                    list_s.append(f"    {lev} : [{n}]")
+                else:
+                    list_s.append(f"    {lev} : {n}")
+        writeStringsToFile(PRINT_AND_SAVE_TO, list_s)
 
     return dfout, dict_dfthis
 

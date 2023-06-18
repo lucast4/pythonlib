@@ -13,6 +13,7 @@ import os
 from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_ANALYSIS_OUTCOMES_SERVER
+from pythonlib.tools.listtools import sort_mixed_type
 
 base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
@@ -593,7 +594,7 @@ class Dataset(object):
             # inds_bad.extend(np.where(dfthis[col].isna())[0])
         print(f"Total num rows: {len(self.Dat)}")
 
-    def removeOutlierRows(self, columns, prctile_min_max):
+    def removeOutlierRows(self, columns, prctile_min_max, df=None):
         """ remove rows that are outliers, based on percentiles for 
         columns of interest.
         INPUT:
@@ -602,29 +603,33 @@ class Dataset(object):
         - prctile_min_max, (2,) array, range=[0, 100], indicating min and max
         prctiles to use for calling somthing outlier. e.g., [1 99]
         RETURNS:
-        - [modifies self.Dat]
+        -  [modifies self.Dat] if df is None. always returns df or self.Dat
         """
+
+        REPLACE_DAT = False
+        if df is None:
+            df = self.Dat
+            REPLACE_DAT = True
+
         print("--- Removing outliers")
-        assert len(self.Dat)>0, "empty dat.."
+        assert len(df)>0, "empty dat.."
         inds_bad = []
         for val in columns:
-            # print("--")
-            # print(self.Dat)
-            # print(val)
-            # print(self.Dat[val])
-            # print(np.min(self.Dat[val]))
-            # print(np.max(self.Dat[val]))
-
-            limits = np.percentile(self.Dat[val], prctile_min_max)
-            indsthis = (self.Dat[val]<limits[0]) | (self.Dat[val]>limits[1])
+            limits = np.percentile(df[val], prctile_min_max)
+            indsthis = (df[val]<limits[0]) | (df[val]>limits[1])
             inds_bad.extend(np.where(indsthis)[0])
 
         inds_bad = sorted(set(inds_bad))
-        inds_good = [i for i in range(len(self.Dat)) if i not in inds_bad]
-        print("starting len(self.Dat)", len(self.Dat))
-        self.Dat = self.Dat.iloc[inds_good] 
-        self.Dat = self.Dat.reset_index(drop=True)
-        print("final len: ", len(self.Dat))
+        inds_good = [i for i in range(len(df)) if i not in inds_bad]
+        print("starting len(self.Dat)", len(df))
+        df = df.iloc[inds_good] 
+        df = df.reset_index(drop=True)
+        print("final len: ", len(df))
+
+        if REPLACE_DAT:
+            self.Dat = df
+
+        return df
 
     def removeOutlierRowsTukey(self, col, niqr = 2, replace_with_nan=False):
         """ remove rows with outliers, based on iqr (tukey method)
@@ -1248,6 +1253,9 @@ class Dataset(object):
         - list of dict, a reordered tokens
         """
 
+        if "BehClass" not in self.Dat.columns:
+            self.behclass_preprocess_wrapper()
+
         # mapper from taskstrokeinds to beh
         mapper_taskstroke_to_beh = {}
         this = self.behclass_extract_beh_and_task(ind)[3]
@@ -1285,6 +1293,53 @@ class Dataset(object):
             return Tokens(tokens)
         else:
             return tokens
+
+    def taskclass_shapes_loc_configuration_extract(self, ind):
+        """ Extract the shapes or location config for this task. 
+        Ignores behavior. 
+        RETURNS:
+        - dict, 
+        --- "shape":tuple of str, eahc a shape
+        --- "loc":tuple of tuples, eahc holding two ints, a gridloc
+        --- "shape_loc": tuple of (shape, loc) tuples.
+        The lists are sorted, so a given task will always return 
+        the same thing
+        """
+        tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
+
+        list_shapes = tuple(sort_mixed_type([t["shape"] for t in tokens]))
+        list_loc = tuple(sort_mixed_type([t["gridloc"] for t in tokens]))
+        list_shape_loc = tuple(sort_mixed_type([(t["shape"], t["gridloc"]) for t in tokens]))
+
+        return {
+            "shape":list_shapes,
+            "loc":list_loc,
+            "shape_loc":list_shape_loc
+        }
+
+    def taskclass_shapes_loc_configuration_assign_column(self):
+        """ Assigns three new columns indicating the tasks shape, loc, and 
+        shape_loc configurations
+        RETURNS:
+        - modifies self.Dat, with columsn:
+        --- "taskconfig_loc"
+        --- "taskconfig_shp"
+        --- "taskconfig_shploc"
+        """
+
+        list_loc =[]
+        list_sh = []
+        list_shloc =[]
+        for ind in range(len(self.Dat)):
+            this = self.taskclass_shapes_loc_configuration_extract(ind)
+            list_loc.append(this["loc"])
+            list_sh.append(this["shape"])
+            list_shloc.append(this["shape_loc"])
+
+        # Append
+        self.Dat["taskconfig_loc"] = list_loc
+        self.Dat["taskconfig_shp"] = list_sh
+        self.Dat["taskconfig_shploc"] = list_shloc
 
 
     def taskclass_shapes_extract(self, ind):
@@ -4994,6 +5049,27 @@ class Dataset(object):
 
 
     ############# DAT dataframe manipualtions
+    def grouping_conjunctions_print_variables_save(self, var, list_vars_others, path):
+        """
+        Help print existing conjucntions of variables in self.Dat.
+        PARAMS:
+        - var, str, a single variable whose levels' variation you care about as an
+        independnet variable, mainpuation.
+        - list_vars_others, list of str, variables you awnt to condition on. will
+        find levels of var conditions on each level fo this.
+        - path, string, path (with extention) to save at.
+        RETURNS:
+        - prints text file at path (give)
+        """
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+        n_min = 0 # leave here, to plot all levels. 
+        lenient_allow_data_if_has_n_levels = 2 # 2 allows plotting all cases
+        dfout, dict_dfs = extract_with_levels_of_conjunction_vars(self.Dat, var, list_vars_others, 
+                                                                  n_min=n_min, 
+                                                                  lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
+                                                                 PRINT_AND_SAVE_TO=path)
+
+
     def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
         """ append column with index after applying grp_by, 
         as in df.groupby, where the new val is  string, from
@@ -5200,6 +5276,9 @@ class Dataset(object):
         for which beh strkes this task stroke was the first task stroke the bhe stroke touched,
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
         """
+
+        if "BehClass" not in self.Dat.columns:
+            self.behclass_preprocess_wrapper()
 
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 

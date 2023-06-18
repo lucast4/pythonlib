@@ -1566,8 +1566,11 @@ class DatStrokes(object):
         list_shape = dfdat["shape"].values.tolist()
 
         # Cluster
+        # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
+        #                                     rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
+        #                                    labels_for_Clusters=list_shape)
         Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-                                            rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
+                                            rescale_strokes_ver=None, distancever="hausdorff_centered", return_as_Clusters=True,
                                            labels_for_Clusters=list_shape)
         ClustDict["task_image_sim"] = Cl
 

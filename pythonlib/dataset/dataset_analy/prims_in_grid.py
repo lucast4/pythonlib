@@ -40,6 +40,55 @@ def preprocess_dataset(D, doplots=False):
     path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
     D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
 
+    ######## LOOK FOR CONJUCNTIONS
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+    LIST_VAR = [
+        "seqc_3_loc_shape", # same n strokes, just diff sequence
+        "seqc_3_loc_shape", # same stim entirely
+        "seqc_3_loc_shape", # same loc config
+        "seqc_3_loc_shape", # same shape config
+
+        "seqc_2_loc_shape",
+        "seqc_2_loc_shape",
+        "seqc_2_loc_shape",
+        "seqc_2_loc_shape",
+
+        "seqc_1_loc_shape",
+        "seqc_1_loc_shape",
+        "seqc_1_loc_shape",
+        "seqc_1_loc_shape",
+
+        "seqc_nstrokes_beh", # diff  n strokes
+        "seqc_nstrokes_beh",
+        "seqc_nstrokes_beh",
+        ]
+    LIST_VARS_CONJUNCTION = [
+        ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
+        ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+        ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+        ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+
+        ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+        ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+        ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+        ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+
+        ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
+        ["taskconfig_shploc", "seqc_0_loc_shape"],
+        ["taskconfig_loc", "seqc_0_loc_shape"],
+        ["taskconfig_shp", "seqc_0_loc_shape"],
+
+        ["seqc_0_loc_shape"], # diff n strokes.
+        ["seqc_0_loc_shape", "seqc_1_loc_shape"],
+        ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+    ]           
+    for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
+        sdir = f"{SAVEDIR}/list_seqc_conjunctions"
+        os.makedirs(sdir, exist_ok=True)
+        path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"        
+        D.grouping_conjunctions_print_variables_save(var, vars_others, path)
+
+    #############################
     if doplots:
         plotscore_all(DS, SAVEDIR)
         plotdrawings_all(DS, SAVEDIR)

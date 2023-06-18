@@ -34,6 +34,7 @@ def sort_mixed_type(mylist):
             if isinstance(x, list):
                 return (0, hash(tuple(x)))
             else:
+                # NOTE: hash(None) is valid
                 return (0, hash(x))
         except TypeError as err:
             # Place at back
