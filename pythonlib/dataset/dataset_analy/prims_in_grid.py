@@ -85,7 +85,8 @@ def preprocess_dataset(D, doplots=False):
     for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
         sdir = f"{SAVEDIR}/list_seqc_conjunctions"
         os.makedirs(sdir, exist_ok=True)
-        path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"        
+        path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
+        vars_others = ["aborted"] + vars_others
         D.grouping_conjunctions_print_variables_save(var, vars_others, path)
 
     #############################
