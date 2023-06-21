@@ -426,14 +426,15 @@ def conjunctions_print_plot_all(D, SAVEDIR):
     for task_kind in ["prims_single", "prims_on_grid"]:
         dfthis = DS.Dat[DS.Dat["task_kind"]==task_kind]
         
-        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="shape", var2="gridloc", vars_others=["stroke_index"])
-        path = f"{sdir}/STROKELEVEL-conjunctions_shape_gridloc-task_kind_{task_kind}.pdf"
-        savefig(fig, path)
+        if len(dfthis)>0:
+            fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="shape", var2="gridloc", vars_others=["stroke_index"])
+            path = f"{sdir}/STROKELEVEL-conjunctions_shape_gridloc-task_kind_{task_kind}.pdf"
+            savefig(fig, path)
 
-        # Dissociate stroke index from remaining num strokes.
-        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="stroke_index", 
-                                                          var2="stroke_index_fromlast", vars_others=["shape", "gridloc"])
-        path = f"{sdir}/STROKELEVEL-conjunctions_stroke_index-task_kind_{task_kind}.pdf"
-        savefig(fig, path)
+            # Dissociate stroke index from remaining num strokes.
+            fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="stroke_index", 
+                                                              var2="stroke_index_fromlast", vars_others=["shape", "gridloc"])
+            path = f"{sdir}/STROKELEVEL-conjunctions_stroke_index-task_kind_{task_kind}.pdf"
+            savefig(fig, path)
 
-        plt.close("all")
+            plt.close("all")
