@@ -5049,7 +5049,8 @@ class Dataset(object):
 
 
     ############# DAT dataframe manipualtions
-    def grouping_conjunctions_print_variables_save(self, var, list_vars_others, path):
+    def grouping_conjunctions_print_variables_save(self, var, list_vars_others, path,
+        n_min=0, ignore_values_called_ignore=True, plot_counts_heatmap_savedir=None):
         """
         Help print existing conjucntions of variables in self.Dat.
         PARAMS:
@@ -5062,13 +5063,15 @@ class Dataset(object):
         - prints text file at path (give)
         """
         from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
-        n_min = 0 # leave here, to plot all levels. 
+        # n_min = 0 # leave here, to plot all levels. 
         lenient_allow_data_if_has_n_levels = 2 # 2 allows plotting all cases
         dfout, dict_dfs = extract_with_levels_of_conjunction_vars(self.Dat, var, list_vars_others, 
                                                                   n_min=n_min, 
                                                                   lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
-                                                                 PRINT_AND_SAVE_TO=path)
-
+                                                                 PRINT_AND_SAVE_TO=path,
+                                                                 ignore_values_called_ignore=ignore_values_called_ignore,
+                                                                 plot_counts_heatmap_savedir=plot_counts_heatmap_savedir)
+        return dfout, dict_dfs
 
     def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
         """ append column with index after applying grp_by, 

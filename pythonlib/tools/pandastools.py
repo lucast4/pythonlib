@@ -9,7 +9,8 @@ will check that the output df is same as input (for matching columns).
 import pandas as pd
 import numpy as np
 from pythonlib.tools.listtools import sort_mixed_type
-
+import matplotlib.pyplot as plt
+from pythonlib.tools.plottools import savefig
 
 def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     """ merge df1 and 2, with output being same length
@@ -249,6 +250,27 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True, just_return
 
 # pivoting (to take multiple rows and make them colums)
 # Y = SFagg.pivot(index="task", columns="epoch", values="distance_median")
+
+def filter_remove_rows_using_function_on_values(df, column, F, PRINT=False, reset_index=True):
+    """ for each row, get the value and pass that in to F(value) --> bool
+    Keep rows that return True
+    RETURNS:
+    - df, a copy of df, pruned. to remove rows that return F() = False
+    """
+
+    keeps = [F(val) for val in df[column].values.tolist()]
+
+    if PRINT:
+        print("nkeep / ntotal rows")
+        print(sum(keeps), "/", len(keeps))
+
+    df = df[keeps]
+
+    if reset_index:
+        df = df.reset_index(drop=True)
+
+    return df
+
 
 def filter_prune_min_n_rows(df, column, min_n):
     """ Returns copy of df pruning so that each  level of column has at leasnt
@@ -1316,6 +1338,37 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     nmin = np.min(np.min(dftmp, axis=0))
     return nmin, nmax
 
+def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None):
+    """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
+    on a value of conjcjtions of vars_others.
+    PARAMS:
+    - var1, var2, string, columns in df, categorical varlibels, will be axes of heatmsp
+    - vars_others, list of str, columns in df, each conj is a sbuplot
+    rRETURNS:s
+    - fig
+    """
+
+    df = append_col_with_grp_index(df, vars_others, "dummy", use_strings=False)
+
+    list_dummy = sort_mixed_type(df["dummy"].unique().tolist())
+    list_var1 = sort_mixed_type(df[var1].unique().tolist())
+    list_var2 = sort_mixed_type(df[var2].unique().tolist())
+
+    ncols = 3
+    nrows = int(np.ceil(len(list_dummy)/ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*5, nrows*5))
+    for ax, dum in zip(axes.flatten(), list_dummy):
+        dfthis = df[df["dummy"]==dum]
+
+        # plot 2d
+        convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
+            list_cat_1 = list_var1, list_cat_2 = list_var2)
+
+        ax.set_title(dum)
+    return fig
+
+
 def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
         save_convert_keys_to_str = False, save_as="dict", sorted_by_keys=True):
     """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
@@ -1710,7 +1763,9 @@ def extract_with_levels_of_var(df, var, levels=None):
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
     n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
-    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None):
+    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
+    ignore_values_called_ignore=False,
+    plot_counts_heatmap_savedir=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -1734,6 +1789,12 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     dfthis is "square" in that each level of var has at least some data for
     each level of vars_others. Does this in an interative fashion, removing levels
     from var or vars_others that have the least impact on data.
+    - ignore_values_called_ignore, bool, if True, then any rows with values (for any
+    var) with "ignore" string, will throw out. could be any caps, and coiuld be within
+    tuple/list. e.g,, ("ignore", "good") would throw out becuaes at l;esat one item is
+    ignore. unloimited depth
+    - plot_counts_heatmap_savedir, str of None. if str, then plots heatmap of num counts
+    of each conj of var vs. vars_others. and saved to this path.
     EG:
     - you wish to ask about shape moudlation for each combaiton of location and 
     size. then var = shape and vars_others = [location, size]
@@ -1765,65 +1826,105 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     # make a copy, becuase will have to append to this dataframe
     df = df.copy()
 
-    # Want to use entier data for this site? or do separately for each level of a given
-    # conjunction variable.
-    if vars_others is None:
-        # then place a dummy variable so that entire thing is one level
-        vars_others = ["dummy_var"]
-        assert "dummy_var" not in df.columns
-        df.loc[:, "dummy_var"] = "IGNORE"
-        REMOVE_DUMMY = True
+    # throw out rows with "ignore?"
+    if ignore_values_called_ignore:
+        from pythonlib.tools.pandastools import filter_remove_rows_using_function_on_values
+
+        def _check_if_ignore_value(value):
+            """ Returns True if this value has "IGNORE" string,in any inner list-lkike. recursive any depths
+            e.g all these fail:
+                # # value = "IGNORE"
+                # # value = ("IGNORE", )
+                # value = (("IGNORE", ), ("IGNORE", ))
+                # _check_if_ignore_value(value)
+            """
+            if isinstance(value, (list, tuple)):
+                ignores = [_check_if_ignore_value(v) for v in value]
+                return any(ignores)
+            elif isinstance(value, str):
+                return value.lower()=="ignore"
+            else:
+                # Is not ignore.
+                return False            
+
+        def _keep(value):
+            # To invert ignore --> True if keep.
+            return not _check_if_ignore_value(value)      
+
+        # remove rows that are IGNORE
+        df = filter_remove_rows_using_function_on_values(df, var, _keep, reset_index=True)
+        if vars_others is not None:
+            for v in vars_others:
+                if len(df)>0:
+                    df = filter_remove_rows_using_function_on_values(df, v, _keep, reset_index=True)
+
+        # if len(df)==0:
+        #     dfout = pd.DataFrame([])
+        #     dict_dfthis = {}
+        #     return dfout, dict_dfthis
+
+    if len(df)>0:
+        # Want to use entier data for this site? or do separately for each level of a given
+        # conjunction variable.
+        if vars_others is None:
+            # then place a dummy variable so that entire thing is one level
+            vars_others = ["dummy_var"]
+            assert "dummy_var" not in df.columns
+            df.loc[:, "dummy_var"] = "IGNORE"
+            REMOVE_DUMMY = True
+        else:
+            assert isinstance(vars_others, list)
+            REMOVE_DUMMY = False
+
+        # 1) Append conjucntions
+        var_conj_of_others = "vars_others"
+        df = append_col_with_grp_index(df, vars_others, new_col_name=var_conj_of_others, use_strings=False)
+        # 2_ get for each conjunction of other variables
+        levels_others = df[var_conj_of_others].unique().tolist()
+        levels_others = sort_mixed_type(levels_others)
+        # except TypeError as err:
+        #     pass
+        #     # print("not sorting (TypeError): ", levels_others)
+
+        # 3) check each sub datfarme
+        list_dfthis = []
+        dict_dfthis = {} # level:df
+        
+        for lev in levels_others:
+
+            if PRINT:
+                print("---- getting this level (othervar):", lev)
+            # get data
+            dfthis = df[df[var_conj_of_others] == lev]
+
+            good, levels_passing = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
+                lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
+                PRINT=PRINT) 
+            if DEBUG:
+                print(lev, var, levels_var, good)
+            if good:
+                # keep, first pruning to just the levels that passed
+                # print(len(dfthis))
+                # print(dfthis[var].value_counts())
+                # print(levels_passing)
+                if prune_levels_with_low_n:
+                    dfthis = dfthis[dfthis[var].isin(levels_passing)]
+                    if PRINT:
+                        print(f"n for each level of {var}, for the othervar level {lev}")
+                        for _lev in levels_passing:
+                            print(_lev, "...", sum(dfthis[var]==_lev))
+                list_dfthis.append(dfthis)
+                dict_dfthis[lev] = dfthis.copy()
+
+        if REMOVE_DUMMY:
+            del df["dummy_var"]
     else:
-        assert isinstance(vars_others, list)
-        REMOVE_DUMMY = False
-
-    # 1) Append conjucntions
-    var_conj_of_others = "vars_others"
-    df = append_col_with_grp_index(df, vars_others, new_col_name=var_conj_of_others, use_strings=False)
-    # 2_ get for each conjunction of other variables
-    levels_others = df[var_conj_of_others].unique().tolist()
-    levels_others = sort_mixed_type(levels_others)
-    # except TypeError as err:
-    #     pass
-    #     # print("not sorting (TypeError): ", levels_others)
-
-    # 3) check each sub datfarme
-    list_dfthis = []
-    dict_dfthis = {} # level:df
-    
-    for lev in levels_others:
-
-        if PRINT:
-            print("---- getting this level (othervar):", lev)
-        # get data
-        dfthis = df[df[var_conj_of_others] == lev]
-
-        good, levels_passing = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
-            lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
-            PRINT=PRINT) 
-        if DEBUG:
-            print(lev, var, levels_var, good)
-        if good:
-            # keep, first pruning to just the levels that passed
-            # print(len(dfthis))
-            # print(dfthis[var].value_counts())
-            # print(levels_passing)
-            if prune_levels_with_low_n:
-                dfthis = dfthis[dfthis[var].isin(levels_passing)]
-                if PRINT:
-                    print(f"n for each level of {var}, for the othervar level {lev}")
-                    for _lev in levels_passing:
-                        print(_lev, "...", sum(dfthis[var]==_lev))
-            list_dfthis.append(dfthis)
-            dict_dfthis[lev] = dfthis.copy()
-
-    if REMOVE_DUMMY:
-        del df["dummy_var"]
+        list_dfthis = []
+        dict_dfthis = {}
 
     # merge
     if len(list_dfthis)==0:
         dfout = pd.DataFrame([])
-        dict_dfthis = {}
     else:
         dfout = pd.concat(list_dfthis).reset_index(drop=True)
 
@@ -1835,20 +1936,27 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             PLOT=DEBUG);
         # print("Ending len:", len(dfthis))
 
-    if len(dfout)>0 and PRINT_AND_SAVE_TO is not None:
+    if PRINT_AND_SAVE_TO is not None:
         # print and save text of sampel size fo alll concuutison
         from pythonlib.tools.expttools import writeStringsToFile
-        levels_var = sort_mixed_type(dfout[var].unique().tolist())
-        list_s = []
-        for lev_other, dftmp in dict_dfthis.items():
-            list_s.append(f"LEVEL OTHER: {lev_other}")
-            for lev in levels_var:
-                n = sum(dftmp[var]==lev)
-                if n>0:
-                    list_s.append(f"    {lev} : [{n}]")
-                else:
-                    list_s.append(f"    {lev} : {n}")
+        if len(dfout)>0:
+            levels_var = sort_mixed_type(dfout[var].unique().tolist())
+            list_s = []
+            for lev_other, dftmp in dict_dfthis.items():
+                list_s.append(f"LEVEL OTHER: {lev_other}")
+                for lev in levels_var:
+                    n = sum(dftmp[var]==lev)
+                    if n>0:
+                        list_s.append(f"    {lev} : [{n}]")
+                    else:
+                        list_s.append(f"    {lev} : {n}")
+        else:
+            list_s = []
         writeStringsToFile(PRINT_AND_SAVE_TO, list_s)
+
+    if len(dfout)>0 and plot_counts_heatmap_savedir:
+        fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
+        savefig(fig, plot_counts_heatmap_savedir)
 
     return dfout, dict_dfthis
 
