@@ -12,6 +12,8 @@ NOTE: currently uses beh variation of DS.
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+from pythonlib.tools.plottools import savefig
 
 def preprocess_dataset(D, doplots=False):
 
@@ -41,53 +43,88 @@ def preprocess_dataset(D, doplots=False):
     D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
 
     ######## LOOK FOR CONJUCNTIONS
-    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
-    LIST_VAR = [
-        "seqc_3_loc_shape", # same n strokes, just diff sequence
-        "seqc_3_loc_shape", # same stim entirely
-        "seqc_3_loc_shape", # same loc config
-        "seqc_3_loc_shape", # same shape config
+    if False:
+        # obsolete...
+        D.taskclass_shapes_loc_configuration_assign_column()
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+        LIST_VAR = [
+            "seqc_3_loc_shape", # same n strokes, just diff sequence
+            "seqc_3_loc_shape", # same stim entirely
+            "seqc_3_loc_shape", # same loc config
+            "seqc_3_loc_shape", # same shape config
 
-        "seqc_2_loc_shape",
-        "seqc_2_loc_shape",
-        "seqc_2_loc_shape",
-        "seqc_2_loc_shape",
+            "seqc_2_loc_shape",
+            "seqc_2_loc_shape",
+            "seqc_2_loc_shape",
+            "seqc_2_loc_shape",
 
-        "seqc_1_loc_shape",
-        "seqc_1_loc_shape",
-        "seqc_1_loc_shape",
-        "seqc_1_loc_shape",
+            "seqc_1_loc_shape",
+            "seqc_1_loc_shape",
+            "seqc_1_loc_shape",
+            "seqc_1_loc_shape",
 
-        "seqc_nstrokes_beh", # diff  n strokes
-        "seqc_nstrokes_beh",
-        "seqc_nstrokes_beh",
-        ]
-    LIST_VARS_CONJUNCTION = [
-        ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
-        ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-        ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-        ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+            "seqc_nstrokes_beh", # diff  n strokes
+            "seqc_nstrokes_beh",
+            "seqc_nstrokes_beh",
+            ]
+        LIST_VARS_CONJUNCTION = [
+            ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
+            ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+            ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+            ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
 
-        ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-        ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-        ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-        ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+            ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+            ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+            ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+            ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
 
-        ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
-        ["taskconfig_shploc", "seqc_0_loc_shape"],
-        ["taskconfig_loc", "seqc_0_loc_shape"],
-        ["taskconfig_shp", "seqc_0_loc_shape"],
+            ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
+            ["taskconfig_shploc", "seqc_0_loc_shape"],
+            ["taskconfig_loc", "seqc_0_loc_shape"],
+            ["taskconfig_shp", "seqc_0_loc_shape"],
 
-        ["seqc_0_loc_shape"], # diff n strokes.
-        ["seqc_0_loc_shape", "seqc_1_loc_shape"],
-        ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-    ]           
-    for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
-        sdir = f"{SAVEDIR}/list_seqc_conjunctions"
-        os.makedirs(sdir, exist_ok=True)
-        path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
-        vars_others = ["aborted"] + vars_others
-        D.grouping_conjunctions_print_variables_save(var, vars_others, path)
+            ["seqc_0_loc_shape"], # diff n strokes.
+            ["seqc_0_loc_shape", "seqc_1_loc_shape"],
+            ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+        ]           
+        for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
+            sdir = f"{SAVEDIR}/list_seqc_conjunctions"
+            os.makedirs(sdir, exist_ok=True)
+            path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
+            vars_others = ["aborted"] + vars_others
+            D.grouping_conjunctions_print_variables_save(var, vars_others, path)
+    else:
+        conjunctions_print_plot_all(D, SAVEDIR)
+        plt.close("all")
+
+    # Pltoi cause of abort
+    dfabort, dfheat_abort = plot_abort_cause(D, DS, SAVEDIR, "abort")
+    dfsucc, dfheat_succ = plot_abort_cause(D, DS, SAVEDIR, "success")
+
+    # Plto fraction of cases aborted
+    sdir = f"{SAVEDIR}/cause_of_abort_frac_of_success"
+    os.makedirs(sdir, exist_ok=True)
+    
+    from pythonlib.tools.snstools import heatmap
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+    # list_shape = sorted(DS.Dat["shape"].unique().tolist())
+    # list_loc = sorted(DS.Dat["gridloc"].unique().tolist())
+
+    # dfheat_succ, _, _, _ = convert_to_2d_dataframe(dfsucc, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
+    # dfheat_abort, _, _, _ = convert_to_2d_dataframe(dfabort, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
+
+    assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
+    assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
+
+    dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
+    dfheat_ntrials = dfheat_abort + dfheat_succ
+
+    fig = heatmap(dfheat_abort_frac)[0]
+    savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+
+    fig = heatmap(dfheat_ntrials)[0]
+    savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
 
     #############################
     if doplots:
@@ -95,6 +132,92 @@ def preprocess_dataset(D, doplots=False):
         plotdrawings_all(DS, SAVEDIR)
 
     return DS, SAVEDIR
+
+def plot_abort_cause(D, DS, SAVEDIR, abort_or_success="abort"):
+    """ Find cases of online abort, and plot reason for that abort, in terms of
+    the stroke shape, location,m and eindex.
+    """ 
+    print("TODO: Rewrite This! it throws out the good inds on abort trials (for success)")
+    import pandas as pd
+    import seaborn as sns
+    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+    sdir = f"{SAVEDIR}/cause_of_{abort_or_success}"
+    os.makedirs(sdir, exist_ok=True)
+
+    ### Collect data across all abort trials
+    if abort_or_success=="abort":
+        inds_abort = D.Dat[D.Dat["aborted"]==True].index.tolist()
+    elif abort_or_success=="success":
+        inds_abort = D.Dat[D.Dat["aborted"]==False].index.tolist()
+    else:
+        assert False
+
+    res = []
+    for ind in inds_abort:
+        tokens = D.taskclass_tokens_extract_wrapper(ind, "beh")
+        if abort_or_success=="abort":
+            # Only take the last index
+            tok_last = tokens[-1]
+            res.append({
+                "inddat":ind,
+                "trialcode":D.Dat.iloc[ind]["trialcode"],
+                "tok_last":tok_last,
+                "shape_last":tok_last["shape"],
+                "loc_last":tok_last["gridloc"],
+                "strokind_last":int(len(tokens))
+            })
+        elif abort_or_success=="success":
+            for j, tok in enumerate(tokens):
+                res.append({
+                    "inddat":ind,
+                    "trialcode":D.Dat.iloc[ind]["trialcode"],
+                    "tok_last":tok,
+                    "shape_last":tok["shape"],
+                    "loc_last":tok["gridloc"],
+                    "strokind_last":j
+                })
+        else:
+            assert False
+
+    dfres = pd.DataFrame(res)
+
+    ### MAKE PLOTS
+    # # sns.catplot(data=dfres, x="loc_last", y="strokind_last", hue="shape_last", jitter=True, alpha=0.2)
+    # # sns.catplot(data=dfres, x="loc_last", y="strokind_last", hue="shape_last", kind="swarm", alpha=0.2)
+    # sns.pairplot(data=dfres, vars=["loc_last", "strokind_last","shape_last"])
+    fig = sns.displot(data=dfres, x="shape_last", y="strokind_last", col="loc_last")
+    rotateLabel(fig)
+    savefig(fig, f"{sdir}/displot-aborted_on_this_stroke.pdf")
+
+    ### HEATMAPS of counts
+    list_shape = sorted(DS.Dat["shape"].unique().tolist())
+    list_loc = sorted(DS.Dat["gridloc"].unique().tolist())
+
+    # def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False, 
+    #     agg_method = "counts", val_name = "val", ax=None, 
+    #     norm_method=None,
+    #     annotate_heatmap=True, zlims=(None, None),
+    #     diverge=False, dosort_colnames=True,
+    #     list_cat_1 = None, list_cat_2 = None):
+
+    # Heatmap
+    dfheat, fig, _, _ = convert_to_2d_dataframe(dfres, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
+    savefig(fig, f"{sdir}/heatmap-aborted_on_this_stroke.pdf")
+
+    # Heatmap, separating by stroke index
+    list_strokind_last = dfres["strokind_last"].unique().tolist()
+    for strokind_last in list_strokind_last:
+        dfthis = dfres[dfres["strokind_last"] == strokind_last]
+        
+        _, fig, _, _ = convert_to_2d_dataframe(dfthis, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
+        savefig(fig, f"{sdir}/heatmap-aborted_on_this_stroke-strokeind_{strokind_last}.pdf")
+
+    plt.close("all")
+
+    return dfres, dfheat
+
 
 def plotscore_all(DS, SAVEDIR):
     """
@@ -238,3 +361,79 @@ def plotdrawings_all(DS, SAVEDIR, n_examples = 3):
         inds = DS.Dat[DS.Dat["shape_oriented"]==shape].index.tolist()
         inds = sorted(random.sample(inds, nplot))
         DS.plot_beh_and_aligned_task_strokes(inds, True)
+
+
+def conjunctions_print_plot_all(D, SAVEDIR):
+    """
+    Wrapper for all printing and plotting (saving) related to conjuicntions of varaibles that matter for PIG>
+    Think of these as the conjucntiosn that care about for neural analysis. Here help assess each beahvior quickly.
+    """
+    from neuralmonkey.metadat.analy.anova_params import dataset_apply_params, params_getter_plots
+    from pythonlib.tools.expttools import writeStringsToFile
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+
+    sdir = f"{SAVEDIR}/conjunctions"
+    os.makedirs(sdir, exist_ok=True)
+
+
+    ListD = [D]
+    which_level="trial"
+    ANALY_VER = "seqcontext"
+    animal = D.animals()[0]
+    _dates = D.Dat["date"].unique()
+    assert len(_dates)==1
+    DATE = int(_dates[0])
+
+    ### Prep dataset, and extract params
+    Dall, Dpruned, TRIALCODES_KEEP, params, params_extraction = dataset_apply_params(ListD, 
+        animal, DATE, which_level, ANALY_VER)
+
+    ### Print and plot all conjucntions
+    LIST_VAR = params["LIST_VAR"]
+    LIST_VARS_CONJUNCTION = params["LIST_VARS_CONJUNCTION"]           
+    list_n = []
+    for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
+        
+        print(var, "vs", vars_others)
+        
+        # All data
+        path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"
+        plot_counts_heatmap_savedir = f"{sdir}/heatmap-{var}|vs|{'-'.join(vars_others)}.pdf"
+        Dpruned.grouping_conjunctions_print_variables_save(var, vars_others, path, n_min=0, 
+                                                          plot_counts_heatmap_savedir=plot_counts_heatmap_savedir)
+        # Passing nmin
+        path = f"{sdir}/goodPassNmin-{var}|vs|{'-'.join(vars_others)}.txt"
+        plot_counts_heatmap_savedir = f"{sdir}/goodPassNmin-heatmap-{var}|vs|{'-'.join(vars_others)}.pdf"
+        dfout, dict_dfs = Dpruned.grouping_conjunctions_print_variables_save(var, vars_others, path, n_min=params["globals_nmin"], 
+                                                          plot_counts_heatmap_savedir=plot_counts_heatmap_savedir)
+        plt.close("all")
+        
+        # Count
+        list_n.append(len(dict_dfs))
+        
+    ### Print summary across conjucntions
+    strings = []
+    strings.append("n good levels of othervar | var |vs| othervars")
+    for var, vars_others, n in zip(LIST_VAR, LIST_VARS_CONJUNCTION, list_n):
+        s = f"{n} -- {var}|vs|{'-'.join(vars_others)}"
+        strings.append(s)
+    path = f"{sdir}/summary_n_levels_of_othervar_with_min_data.txt"
+    writeStringsToFile(path, strings)  
+
+    ### STROKE LEVEL - heatmaps of (shape, location) vs. index
+    from pythonlib.dataset.dataset_strokes import DatStrokes
+    DS = DatStrokes(Dpruned)
+    for task_kind in ["prims_single", "prims_on_grid"]:
+        dfthis = DS.Dat[DS.Dat["task_kind"]==task_kind]
+        
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="shape", var2="gridloc", vars_others=["stroke_index"])
+        path = f"{sdir}/STROKELEVEL-conjunctions_shape_gridloc-task_kind_{task_kind}.pdf"
+        savefig(fig, path)
+
+        # Dissociate stroke index from remaining num strokes.
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="stroke_index", 
+                                                          var2="stroke_index_fromlast", vars_others=["shape", "gridloc"])
+        path = f"{sdir}/STROKELEVEL-conjunctions_stroke_index-task_kind_{task_kind}.pdf"
+        savefig(fig, path)
+
+        plt.close("all")

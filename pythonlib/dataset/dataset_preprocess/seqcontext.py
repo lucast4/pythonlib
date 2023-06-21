@@ -45,8 +45,8 @@ def preprocess_dataset(D, n_strok_max = 6):
                 dat[f"{j}_loc"] = tok["gridloc"]
             else:
                 # Use same type as the actuals.
-                dat[f"{j}_shape"] = 'NOEXIST'
-                dat[f"{j}_loc"] = ('NOEXIST',)
+                dat[f"{j}_shape"] = "IGNORE"
+                dat[f"{j}_loc"] = ("IGNORE",)
             dat[f"{j}_loc_shape"] = (dat[f"{j}_loc"], dat[f"{j}_shape"]) # conjunction
 
         list_dat.append(dat)
