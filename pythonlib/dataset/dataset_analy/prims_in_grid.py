@@ -102,8 +102,11 @@ def preprocess_dataset(D, doplots=False):
         plt.close("all")
 
     # Pltoi cause of abort
-    dfabort, dfheat_abort = plot_abort_cause(D, DS, SAVEDIR, "abort")
-    dfsucc, dfheat_succ = plot_abort_cause(D, DS, SAVEDIR, "success")
+    Dthis = D.copy()
+    Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+    DSthis = DatStrokes(Dthis)
+    dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, SAVEDIR, "abort")
+    dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, SAVEDIR, "success")
 
     # Plto fraction of cases aborted
     sdir = f"{SAVEDIR}/cause_of_abort_frac_of_success"
@@ -111,12 +114,6 @@ def preprocess_dataset(D, doplots=False):
     
     from pythonlib.tools.snstools import heatmap
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
-
-    # list_shape = sorted(DS.Dat["shape"].unique().tolist())
-    # list_loc = sorted(DS.Dat["gridloc"].unique().tolist())
-
-    # dfheat_succ, _, _, _ = convert_to_2d_dataframe(dfsucc, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
-    # dfheat_abort, _, _, _ = convert_to_2d_dataframe(dfabort, "shape_last", "loc_last", plot_heatmap=True, list_cat_1 = list_shape, list_cat_2 = list_loc);
 
     assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
     assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
