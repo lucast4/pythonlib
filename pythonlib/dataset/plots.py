@@ -88,6 +88,7 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
     if strokes_by_order:
         plotkwargs["strokes_by_order"] = True
 
+
     def _assign_row_col_inds(dfthis, group, levels, new_col_name, other_group=None):
         # If give levels, and if not covers all trials, then will give uncovered trials -1.
         if group in ["trial", "trial_shuffled"]:
@@ -97,7 +98,10 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
             dfthis = append_col_with_index_number_in_group(dfthis, other_group, colname = new_col_name,
                 randomize = group=="trial_shuffled")
             labels = range(0, max(dfthis[new_col_name])+1)
-            trialcode_list = dfthis["trialcode"].to_list()
+            if xlabel_trialcode:
+                trialcode_list = dfthis["trialcode"].to_list()
+            else:
+                trialcode_list = None
         else:
             if levels is None:
                 levels = sorted(dfthis[group].unique().tolist())
@@ -117,7 +121,10 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
 
             dfthis = applyFunctionToAllRows(dfthis, mapper, new_col_name)
             labels = levels
-            trialcode_list = dfthis["trialcode"].to_list()
+            if xlabel_trialcode:
+                trialcode_list = dfthis["trialcode"].to_list()
+            else:
+                trialcode_list = None
 
         return dfthis, labels, trialcode_list
 
@@ -145,7 +152,8 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
     
     figbeh, figtask = plot_dat_grid_inputrowscols(dfthis, max_n_per_grid=max_n_per_grid, plotfuncbeh=plotfuncbeh, 
         col_labels=col_labels, row_labels=row_labels, xlabels = trialcode_list_1,
-        max_cols=max_cols, max_rows=max_rows, titles_each_cell=titles_each_cell, **plotkwargs)
+        max_cols=max_cols, max_rows=max_rows, titles_each_cell=titles_each_cell, plot_task=plot_task,
+        **plotkwargs)
 
     return figbeh, figtask
 
@@ -373,3 +381,29 @@ def plot_one_trial_per_level(D):
     - e.g., one trial per unique task.
     """
     assert False, "see analy --> primtives, port here."
+
+
+def plotwrapper_draw_grid_rows_cols(df, rowvar, colvar, n_examples_per_sublot=1,
+        plot_task=False, xlabel_trialcode=False):
+    """ [Good], plot grid of exmaple strokes, where you specify the categorical variable whose
+    levels make up the rows and columns
+    PARAMS:
+    - df, dataframe holding data, must have these columns:
+    --- "strokes_beh", each item a strokes (list ofa rray)
+    --- <rowvar>
+    --- <colvar>
+    --- [optiona] "strokes_task", the image.
+    """
+
+    assert "strokes_beh" in df.columns
+    assert rowvar in df.columns
+    assert colvar in df.columns
+    if plot_task:
+        assert "strokes_task" in df.columns
+    if xlabel_trialcode:
+        assert "trialcode" in df.columns
+
+    figbeh, figtask = _plot_beh_grid_flexible_helper(df, rowvar, colvar, plotfuncbeh=None,
+                              plot_task=False, max_n_per_grid=n_examples_per_sublot,
+                              xlabel_trialcode = xlabel_trialcode)
+    return figbeh, figtask

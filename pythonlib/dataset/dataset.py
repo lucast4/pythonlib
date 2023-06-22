@@ -1161,6 +1161,19 @@ class Dataset(object):
         # for x in tmp_sorted:
         #     print(x)        
 
+    def taskclass_gridsize_assign_column(self):
+        """ Extract gridsize (string) and assign to new column in self.Dat
+        caled "gridsize"
+        """
+        # Extract gridsize
+        list_gridsize = []
+        for ind in range(len(self.Dat)):
+            T = self.Dat.iloc[ind]["Task"]
+            gridsize = T.PlanDat["TaskGridClass"]["Gridname"]
+            list_gridsize.append(gridsize)
+        self.Dat["gridsize"] = list_gridsize
+        
+
     def taskclass_get_grid_xy_over_all_tasks(self):
         """ return gridxy that is union over all tasks.
         RETURNS:

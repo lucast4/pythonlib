@@ -743,7 +743,7 @@ class DatStrokes(object):
             list_grouping = ["shape_oriented", "gridloc", "gridsize"]
 
         from pythonlib.tools.pandastools import grouping_print_n_samples
-        outdict = grouping_print_n_samples(self.Dat, list_grouping, Nmin, savepath)
+        outdict = grouping_print_n_samples(self.Dat, list_grouping, Nmin, savepath, save_as="txt")
 
     def print_n_samples_per_combo(self, list_grouping):
         """ Wrapper, legacy name"""
@@ -1021,6 +1021,17 @@ class DatStrokes(object):
                                              ver_behtask=ver_behtask, ncols=6, SIZE=3, 
                                               n_examples=n_examples_total_per_shape, color_by=color_by,
                                              levels_subplots=list_shape)
+
+    def plotshape_row_col_vs_othervar(self, rowvar, colvar="shape", n_examples_per_sublot=1):
+        """ Plot shapes on columns and othervar as rows, each slot an example stroke 
+        conjucntion those levels
+        PARAMS:
+        - othervar, string, column in self.Dat (caregorical)
+        """
+        from pythonlib.dataset.plots import plotwrapper_draw_grid_rows_cols
+        figbeh, _ = plotwrapper_draw_grid_rows_cols(self.Dat, rowvar, colvar, 
+            n_examples_per_sublot=n_examples_per_sublot)
+        return figbeh
 
     def plotshape_multshapes_egstrokes_grouped_in_subplots(self, task_kind=None, 
         key_subplots="shape_oriented",
@@ -1566,12 +1577,12 @@ class DatStrokes(object):
         list_shape = dfdat["shape"].values.tolist()
 
         # Cluster
-        # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-        #                                     rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
-        #                                    labels_for_Clusters=list_shape)
         Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-                                            rescale_strokes_ver=None, distancever="hausdorff_centered", return_as_Clusters=True,
+                                            rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
                                            labels_for_Clusters=list_shape)
+        # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
+        #                                     rescale_strokes_ver=None, distancever="hausdorff_centered", return_as_Clusters=True,
+        #                                    labels_for_Clusters=list_shape)
         ClustDict["task_image_sim"] = Cl
 
         # 3) shape category (abstract)
