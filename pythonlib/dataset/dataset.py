@@ -516,6 +516,17 @@ class Dataset(object):
         return findPandas(self.Dat, col, list_of_vals, reset_index=reset_index)
 
 
+    def index_by_trialcode(self, tc, assert_only_one_match=True):
+        """ Return integere indiex into self.Dat which matches this tc
+        RETURNS:
+        - index into self.Dat. if multiple matches, returns the first
+        """
+
+        indices = self.Dat[self.Dat["trialcode"] == tc].index.tolist()
+        if assert_only_one_match:
+            assert len(indices)==1
+        return indices[0]
+
     ############### UTILS
     def _strokes_kinds(self):
         """ returns list with names (strings) for the kinds of strokes that
@@ -1299,7 +1310,7 @@ class Dataset(object):
             # print(t["ind_taskstroke_orig"],  t["ind_behstrokes"])
 
         if plot:
-            self.sequence_extract_beh_and_task(ind, ploton=True)
+            self.grammarmatlab_extract_beh_and_task(ind, ploton=True)
 
         if return_as_tokensclass:
             from pythonlib.drawmodel.tokens import Tokens
@@ -1710,8 +1721,8 @@ class Dataset(object):
             return f"{x['date']}-{x['session']}"
         self.Dat = applyFunctionToAllRows(self.Dat, F, 'date_sess')
 
-        # fix a problem, sholdnt throw out epoch name
-        self.supervision_epochs_extract_orig()
+        # # fix a problem, sholdnt throw out epoch name
+        # self.supervision_epochs_extract_orig()
 
         ####
         self.Dat = self.Dat.reset_index(drop=True)
@@ -1935,19 +1946,19 @@ class Dataset(object):
                     # correct sequence matching at lesat one of the grammar parses.
                     # strict, only if complete entire trial, and is correct sequnece. i..e
                     # if correct so far, but online abort, then exclude.
-                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). or grammarmatlab_successbinary_score Cant do here, since might overwrite diesred states."
                     inds_keep = []
                     for i in range(len(self.Dat)):
-                        res = self.sequence_score_wrapper(i)
+                        res = self.grammarparsesmatlab_score_wrapper(i)
                         if res in ["sequence_correct"]:
                             inds_keep.append(i)
                     self.subsetDataframe(inds_keep)
                 elif p=="wrong_sequencing_binary_score":
                     # incorrect sequencing. actually seuqenceing wrong, so does not include if failure is just due to onmien abort.
-                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammar_successbinary_score_parses(False). Cant do here, since might overwrite diesred states."
+                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). Cant do here, since might overwrite diesred states."
                     inds_keep = []
                     for i in range(len(self.Dat)):
-                        res = self.sequence_score_wrapper(i)
+                        res = self.grammarparsesmatlab_score_wrapper(i)
                         if res in ["sequence_incorrect_online_abort", "sequence_incorrect_but_no_abort"]:
                             inds_keep.append(i)
                     self.subsetDataframe(inds_keep)
@@ -1967,7 +1978,7 @@ class Dataset(object):
                     # Only if beh sequence is consistent with at least one acceptable rule 
                     # based on the epoch.
                     assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
-                    bm = self.grammar_wrapper_extract()
+                    bm = self.grammarmatlab_wrapper_extract()
                     self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
                 elif p=="frac_touched_ok":
                     assert frac_touched_min is not None
@@ -2069,7 +2080,7 @@ class Dataset(object):
         if concise:
             return self.save_generate_string_animal_dates()
         else:
-            return self.identifier_string()
+            return self.identifier_string() 
 
     def identifier_string(self):
         """ string, useful for saving
@@ -5645,6 +5656,9 @@ class Dataset(object):
         merge_sets_with_only_single_epoch_name = tuple(["LEFTOVER"])
         ):
         """
+        Find groups of trials that share some feature (e.g., same character) and also occur across multiple
+        epochs. Group the trials that occur across the exact same epochs. e..g, this finds tasks that 
+        have same beh across epochs
         PARAMS:
         - trial_label, int, how to label each trial, i.e., what variable to use for grouping trials, e..g
         if "character", then groups trials by character,
@@ -5682,8 +5696,8 @@ class Dataset(object):
             print("... merge_sets_with_only_single_epoch... ")
             # Collect all the epochsets that have only one epoch, then merge them.
             # Beucase they would be useless (thrown out) if only one epoch.
-            var = "epoch"
-            groupdict = self.grouping_get_inner_items("epochset", var)
+            var = epoch_label
+            groupdict = self.grouping_get_inner_items(epochset_col_name, var)
 
             list_epochsets_with_only_one_epoch = []
             for epochset, epochs_within_this_epochset in groupdict.items():
@@ -5693,9 +5707,15 @@ class Dataset(object):
 
             # Merge these all into one new epochset
             self.supervision_epochs_merge_these(list_epochsets_with_only_one_epoch, 
-                merge_sets_with_only_single_epoch_name, "epochset")
-        print("Final epochsets:")
-        print(self.Dat["epochset"].value_counts())
+                merge_sets_with_only_single_epoch_name, epochset_col_name)
+        print("-- Final epochsets:")
+        print(self.Dat[epochset_col_name].value_counts())
+
+        print(f"-- FINAL RESULTS ({epochset_col_name}, {trial_label}, {epoch_label}):")
+        self.grouping_print_n_samples([epochset_col_name, trial_label, epoch_label])
+
+        print(f"-- FINAL RESULTS ({epochset_col_name}, {epoch_label}, {trial_label}):")
+        self.grouping_print_n_samples([epochset_col_name, epoch_label, trial_label])
 
     ############### PROBES stuff
     def probes_extract_blocks_with_probe_tasks(self):
@@ -5707,7 +5727,7 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
-    def grammar_rules_extract_info(self):
+    def grammarparses_rules_extract_info(self):
         """ Return dict holding infor for all rules (epochs)
         epoch: Dict holding:
         - rule_dict
@@ -5734,13 +5754,16 @@ class Dataset(object):
 
 
     # def grammar_rules_extract_rul
-    def grammar_grammardict_return(self, ind):
+    def grammarparses_grammardict_return(self, ind, doplot=False):
         """
         """
         tc = self.Dat.iloc[ind]["trialcode"]
-        return self.GrammarDict[tc]
+        gd = self.GrammarDict[tc]
+        if doplot:
+            gd.print_plot_summary(doplot=doplot)
+        return gd
 
-    def _grammar_parses_generate(self, ind, list_rulestring = None):
+    def _grammarparses_parses_generate(self, ind, list_rulestring = None):
         """ Generate GrammarDat object and save, for this trial
         PARAMS:
         - ind, index in D.Dat
@@ -5768,25 +5791,14 @@ class Dataset(object):
         # Return the grammardict, holding all the parses
         return GD
 
-    def grammar_tasksequencer_rules_matlab(self, ind):
-        """ REturn the tasksequencer rules used in matlab to generate
-        the ObjectClass seuqence
-        """
-
-        # 1) get the matlab params
-
-        # 2) [optional] convert to a string code for post-processing.
-
-        assert False, 'this is alread in self.Dat["epoch_rule_tasksequencer"] To reextract, see epoch_grouping_reassign_by_tasksequencer'
-
-    def grammar_parses_extract(self, ind, list_rulestrings, fail_if_empty=True):
+    def _grammarparses_parses_extract(self, ind, list_rulestrings, fail_if_empty=True):
         """ Extract set of parses for each rule.
         PARAMS;
         - list_rulestrings, list of str <cat>-<subcat>-<rule>
         RETURNS:
         - dict[rule] = parses, each a list of possible orderings
         """
-        GD = self._grammar_parses_generate(ind, list_rulestrings)
+        GD = self._grammarparses_parses_generate(ind, list_rulestrings)
         outdict = {}
         for rulestring in list_rulestrings:
             parses = GD.parses_extract_generated(rulestring)
@@ -5797,13 +5809,66 @@ class Dataset(object):
             outdict[rulestring] = parses
         return outdict
 
-
-    def grammar_extract_beh_and_task(self, ind, ploton=False):
-        """ Goal is to replace "seuqence" module with grammar
+    def grammarparses_successbinary_print_summary(self):
         """
-        return self.sequence_extract_beh_and_task(ind, ploton)
+        """
 
-    def grammar_successbinary_print_summary(self):
+        assert False, "see todo"
+        # Check that success_binary_quick is from parses analysis.
+        # Then run grammar_successbinary_print_summary
+
+
+    def grammarparses_successbinary_score(self, print_summary=False, DEBUG=False):
+        """ Good, determine if beh is success based on matching any of the possible
+        parses given each trial's rule.
+        PARAMS:
+        - print_summary, bool, then useful printing for each trial, sanity checks as well.
+        RETURNS:
+        - bm, object holding results.
+        - appends columns to self.Dat, including success_binary_quick
+        """
+        from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
+
+        # 1) Score each trial based on parses
+        bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG)
+
+        # D.sequence_extract_beh_and_task(230, True)
+        if print_summary:
+            self.grammarparses_successbinary_print_summary()
+
+        if DEBUG:
+            # For each trial, print its semantic outcome
+            for i in range(len(self.Dat)):
+                tc = self.Dat.iloc[i]["trialcode"]
+                print(i, tc, self.grammarparsesmatlab_score_wrapper(i))
+
+            # pick a speicfic trial and plot and print it.
+            ind = 783
+            tc = self.Dat.iloc[ind]["trialcode"]
+            bm.DatLong[bm.DatLong["trialcode"] == tc]
+
+            self.grammarmatlab_extract_beh_and_task(ind, True)
+            
+        return bm
+
+    # def grammarmatlab_extract_beh_and_task(self, ind, ploton=False):
+    #     """ Goal is to replace "seuqence" module with grammar
+    #     """
+    #     return self.grammarmatlab_extract_beh_and_task(ind, ploton)
+
+    def grammarmatlab_tasksequencer_rules_matlab(self, ind):
+        """ REturn the tasksequencer rules used in matlab to generate
+        the ObjectClass seuqence
+        """
+
+        # 1) get the matlab params
+
+        # 2) [optional] convert to a string code for post-processing.
+
+        assert False, 'this is alread in self.Dat["epoch_rule_tasksequencer"] To reextract, see epoch_grouping_reassign_by_tasksequencer'
+
+    
+    def grammarmatlab_successbinary_print_summary(self):
         """
         Useful printing for each trial, sanity checks as well, for success_binayr,
         which I think could be eitehr matlab sequence or parses, based on which code was run
@@ -5833,40 +5898,7 @@ class Dataset(object):
                 # Then not success...
                 print(ind, isprobe, SUCCESS, nbeh, ntask, one_to_one)
 
-    def grammar_successbinary_score_parses(self, print_summary=False, DEBUG=False):
-        """ Good, determine if beh is success based on matching any of the possible
-        parses given each trial's rule.
-        PARAMS:
-        - print_summary, bool, then useful printing for each trial, sanity checks as well.
-        RETURNS:
-        - bm, object holding results.
-        - appends columns to self.Dat, including success_binary_quick
-        """
-        from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
-
-        # 1) Score each trial based on parses
-        bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG)
-
-        # D.sequence_extract_beh_and_task(230, True)
-        if print_summary:
-            self.grammar_successbinary_print_summary()
-
-        if DEBUG:
-            # For each trial, print its semantic outcome
-            for i in range(len(self.Dat)):
-                tc = self.Dat.iloc[i]["trialcode"]
-                print(i, tc, self.sequence_score_wrapper(i))
-
-            # pick a speicfic trial and plot and print it.
-            ind = 783
-            tc = self.Dat.iloc[ind]["trialcode"]
-            bm.DatLong[bm.DatLong["trialcode"] == tc]
-
-            self.sequence_extract_beh_and_task(ind, True)
-            
-        return bm
-
-    def grammar_successbinary_score_matlab(self, print_summary=False):
+    def grammarmatlab_successbinary_score(self, print_summary=False):
         """ Good, score each trial based on the ground truth matlab sequence, a singel
         determistic sequence.
         PARAMS:
@@ -5882,11 +5914,11 @@ class Dataset(object):
 
         # D.sequence_extract_beh_and_task(230, True)
         if print_summary:
-            self.grammar_successbinary_print_summary()
+            self.grammarmatlab_successbinary_print_summary()
 
         return bm
 
-    def grammar_wrapper_extract(self, return_as_bmh_object=True):
+    def grammarmatlab_wrapper_extract(self, return_as_bmh_object=True):
         """ Extract grammar data for each trial
         RETURNS:
         - bm, beh_model_holder, with dataset (rows) matching self.Dat
@@ -5896,6 +5928,8 @@ class Dataset(object):
         bm, _, _ = preprocess_dataset(self, return_as_bmh_object=return_as_bmh_object)
         return bm
 
+
+    #####################################################
     def sequence_tokens_clear_behclass_and_taskclass(self):
         """ Remove cached tokens, datsegs by deleting them. Useful if you want to reextract them.
         """
@@ -5924,7 +5958,7 @@ class Dataset(object):
         def _get_char_sequence(ind):
             char = self.Dat.iloc[ind]["character"]
             if ver=="task_matlab":
-                sequence = tuple(self.sequence_extract_beh_and_task(ind)["taskstroke_inds_correct_order"])
+                sequence = tuple(self.grammarmatlab_extract_beh_and_task(ind)["taskstroke_inds_correct_order"])
             else:
                 print(ver)
                 assert False, "code it!!"
@@ -5939,10 +5973,40 @@ class Dataset(object):
         print(f".. Appended new column 'char_seq', version: {ver}")
 
 
-    def sequence_score_wrapper(self, ind, PRINT=False):
+
+
+    def sequence_compute_one_to_one_beh_to_task(self, ind):
+        """ Compute whether one to one mappibng between beh and task strokes.
+        i.e, each beh stroke matehd to a singel task stroke, and vice versa.
+        alsop means must have gotten all strokes
+        """
+
+        # Get task strokes in order of gotten, and for each get the
+        # beh strokes for which this task stroek was the first gotten
+        # e.g,
+        # [[0], [1], [], [2], [3]] means 3rd task stroke was not gotten, or it
+        # was gotten along with 2nd task stroke byt the 2nd beh stroke.
+        this = [t[0] for t in self.behclass_extract_beh_and_task(ind)[3]] 
+        n_beh = len(self.Dat.iloc[ind]["strokes_beh"])
+        n_task = len(self.Dat.iloc[ind]["strokes_task"])
+
+        matches = all([len(t)==1 for t in this]) # eahc task stroke gotten is matched to its own beh stroke
+        same_n_strokes = n_task == len(this) # got all task strokes.
+        
+        one_to_one = matches and same_n_strokes
+
+        if one_to_one:
+            # NOTE: it is not true the other way round...
+            assert n_beh == n_task
+        return one_to_one
+
+
+    ######################################
+    def grammarparsesmatlab_score_wrapper(self, ind, PRINT=False):
         """ [GOOD] For this trial (ind), return a semantic wrapper of the behavior, based on 
         what has already been computed and saved in D.Dat, for seuqence accuracy either
-        relative to parses or matlab
+        relative to parses or matlab.
+        THIS uses either matlab or parses, deoending on which version generated success_binary_quick.
         RETURNS:
         - outcome, a string that is interpretable.
         """
@@ -5980,7 +6044,7 @@ class Dataset(object):
             print(a,b,c,d,e)
             print(ind)
             print(self.Dat.iloc[ind]["trialcode"])
-            self.sequence_extract_beh_and_task(ind, True)
+            self.grammarmatlab_extract_beh_and_task(ind, True)
             assert False
 
         if online_abort_but_sequence_correct_so_far:
@@ -6000,33 +6064,8 @@ class Dataset(object):
         else:
             assert False
 
-
-    def sequence_compute_one_to_one_beh_to_task(self, ind):
-        """ Compute whether one to one mappibng between beh and task strokes.
-        i.e, each beh stroke matehd to a singel task stroke, and vice versa.
-        alsop means must have gotten all strokes
-        """
-
-        # Get task strokes in order of gotten, and for each get the
-        # beh strokes for which this task stroek was the first gotten
-        # e.g,
-        # [[0], [1], [], [2], [3]] means 3rd task stroke was not gotten, or it
-        # was gotten along with 2nd task stroke byt the 2nd beh stroke.
-        this = [t[0] for t in self.behclass_extract_beh_and_task(ind)[3]] 
-        n_beh = len(self.Dat.iloc[ind]["strokes_beh"])
-        n_task = len(self.Dat.iloc[ind]["strokes_task"])
-
-        matches = all([len(t)==1 for t in this]) # eahc task stroke gotten is matched to its own beh stroke
-        same_n_strokes = n_task == len(this) # got all task strokes.
-        
-        one_to_one = matches and same_n_strokes
-
-        if one_to_one:
-            # NOTE: it is not true the other way round...
-            assert n_beh == n_task
-        return one_to_one
-
-    def sequence_extract_beh_and_task(self, ind, ploton=False):
+    # def sequence_extract_beh_and_task(self, ind, ploton=False):
+    def grammarmatlab_extract_beh_and_task(self, ind, ploton=False):
         """ Wrapper to extract behavior (taskstrokes ordered by beh) and 
         task (e.g., taskstroke inds ordered by chunk, and whether there is color
         supervision)
@@ -6091,11 +6130,14 @@ class Dataset(object):
         print("Appended columns gridsize!")
 
     ################ SAVE
+    def make_path_savedir_directory_notebook_for_figures(self, analysis_name):
+        return self.make_savedir_for_analysis_figures(analysis_name)
+        
     def make_savedir_for_analysis_figures(self, analysis_name):
         from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
-        animal = self.animals()
-        expt = self.expts()
-        rulelist = self.rules()
+        # animal = self.animals()
+        # expt = self.expts()
+        # rulelist = self.rules()
 
         idstring = self.save_generate_string_identifier_wrapper(concise=False)
         if len(idstring)>35:

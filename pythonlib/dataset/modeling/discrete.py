@@ -169,7 +169,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         """
 
         # NOTE: bools are NOT fixed order.
-        map_rule_to_fixedorder = {
+        map_rule_to_notfixedorder = {
             ("ss", "rank"): [False, True], # [alow reorder, allow reorder.]
             ("ss", "rankdir"): [False, False], # line-circe, where forced to do specific order within line and cirlc.e
             ("ss", "chain"): [False, False],
@@ -182,7 +182,11 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
             ("rand", "null"): [True, True], # random, 
         }
         key = (ruledict["categ"], ruledict["subcat"])
-        tmp = map_rule_to_fixedorder[key] # [False, True]
+        tmp = map_rule_to_notfixedorder[key] # [False, True]
+
+        # print("HERERER")
+        # print(key)
+        # assert False
         return fixed_order_for_this_hier(hier, tmp[0], tmp[1])
 
 
@@ -1108,12 +1112,17 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
-        ("AnBm1b"):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
+        ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
         ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
-        ("AnBmTR"):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
-        ("rndstr"): ["preset-null-rndstr"] #  
+        ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
+        ("rndstr",): ["preset-null-rndstr"] #  
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
+
+    for key, values in DICT_RELATED_RULES.items():
+        assert isinstance(key, tuple), "you prob forgot comma in the parantheses to make this a tuple"
+        assert isinstance(values, list)
+
     RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
     # bring in all the rules.
 
@@ -1125,6 +1134,7 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         related_rules = []
         FOUND = False
         for rule_keys, rule_set in DICT_RELATED_RULES.items():
+            # print(rule_keys, type(rule_keys))
             if rulethis in RULES_IGNORE:
                 return []
             elif rulethis in rule_keys:
@@ -1133,6 +1143,8 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         assert FOUND, f"didnt find this rule in any sets: {rulethis}"
         return list(set(related_rules))
 
+    # print(list_rules)
+    # assert False
     list_rules_related =[]
     for rulethis in list_rules:
         rules_related = _find_related_rules(rulethis)
@@ -1167,7 +1179,7 @@ def tasks_categorize_based_on_rule_mult(D):
     from pythonlib.tools.pandastools import applyFunctionToAllRows
 
     # Get list of rules
-    list_rule = D.grammar_rules_extract_info()["list_rules_exist"]
+    list_rule = D.grammarparses_rules_extract_info()["list_rules_exist"]
     # ALL_OUT = []
     # ALL_LIST_COL = []
 

@@ -439,6 +439,9 @@ def _groupingParams(D, expt):
                 print(grmeth)
                 assert False
 
+    # fix a problem, sholdnt throw out epoch name
+    D.supervision_epochs_extract_orig()
+
     if grouping_levels is None:
         # Then you did not enter it manually. extract it
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)

@@ -151,6 +151,12 @@ class GrammarDat(object):
 
 
     ################ utils
+    def dataset_trialcode_to_ind(self, trialcode):
+        """ Return the index (int) into self.Dataset. 
+        asserts there exactly one match
+        """
+        return self.Dataset.index_by_trialcode(trialcode)
+
     def strokes_extract(self, ind_strokes=None):
         """ Returns strokes, optioanlly ordered as in ind_strokes
         """
@@ -175,9 +181,8 @@ class GrammarDat(object):
         """
 
         # 1) Plot behavior
-        assert False, "convert from self.DatasetTrialcode to ind"
-        
-        fig1 = self.Dataset.plotSingleTrial(self.DatasetInd, task_add_num=True)
+        ind = self.dataset_trialcode_to_ind(self.DatasetTrialcode)
+        fig1 = self.Dataset.plotSingleTrial(ind, task_add_num=True)
         # fig1, ax = self.Beh.plotStrokes()
         # ax.set_title("Behavior")
         # self.Beh.plotTaskStrokes()
@@ -197,6 +202,26 @@ class GrammarDat(object):
         # print(parses)
         fig2, axes2 = self.Dataset.plotMultStrokes(list_strokes)
         return fig1, fig2, axes2, indsthis, parses
+
+    #################
+    def print_plot_summary(self, doplot=True):
+        """ Print and plot things summarizing this grammardat, including parses"""
+        for rule, CLC in self.ChunksListClassAll.items():
+            print("----- CLC for This rule: ", rule)
+            print(CLC.print_summary())
+            print("... with these parases:")
+            if len(self.ParsesGenerated[rule])<20:
+                print(self.ParsesGenerated[rule])
+            else:
+                print(f"(just first N, since too many {len(self.ParsesGenerated[rule])}):")
+                print(self.ParsesGenerated[rule][:20])
+
+            if doplot:
+                self.plot_beh_and_parses(rule)
+                self.Beh.alignsim_plot_summary()
+
+
+
 
 
     

@@ -274,8 +274,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
         epoch_i = D.Dat.iloc[ind]['epoch']
 
         # generate all parses for this trial
-        gramdict = D.sequence_extract_beh_and_task(ind)
-        parsesdict = D.grammar_parses_extract(ind, list_rules)       
+        gramdict = D.grammarmatlab_extract_beh_and_task(ind)
+        parsesdict = D._grammarparses_parses_extract(ind, list_rules)       
         taskstroke_inds_beh_order = gramdict["taskstroke_inds_beh_order"]
 
         # Score this trial as correct/incorrect
@@ -492,7 +492,7 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
         epoch_i = D.Dat.iloc[ind]['epoch']
 
         # generate all parses for this trial
-        gramdict = D.sequence_extract_beh_and_task(ind)
+        gramdict = D.grammarmatlab_extract_beh_and_task(ind)
         taskstroke_inds_beh_order = gramdict["taskstroke_inds_beh_order"]
 
         # Score this trial as correct/incorrect

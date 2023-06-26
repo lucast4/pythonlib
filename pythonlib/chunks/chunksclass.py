@@ -269,7 +269,7 @@ class ChunksClass(object):
         if fixed_order is None:
             # Enter default. assume both levels can be reordered:
             from .chunks import fixed_order_for_this_hier
-            self.FixedOrder = fixed_order_for_this_hier(hier)
+            self.FixedOrder = fixed_order_for_this_hier(hier, True, True)
         else:
             self.FixedOrder = fixed_order
         self.Labels = task_stroke_labels
@@ -281,7 +281,6 @@ class ChunksClass(object):
             assert len(colorlist_hier)==len(hier)
         self.ColorlistHier = colorlist_hier
 
-        # print("HERE", [self.Hier, self.Flips])
         self._preprocess()
 
 

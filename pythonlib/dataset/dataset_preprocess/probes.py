@@ -100,7 +100,7 @@ def _check_equidistant_from_first_stroke(ind, D):
     """
     
     # 1) get ground truth sequencing order (using tasksequencer)
-    sdict = D.sequence_extract_beh_and_task(ind)
+    sdict = D.grammarmatlab_extract_beh_and_task(ind)
 #     {'taskstroke_inds_beh_order': [2, 0, 1],
 #          'taskstroke_inds_correct_order': [2, 0, 1],
 #          'active_chunk': <pythonlib.chunks.chunksclass.ChunksClass at 0x7f2c5f9b1cd0>,
@@ -273,7 +273,7 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                 list_inds = D.Dat[(D.Dat["character"]==task_probe) & (D.Dat["epoch"]==ep)].index.tolist()
                 if len(list_inds)>0:
                     # list_equidistant = [] # check all inds, and confirm they are identical
-                    sdict = D.sequence_extract_beh_and_task(list_inds[0])
+                    sdict = D.grammarmatlab_extract_beh_and_task(list_inds[0])
                     taskstroke_inds_correct_order = sdict["taskstroke_inds_correct_order"]
                     list_correct_sequence.append(tuple(taskstroke_inds_correct_order))
             list_correct_sequence_unique = list(set(list_correct_sequence))

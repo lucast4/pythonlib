@@ -491,7 +491,7 @@ def find_motif_in_beh_wildcard_control(D, motifname, motifparams,
     (None, None) if this rule_control_model doesnt have any parses for this trial's task
     """
     # 1) get parses
-    parses = D.grammar_parses_extract(indtrial, [rulestring])[rulestring]
+    parses = D._grammarparses_parses_extract(indtrial, [rulestring])[rulestring]
 
     # 2) Convert each parse to a tokens
     T = D.Dat.iloc[indtrial]["Task"]
