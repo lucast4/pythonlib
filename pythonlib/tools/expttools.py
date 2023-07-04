@@ -71,6 +71,18 @@ def writeDictToYaml(dictdat, path):
         # yaml.dump(dictdat, f, default_flow_style=False)
         yaml.dump(dictdat, f, sort_keys=False)
 
+def writeDictToTxt(dictdat, path):
+    """ Write each key:val of dict as as new line in text file
+    f"{key} : {val}"
+    PARAMS:
+    - path, imcludes extension.
+    """
+    list_s = []
+    for key, val in dictdat.items():
+        list_s.append(f"{key} : {val}")
+    writeStringsToFile(path, list_s)
+
+
 def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
     pull out arc2 if give me sep="_" and pos = "2"
@@ -138,18 +150,30 @@ def count_n_files_in_dir(dirpath, ext=None):
 
     return len(list_paths), list_paths
 
+def check_if_dir_not_empty(dirpath):
+    """ Reutrns True if any file exists in dirpath"""
+    with os.scandir(dirpath) as it:
+        if any(it):
+            return True
+    return False
+
 def checkIfDirExistsAndHasFiles(dirname):
     """ returns (exists?, hasfiles?), 
     - hasfiles is obviously always False if exists
     is False
     """
-    import os
     if os.path.isdir(dirname):
         exists = True
-        if len(os.listdir(dirname))>0:
-            hasfiles = True
+            
+        if True:
+            # Should be faster when many files in dir
+            # https://stackoverflow.com/questions/49284015/how-to-check-if-folder-is-empty-with-python
+            hasfiles = check_if_dir_not_empty(dirname)
         else:
-            hasfiles = False
+            if len(os.listdir(dirname))>0:
+                hasfiles = True
+            else:
+                hasfiles = False
     else:
         exists = False
         hasfiles = False

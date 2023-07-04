@@ -657,6 +657,8 @@ def printOverview(df, MAX=50):
             else:
                 print(df[col].value_counts())
 
+
+
 # @param grp: [col1 col2 col3]
 # @return: new column with index for category (based on col1/2/3 perm)
 def append_col_with_grp_index(df, grp, new_col_name, use_strings=True, 
@@ -726,6 +728,36 @@ def append_col_after_applying_to_group(df, groupby, cols_to_use, F, newcol):
 
     return df
 
+
+def append_col_with_index_of_level(df, column, newcolumn):
+    """ 
+    APpends a new column which converts levels of <column> into indices, 0, 1,..
+    assuming colum is categorical.
+    PARAMS:
+    - column, string col in df
+    - newcolumn, str, name of new column 
+    RETURNS:
+    (mutates df to have this new column)
+    - map_idx_to_level, dict
+    - map_level_to_idx, dict
+    """
+
+    levels = sort_mixed_type(df[column].unique().tolist())
+    
+    # map_idx_to_level, map_level_to_idx = map
+    map_level_to_idx = {lev:i for i, lev in enumerate(levels)}
+    map_idx_to_level = {}
+    for lev, idx in map_level_to_idx.items():
+        assert idx not in map_idx_to_level.keys()
+        map_idx_to_level[idx] = lev
+
+
+    # get list, len(dtapts)
+    idxs = [map_level_to_idx[lev] for lev in df[column].tolist()]
+    # Append
+    df[newcolumn] = idxs
+
+    return map_idx_to_level, map_level_to_idx
 
 def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.

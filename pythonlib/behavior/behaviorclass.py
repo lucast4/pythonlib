@@ -464,7 +464,6 @@ class BehaviorClass(object):
             # Load cached datsegs
             if self.Alignsim_Datsegs is not None:
                 return self.Alignsim_Datsegs
-
         # If you are computing, then you should pass in input_grid_xy
         if input_grid_xy is None:
             print("recompute:", recompute)
@@ -515,7 +514,6 @@ class BehaviorClass(object):
         # task datsegs (get in both (i) length of task and (ii) length of beh.
         datsegs_tasklength = self.alignsim_extract_datsegs(include_scale=include_scale) 
         datsegs_behlength = [datsegs_tasklength[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
-
 
         # Combined representaion, list (length num taskstrokes) of tuples, each tuple:
         # (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into self.Strokes,

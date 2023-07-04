@@ -1283,10 +1283,10 @@ class Dataset(object):
         # mapper from taskstrokeinds to beh
         mapper_taskstroke_to_beh = {}
         this = self.behclass_extract_beh_and_task(ind)[3]
+
         for x in this:
             ind_task = x[2]["ind_taskstroke_orig"]
             mapper_taskstroke_to_beh[ind_task] = x[0] # indidces into storkes_beh
-        
         # some tasktrokes were missed
         n_task_strokes = len(self.Dat.iloc[ind]["strokes_task"])
         for i in range(n_task_strokes):
@@ -1311,6 +1311,9 @@ class Dataset(object):
 
         if plot:
             self.grammarmatlab_extract_beh_and_task(ind, ploton=True)
+        # print(tokens[0])
+        # assert False
+        # assert False
 
         if return_as_tokensclass:
             from pythonlib.drawmodel.tokens import Tokens
@@ -2134,6 +2137,12 @@ class Dataset(object):
         out["dists_gap"] = gapDistances(strokes_beh)
 
         return out
+
+    # def motor_get_stats_append_columns(self):
+    #     """
+    #     """
+    #     for i in range(len(self.Dat)):
+    #         self.get_motor_stats()
 
 
     ################# SPATIAL OPERATIONS
@@ -6077,15 +6086,15 @@ class Dataset(object):
         taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
         if ploton:
             Beh = self.Dat.iloc[ind]["BehClass"]
-            # Beh.alignsim_extract_datsegs(plot_print_on=True);
-            datsegs = Beh.Alignsim_Datsegs
+            datsegs = self.taskclass_tokens_extract_wrapper(ind, "beh", plot=False)
+            # Beh.alignsim_extract_datsegs()
+            # # datsegs = Beh.Alignsim_Datsegs
             for x in datsegs:
                 print(x)
             Beh.alignsim_plot_summary()
 
             print("*** Behavior order: ", taskstroke_inds_beh_order)
             # print(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
-
         # 2) Get target sequence
         out = self.objectclass_wrapper_extract_sequence_chunk_color(ind, ploton)
         C = out["active_chunk"]
