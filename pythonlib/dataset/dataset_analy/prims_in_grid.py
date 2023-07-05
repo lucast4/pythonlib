@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pythonlib.tools.plottools import savefig
+import seaborn as sns
+from pythonlib.tools.snstools import rotateLabel
 
 def preprocess_dataset(D, doplots=False):
 
@@ -41,6 +43,31 @@ def preprocess_dataset(D, doplots=False):
 
     path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
     D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
+
+    ####### rew as function of n strokes in task
+    savedir = f"{SAVEDIR}/rew_vs_nstrokestask"
+    os.makedirs(savedir, exist_ok=True)
+    list_blocks = D.Dat["block"].unique().tolist()
+    D.Dat["aborted_int"] = np.array(D.Dat["aborted"], dtype=int) # or else plot will error.
+    for block in list_blocks:
+        dfthis = D.Dat[D.Dat["block"]==block]
+        if len(dfthis)>20:
+            fig = sns.pairplot(data=dfthis, vars=["beh_multiplier", "rew_total", "aborted_int"], 
+                         hue="seqc_nstrokes_task", plot_kws={"alpha":0.4}, height=3, aspect=1.5)
+            savefig(fig, f"{savedir}/rew_vs_nstrokestask-bk_{block}.pdf")        
+
+    #### Plot score/rew vs. location config.
+    savedir = f"{SAVEDIR}/locationconfig"
+    os.makedirs(savedir, exist_ok=True)
+    D.taskclass_shapes_loc_configuration_assign_column()
+    for y in ["beh_multiplier", "rew_total"]:
+        fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
+        rotateLabel(fig)
+        savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
+
+        fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
+        rotateLabel(fig)
+        savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
 
     ######## LOOK FOR CONJUCNTIONS
     if False:
