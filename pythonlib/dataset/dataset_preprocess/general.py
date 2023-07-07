@@ -447,8 +447,8 @@ def _groupingParams(D, expt):
                 print(grmeth)
                 assert False
 
-    # fix a problem, sholdnt throw out epoch name
-    D.supervision_epochs_extract_orig()
+    # # fix a problem, sholdnt throw out epoch name
+    # D.supervision_epochs_extract_orig() 
 
     if grouping_levels is None:
         # Then you did not enter it manually. extract it
@@ -920,7 +920,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         return (x["epoch"], x["supervision_stage_concise"])
     D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
 
-
     # Merge epochs;
     if len(epoch_merge_dict)>0:
         print("MERGING EPOCHS...")
@@ -930,6 +929,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
             
     # Since epoch might change...
     D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
+
+    # fix a problem, sholdnt throw out epoch name
+    D.supervision_epochs_extract_orig() 
 
     # if taskgroup name is too long, then prune it. otherwise can lead to seaborn plotting errors...
     def F(x):
