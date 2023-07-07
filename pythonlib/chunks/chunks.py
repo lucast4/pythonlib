@@ -390,7 +390,6 @@ def search_permutations_chunks(chunks_hier, fixed_order, max_perms=10000):
 
         return [list(x) for x in product(*list_of_list_out_all)] # list of lists, where inner lists are same shape as inner lsit of list_of_list.
 
-
     hier = chunks_hier
 
     # First level

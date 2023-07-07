@@ -27,6 +27,8 @@ def find_object_groups_new(Task, params):
     e.g., if it participates in multiple gourpings.
     """
 
+    GRIDLOC_VER = "gridloc_local" 
+
     # Generate tokens
     tokens = Task.tokens_generate(assert_computed=True)
     objects = tokens # naming convention change.
@@ -42,7 +44,7 @@ def find_object_groups_new(Task, params):
         """ Location on grid, in grid units (integers, centered at 0)
         Returns (x,y)
         """
-        return objects[i]["gridloc"]
+        return objects[i][GRIDLOC_VER]
     def _posdiffs_grid(i, j):
         """ Difference in positions between i and j, in grid units
         Return xdiff, ydiff"""

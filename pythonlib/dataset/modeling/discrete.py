@@ -1087,8 +1087,13 @@ def rules_related_rulestrings_extract_auto(D):
     are alternative huypotjeses to those rules
     """
     # list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
-    list_rules = D.Dat["epoch_orig"].unique().tolist()
-    return _rules_related_rulestrings_extract_auto(list_rules)
+    try:
+        list_rules = D.Dat["epoch_orig"].unique().tolist()
+        return _rules_related_rulestrings_extract_auto(list_rules)
+    except AssertionError as err:
+        # Fails soemtimes if you have merged epochs..
+        list_rules = D.Dat["epoch"].unique().tolist()  
+        return _rules_related_rulestrings_extract_auto(list_rules)
 
 def _rules_related_rulestrings_extract_auto(list_rules):
     """
@@ -1145,8 +1150,6 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         assert FOUND, f"didnt find this rule in any sets: {rulethis}"
         return list(set(related_rules))
 
-    # print(list_rules)
-    # assert False
     list_rules_related =[]
     for rulethis in list_rules:
         rules_related = _find_related_rules(rulethis)

@@ -23,7 +23,7 @@ class GrammarDat(object):
         # Properties
         self.ChunksListClassAll = {} # dict[rulename] = CLC for that rule
         self.ParsesGenerated = {} # to store parses that have already been gnenerated.
-
+        self.ParsesGeneratedYokedChunkObjects = {} # yoked, the oriignal chunksclass tied to each parse.
         # Input data
         if input_version=="dataset":
             """ Input the dataset and a trial index
@@ -53,7 +53,6 @@ class GrammarDat(object):
     def _input_data(self, Beh, Task, exptname):
         """ Input data. 
         """
-
         self.Beh = Beh
         self.Task = Task
         self.Expt = exptname
@@ -120,13 +119,6 @@ class GrammarDat(object):
 
         # Genreate all concrete parses and return them
         return self.parses_extract_generated(rule_name)
-        # out = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks")
-        # if DEBUG:
-        #     print(" == Printing all concrete chunks")
-        #     for o in out:
-        #         print(o)
-
-        # return out
 
     def parses_extract_generated(self, rulestring):
         """ Extract parses that are already genreated
@@ -136,19 +128,49 @@ class GrammarDat(object):
 
         # generate clc?
         if rulestring not in self.ChunksListClassAll.keys():
-            self.parses_generate(rulestring)
+            self.parses_generate(rulestring) 
 
         # extract parses? (and cache)
         if rulestring not in self.ParsesGenerated.keys():
             CL = self.ChunksListClassAll[rulestring]
-            out = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks")
+            out, out_chunkobj = CL.search_permutations_chunks(return_ver="list_of_flattened_chunks",
+                return_out_chunkobj=True)
             self.ParsesGenerated[rulestring] = out
+            self.ParsesGeneratedYokedChunkObjects[rulestring] = out_chunkobj
 
         return self.ParsesGenerated[rulestring]
 
 
     ############### DIAGNOSTIC MODELING
+    def _score_beh_in_parses(self, taskstroke_inds_beh_order, rulestring):
+        """ 
+        Returns true if taskstroke_inds_beh_order is identival to one of the
+        parses for this rulestring
+        PARAMS
+        - taskstroke_inds_beh_order, list of ints, behavior strokes, in format
+        of task stroke indices.
+        - return_matching_parse, bool, if True, then additioanlly returns the index
+        of match, if match exists. otherwise returns None.
+        RETURNS:
+        - bool
+        """
+        parses = self.parses_extract_generated(rulestring)
+        if isinstance(taskstroke_inds_beh_order, list):
+            taskstroke_inds_beh_order = tuple(taskstroke_inds_beh_order)
+        return taskstroke_inds_beh_order in parses
 
+    def _score_beh_in_parses_find_index_match(self, taskstroke_inds_beh_order, rulestring):
+        """ 
+        returns the index of the parse for this rulestring that matches this beh,
+        if it exists. otherwise returns None
+        """
+        parses = self.parses_extract_generated(rulestring)
+        if isinstance(taskstroke_inds_beh_order, list):
+            taskstroke_inds_beh_order = tuple(taskstroke_inds_beh_order)
+        if taskstroke_inds_beh_order in parses:
+            return parses.index(taskstroke_inds_beh_order)
+        else:
+            return None
 
     ################ utils
     def dataset_trialcode_to_ind(self, trialcode):

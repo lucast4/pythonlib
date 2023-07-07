@@ -68,6 +68,49 @@ class Tokens(object):
         
         return chunk_rank, chunk_within_rank
 
+    def chunks_update_by_chunksobject(self, C):
+        """ Assign each token to a chunk and a ordinal withn the chunk, based
+        on the Hier defined in C.Hier. E..g, C could define concrete chunks, like lollis
+        [[1,2], [0,4]], and this will assigns toeksn with strokeinds 1 and 2 to chunk 0, a
+        and with 0 and 4 to chunk 1.
+        EG:
+        - C.Hier = [[0, 1], [2, 3], [4, 5]]
+        --> ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
+
+        - C.Hier = [[0, 4], [2, 3], [1, 5]]
+        --> ([0, 2, 1, 1, 0, 2], [0, 0, 0, 1, 0, 0])
+
+        - C.Hier = [[2, 3], [0, 1], [4, 5]]
+        --> ([1, 1, 0, 0, 2, 2], [0, 1, 0, 1, 0, 1])
+
+        NOTE: the numbers index the order the chunks appear in C.Hier. If Fixed order is False,
+        then these numbers are not meaningful, but simply are unique identifiers for items in Hier.
+        """
+
+        tokens = self.Tokens
+        strokeinds = [tok["ind_taskstroke_orig"] for tok in tokens]
+        chunk_rank = C.find_hier_for_list_taskstroke(strokeinds) # e.g, [0, 0, 1, 1, 2, 2]
+
+        # 2) get ordinal within the chunk
+        # e.g [0 0 1 1 1 0] will map to [0 1 0 1 2 0]
+        chunk_within_rank = []
+        r_prev = None
+        for r in chunk_rank:
+            if r==r_prev:
+                o = o+1
+            else:
+                # reset
+                o = 0
+            r_prev = r
+            chunk_within_rank.append(o)
+        
+        # 3) modify tokens
+        for t,r,o in zip(tokens, chunk_rank, chunk_within_rank):
+            t["chunk_rank"] = r
+            t["chunk_within_rank"] = o
+        
+        return chunk_rank, chunk_within_rank
+
 
     def sequence_context_relations_calc(self):
         """ Get each item's sequence context, entering as new features
@@ -75,15 +118,17 @@ class Tokens(object):
         NOTE: derived from taskgeneral._tokens_generate_relations
         """
 
+        # GRIDLOC_VER = "gridloc"
+        GRIDLOC_VER = "gridloc_local" # better, since considers just the grid of this task.
         tokens = self.Tokens
 
         grid_ver = "on_grid"
         for dseg in tokens:
-            if dseg["gridloc"] is None:
+            if dseg[GRIDLOC_VER] is None:
                 grid_ver = "on_rel"
         
         def _location(i):
-            xloc, yloc = tokens[i]["gridloc"]
+            xloc, yloc = tokens[i][GRIDLOC_VER]
             return xloc, yloc
 
         def _posdiffs(i, j):
@@ -144,7 +189,6 @@ class Tokens(object):
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 # give none for params
-                # dseg["gridloc"] = None
                 dseg["rel_from_prev"] = None
                 # datsegs[-1]["rel_to_next"] = None
                 dseg["h_v_move_from_prev"] = None
@@ -156,20 +200,26 @@ class Tokens(object):
             #### Context
             if i==0:
                 loc_prev = (0, "START") # tuple, so that is same type as gridloc
+                loc_prev_local = (0, "START") # tuple, so that is same type as gridloc
                 shape_prev = "START"
             else:
                 loc_prev = tokens[i-1]["gridloc"]
+                loc_prev_local = tokens[i-1]["gridloc_local"]
                 shape_prev = tokens[i-1]["shape"]
             dseg["CTXT_loc_prev"] = loc_prev
+            dseg["CTXT_loc_prev_local"] = loc_prev_local
             dseg["CTXT_shape_prev"] = shape_prev
 
             if i==len(tokens)-1:
                 loc_next = ("END", 0)
+                loc_next_local = ("END", 0)
                 shape_next = "END"
             else:
                 loc_next = tokens[i+1]["gridloc"]
+                loc_next_local = tokens[i+1]["gridloc_local"]
                 shape_next = tokens[i+1]["shape"]
             dseg["CTXT_loc_next"] = loc_next
+            dseg["CTXT_loc_next_local"] = loc_next_local
             dseg["CTXT_shape_next"] = shape_next
 
 

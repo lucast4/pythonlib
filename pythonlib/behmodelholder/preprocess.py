@@ -274,17 +274,20 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
         epoch_i = D.Dat.iloc[ind]['epoch']
 
         # generate all parses for this trial
-        gramdict = D.grammarmatlab_extract_beh_and_task(ind)
-        parsesdict = D._grammarparses_parses_extract(ind, list_rules)       
-        taskstroke_inds_beh_order = gramdict["taskstroke_inds_beh_order"]
+        # gramdict = D.grammarmatlab_extract_beh_and_task(ind)
+        # taskstroke_inds_beh_order = gramdict["taskstroke_inds_beh_order"]
+        taskstroke_inds_beh_order = D.grammarparses_extract_beh_taskstroke_inds(ind)
+        # parsesdict = D._grammarparses_parses_extract(ind, list_rules)       
+        D._grammarparses_parses_extract(ind, list_rules) # need to extract.
+        GD = D.grammarparses_grammardict_return(ind)       
 
         # Score this trial as correct/incorrect
         if how_define_correct_order=="matlab":
+            assert False, "use ...matlabrule"
             # correct order specified in matlab code
             order_correct = gramdict["taskstroke_inds_correct_order"]
             assert order_correct is not None, "not defined in matlab ObjectClass.. you must recompute, useing grammar_recompute_parses"
             list_order_correct = [order_correct] # only a single correct order
-            assert False, "use ...matlabrule"
         elif how_define_correct_order=="epoch":
             # 1) get all the acceptable rules
             from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
@@ -294,16 +297,11 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 print("Current epoch: ", epoch_i)
                 print("...collecting all correct parses for rulestrings aliggned with this epoch...")
             for rule_string in list_rule_strings:
-                parses = parsesdict[rule_string] # list of tuples of ints
+                parses = GD.parses_extract_generated(rule_string)
+                # parses = parsesdict[rule_string] # list of tuples of ints
                 list_order_correct.extend(parses)
                 if DEBUG:
                     print(f"Correct sequences for rulestring {rule_string}: {parses}")
-            # # use the rule
-            # if epoch_i not in parsesdict.keys():
-            #     print(parsesdict)
-            #     assert False
-            # list_order_correct = parsesdict[epoch_i]
-
             # make sure all parses are lists
             list_order_correct = [list(par) for par in list_order_correct]
         else:
@@ -366,7 +364,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
 
         ########## [END] CONSIDER EXCEPTIONs
         for rule in list_rules:
-            parses = parsesdict[rule]
+            # parses = parsesdict[rule]
+            # parses = GD.parses_extract_generated(rule)
             # dfGramScore.at[i, f"behmodpost_{rule}_default"] = taskstroke_inds_beh_order in parses
             # results[-1][f"behmodpost_{rule}_{modelclass}"] = taskstroke_inds_beh_order in parses
 
@@ -375,7 +374,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "agent_rule":rule, 
                 # "epoch":epoch_i,
                 "score_name":"binsucc",
-                "score":tuple(taskstroke_inds_beh_order) in parses,
+                "score":GD._score_beh_in_parses(taskstroke_inds_beh_order, rule),
+                # "score":tuple(taskstroke_inds_beh_order) in parses,
                 "probe":D.Dat.iloc[ind]["probe"],
                 "epoch_superv":D.Dat.iloc[ind]["epoch_superv"],
                 "success_binary_quick":success_binary, # success if match any of the rules that are aligned with this epoch.
@@ -390,7 +390,7 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "taskgroup":D.Dat.iloc[ind]["taskgroup"],
                 "character":D.Dat.iloc[ind]["character"],
                 "which_probe_blockset":which_probe_blockset,
-                "parsesdict":parsesdict
+                "parsesdict":GD.parses_extract_generated(rule)
             })
 
         LIST_success_binary.append(success_binary)

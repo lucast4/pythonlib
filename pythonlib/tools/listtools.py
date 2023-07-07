@@ -3,7 +3,7 @@ from operator import itemgetter
 import numpy as np
 # import torch
 
-def stringify_list(li):
+def stringify_list(li, return_as_str=False, separator="--"):
     """ 
     list --> list of str
     """
@@ -17,7 +17,10 @@ def stringify_list(li):
 #             out.extend(stringify(x))
         else:
             out.append(str(x))
-    return out
+    if return_as_str:
+        return f"{separator}".join(out)
+    else:
+        return out
 
 
 def sort_mixed_type(mylist):

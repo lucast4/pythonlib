@@ -1246,6 +1246,8 @@ class TaskClass(object):
                 hack_is_gridlinecircle=hack_is_gridlinecircle, 
                 include_scale=include_scale, input_grid_xy=input_grid_xy)
             self._DatSegs = datsegs
+            # # print(input_grid_xy)
+            # print([x["gridloc"] for x in datsegs], " -- ", [x["gridloc_local"] for x in datsegs])
             return self._DatSegs
 
     def tokens_concat(self, tokens):
@@ -1392,8 +1394,8 @@ class TaskClass(object):
             assert np.all(np.diff(xgrid)>0)
             assert np.all(np.diff(ygrid)>0)
 
-        nver = len(ygrid)
-        nhor = len(xgrid)
+        # always get local grid (ie. this task), for releations
+        xgrid_thistask, ygrid_thistask, _ = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
 
         ################ METHODS (doesnt matter if on grid)
         def _orient(i):
@@ -1492,111 +1494,123 @@ class TaskClass(object):
             #         print("---")
             #         assert False
 
-            locations = []
-            for i, p in enumerate(Prims):
-                prms = p.extract_as("shape", include_scale=include_scale)[1]
-                xloc = prms["x"]
-                yloc = prms["y"]
-                
-                if not isin_close(xloc, xgrid, atol=ATOL)[0] or not isin_close(yloc, ygrid, atol=ATOL)[0]:
-                    # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
-                    # leads to the x y locations off-grid. Look into the original Relations struct to get the 
-                    # grid loc.
-                    a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
-                    b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim"] # meaning: is relation rel sketchpad.
-                    c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho"] # ones where this fails. add to this list.
-                    d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # only coded for this so far.
-                    e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 # only coded for this so far.
-                    if not d or not e:
-                        print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2])
-                        print(*self.PlanDat["Rels"])
-                        assert False, "are these grid units or continuos? if grid, then use them for the cetner.. if not, then use Relations, not RelsBeforeRescaleToGrid?"
-                    if self.PlanDat["RelsBeforeRescaleToGrid"][i][0]=="translate_xy" and a and b and c and d and e:
-                        # Then is actually on grid!
-                        xind = 0
-                        yind = 0
-                         # 'RelsBeforeRescaleToGrid': [['translate_xy',
-                         #   array(0.),
-                         #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
+            def _assign_prims_to_grid_locations(Prims, xgrid, ygrid):
+                nver = len(ygrid)
+                nhor = len(xgrid)
+                locations = []
+                for i, p in enumerate(Prims):
+                    prms = p.extract_as("shape", include_scale=include_scale)[1]
+                    xloc = prms["x"]
+                    yloc = prms["y"]
+                    # print("---", i, xloc, yloc)
+                    
+                    if not isin_close(xloc, xgrid, atol=ATOL)[0] or not isin_close(yloc, ygrid, atol=ATOL)[0]:
+                        # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
+                        # leads to the x y locations off-grid. Look into the original Relations struct to get the 
+                        # grid loc.
+                        a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
+                        b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim"] # meaning: is relation rel sketchpad.
+                        c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho"] # ones where this fails. add to this list.
+                        d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # only coded for this so far.
+                        e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 # only coded for this so far.
+                        if not d or not e:
+                            print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2])
+                            print(*self.PlanDat["Rels"])
+                            assert False, "are these grid units or continuos? if grid, then use them for the cetner.. if not, then use Relations, not RelsBeforeRescaleToGrid?"
+                        if self.PlanDat["RelsBeforeRescaleToGrid"][i][0]=="translate_xy" and a and b and c and d and e:
+                            # Then is actually on grid!
+                            xind = 0
+                            yind = 0
+                             # 'RelsBeforeRescaleToGrid': [['translate_xy',
+                             #   array(0.),
+                             #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
+                        else:
+                            # not sure why failed...
+                            print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                            self.plotStrokes()
+                            print("---")
+                            print(prms, xgrid, ygrid)
+                            print(isin_close(prms["x"], xgrid, atol=ATOL))
+                            print("---")
+                            print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                            i
+                            assert False, "prob just need to input it."
+
                     else:
-                        # not sure why failed...
-                        print(self.PlanDat["RelsBeforeRescaleToGrid"])
-                        self.plotStrokes()
-                        print("---")
-                        print(prms, xgrid, ygrid)
-                        print(isin_close(prms["x"], xgrid, atol=ATOL))
-                        print("---")
-                        print(self.PlanDat["RelsBeforeRescaleToGrid"])
-                        i
-                        assert False, "prob just need to input it."
+                        # Good, got grid locations.
+                        xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
+                        yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
+                    
+                    # print("locations:", xloc, yloc)
+                    # print("locations(grid):", xind, yind)
+                    locations.append((xind, yind))
+                return locations
 
-                else:
-                    # Good, got grid locations.
-                    xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
-                    yind = int(isin_close(yloc, ygrid, atol=ATOL)[1][0]) - int((nver-1)/2)
-                
-                # print("locations:", xloc, yloc)
-                # print("locations(grid):", xind, yind)
-                locations.append((xind, yind))
+            locations = _assign_prims_to_grid_locations(Prims, xgrid, ygrid)
+            locations_thistaskgrid = _assign_prims_to_grid_locations(Prims, xgrid_thistask, ygrid_thistask)
+
+            # print(xgrid, ygrid, locations)
+            # print(xgrid_thistask, ygrid_thistask, locations_thistaskgrid)
+            # assert False
             
-            def _posdiffs(i, j):
-                # return xdiff, ydiff, 
-                # in grid units.
-                pos1 = locations[i]
-                pos2 = locations[j]
-                return pos2[0]-pos1[0], pos2[1] - pos1[1]
+            # def _posdiffs(i, j):
+            #     # return xdiff, ydiff, 
+            #     # in grid units.
+            #     pos1 = locations[i]
+            #     pos2 = locations[j]
+            #     return pos2[0]-pos1[0], pos2[1] - pos1[1]
 
-            def _direction(i, j):
-                # only if adjacnet on grid.
-                xdiff, ydiff = _posdiffs(i,j)
-                if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
-                    return "up"
-                elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
-                    return "down"
-                elif xdiff ==-1. and np.isclose(ydiff, 0.):
-                    return "left"
-                elif xdiff ==1. and np.isclose(ydiff, 0.):
-                    return "right"
-                else:
-                    return "far"
+            # def _direction(i, j):
+            #     # only if adjacnet on grid.
+            #     xdiff, ydiff = _posdiffs(i,j)
+            #     if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
+            #         return "up"
+            #     elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
+            #         return "down"
+            #     elif xdiff ==-1. and np.isclose(ydiff, 0.):
+            #         return "left"
+            #     elif xdiff ==1. and np.isclose(ydiff, 0.):
+            #         return "right"
+            #     else:
+            #         return "far"
 
-            def _relation_from_previous(i):
-                # relation to previous stroke
-                if i==0:
-                    return "start"
-                else:
-                    return _direction(i-1, i)
+            # def _relation_from_previous(i):
+            #     # relation to previous stroke
+            #     if i==0:
+            #         return "start"
+            #     else:
+            #         return _direction(i-1, i)
 
-            def _relation_to_following(i):
-                # if i==len(objects)-1:
-                if i==len(Prims)-1:
-                    return "end"
-                else:
-                    return _direction(i, i+1)       
+            # def _relation_to_following(i):
+            #     # if i==len(objects)-1:
+            #     if i==len(Prims)-1:
+            #         return "end"
+            #     else:
+            #         return _direction(i, i+1)       
 
-            def _horizontal_or_vertical(i, j):
-                xdiff, ydiff = _posdiffs(i,j)
-                if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
-                    assert False, "strokes are on the same grid location, decide what to call this"
-                elif np.isclose(xdiff, 0.):
-                    return "vertical"
-                elif np.isclose(ydiff, 0.):
-                    return "horizontal"
-                else: # xdiff, ydiff are both non-zero
-                    return "diagonal" 
+            # def _horizontal_or_vertical(i, j):
+            #     xdiff, ydiff = _posdiffs(i,j)
+            #     if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
+            #         assert False, "strokes are on the same grid location, decide what to call this"
+            #     elif np.isclose(xdiff, 0.):
+            #         return "vertical"
+            #     elif np.isclose(ydiff, 0.):
+            #         return "horizontal"
+            #     else: # xdiff, ydiff are both non-zero
+            #         return "diagonal" 
 
-            def _horiz_vert_move_from_previous(i):
-                if i==0:
-                    return "start"
-                else:
-                    return _horizontal_or_vertical(i-1, i)
+            # def _horiz_vert_move_from_previous(i):
+            #     if i==0:
+            #         return "start"
+            #     else:
+            #         return _horizontal_or_vertical(i-1, i)
 
-            def _horiz_vert_move_to_following(i):
-                # if i==len(objects)-1:
-                if i==len(Prims)-1:
-                    return "end"
-                else:
-                    return _horizontal_or_vertical(i, i+1)   
+            # def _horiz_vert_move_to_following(i):
+            #     # if i==len(objects)-1:
+            #     if i==len(Prims)-1:
+            #         return "end"
+            #     else:
+            #         return _horizontal_or_vertical(i, i+1)   
         else:
             assert grid_ver in ["on_rel"]
 
@@ -1624,6 +1638,7 @@ class TaskClass(object):
             if grid_ver=="on_grid":
                 # Then this is on grid, so assign grid locations.
                 datsegs[-1]["gridloc"] = locations[i]
+                datsegs[-1]["gridloc_local"] = locations_thistaskgrid[i]
                 # if track_order:
                 #     datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
                 #     datsegs[-1]["rel_to_next"] = _relation_to_following(i)
@@ -1633,6 +1648,7 @@ class TaskClass(object):
                 # Then this is using relations, not spatial grid.
                 # give none for params
                 datsegs[-1]["gridloc"] = None
+                datsegs[-1]["gridloc_local"] = None
                 # if track_order:
                 #     datsegs[-1]["rel_from_prev"] = None
                 #     datsegs[-1]["rel_to_next"] = None

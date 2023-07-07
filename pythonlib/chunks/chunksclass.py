@@ -198,7 +198,7 @@ class ChunksClassList(object):
 
     ########## PERMUTATIONS
     def search_permutations_chunks(self, return_ver="list_of_flattened_chunks", 
-        max_perms=10000):
+        max_perms=10000, return_out_chunkobj=False):
         """ Return unique permutations of each Chunk. If num possible
         perms is less than max_perms, then returns all.
         PARAMS:
@@ -207,34 +207,62 @@ class ChunksClassList(object):
         --- list_of_chunks, each inner list is a chunk, i..e, combines chunks acorss
         ChunksClass
         --- list_of_flattened_chunks, each inner list is a flattened chunk.
+        - return_out_chunkobj, if True, also returns a list holding the Chunks() object
+        aligned with each parse.
         RETURNS:
         - out (structure depends on return_ver). Ensures no reduntant chunks.
         If no parses, returns []
         """
         out = []
+        # out_heir_of_chunk = []
+        out_chunkobj = []
         for C in self.ListChunksClass:
             # Get all permutations of grounded concrete sequences, given a chunks
             list_chunk_permutations = C.search_permutations_chunks(max_perms=max_perms)
 
             if return_ver=="list_of_list_of_chunks":
                 out.append(list_chunk_permutations)
+                # out_heir_of_chunk.append(C.Hier)
+                out_chunkobj.append(C)
             elif return_ver=="list_of_chunks":
                 for chunk in list_chunk_permutations:
                     out.append(chunk)
+                    # out_heir_of_chunk.append(C.Hier)
+                    out_chunkobj.append(C)
             elif return_ver=="list_of_flattened_chunks":
                 for chunk in list_chunk_permutations:
                     out.append(C._flatten_chunk(chunk))
+                    # out_heir_of_chunk.append(C.Hier)
+                    out_chunkobj.append(C)
             else:
                 print(return_ver)
                 assert False
 
+        # print(out)
+        # # print(out_heir_of_chunk)
+        # print(out_chunkobj)
+
+        # test = [(tuple(out[0]), out_chunkobj[0]) for _ in range(2)]
+        # print(test)
+        # print(list(set(test)))
+        # assert False
+
         # 1) make sure no redundant ones.
         if return_ver in ["list_of_chunks", "list_of_flattened_chunks"]:
             out = [tuple(o) for o in out]
-            out = list(set(out))
-            # assert(len(out)==len(list(set(out))))
-
-        return out
+            if False:
+                out = list(set(out))
+            else:
+                # make sure out and out_chunkobj are yoked.
+                tmp = [(a, b) for a, b in zip(out, out_chunkobj)]
+                tmp = list(set(tmp))
+                out = [x[0] for x in tmp]
+                out_chunkobj = [x[1] for x in tmp]
+        if out_chunkobj:
+            assert len(out)==len(out_chunkobj)
+            return out, out_chunkobj
+        else:
+            return out
 
 
 
@@ -385,10 +413,13 @@ class ChunksClass(object):
     def find_hier_for_this_taskstroke(self, indstroke):
         """ Given this original task stroke ind, return its hier chunk. takes into 
         account chunking, then hierarchy.
+        RETURNS:
+        - index into self.Hier
+        e./g., if self.HIer = [[0, 1], [2, 3], [4, 5]], and indstroke = 5, returns 2
         """
-
         indchunk = self._find_group_for_this_ind(indstroke)
         hierthis = self._find_group_for_this_ind(indchunk, "hier")
+        assert indstroke in self.Hier[hierthis]
         return hierthis
 
     def find_hier_for_list_taskstroke(self, list_indstrokes):

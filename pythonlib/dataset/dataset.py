@@ -1322,7 +1322,7 @@ class Dataset(object):
             return tokens
 
     def taskclass_shapes_loc_configuration_extract(self, ind):
-        """ Extract the shapes or location config for this task. 
+        """ Extract the shapes or location config (global) for this task. 
         Ignores behavior. 
         RETURNS:
         - dict, 
@@ -5288,11 +5288,8 @@ class Dataset(object):
         - list of ints, e.g,, [0 4 2] means got taskstrokes 0, 4, and 2 in that order, and
         missed strokes 3 and 1.
         """
-
         Beh = self.Dat.iloc[indtrial]["BehClass"]
         return Beh.Alignsim_taskstrokeinds_sorted
-
-
 
     def behclass_extract_beh_and_task(self, indtrial, include_scale=True):
         """ Extract both beh (oist of PrimitiveClass) and task
@@ -5469,7 +5466,6 @@ class Dataset(object):
         print("Updated self.Dat with new column: epochkind")
 
         
-
     def supervision_epochs_extract_orig(self):
         """ Extracts original name (e.g, AnBmTR|0 --> AnBmTR) before appended color
         superv info. This is a hacky solution to the original problem of not saving these names
@@ -5757,8 +5753,11 @@ class Dataset(object):
 
         out = {
             "list_rules_exist":list_rules_exist,
-            "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule
+            "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule,
+            "ruledict_for_each_rule":rules_map_rule_to_ruledict_extract_auto(self)
         }
+
+        out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
         return out
 
 
@@ -5807,7 +5806,7 @@ class Dataset(object):
         RETURNS:
         - dict[rule] = parses, each a list of possible orderings
         """
-        GD = self._grammarparses_parses_generate(ind, list_rulestrings)
+        GD = self._grammarparses_parses_generate(ind, list_rulestrings) 
         outdict = {}
         for rulestring in list_rulestrings:
             parses = GD.parses_extract_generated(rulestring)
@@ -5817,6 +5816,74 @@ class Dataset(object):
                 assert False, "epty..."
             outdict[rulestring] = parses
         return outdict
+
+    def grammarparses_extract_beh_taskstroke_inds(self, ind):
+        """ Return the beh strokes, in format of taskstroke indices.
+        as list of ints, same len as beh, based oint he order in which each
+        taskstroke ind was first touchhed! So might be shorter than the num beh strokes...
+        """
+        taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
+        assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
+        return taskstroke_inds_beh_order
+
+    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind):
+        """
+        For this trial, assign each beh stroke to a chunk index and to index within chunk,
+        based on the matching parse, for the rule of this trial. e.g., lines to circles, 
+        lines, then circle.s 
+        NOTE: if this is a failure trial, could be wierd. recormmended to run:
+        D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
+        NOTE: Fails if:
+        - the length of beh(first touch) is diff from len (beh strokes)\
+        - incorrect beh, so no parses found (then cannot assign chunk)
+        RETURNS:
+        - chunks, list of ints, 
+        - chunks_within, list of ints, 
+        EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
+        """
+        epoch = self.Dat.iloc[ind]["epoch"]
+        rs = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["rulestring"]
+        
+        beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
+        tmp = self.taskclass_tokens_extract_wrapper(ind, which_order="beh")
+        assert len(beh)==len(tmp), "beh_firsttouch doesnt exist beh. cannot do assignment."
+
+        try:
+            GD = self.grammarparses_grammardict_return(ind)
+        except AssertionError as err:
+            print("Run this?? D.grammarparses_successbinary_score()")
+            raise err
+
+        # get the original chunksclass for this index
+        idx = GD._score_beh_in_parses_find_index_match(beh, rs)
+        if idx is None:
+            print(idx)
+            assert False, "then there is no match..."
+        else:
+            C = GD.ParsesGeneratedYokedChunkObjects[rs][idx]
+        
+        # based on this hier, assign chunks ids to each stroke
+        PLOT = False
+        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh", plot=PLOT, return_as_tokensclass=True)
+        chunks, chunks_within = Tk.chunks_update_by_chunksobject(C)
+        # print(ind, epoch, beh, C.Hier, Tk.chunks_update_by_chunksobject(C))
+        # _chunk_sequence_is_correct(Tk.Tokens, print_chunk_seq=True)        
+        return chunks, chunks_within
+
+    def grammarparses_score_this_trial(self, ind):
+        """ Score whether this trials behaviro is consistent with
+        each of the rule's parses
+        RETURNS:
+        - dict[rulestring]=bool, where True means this trial;s behavior matches oen fo the
+        parses for this rule.
+        """
+        taskstroke_inds_beh_order = self.grammarparses_extract_beh_taskstroke_inds(ind)
+        GD = self.grammarparses_grammardict_return(ind)       
+        list_rulestring = self.grammarparses_rules_extract_info()["list_rules_exist_as_rulestring"]
+        res = {}
+        for rs in list_rulestring:
+            res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
+        return res
 
     def grammarparses_successbinary_print_summary(self):
         """

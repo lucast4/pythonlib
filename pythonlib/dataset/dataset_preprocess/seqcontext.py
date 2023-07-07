@@ -43,10 +43,12 @@ def preprocess_dataset(D, n_strok_max = 6):
                 tok = tokens_beh[j]
                 dat[f"{j}_shape"] = tok["shape"]
                 dat[f"{j}_loc"] = tok["gridloc"]
+                dat[f"{j}_loc_local"] = tok["gridloc_local"]
             else:
                 # Use same type as the actuals.
                 dat[f"{j}_shape"] = "IGNORE"
                 dat[f"{j}_loc"] = ("IGNORE",)
+                dat[f"{j}_loc_local"] = ("IGNORE",)
             dat[f"{j}_loc_shape"] = (dat[f"{j}_loc"], dat[f"{j}_shape"]) # conjunction
 
         list_dat.append(dat)
@@ -58,4 +60,5 @@ def preprocess_dataset(D, n_strok_max = 6):
     for i in range(n_strok_max):
         D.Dat[f"seqc_{i}_shape"] = dfdat[f"{i}_shape"]
         D.Dat[f"seqc_{i}_loc"] = dfdat[f"{i}_loc"]
+        D.Dat[f"seqc_{i}_loc_local"] = dfdat[f"{i}_loc_local"]
         D.Dat[f"seqc_{i}_loc_shape"] = dfdat[f"{i}_loc_shape"]
