@@ -5159,14 +5159,21 @@ class Dataset(object):
             take_top_n_inner=take_top_n_inner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
-    def behclass_preprocess_wrapper(self):
+    def behclass_preprocess_wrapper(self, reset_tokens=True):
         """ Wrapper of general preprocess steps for entire datset
+        PARAMS;
+        - reset_tokens, then resets the tokens in TaskClass, if they exist
         """
-        self.behclass_generate_alltrials()
+
+
+        self.behclass_generate_alltrials(reset_tokens=reset_tokens) 
         self.behclass_alignsim_compute()        
         self.behclass_tokens_extract_datsegs()
+        # for x in self.taskclass_tokens_extract_wrapper(1):
+        #     print(x)
+        # assert False
 
-    def behclass_generate(self, indtrial, expt=None):
+    def behclass_generate(self, indtrial, expt=None, reset_tokens=False):
         """ Generate the BehaviorClass object for this trial
         PARAMS:
         - expt, will try to extract if can't then you must enter
@@ -5196,16 +5203,16 @@ class Dataset(object):
             "ind":indtrial,
             "expt":expt
         }
-        Beh = BehaviorClass(params, "dataset")
+        Beh = BehaviorClass(params, "dataset", reset_tokens=reset_tokens)
         return Beh
 
-    def behclass_generate_alltrials(self):
+    def behclass_generate_alltrials(self, reset_tokens=False):
         """ Generate list of behClass objects, one for each trial,
         and stores as part of self.
         RETURNS:
         - self.Dat["BehClass"], list of beh class iunstance.
         """
-        ListBeh = [self.behclass_generate(i) for i in range(len(self.Dat))]
+        ListBeh = [self.behclass_generate(i, reset_tokens=reset_tokens) for i in range(len(self.Dat))]
         self.Dat["BehClass"] = ListBeh
         
         print("stored in self.Dat[BehClass]")
@@ -5841,7 +5848,7 @@ class Dataset(object):
         - chunks_within, list of ints, 
         EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
         """
-        epoch = self.Dat.iloc[ind]["epoch"]
+        epoch = self.Dat.iloc[ind]["epoch_orig"]
         rs = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["rulestring"]
         
         beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
@@ -6171,7 +6178,6 @@ class Dataset(object):
             taskstroke_inds_correct_order = None
         if ploton:
             print("*** Correct order: ", taskstroke_inds_correct_order)
-
 
         # 3) What there sequence supervision?
         if "supervision_stage_concise" not in self.Dat.columns:

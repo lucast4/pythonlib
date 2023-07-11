@@ -1238,7 +1238,7 @@ class TaskClass(object):
         assert len(params)==0, "do not pass in params. this needs to be default. instead, pass into tokens_reorder"
 
         # Check if it already exists.
-        if hasattr(self, '_DatSegs') and len(self._DatSegs)>0:
+        if hasattr(self, '_DatSegs') and self._DatSegs is not None and len(self._DatSegs)>0:
             return self._DatSegs
         else:
             # Generate from scratch
@@ -1246,8 +1246,6 @@ class TaskClass(object):
                 hack_is_gridlinecircle=hack_is_gridlinecircle, 
                 include_scale=include_scale, input_grid_xy=input_grid_xy)
             self._DatSegs = datsegs
-            # # print(input_grid_xy)
-            # print([x["gridloc"] for x in datsegs], " -- ", [x["gridloc_local"] for x in datsegs])
             return self._DatSegs
 
     def tokens_concat(self, tokens):
@@ -1278,8 +1276,6 @@ class TaskClass(object):
         # Shallow copy is good enough, becuase you just want to avoid replacing the
         # value in self._DatSegs[i][key]. Tested that this is fine.
         datsegs_new = [copy.copy(d) for d in self._DatSegs]
-        # datsegs_new = self._DatSegs # BAD, modifies _DatSegs
-        # datsegs_new = copy.deepcopy(self._DatSegs) # Good, but slower.
         datsegs_new = [datsegs_new[i] for i in inds_taskstrokes]
         return self._tokens_generate_relations(datsegs_new)
 
@@ -1295,6 +1291,11 @@ class TaskClass(object):
         Tk = Tokens(datsegs)
         Tk.sequence_context_relations_calc()
         return Tk.Tokens
+
+    def _tokens_delete(self):
+        """ Deletes tokens..
+        """
+        self._DatSegs = None
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
             track_order=True, hack_is_gridlinecircle=False, include_scale=True,
@@ -1548,69 +1549,6 @@ class TaskClass(object):
 
             locations = _assign_prims_to_grid_locations(Prims, xgrid, ygrid)
             locations_thistaskgrid = _assign_prims_to_grid_locations(Prims, xgrid_thistask, ygrid_thistask)
-
-            # print(xgrid, ygrid, locations)
-            # print(xgrid_thistask, ygrid_thistask, locations_thistaskgrid)
-            # assert False
-            
-            # def _posdiffs(i, j):
-            #     # return xdiff, ydiff, 
-            #     # in grid units.
-            #     pos1 = locations[i]
-            #     pos2 = locations[j]
-            #     return pos2[0]-pos1[0], pos2[1] - pos1[1]
-
-            # def _direction(i, j):
-            #     # only if adjacnet on grid.
-            #     xdiff, ydiff = _posdiffs(i,j)
-            #     if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
-            #         return "up"
-            #     elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
-            #         return "down"
-            #     elif xdiff ==-1. and np.isclose(ydiff, 0.):
-            #         return "left"
-            #     elif xdiff ==1. and np.isclose(ydiff, 0.):
-            #         return "right"
-            #     else:
-            #         return "far"
-
-            # def _relation_from_previous(i):
-            #     # relation to previous stroke
-            #     if i==0:
-            #         return "start"
-            #     else:
-            #         return _direction(i-1, i)
-
-            # def _relation_to_following(i):
-            #     # if i==len(objects)-1:
-            #     if i==len(Prims)-1:
-            #         return "end"
-            #     else:
-            #         return _direction(i, i+1)       
-
-            # def _horizontal_or_vertical(i, j):
-            #     xdiff, ydiff = _posdiffs(i,j)
-            #     if np.isclose(xdiff, 0.) and np.isclose(ydiff, 0.):
-            #         assert False, "strokes are on the same grid location, decide what to call this"
-            #     elif np.isclose(xdiff, 0.):
-            #         return "vertical"
-            #     elif np.isclose(ydiff, 0.):
-            #         return "horizontal"
-            #     else: # xdiff, ydiff are both non-zero
-            #         return "diagonal" 
-
-            # def _horiz_vert_move_from_previous(i):
-            #     if i==0:
-            #         return "start"
-            #     else:
-            #         return _horizontal_or_vertical(i-1, i)
-
-            # def _horiz_vert_move_to_following(i):
-            #     # if i==len(objects)-1:
-            #     if i==len(Prims)-1:
-            #         return "end"
-            #     else:
-            #         return _horizontal_or_vertical(i, i+1)   
         else:
             assert grid_ver in ["on_rel"]
 
@@ -1639,21 +1577,11 @@ class TaskClass(object):
                 # Then this is on grid, so assign grid locations.
                 datsegs[-1]["gridloc"] = locations[i]
                 datsegs[-1]["gridloc_local"] = locations_thistaskgrid[i]
-                # if track_order:
-                #     datsegs[-1]["rel_from_prev"] = _relation_from_previous(i)
-                #     datsegs[-1]["rel_to_next"] = _relation_to_following(i)
-                #     datsegs[-1]["h_v_move_from_prev"] = _horiz_vert_move_from_previous(i)
-                #     datsegs[-1]["h_v_move_to_next"] = _horiz_vert_move_to_following(i)
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 # give none for params
                 datsegs[-1]["gridloc"] = None
                 datsegs[-1]["gridloc_local"] = None
-                # if track_order:
-                #     datsegs[-1]["rel_from_prev"] = None
-                #     datsegs[-1]["rel_to_next"] = None
-                #     datsegs[-1]["h_v_move_from_prev"] = None
-                #     datsegs[-1]["h_v_move_to_next"] = None
             else:
                 print(grid_ver)
                 assert False, "code it"

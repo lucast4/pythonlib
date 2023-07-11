@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 class BehaviorClass(object):
     """docstring for BehaviorClass"""
     
-    def __init__(self, params, ver="dataset"):
+    def __init__(self, params, ver="dataset", reset_tokens=False):
         """ 
         PARAMS:
         - params. Different methods (ver) for params entry
@@ -25,6 +25,7 @@ class BehaviorClass(object):
         params["TaskClass"]
         In any case, can have the following keys:
         -- "shape_dist_thresholds", value is dict, specifying max distance for calling something a given label.
+        - reset_tokens, bool, if True, then deletes the tokens in Task, so that you reset it.
         """
 
         # self.Dataset = None
@@ -39,6 +40,10 @@ class BehaviorClass(object):
             D = params["D"]
             ind = params["ind"]
             Task = D.Dat.iloc[ind]["Task"]
+
+            if reset_tokens:
+                Task._tokens_delete()
+
             assert "expt" in params.keys() and isinstance(params["expt"], str), "you really should pass in the expt, becaause it can define diff steps in parts of the code -- e.g,, alignsim_extract_datsegs for gridlinecircle."
             # if "expt" in params.keys():]
             self.Expt = params["expt"]

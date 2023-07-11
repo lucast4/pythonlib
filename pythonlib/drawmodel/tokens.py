@@ -126,7 +126,7 @@ class Tokens(object):
         for dseg in tokens:
             if dseg[GRIDLOC_VER] is None:
                 grid_ver = "on_rel"
-        
+
         def _location(i):
             xloc, yloc = tokens[i][GRIDLOC_VER]
             return xloc, yloc
