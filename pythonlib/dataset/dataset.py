@@ -2073,7 +2073,7 @@ class Dataset(object):
         return tp
         
 
-    def save_generate_string_identifier_wrapper(self, concise=True):
+    def save_generate_string_identifier_wrapper(self, concise=True, date_first=False):
         """ Wrapper for making string that identifie sthis dataset
         PARAMS:
         - concise, bool, if true, then is shorter, just the animals and first
@@ -2083,16 +2083,20 @@ class Dataset(object):
         if concise:
             return self.save_generate_string_animal_dates()
         else:
-            return self.identifier_string() 
+            return self.identifier_string(date_first=date_first) 
 
-    def identifier_string(self):
+    def identifier_string(self, date_first=False):
         """ string, useful for saving
         """    
         a = "_".join(self.animals())
         e = "_".join(self.expts())
         r = "_".join(self.rules())
 
-        return f"{a}_{e}_{r}"
+        if date_first:
+            # since, for daily dataset, rules are actuall dates.
+            return f"{a}_{r}_{e}"
+        else:
+            return f"{a}_{e}_{r}"
 
     def get_sample_rate_alltrials(self):
         """ 
@@ -6215,16 +6219,23 @@ class Dataset(object):
     def make_path_savedir_directory_notebook_for_figures(self, analysis_name):
         return self.make_savedir_for_analysis_figures(analysis_name)
         
-    def make_savedir_for_analysis_figures(self, analysis_name):
+    def make_savedir_for_analysis_figures_BETTER(self, analysis_name):
+        """ BETTER means:
+        ii) is animal_date_expt instead of animal_expt_date. This is easier for sorting.
+        """
+        return self.make_savedir_for_analysis_figures(analysis_name, date_first=True)
+
+    def make_savedir_for_analysis_figures(self, analysis_name, date_first=False):
         from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
         # animal = self.animals()
         # expt = self.expts()
         # rulelist = self.rules()
 
-        idstring = self.save_generate_string_identifier_wrapper(concise=False)
+        idstring = self.save_generate_string_identifier_wrapper(concise=False, 
+            date_first=date_first)
         if len(idstring)>35:
             # get concise
-            idstring = self.save_generate_string_identifier_wrapper(concise=True)
+            idstring = self.save_generate_string_identifier_wrapper(concise=True, date_first=date_first)
 
         SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/{analysis_name}/{idstring}"
         print("SAVING at: ", SDIR_MAIN)

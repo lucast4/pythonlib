@@ -11,12 +11,13 @@ from pythonlib.dataset.dataset_analy.motifs_search_unordered import find_object_
 ####### 
 MAP_EPOCHKIND_EPOCH = {
     "direction":["D", "U", "R", "L", "TR"],
-    "shape":["LVl1", "lVL1", "VlL1", "llV1"],
+    "shape":["LVl1", "lVL1", "VlL1", "llV1", "ZlA1"],
     "(AB)n":["(AB)n", "LolDR"],
     "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0"],
     "AnBmDir":["LCr2", "CLr2", "AnBmTR", "LCr1", "CLr1", "LCr3"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
-    "ranksup":["rndstr", "rank"]
+    "ranksup":["rndstr", "rank"],
+    "baseline":["base", "baseline"]
 }
 
 MAP_EPOCH_EPOCHKIND = {}
@@ -623,9 +624,22 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
 
-        print(tokens)
-        print(Task)
-        assert False
+        TT = Task.Params["input_params"]
+        C = TT.objectclass_extract_active_chunk()
+        if C is not None:
+            taskstroke_inds_correct_order = C.extract_strokeinds_as("flat")
+        else:
+            taskstroke_inds_correct_order = None
+        list_hier = [taskstroke_inds_correct_order] # e..g, [[1, 0, 3, 2]]
+        list_fixed_order = [
+            {0:True, 1:[True for _ in range(len(taskstroke_inds_correct_order))]}
+        ]
+        # list_hier 
+        # print(taskstroke_inds_correct_order)
+        # print([tok["ind_taskstroke_orig"] for tok in tokens])
+        # print(Task)
+        # print(tokens)
+        # assert False
 
     else:
         print(rulestring)
@@ -647,6 +661,9 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
 
     # sanity check
     for hier, fo in zip(list_hier, list_fixed_order):
+        # print(hier)
+        # print(fo)
+        # print(fo[1])
         assert len(hier) == len(fo[1])
     
     if DEBUG:
@@ -1087,13 +1104,13 @@ def rules_related_rulestrings_extract_auto(D):
     are alternative huypotjeses to those rules
     """
     # list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
-    try:
-        list_rules = D.Dat["epoch_orig"].unique().tolist()
-        return _rules_related_rulestrings_extract_auto(list_rules)
-    except AssertionError as err:
-        # Fails soemtimes if you have merged epochs..
-        list_rules = D.Dat["epoch"].unique().tolist()  
-        return _rules_related_rulestrings_extract_auto(list_rules)
+    # try:
+    list_rules = D.Dat["epoch_orig"].unique().tolist()
+    return _rules_related_rulestrings_extract_auto(list_rules)
+    # except AssertionError as err:
+    #     # Fails soemtimes if you have merged epochs..
+    #     list_rules = D.Dat["epoch"].unique().tolist()  
+    #     return _rules_related_rulestrings_extract_auto(list_rules)
 
 def _rules_related_rulestrings_extract_auto(list_rules):
     """
@@ -1116,7 +1133,7 @@ def _rules_related_rulestrings_extract_auto(list_rules):
     DICT_RELATED_RULES = {
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
         ("LVl1", "lVL1", "VlL1", "llV1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1")),
-        ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
+        ("D", "U", "R", "L", "TR"):_get_direction_variations(["D", "U", "R", "L", "TR"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule

@@ -416,6 +416,7 @@ class DatStrokes(object):
             indstrok = self.Dat.iloc[ind]["stroke_index"]
             strokthis = self.Dat.iloc[ind]["strok"]
 
+            ################## STROKE INFORMATION
             # onset and offset
             on = me["ons"][indstrok]
             off = me["offs"][indstrok]
@@ -426,7 +427,7 @@ class DatStrokes(object):
             list_ons.append(on)
             list_offs.append(off)
 
-            # #### GAP INFORMATION
+            ############### GAP INFORMATION
             ## Preceding gap
             if indstrok==0:
                 # the first strok is time from raise
@@ -457,6 +458,7 @@ class DatStrokes(object):
         self.Dat["time_onset"] = list_ons
         self.Dat["time_offset"] = list_offs
         self.Dat["time_duration"] = self.Dat["time_offset"] - self.Dat["time_onset"]
+        self.Dat["velocity"] = self.Dat["distcum"]/self.Dat["time_duration"]
         self.Dat["gap_from_prev_dur"] = list_gap_dur
         self.Dat["gap_from_prev_dist"] = list_gap_dist
 

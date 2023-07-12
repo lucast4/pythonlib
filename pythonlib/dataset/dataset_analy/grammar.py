@@ -30,7 +30,6 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False):
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
     list_rules = rules_related_rulestrings_extract_auto(D)
-
     bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG)
 
     return bm

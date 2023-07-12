@@ -155,7 +155,7 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     for lab, col in zip(labels, colors):
         this = mpatches.Patch(color=col, label=lab, alpha=alpha)
         handles.append(this)
-    ax.legend(handles=handles, framealpha=alpha, fontsize=8)
+    ax.legend(handles=handles, framealpha=alpha, fontsize=8, loc="upper right") # default loc ("best") is slow for large amonts of data.
 
 
 def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):
