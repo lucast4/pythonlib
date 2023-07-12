@@ -67,6 +67,7 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('V2-2-2', 'V2-2-4', 'V-2-4', 'line-13-14', 'line-8-4', 'line-13-13', 'line-8-3'))] = "llV1R"
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'arcdeep-4-3'))] = "ZlA1" # diego, dirshapediego1
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'line-9-1', 'arcdeep-4-3'))] = "ZlA1" # dirshapediego1
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3'))] = "ZlA1" # dirshapediego1
 
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-8-3'))] = "AnBm1a"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-1', 'line-8-2'))] = "AnBm2"
