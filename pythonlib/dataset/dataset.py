@@ -1939,9 +1939,13 @@ class Dataset(object):
                 elif p=="rescale_to_1":
                     self.rescaleStrokes()
                 elif p=="no_supervision":
-                    # Remove trials with online supervision (e.g, color)
-                    LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
-                    self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
+                    # Remove trials with online sequence supervision
+                    if False:
+                        LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
+                        self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
+                    else:
+                        # Better, since goes directly to what param matters.
+                        self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"]
                 elif p=="remove_online_abort":
                     # Remove trials with online abort
                     self.Dat = self.Dat[self.Dat["aborted"]==False]
@@ -5603,9 +5607,68 @@ class Dataset(object):
         print("New epochs")
         print(self.Dat[new_col_name].value_counts())
 
+    def supervision_semantic_string_append(self, colname):
+        """ Append a new column with string indicating superivison for this trial
+        """
+        tmp = []
+        for ind in range(len(self.Dat)):
+            tmp.append(self.supervision_semantic_string_extract(ind))
+        self.Dat[colname] = tmp
+        print("Append column to self.Dat: ", colname)
+
+    def supervision_semantic_string_extract(self, ind):
+        """ Human-readable string indicating features for supervision for this trial.
+        Appends features to string if they are not "off".
+        RETURNS:
+        - string, |-separated. if no superivison at all, then returns NONE
+        """ 
+
+        prms = self.supervision_extract_params(ind)
+        supervstr = ""
+        ##### ONLINE SUPERVISION
+        if prms["SEQUENCE_SUP"]=="mask":
+            # Supervision stroke by stroke.
+            # even if SEQUENCE_ALPHA==0, this is still visible. 
+            supervstr+="|seqsup"
+        elif prms["SEQUENCE_SUP"]=="off":
+            # no seqsupervision
+            pass
+        else:
+            print(prms)
+            assert False
+
+        ##### COLOR (CUES AND INSTRUCTION)
+        if prms["COLOR_ON"]==1:
+            if prms["COLOR_METHOD"]=="solid":
+                # Color cue (fixation cue, strokes, etc)
+                supervstr+="|colcue"
+            elif prms["COLOR_METHOD"]=="rank":
+                print(prms)
+                supervstr+="|colrank"
+                assert False, "is this rank strokes? give it a name"
+
+            if prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1111":
+                # Strokes are colored during guide and draw
+                supervstr+="|strkcolGD"
+            elif prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1101":
+                # Strokes are colored during guide but not during draw
+                supervstr+="|strkcolG"
+            else:
+                print(prms)
+                assert False
+        elif prms["COLOR_ON"]==0:
+            pass
+        else:
+            assert False
+
+        if len(supervstr)==0:
+            # Then no supervision at all
+            supervstr = "NONE"
+
+        return supervstr
 
     def supervision_summarize_into_tuple(self, method="verbose", print_summary=False,
-            new_col_name = "supervision_stage_new"):
+            new_col_name = None):
         """ Summarize those supervision params that potnetially provide online instruction
         , these can define distinct stages of blocks
         PARAMS:
@@ -5624,10 +5687,16 @@ class Dataset(object):
         #     # Old task version, ignore this.
         #     return None
 
-        if method=="concise":
-            grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
+        assert new_col_name is not None, "to avoid errors, you must enter it"
+        # supervision_stage_new
+        # supervision_stage_concise
+
+        if method in ["concise"]:
+            # grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
+            grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR", "GUIDEDYN_ON"]    
         elif method=="verbose":
-            grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
+            # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
+            grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
         else:
             assert False
         grouping_keys_prefix = [f"superv_{key}" for key in grouping_keys]
@@ -5642,10 +5711,10 @@ class Dataset(object):
         # 3) prin summary
         if print_summary:
             print("*** SUMMARY of new column, after making supervision tuple (column: supervision_stage_new):")
-            print(self.Dat["supervision_stage_new"].value_counts())
+            print(self.Dat[new_col_name].value_counts())
             from pythonlib.tools.pandastools import grouping_get_inner_items
-            tmp = grouping_get_inner_items(self.Dat, "supervision_stage_new", "block")
-            print("**** SUMMARY: Levels of supervision_stage_new : blocks")
+            tmp = grouping_get_inner_items(self.Dat, new_col_name, "block")
+            print(f"**** SUMMARY: Levels of {new_col_name} : blocks")
             for k, v in tmp.items():
                 print("--", k, ":", v)
 
@@ -6089,6 +6158,18 @@ class Dataset(object):
 
 
     ######################################
+    def grammarparsesmatlab_score_wrapper_append(self):
+        """ For each trial, give string code for its outcome, which takes
+        into account whether the sequence was correct, even if it was aborted
+        RETURNS;
+        - appends column grammar_score_string to D.Dat
+        """
+        results = []
+        for ind in range(len(self.Dat)):
+            results.append(self.grammarparsesmatlab_score_wrapper(ind)) 
+        self.Dat["grammar_score_string"] = results
+        print("Appended D.Dat[grammar_score_string]")
+
     def grammarparsesmatlab_score_wrapper(self, ind, PRINT=False):
         """ [GOOD] For this trial (ind), return a semantic wrapper of the behavior, based on 
         what has already been computed and saved in D.Dat, for seuqence accuracy either

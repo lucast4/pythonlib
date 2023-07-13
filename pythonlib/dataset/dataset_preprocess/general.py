@@ -869,7 +869,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.taskclass_extract_los_info_append_col()
 
     #### SUPERVISION - get supervision stages, i.e, tuples
-    D.supervision_summarize_into_tuple()
+    D.supervision_summarize_into_tuple(method="verbose", new_col_name = "supervision_stage_new")
 
     # Reassign taskgroup. by default uses value in task_stagecategory.
     # i) first, do automatic detection of probe categories for each character
@@ -947,6 +947,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         else:
             return x["taskgroup"]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "taskgroup")
+
+    ############## OLD THINGS, delete if not using (to avoid confusion)
+    del D.Dat["supervision_params"] # from drawmonkey.
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 

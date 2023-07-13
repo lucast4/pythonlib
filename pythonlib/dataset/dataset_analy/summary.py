@@ -299,9 +299,10 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         else:
             Dthis = D
 
-        list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        # list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        list_supstage = Dthis.Dat["supervision_stage_semantic"].unique().tolist()
         for supstage in list_supstage:
-            Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_concise":[supstage]}, "dataset")
+            Dthisplot = Dthis.filterPandas({"random_task":[False], "supervision_stage_semantic":[supstage]}, "dataset")
             # Check if plot is large. if so, split into multiple plots.
             plot_summary_drawing_examplegrid(Dthisplot, SAVEDIR_FIGS, subfolder=f"{supstage}", 
                              yaxis_ver="date_epoch", how_to_split_files = "taskgroup")
@@ -316,13 +317,14 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         else:
             Dthis = D
 
-        list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        # list_supstage = Dthis.Dat["supervision_stage_concise"].unique().tolist()
+        list_supstage = Dthis.Dat["supervision_stage_semantic"].unique().tolist()
         list_taskgroup = Dthis.Dat["taskgroup"].unique().tolist()
         for supstage in list_supstage:
             # Further split by taskgroup
             for taskgroup in  list_taskgroup:
                 Dthisplot = Dthis.filterPandas({"random_task":[False], 
-                    "supervision_stage_concise":[supstage],
+                    "supervision_stage_semantic":[supstage],
                     "taskgroup":[taskgroup]}, "dataset")
                 if len(Dthisplot.Dat)>0:
                     # subfolder = f"{traintest}"
