@@ -119,3 +119,29 @@ def unique_tol(arr, decimels=4):
     """ get unique, alowoing for tolerance, based on roudning decimels
     """
     return np.unique(arr.round(decimels=decimels))
+
+
+def sort_by_labels(X, labels, axis=0):
+    """ Sort X by labels, in incresaing order.
+    PARAMS:
+    - X, ndat x ndim np array, rows will be osrted.
+    - labels, list of ints, length ndat, to suport sorting in incresaing order
+    - axis, dimeision to srot byt. if 0, then sorts rows...
+    RETURNS:
+    - X, labels, but sorted (copies)
+    """
+    
+    inds = np.argsort(labels)
+
+    if axis==0:
+        X = X[inds,:]
+    elif axis==1:
+        X = X[:, inds]
+    else:
+        print(X.shape)
+        print(axis)
+        assert False
+
+    labels = [labels[i] for i in inds]
+    
+    return X, labels

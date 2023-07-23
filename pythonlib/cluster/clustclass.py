@@ -10,6 +10,7 @@ First made when doing similarity matrix stuff for beh data (e.g, stroke similari
 
 import matplotlib.pyplot as plt
 import numpy as np
+from ..tools.nptools import sort_by_labels as sbl
 
 class Clusters(object):
     """docstring for Clusters"""
@@ -68,6 +69,22 @@ class Clusters(object):
     
 
     ######################### sorting, filtering, slicing
+    def sort_mat_helper(self, X, sortvalues, axis):
+        """ Helper to sort X by values,matched to items along either
+        row or col.
+        PARAMS:
+        - X, array, (n, m)
+        - sortvalues, 1d arra, iether len n or m deepenwding on axis.
+        - axis, 0, 1, which to sort
+        RETURNS:
+        - Xsorted, (n,m)
+        - sortvalues_sorted,
+        --- both are copies, then sort
+        """
+        # from ..tools.nptools import sort_by_labels as sbl
+
+        return sbl(X, sortvalues, axis)
+
     def sort_by_labels(self, X=None, labels=None, axis=0):
         """ 
         Sorts labels, then sorts X using the sortinds for labels
@@ -76,7 +93,7 @@ class Clusters(object):
         RETURNS:
         - Xsorted, labelsSorted
         """
-        from ..tools.clustertools import sort_by_labels as sbl
+        # from ..tools.clustertools import sort_by_labels as sbl
 
         if labels is None:
             labels = self.extract_labels(axis=axis)
@@ -207,7 +224,33 @@ class Clusters(object):
 
 #         return fig, X, labels_col, labels_row
 
+    def _plot_heatmap_data(self, X, labels_row=None, labels_col=None,
+        SIZE=12, zlims=(None, None), nrand=None, rotation=45):
+        """ Low-=level plotting of heatmap
+        """
 
+        if nrand is not None:
+            import random
+            inds = random.sample(range(X.shape[0]), nrand)
+            X = X[inds, :]
+            if labels_row:
+                labels_row = [labels_row[i] for i in inds]
+
+        # --- before sorting
+        ndim = X.shape[0]
+        ndat = X.shape[1]
+        ASPECT = ndim/ndat
+        fig, ax = plt.subplots(figsize=(SIZE, ASPECT*SIZE))
+        
+        h = ax.imshow(X, vmin=zlims[0], vmax=zlims[1], cmap='viridis')
+        fig.colorbar(h, ax=ax)
+            
+        if labels_row:
+            ax.set_yticks(range(len(labels_row)), labels_row)
+        if labels_col:
+            ax.set_xticks(range(len(labels_col)), labels_col, rotation=rotation);
+
+        return fig, X, labels_col, labels_row
 
     def plot_heatmap_data(self, datkind="raw", labelkind="raw", 
         nrand = None, SIZE=12, zlims=(None, None)):
@@ -219,7 +262,7 @@ class Clusters(object):
         --- None, no osrting
         --- {0,1}, sorts on thsoie axis
         --- 2, sorts both axes
-        - nrand, int for taking random subset. None to skip
+        - nrand, int for taking random subset of rows. None to skip
         RETURNS:
         - fig, X, labels
         """
@@ -229,29 +272,15 @@ class Clusters(object):
         labels_row = self.extract_labels(labelkind, axis=0)
         labels_col = self.extract_labels(labelkind, axis=1)
 
-        # Take subset?
+        # Take subset of rows?
         if nrand is not None:
             import random
-            inds = random.sample(X.shape[0], nrand)
+            inds = random.sample(range(X.shape[0]), nrand)
             X = X[inds, :]
             labels_row = [labels_row[i] for i in inds]
-            labels_col = [labels_col[i] for i in inds]
+            # labels_col = [labels_col[i] for i in inds]
         
-        # --- before sorting
-        ndim = X.shape[0]
-        ndat = X.shape[1]
-        ASPECT = ndim/ndat
-        fig, ax = plt.subplots(figsize=(SIZE, ASPECT*SIZE))
-        
-        h = ax.imshow(X, vmin=zlims[0], vmax=zlims[1], cmap='viridis')
-        fig.colorbar(h, ax=ax)
-                
-        ax.set_yticks(range(len(labels_row)), labels_row);
-        # ax.set_yticklabels(ylabels);
-
-        ax.set_xticks(range(len(labels_col)), labels_col, rotation=45);
-
-        return fig, X, labels_col, labels_row
+        return self._plot_heatmap_data(X, labels_row, labels_col, SIZE, zlims)
 
     def plot_save_hier_clust(self, col_cluster=True):
         """ Perform hier clustering (agglomerative) and plot and 
@@ -297,3 +326,245 @@ class Clusters(object):
             ax.set_yticks(locs, labels=list_labels_this, rotation=0);
         else:
             assert False
+
+
+    ################### DO CLUSTERING
+    def cluster_compute_all(self, PCAdim_touse=5, gmm_n_mixtures=None,
+        perplist = None,
+        things_to_do = ("tsne", "gmm", "gmm_using_tsne"),
+        gmm_tsne_perp_to_use=15):
+        """ Helper to generate models of data of various types.
+        E.g., Do PCA, tSNE, and GMM
+        RETURNS:
+        - stores models in ClusterComputeAllResults
+        """
+        from pythonlib.tools.clustertools import clusterSimMatrix
+        simmat = self.Xinput
+        if gmm_n_mixtures is None:
+            gmm_n_mixtures = range(5, 20)
+        if perplist is None:
+            perplist = (8, 15, 25, 35, 45)
+
+        OUT = clusterSimMatrix(simmat, None, PCAdim_touse,
+            gmm_n_mixtures =gmm_n_mixtures,
+            perplist =perplist,
+            gmm_tsne_perp_to_use = gmm_tsne_perp_to_use,
+            things_to_do = things_to_do)
+
+        self.ClusterComputeAllResults = OUT
+
+    def cluster_pca_plot_all(self):
+        """ Plot results of PCA, including sunbset of data
+        projected, and variance explained
+        """
+        pcamodel = self.ClusterComputeAllResults["pca_model"]
+        fig, axes = plt.subplots(2,2)
+
+        ax = axes.flatten()[0]
+        ax.plot(pcamodel.explained_variance_, "-o")
+
+        fig, X, labels_col, labels_row = self._plot_heatmap_data(pcamodel.components_, range(len(pcamodel.components_)), 
+            self.LabelsCols, SIZE=5, rotation=90)
+        # fig.axes.flatten()[0].set_ylabel("components, decreased var")
+
+
+    def cluster_plot_scatter(self, space="pca", label="shape", perp=15,
+        gmm_n = None, ax = None, dims=None):
+        """ Wrapper to plot scatter in any space and labeled any way
+        """
+
+        from pythonlib.tools.plottools import plotScatterOverlay
+        data = self.cluster_extract_data(space, perp=perp)
+        labels = self.cluster_extract_label(label, gmm_n=gmm_n)
+
+        if dims:
+            data = data[:, [dims[0], dims[1]]]
+
+        plotScatterOverlay(data, labels, ax=ax)   
+
+    def cluster_extract_label(self, kind, gmm_n=None, nrand=None):
+        """ 
+        Helper to extract labels for each trial given different spaces.
+        RETURNS:
+        - 
+        """
+        if kind=="shape":
+            return self.Labels
+        elif kind=="gmm":
+            mod = self.cluster_extract_model("gmm", gmm_n=gmm_n)
+            Xpca_input_models = self.cluster_extract_data("pca_inputted_into_models")
+            labels = mod["mod"].predict(Xpca_input_models)
+            return labels
+        elif kind=="gmm_using_tsne":
+            mod = self.cluster_extract_model("gmm_using_tsne", gmm_n=gmm_n)
+            Xpca_input_models = self.cluster_extract_data("tsne_inputted_into_gmm")
+            labels = mod["mod"].predict(Xpca_input_models)
+            return labels
+        elif kind=="random":
+            # Generate random labels (ints, from 0,....)
+            assert nrand is not None # range of numbers
+            asds
+            labels = [random.sample(range(nrand), 1)[0] for _ in range(len(SF))]
+        else:
+            assert False, "code it"
+
+    def cluster_extract_data(self, kind, perp=None):
+        """
+        Extract raw data projected in different spaces. Requires that those
+        models are already gnerated.
+        """
+
+        if kind=="pca":
+            return self.ClusterComputeAllResults["Xpca"]
+        elif kind=="pca_inputted_into_models":
+            # pca rthat was inouted into Tsne and gmm
+            return self.ClusterComputeAllResults["Xpca_input_models"]
+        elif kind=="tsne_inputted_into_gmm":
+            # pca rthat was inouted into Tsne and gmm
+            return self.ClusterComputeAllResults["Xtsne_input_gmm"]
+        elif kind=="tsne":
+            assert perp is not None
+            assert self.ClusterComputeAllResults["models_tsne"] is not None, "need to first extracgt tnse"
+            modthis = [mod for mod in self.ClusterComputeAllResults["models_tsne"] if mod["perp"]==perp]
+            assert len(modthis)==1, "didnt find this perp..."
+            return modthis[0]["D_fit"]
+        else:
+            assert False
+  
+    # def cluster_pca_plot_scatter(self, ax):
+    #     from pythonlib.tools.plottools import plotScatterOverlay
+
+    #     for dim 
+    #     X = self.cluster_results_extract_specific("pca")
+    #     plotScatterOverlay(X, labels=self.Labels, ax=ax)   
+
+    # def cluster_tsne_plot_scatter_thisperp(self, perp, ax=None):
+    #     """ 
+    #     """
+    #     from pythonlib.tools.plottools import plotScatterOverlay
+    #     mod = self.cluster_results_extract_specific("tsne", perp=perp)
+    #     # models_tsne = self.ClusterComputeAllResults["models_tsne"]
+    #     X = mod["D_fit"]
+    #     plotScatterOverlay(X, labels=self.Labels, ax=ax)   
+
+    # def cluster_tsne_plot_scatter_allperp(self):
+    #     """
+    #     """
+    #     # TSNE PLOTS
+    #     models_tsne = self.ClusterComputeAllResults["models_tsne"]
+    #     for mod in models_tsne:
+    #         perp = mod["perp"]
+    #         self.cluster_tsne_plot_scatter_thisperp(perp)
+
+    def cluster_extract_model(self, which_mod, perp=None, gmm_n=None):
+        """
+        Helpert to extract specific model
+        RETURNS:
+        - dict, usually with {"mod":model}, and other params as keys too.
+        """
+        if which_mod=="pca":
+            return {"mod":self.ClusterComputeAllResults["pca_model"]}
+        elif which_mod=="tsne":
+            assert perp
+            modthis = [mod for mod in self.ClusterComputeAllResults["models_tsne"] if mod["perp"]==perp]
+            assert len(modthis)==1
+            return modthis[0]
+        elif which_mod=="gmm":
+            assert gmm_n, "need to pick a model out"
+            # self.ClusterComputeAllResults["models_gmm"]
+            for mod in self.ClusterComputeAllResults["models_gmm"]:
+                if mod["n"]==gmm_n:
+                    return mod
+            for mod in self.ClusterComputeAllResults["models_gmm"]:
+                print(mod)
+            assert False, "model with this nmix doesnt exist"
+        elif which_mod=="gmm_using_tsne":
+            assert gmm_n, "need to pick a model out"
+            # self.ClusterComputeAllResults["models_gmm"]
+            for mod in self.ClusterComputeAllResults["models_gmm_using_tsne"]:
+                if mod["n"]==gmm_n:
+                    return mod
+            for mod in self.ClusterComputeAllResults["models_gmm_using_tsne"]:
+                print(mod)
+            assert False, "model with this nmix doesnt exist"
+        else:
+            assert False, "code it"
+
+    def cluster_results_extract_all(self, which_mod):
+        """ Helper to extract all model results across all params
+        RETURNS:
+        - list of dicts, each a model instance (with params included as keys)
+        """
+        if which_mod=="tsne":
+            return self.ClusterComputeAllResults["models_tsne"]
+        elif which_mod=="gmm":
+            return self.ClusterComputeAllResults["models_gmm"]
+        elif which_mod=="gmm_using_tsne":
+            return self.ClusterComputeAllResults["models_gmm_using_tsne"]
+        else:
+            assert False, "code it"
+
+    def cluster_tsne_extract_list_perp(self):
+        """
+        RETurn list of nums, the perps that are presnet across models of tsne that 
+        were saved
+        """
+        list_mod = self.cluster_results_extract_all("tsne")
+        list_perp = [mod["perp"] for mod in list_mod]
+        return list_perp    
+
+
+    # Plot example trials, in grid organized by TSne
+    def plot_grid_egtrials_organizedby(by, params, nbins=20):
+        """ Plot strokes in a 2d grid, where x and y coord of each subplot
+        correspond to binne coordinates in some low d representation
+        PARAMS:
+        - by, string name, what coordinate system
+        - params, list, params that are for this "by"
+        - nbins, int, how many bins per axis. 
+        """
+        assert False ,"in progress - is the grid, with strokes plotted at their cooridnates."
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+
+        # Which coordinate system for deciding 2d grid organization
+        Xfit = extract_dat(by, params)
+
+        # === plot a grid, based on percentiles along 2 dimensions
+        # 1) assign all indices to a position in grid, based on percentiles
+        values1 = Xfit[:,0]
+        values2 = Xfit[:,1]
+        idxslist = range(Xfit.shape[0])
+        p = np.linspace(0, 100, nbins)
+
+        binedges = np.percentile(values1, p)
+        inds1 = np.digitize(values1, binedges)
+
+        binedges = np.percentile(values2, p)
+        inds2 = np.digitize(values2, binedges)
+
+        # 2) for each combo of inds, plot an example trial
+        indslist = set(np.r_[inds1, inds2])
+        fig, axes = plt.subplots(len(indslist), len(indslist), sharex=True, sharey=True, figsize=(len(indslist)*2, len(indslist)*2))
+        for i1 in indslist:
+            for ii2, i2 in enumerate(np.array([i for i in indslist])[::-1]): # so can go backwards.. with bottom left as 1,1
+                print(i1, i2)
+                ax = axes[ii2-1][i1-1]
+                indsthis = list(np.where((inds1==i1) & (inds2==i2))[0])
+                if len(indsthis)==0:
+                    continue
+
+                ind = random.sample(indsthis,1)[0]
+
+                strokthis = SF["strok"][ind]
+                plotDatStrokes([strokthis], ax, pcol="r")
+                ax.axhline(0, color='k', alpha=0.3)
+                ax.axvline(0, color='k', alpha=0.3)
+                ax.set_title(f"{i1}-{i2}")
+                M = 300
+                ax.set_xlim([-M, M])
+                ax.set_ylim([-M, M])    
+            assert False
+
+    #     fig.savefig(f"{SDIRFIGS}/tsne-behgrid-ll.pdf")
+    # #################### PLOTS
+    # self.plot_basis_strokes

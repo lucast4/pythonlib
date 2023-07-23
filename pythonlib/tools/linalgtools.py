@@ -1,7 +1,6 @@
 """ lin algebra stuff"""
 import numpy as np
 import matplotlib.pyplot as plt
-from .plottools import plotScatterXreduced
 
 
 def pca(X, centerize=True, ver="eig", ploton=False):

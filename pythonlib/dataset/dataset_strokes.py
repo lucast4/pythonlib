@@ -1630,8 +1630,10 @@ class DatStrokes(object):
         Cl = ClustDict[which_features]
         sims_max = Cl.Xinput.max(axis=1)
         sims_min = Cl.Xinput.min(axis=1)
+        sims_median = np.median(Cl.Xinput, axis=1)
         # sims_mean = Cl.Xinput.mean(axis=1)
         sims_concentration = (sims_max - sims_min)/(sims_max + sims_min)
+        sims_concentration_v2 = (sims_max - sims_median)/(sims_max + sims_median)
         # which shape does it match the best
         inds_maxsim = np.argmax(Cl.Xinput, axis=1)
         cols_maxsim = [Cl.LabelsCols[i] for i in inds_maxsim]
@@ -1639,6 +1641,7 @@ class DatStrokes(object):
         ### Slide back into DS
         dfdat["clust_sim_max"] = sims_max
         dfdat["clust_sim_concentration"] = sims_concentration
+        dfdat["clust_sim_concentration_v2"] = sims_concentration_v2
         dfdat["clust_sim_max_ind"] = inds_maxsim
         dfdat["clust_sim_max_colname"] = cols_maxsim
         dfdat["clust_sim_vec"] = [vec for vec in Cl.Xinput]

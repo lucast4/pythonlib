@@ -130,6 +130,22 @@ def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever,
                            # normalize_by_range=True, range_norm=[2,170],
                            normalize_by_range=True, range_norm=[2,145],
                            DEBUG=False)
+
+    elif distancever == "hausdorff_max":
+        # Hausdorff (spatial), after centering strokes in space
+
+        # center
+        strokes_data = strokes_centerize(strokes_data)
+        strokes_basis = strokes_centerize(strokes_basis)
+
+        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
+                           convert_to_similarity=True, distancever="hausdorff_max",
+                           similarity_method="squared_one_minus", 
+                           # normalize_by_range=True, range_norm=[2,170],
+                           normalize_by_range=True, range_norm=[2,145],
+                           DEBUG=False)
+
+
     else:
         print(distancever)
         assert False

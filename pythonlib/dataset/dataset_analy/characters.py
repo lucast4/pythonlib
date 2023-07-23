@@ -56,9 +56,7 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
 
     return RES, savedir
 
-
-def generate_data(D, which_basis_set="standard_17", 
-        which_shapes="all_basis",
+def generate_data(D, version_trial_or_shapemean="trial", 
         trial_summary_score_ver="clust_sim_max",
         list_distance_ver=None, 
         plot_score_hist=False, filter_taskkind = None,
@@ -77,71 +75,22 @@ def generate_data(D, which_basis_set="standard_17",
     """
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
-    if list_distance_ver is None:
-        list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
     ### Generate Strokes data
     DS = DatStrokes(D)
-
     if ds_clean_methods is not None:
         DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
-    
     # Filter to just "character" tasks
     if filter_taskkind:
         DS.filter_dataframe({"task_kind":[filter_taskkind]}, True)
-
     if ds_filterdict is not None:
         DS.filter_dataframe(ds_filterdict, True)
 
-    ### Generate basis set of strokes
-    if D.animals()==["Pancho"]:
-        which_basis_set = "standard_17"
-    elif D.animals()==["Diego"]:
-        which_basis_set = "diego_all_minus_open_to_left"
-    else:
-        print(D.animals())
-        assert False
-        
-    dfstrokes, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(
-        which_basis_set=which_basis_set, which_shapes=which_shapes)
+    ClustDict, ParamsDict, ParamsGeneral, dfdat = DS.features_wrapper_generate_all_features(version_trial_or_shapemean)
 
-    ### Generate dataset of beh strokes
-    list_strok = DS.Dat["strok"].tolist()
-    list_shape = DS.Dat["shape"].tolist()
-
-    ### Compute similarity
-    Cl = DS._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, list_distance_ver,
-                                                        labels_for_Clusters = list_shape, 
-                                                        labels_for_basis = list_shape_basis)
-
-    ### Extract scalar values summarizing the simialrity scores (e.g,, clustering)
-    # For each beh stroke, get (i) match and (ii) uniqueness.
-    sims_max = Cl.Xinput.max(axis=1)
-    sims_min = Cl.Xinput.min(axis=1)
-    # sims_mean = Cl.Xinput.mean(axis=1)
-    sims_concentration = (sims_max - sims_min)/(sims_max + sims_min)
-    # which shape does it match the best
-    inds_maxsim = np.argmax(Cl.Xinput, axis=1)
-    cols_maxsim = [Cl.LabelsCols[i] for i in inds_maxsim]
-
-    ### Slide back into DS
-    DS.Dat["clust_sim_max"] = sims_max
-    DS.Dat["clust_sim_concentration"] = sims_concentration
-    DS.Dat["clust_sim_max_ind"] = inds_maxsim
-    DS.Dat["clust_sim_max_colname"] = cols_maxsim
-    DS.Dat["clust_sim_vec"] = [vec for vec in Cl.Xinput]
-
-    ### Slide back in to D: Collect scores (avg over strokes for a trial) and put back into D
-    list_scores = []
-    for i in range(len(D.Dat)):
-        # get all rows in DS
-        inds = DS._dataset_index_here_given_dataset(i)
-        if len(inds)>0:
-            score = np.mean(DS.Dat.iloc[inds][trial_summary_score_ver])
-        else:
-            # assert False, "not sure why this D trial has no strokes..."
-            score = np.nan
-        list_scores.append(score)
-    D.Dat["strokes_clust_score"] = list_scores
+    DS.clustergood_assign_data_to_cluster(ClustDict, ParamsDict, 
+            ParamsGeneral, dfdat,
+            which_features = "beh_motor_sim",
+            trial_summary_score_ver=trial_summary_score_ver)
 
     # OUT
     RES = {
@@ -150,8 +99,8 @@ def generate_data(D, which_basis_set="standard_17",
         "which_shapes":which_shapes,
         "DS":DS,
         "Cl":Cl,
-        "list_strok_basis":list_strok_basis,
-        "list_shape_basis":list_shape_basis,
+        "list_strok_basis":params["list_strok_basis"],
+        "list_shape_basis":params["list_shape_basis"],
         "list_distance_ver":list_distance_ver
     }
     
@@ -160,6 +109,96 @@ def generate_data(D, which_basis_set="standard_17",
         plt.hist(Cl.Xinput)
     
     return RES
+
+# def generate_data(D, which_basis_set="standard_17", 
+#         which_shapes="all_basis",
+#         trial_summary_score_ver="clust_sim_max",
+#         list_distance_ver=None, 
+#         plot_score_hist=False, filter_taskkind = None,
+#         ds_clean_methods = None, ds_clean_params = None,
+#         ds_filterdict = None):
+#     """
+#     Initial data generation: extracts strokes, extracts basis
+#     set of strokes to compare them to, does similarity matrix
+#     PARAMS;
+#     - which_basis_set, which_shapes, params for getting bassis set of 
+#     strokes (see within)
+#     - trial_summary_score_ver, str, which statistic to use as the
+#     summary score (i.e, a strokiness score)
+#     RETURNS:
+#     - RES, dict of results.
+#     """
+#     from pythonlib.dataset.dataset_strokes import DatStrokes
+
+#     if list_distance_ver is None:
+#         list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+
+#     ### Generate Strokes data
+#     DS = DatStrokes(D)
+#     DS.features_generate_dataset_singletrial() # Prepare necessary columns
+
+#     if ds_clean_methods is not None:
+#         DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
+    
+#     # Filter to just "character" tasks
+#     if filter_taskkind:
+#         DS.filter_dataframe({"task_kind":[filter_taskkind]}, True)
+
+#     if ds_filterdict is not None:
+#         DS.filter_dataframe(ds_filterdict, True)
+
+#     Cl, params = DS.clustergood_featurespace_project(DS.Dat, which_space="strok_sim_motor", 
+#         list_strok_basis=None, list_distance_ver=list_distance_ver)
+
+#     ### Extract scalar values summarizing the simialrity scores (e.g,, clustering)
+#     # For each beh stroke, get (i) match and (ii) uniqueness.
+#     sims_max = Cl.Xinput.max(axis=1)
+#     sims_min = Cl.Xinput.min(axis=1)
+#     # sims_mean = Cl.Xinput.mean(axis=1)
+#     sims_concentration = (sims_max - sims_min)/(sims_max + sims_min)
+#     # which shape does it match the best
+#     inds_maxsim = np.argmax(Cl.Xinput, axis=1)
+#     cols_maxsim = [Cl.LabelsCols[i] for i in inds_maxsim]
+
+#     ### Slide back into DS
+#     DS.Dat["clust_sim_max"] = sims_max
+#     DS.Dat["clust_sim_concentration"] = sims_concentration
+#     DS.Dat["clust_sim_max_ind"] = inds_maxsim
+#     DS.Dat["clust_sim_max_colname"] = cols_maxsim
+#     DS.Dat["clust_sim_vec"] = [vec for vec in Cl.Xinput]
+
+#     ### Slide back in to D: Collect scores (avg over strokes for a trial) and put back into D
+#     list_scores = []
+#     for i in range(len(D.Dat)):
+#         # get all rows in DS
+#         tc = D.Dat.iloc[i]["trialcode"]
+#         inds = DS._dataset_index_here_given_trialcode(tc)
+#         # inds = DS._dataset_index_here_given_dataset(i)
+#         if len(inds)>0:
+#             score = np.mean(DS.Dat.iloc[inds][trial_summary_score_ver])
+#         else:
+#             # assert False, "not sure why this D trial has no strokes..."
+#             score = np.nan
+#         list_scores.append(score)
+#     D.Dat["strokes_clust_score"] = list_scores
+
+#     # OUT
+#     RES = {
+#         "which_basis_set":which_basis_set,
+#         "trial_summary_score_ver":trial_summary_score_ver,
+#         "which_shapes":which_shapes,
+#         "DS":DS,
+#         "Cl":Cl,
+#         "list_strok_basis":params["list_strok_basis"],
+#         "list_shape_basis":params["list_shape_basis"],
+#         "list_distance_ver":list_distance_ver
+#     }
+    
+#     if plot_score_hist:        
+#         plt.figure()
+#         plt.hist(Cl.Xinput)
+    
+#     return RES
 
 
 def plot_example_trials(RES, nrand=5, list_inds=None):
@@ -328,106 +367,110 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     ONLY_TRIALS_WITH_ENOUGH_STROKES = True
     ONLY_TRIALS_IN_NOSUP_BLOCKS = True
 
-    DF = D.Dat
-    print("orignial", len(DF))
+    Dcopy = D.copy()
     if ONLY_TRIALS_IN_NOSUP_BLOCKS:
-        DF = DF[DF["supervision_stage_concise"]=="off|0||0"]
-    print("ONLY_TRIALS_IN_NOSUP_BLOCKS", len(DF))
+        Dcopy.preprocessGood(params=["no_supervision"])
+    DF = Dcopy.Dat
+    print("orignial", len(DF))
+    # if ONLY_TRIALS_IN_NOSUP_BLOCKS:
+    #     DF = DF[DF["supervision_stage_concise"]=="off|0||0"]
+    # print("ONLY_TRIALS_IN_NOSUP_BLOCKS", len(DF))
     if ONLY_TRIALS_WITH_ENOUGH_STROKES:
         DF = DF[DF["nbeh_match_ntask"]==True]
     print("ONLY_TRIALS_IN_NOSUP_BLOCKS", len(DF))
 
-    list_slope = []
-    list_slope_sk2 = []
-    list_slope_rew = []
-    for char in list_char_alpha:
-        df = DF[DF["character"]==char]
-        t = df["tvalfake"]
-        v = df[scorename]
-        strokinessv2 = df["strokinessv2"]
-        rew_total = df["rew_total"]
+    if "strokinessv2" in df.columns:
+        list_slope = []
+        list_slope_sk2 = []
+        list_slope_rew = []
+        for char in list_char_alpha:
+            df = DF[DF["character"]==char]
+            t = df["tvalfake"]
+            v = df[scorename]
+            strokinessv2 = df["strokinessv2"]
+            rew_total = df["rew_total"]
 
-        if len(t)>=4:
-            # convert to to rank
-            t = rankItems(t)
-            slope = lr(t, v)[0]
-            list_slope.append(slope)
+            if len(t)>=4:
+                # convert to to rank
+                t = rankItems(t)
+                slope = lr(t, v)[0]
+                list_slope.append(slope)
 
-            # make sure score and strokiness correlate with offline score
-            slope = lr(strokinessv2, v)[0]
-            list_slope_sk2.append(slope)
+                # make sure score and strokiness correlate with offline score
+                slope = lr(strokinessv2, v)[0]
+                list_slope_sk2.append(slope)
 
-            slope = lr(rew_total, v)[0]
-            list_slope_rew.append(slope)      
-        else:
-            list_slope.append(np.nan)
-            list_slope_rew.append(np.nan)
-            list_slope_sk2.append(np.nan)
+                slope = lr(rew_total, v)[0]
+                list_slope_rew.append(slope)      
+            else:
+                list_slope.append(np.nan)
+                list_slope_rew.append(np.nan)
+                list_slope_sk2.append(np.nan)
 
-    # only keep chars with enough data
-    inds = np.where(~np.isnan(list_slope))[0].tolist()
-    list_char_alpha = [list_char_alpha[i] for i in inds]
-    list_slope = [list_slope[i] for i in inds]
-    list_slope_rew = [list_slope_rew[i] for i in inds]
-    list_slope_sk2 = [list_slope_sk2[i] for i in inds]
+        # only keep chars with enough data
+        inds = np.where(~np.isnan(list_slope))[0].tolist()
+        list_char_alpha = [list_char_alpha[i] for i in inds]
+        list_slope = [list_slope[i] for i in inds]
+        list_slope_rew = [list_slope_rew[i] for i in inds]
+        list_slope_sk2 = [list_slope_sk2[i] for i in inds]
 
-    # Plot (each char)
-    fig, axes = plt.subplots(1,3, figsize=(15, len(list_char_alpha)*0.16))
+        # Plot (each char)
+        fig, axes = plt.subplots(1,3, figsize=(15, len(list_char_alpha)*0.16))
 
-    ax=axes.flatten()[0]
-    ax.plot(list_slope, list_char_alpha, "ok")
-    ax.axvline(0)
-    ax.set_xlabel(f"slope ({scorename}/trials)")
-    ax.grid(True)
+        ax=axes.flatten()[0]
+        ax.plot(list_slope, list_char_alpha, "ok")
+        ax.axvline(0)
+        ax.set_xlabel(f"slope ({scorename}/trials)")
+        ax.grid(True)
 
-    ax=axes.flatten()[1]
-    ax.plot(list_slope_sk2, list_char_alpha, "ok")
-    ax.axvline(0)
-    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
-    ax.grid(True)
+        ax=axes.flatten()[1]
+        ax.plot(list_slope_sk2, list_char_alpha, "ok")
+        ax.axvline(0)
+        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+        ax.grid(True)
 
-    ax=axes.flatten()[2]
-    ax.plot(list_slope_rew, list_char_alpha, "ok")
-    ax.axvline(0)
-    ax.set_xlabel(f"slope ({scorename}/rew_total)")
-    ax.grid(True)
+        ax=axes.flatten()[2]
+        ax.plot(list_slope_rew, list_char_alpha, "ok")
+        ax.axvline(0)
+        ax.set_xlabel(f"slope ({scorename}/rew_total)")
+        ax.grid(True)
 
-    fig.savefig(f"{sdir}/slope_score_vs_trial-each_char.pdf")
+        fig.savefig(f"{sdir}/slope_score_vs_trial-each_char.pdf")
 
-    # Plot, historgram across cahar
-    fig, axes = plt.subplots(1,3, figsize=(9,2))
+        # Plot, historgram across cahar
+        fig, axes = plt.subplots(1,3, figsize=(9,2))
 
-    ax=axes.flatten()[0]
-    ax.hist(list_slope, bins=20)
-    ax.axvline(0, color="k")
-    ax.set_xlabel(f"slope ({scorename}/trials)")
+        ax=axes.flatten()[0]
+        ax.hist(list_slope, bins=20)
+        ax.axvline(0, color="k")
+        ax.set_xlabel(f"slope ({scorename}/trials)")
 
-    ax=axes.flatten()[1]
-    ax.hist(list_slope_sk2, bins=20)
-    ax.axvline(0, color="k")
-    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+        ax=axes.flatten()[1]
+        ax.hist(list_slope_sk2, bins=20)
+        ax.axvline(0, color="k")
+        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
 
-    ax=axes.flatten()[2]
-    ax.hist(list_slope_rew, bins=20)
-    ax.axvline(0, color="k")
-    ax.set_xlabel(f"slope ({scorename}/rew_total)")
+        ax=axes.flatten()[2]
+        ax.hist(list_slope_rew, bins=20)
+        ax.axvline(0, color="k")
+        ax.set_xlabel(f"slope ({scorename}/rew_total)")
 
-    fig.savefig(f"{sdir}/slope_score_vs_trial-hist.pdf")
+        fig.savefig(f"{sdir}/slope_score_vs_trial-hist.pdf")
 
-    # Does having higher slope for (rew vs. score) predict learning?
-    fig, axes = plt.subplots(2,2, figsize=(8,8))
+        # Does having higher slope for (rew vs. score) predict learning?
+        fig, axes = plt.subplots(2,2, figsize=(8,8))
 
-    ax = axes.flatten()[0]
-    ax.plot(list_slope_rew, list_slope, 'ok')
-    ax.set_xlabel(f"slope ({scorename}/rew_total)")
-    ax.set_ylabel(f"slope ({scorename}/trials)")
+        ax = axes.flatten()[0]
+        ax.plot(list_slope_rew, list_slope, 'ok')
+        ax.set_xlabel(f"slope ({scorename}/rew_total)")
+        ax.set_ylabel(f"slope ({scorename}/trials)")
 
-    ax = axes.flatten()[1]
-    ax.plot(list_slope_sk2, list_slope, 'ok')
-    ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
-    ax.set_ylabel(f"slope ({scorename}/trials)")
+        ax = axes.flatten()[1]
+        ax.plot(list_slope_sk2, list_slope, 'ok')
+        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+        ax.set_ylabel(f"slope ({scorename}/trials)")
 
-    fig.savefig(f"{sdir}/scatter-slopes_vs_slopes.pdf")
+        fig.savefig(f"{sdir}/scatter-slopes_vs_slopes.pdf")
 
     # Close
     plt.close("all")
@@ -517,14 +560,14 @@ def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=Fa
     print("Saving at:", sdir)
     DS = RES["DS"]
 
-    def _extract_shapes_beh_order(ind_dataset):
+    def _extract_shapes_beh_order(tc):
         """ get list of shapes for this trial in order of beh strokes
         """        
         # 1) shapes, based on simmat alignment
-        shapes_ordered_by_beh_strokes_datseg = DS.dataset_extract_strokeslength_list(ind_dataset, "shape")
+        shapes_ordered_by_beh_strokes_datseg = DS.dataset_extract_strokeslength_list(tc, "shape")
 
         # 2) shapes, based on clustering each stroke
-        shapes_ordered_by_beh_strokes_cluster = DS.dataset_extract_strokeslength_list(ind_dataset, "clust_sim_max_colname")
+        shapes_ordered_by_beh_strokes_cluster = DS.dataset_extract_strokeslength_list(tc, "clust_sim_max_colname")
 
         return shapes_ordered_by_beh_strokes_datseg, shapes_ordered_by_beh_strokes_cluster
 
@@ -533,8 +576,9 @@ def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=Fa
     list_shapes_datseg = []
     list_shapes_cluster = []
     for i in range(len(D.Dat)):
+        tc = D.Dat.iloc[i]["trialcode"]
         if D.Dat.iloc[i]["strokes_clust_score"]>=MIN_SCORE:
-            shapes_datseg, shapes_cluster = _extract_shapes_beh_order(i)
+            shapes_datseg, shapes_cluster = _extract_shapes_beh_order(tc)
             list_shapes_cluster.append(shapes_cluster)
             list_shapes_datseg.append(shapes_datseg)
         else:

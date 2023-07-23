@@ -5682,8 +5682,13 @@ class Dataset(object):
                 supervstr+="|colcue"
             elif prms["COLOR_METHOD"]=="rank":
                 supervstr+="|colrank"
+            elif prms["COLOR_METHOD"]=="randomize_each_stroke":
+                # This can be in charseq, when colors are assigned
+                # randomly, e.g, Pancho 230125
+                supervstr+="|colrnd"                
             else:
                 print(prms)
+                print(self.Dat.iloc[ind]["epoch"])
                 assert False                
 
             if prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1111":
@@ -6884,7 +6889,7 @@ class Dataset(object):
             add_stroke_number_beh)
 
     def plot_trials_after_slicing_within_range_values(self, colname, minval, 
-        maxval, plot_hist=True):
+        maxval, plot_hist=True, nrand=20):
         """ Plot example trials that are wihitn this range of values for
         a given column, e.g,., frac_touched
         """
@@ -6895,8 +6900,9 @@ class Dataset(object):
         # d2 = 0.7
         inds = self.Dat[(self.Dat[colname]>minval) & (self.Dat[colname]<maxval)].index.tolist()
         print("This many trials found:", len(inds))
-        self.plotMultTrials(inds)
-        self.plotMultTrials(inds, "strokes_task")
+        fig, axes, idxs = self.plotMultTrials(inds, nrand=nrand)
+        titles = self.Dat.iloc[idxs][colname].tolist()
+        self.plotMultTrials(idxs, "strokes_task", titles=titles)
 
 
     def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
@@ -7132,7 +7138,10 @@ class Dataset(object):
 
         if nrand is not None:
             if nrand < len(idxs):
-                idxs = sorted(random.sample(idxs, nrand))
+                from pythonlib.tools.listtools import random_inds_uniformly_distributed
+                tmp = random_inds_uniformly_distributed(idxs, nrand)
+                idxs = [idxs[i] for i in tmp]
+                # idxs = sorted(random.sample(idxs, nrand))
 
         if which_strokes=="parses":
             # then pull out a random parse for each case
