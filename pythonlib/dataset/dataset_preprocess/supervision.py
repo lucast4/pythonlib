@@ -94,6 +94,8 @@ def extract_supervision_params(D, ind):
     # print(allparams.keys())
     # print(allparams.keys())
     COLOR_ON = allparams["colormod"]["strokes"]["on"]==1
+    if COLOR_ON==1:
+        COLOR_ON=True
 
     if "color_method" not in allparams["colormod"]["strokes"].keys():
         if "randomize_each_stroke" in allparams["colormod"]["strokes"].keys():

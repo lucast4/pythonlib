@@ -146,46 +146,13 @@ def preprocess_dataset(D, doplots=False):
     # sUCCESSES shoudl always use all trials
     Dthis = D.copy()
     Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-    DSthis = DatStrokes(Dthis)
-    savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
-    os.makedirs(savedir, exist_ok=True)
-    dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-    dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-    
-    # Plto fraction of cases aborted
-    sdir = f"{savedir}/cause_of_abort_frac_of_success"
-    os.makedirs(sdir, exist_ok=True)
-    
-    from pythonlib.tools.snstools import heatmap
-    from pythonlib.tools.pandastools import convert_to_2d_dataframe
-
-    assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-    assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
-
-    dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
-    dfheat_ntrials = dfheat_abort + dfheat_succ
-
-    fig = heatmap(dfheat_abort_frac)[0]
-    savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
-
-    fig = heatmap(dfheat_ntrials)[0]
-    savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
-
-    for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
-        Dthis = D.copy()
-        Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-        Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+    if len(Dthis.Dat)>0:
         DSthis = DatStrokes(Dthis)
-
-        savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+        savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
         os.makedirs(savedir, exist_ok=True)
-
         dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-        if dfabort is None:
-            # no data
-            continue
-        # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
- 
+        dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+        
         # Plto fraction of cases aborted
         sdir = f"{savedir}/cause_of_abort_frac_of_success"
         os.makedirs(sdir, exist_ok=True)
@@ -204,6 +171,40 @@ def preprocess_dataset(D, doplots=False):
 
         fig = heatmap(dfheat_ntrials)[0]
         savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+
+        for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
+            Dthis = D.copy()
+            Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+            Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+            DSthis = DatStrokes(Dthis)
+
+            savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+            os.makedirs(savedir, exist_ok=True)
+
+            dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
+            if dfabort is None:
+                # no data
+                continue
+            # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+     
+            # Plto fraction of cases aborted
+            sdir = f"{savedir}/cause_of_abort_frac_of_success"
+            os.makedirs(sdir, exist_ok=True)
+            
+            from pythonlib.tools.snstools import heatmap
+            from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+            assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
+            assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
+
+            dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
+            dfheat_ntrials = dfheat_abort + dfheat_succ
+
+            fig = heatmap(dfheat_abort_frac)[0]
+            savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+
+            fig = heatmap(dfheat_ntrials)[0]
+            savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
 
     #############################
     if doplots:

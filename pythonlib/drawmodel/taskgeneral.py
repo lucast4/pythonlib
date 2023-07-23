@@ -1585,7 +1585,6 @@ class TaskClass(object):
             else:
                 print(grid_ver)
                 assert False, "code it"
-
         datsegs = self._tokens_generate_relations(datsegs)
         datsegs = tuple(datsegs)
 
