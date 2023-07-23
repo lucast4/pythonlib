@@ -28,9 +28,8 @@ class GrammarDat(object):
         if input_version=="dataset":
             """ Input the dataset and a trial index
             """
-            D = input_data_dict["dataset"]
             ind = input_data_dict["ind_dataset"]
-            self.Dataset = D
+            self.Dataset = input_data_dict["dataset"].copy()
             # self.DatasetInd = ind
             self.DatasetTrialcode = D.Dat.iloc[ind]["trialcode"]
 

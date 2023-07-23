@@ -2020,6 +2020,11 @@ class Dataset(object):
                     # (since this is present in column "probes") and ignore suffixes (e..g,
                     # E or I, without n strokes..)
                     self.taskgroup_reassign_ignoring_whether_is_probe(CLASSIFY_PROBE_DETAILED=False)                
+                elif p=="only_blocks_with_probes":
+                    # only keep trials from blcoks that have both probes and non-probe tasks.
+                    dict_block_probes = self.grouping_get_inner_items("block", "probe")
+                    blocks_with_probes = [bk for bk, probes in dict_block_probes.items() if sorted(probes)==[0,1]]
+                    self.Dat = self.Dat[self.Dat["block"].isin(blocks_with_probes)]
                 else:
                     print(p)
                     assert False, "dotn know this"
@@ -2028,6 +2033,39 @@ class Dataset(object):
         
         return params
 
+
+    #################### VARIOUS UTILS
+    def assign_insert_value_using_trialcode_key(self, column, map_value_to_trialcodes):
+        """ 
+        Given a mapping from value to trailcode, or vice versa (todo), update values for
+        all columns that are present within the mapper.
+        PARAMS;
+        - column, to modify
+        - map_value_to_trialcodes, map from value (desired value to inset into self.Dat[column])
+        to list of trialcodes to take that value.
+        RETURNS;
+        - modifies self.Dat
+        """ 
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+        for list_tc in map_value_to_trialcodes.values():
+            assert isinstance(list_tc, list), "should be list of trialcodes."
+
+        # Convert to map from tc to value
+        map_trialcode_value = {}
+        for value, list_tc in map_value_to_trialcodes.items():
+            for tc in list_tc:
+                assert tc not in map_trialcode_value.keys()
+                map_trialcode_value[tc] = value
+                
+        def F(x):
+            tc = x["trialcode"]
+            if tc in map_trialcode_value.keys():
+                return map_trialcode_value[tc]
+            else:
+                # Then no change
+                return x[column]
+        self.Dat = applyFunctionToAllRows(self.Dat, F, column)
 
     ####################
     def animals(self, force_single=False):
@@ -5638,14 +5676,15 @@ class Dataset(object):
             assert False
 
         ##### COLOR (CUES AND INSTRUCTION)
-        if prms["COLOR_ON"]==1:
+        if prms["COLOR_ON"]==True or prms["COLOR_ON"]==1:
             if prms["COLOR_METHOD"]=="solid":
                 # Color cue (fixation cue, strokes, etc)
                 supervstr+="|colcue"
             elif prms["COLOR_METHOD"]=="rank":
-                print(prms)
                 supervstr+="|colrank"
-                assert False, "is this rank strokes? give it a name"
+            else:
+                print(prms)
+                assert False                
 
             if prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1111":
                 # Strokes are colored during guide and draw
@@ -5653,10 +5692,13 @@ class Dataset(object):
             elif prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1101":
                 # Strokes are colored during guide but not during draw
                 supervstr+="|strkcolG"
+            elif prms["COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR"]=="1001":
+                # Only cue is colored. strokes never colored
+                supervstr+="|strkcolOFF"
             else:
                 print(prms)
                 assert False
-        elif prms["COLOR_ON"]==0:
+        elif prms["COLOR_ON"]==False:
             pass
         else:
             assert False
@@ -5734,12 +5776,196 @@ class Dataset(object):
 
 
     ############## EPOCHSET stuff
+    def _epochset_extract_common_stroke_index(self, list_stroke_index, 
+        return_as = "list"):
+        """ [NOT USED MUCH...]Group trials so that all trials which have, across epochs,
+        (same char, same stroke at the given index) into one group, and
+        all others into leftover group
+        PARAMS;
+        - list_stroke_index, list of ints, each a stroke index of beh order. tells which 
+        indices must be same task stroke, to call it sepochset.
+        e..g, list_stroke_index = [0,3] means that this char must have the same taskstroke
+        (i.e, shape/loc) for beh stroke 0 and 3, across epochs (if doing it correctly, based
+        ont asksequencer).
+        e..g, list_stroke_index = [0] finds chars with same first stroke across epochs, but
+        ignore whether second stroke and up is same.
+        - return_as, 
+        --- "list", then is list of len(self.Dat), holding the epochste
+        --- "dict", then is dict, {epochset:inds into self.Dat}
+        RETURNS:
+        NOTE: keeps all epochsets that have at least 1 epoch, and the ones with 1 epoch merges into a
+        single epochset called tuple(["LEFTOVER"])
+        """
+        assert isinstance(list_stroke_index, list)
+        Dcopy = self.copy()
+
+        # Assign column "char_seq" indicated the correct seuqence for each peoch.
+        Dcopy.sequence_char_taskclass_assign_char_seq(sequence_keep_these_indices=list_stroke_index)
+
+        # keep only chars with same first stroke across epochs
+        Dcopy.epochset_extract_common_epoch_sets(merge_sets_with_only_single_epoch=True)
+
+        if return_as=="list":
+            return Dcopy.Dat["epochset"].tolist()
+        elif return_as=="dict":
+            return Dcopy.grouping_get_inner_items("epochset")
+        else:
+            print(return_as)
+            assert False
+        # # trialcodes_keep = self.Dat[self.Dat["epochset"]==epochs_all]["trialcode"].tolist()
+        
+        # return trialcodes_keep
+
+    def epochset_apply_sequence_wrapper(self, versions_ordered=None):
+        """ Iteratively label trials with epochsets, starting with the least special
+        [GOOD]. 
+        PARAMS:
+        - versions_ordered, list of str, trial-level variables for use in defining epochset, applied
+        in order, so the first one is overwritten by epochsets (not leftovers) detected by subsequent ones.
+        Make the last one the most important (unique, dont' want to miss out).
+        """
+        if versions_ordered is None:
+            versions_ordered = ["char", "same_beh_first_stroke", "same_beh"]
+
+        for i, version in enumerate(versions_ordered):
+            if i==0:
+                # First one, least special, apply to directly to D.
+                # And do not merge any sets, e.g, to keep single prims separate from others.
+                self.epochset_extract_wrapper(version, mutate=True, merge_sets_with_only_single_epoch=False)
+            else:
+                # The rest, only update trials that are not LEFTOVER
+                # (Update subset of trialcodes that can be assigned a more interesting label for epochset
+                # map_epochset_trialcode = D.epochset_extract_wrapper("same_beh_first_stroke", exclude_leftover=True)
+                # D.assign_insert_value_using_trialcode_key("epochset", map_epochset_trialcode)
+                map_epochset_trialcode = self.epochset_extract_wrapper(version, exclude_leftover=True)
+                self.assign_insert_value_using_trialcode_key("epochset", map_epochset_trialcode)
+
+    def epochset_extract_wrapper(self, version, params=None, epoch_label="epoch",
+        exclude_leftover=False, mutate=False, merge_sets_with_only_single_epoch=True,
+        only_keep_epochsets_containing_all_epochs=False):
+        """ 
+        [GOOD] Various methods to compute epochset information. 
+        PARAMS:
+        - version, str, how to classify sets
+        - params, None, or optional params specific to version
+        - exclude_leftover, then any trials in "LEFTOVER" epochsets will not include in
+        the output dict.
+        - mutate, bool, if True, then modifies self.Dat to assign trials to epochsets. 
+        RETURNS:
+        - dict, {epochset:list of trialcodes}
+        """
+
+        D = self.copy()
+
+        if version=="char":
+            # Epochset using characters (ignores what is correct beh sequence).
+            APPEND_PREFIX = "char"
+            D.epochset_extract_common_epoch_sets(
+                trial_label="character",
+                merge_sets_with_only_single_epoch=merge_sets_with_only_single_epoch,
+                merge_sets_with_only_single_epoch_name = ("LEFTOVER",),
+                append_prefix=APPEND_PREFIX,
+                only_keep_epochsets_containing_all_epochs=only_keep_epochsets_containing_all_epochs
+            )
+        elif version=="same_beh":
+            # Epochset defined by characters with same beh across epochs.
+            D.sequence_char_taskclass_assign_char_seq()
+            APPEND_PREFIX = "same"
+            D.epochset_extract_common_epoch_sets(
+                trial_label="char_seq",
+                merge_sets_with_only_single_epoch=merge_sets_with_only_single_epoch,
+                merge_sets_with_only_single_epoch_name = ("LEFTOVER",),
+                append_prefix=APPEND_PREFIX,
+                only_keep_epochsets_containing_all_epochs=only_keep_epochsets_containing_all_epochs
+            )
+
+        elif version=="same_beh_first_stroke":
+            # Epochset defined by characters with same first stroke across epochs.
+            # regardless of second stroke and onwards.
+            D.sequence_char_taskclass_assign_char_seq(sequence_keep_these_indices=[0])
+            APPEND_PREFIX = "same_stroke_0"
+            D.epochset_extract_common_epoch_sets(
+                trial_label="char_seq",
+                merge_sets_with_only_single_epoch=merge_sets_with_only_single_epoch,
+                merge_sets_with_only_single_epoch_name = ("LEFTOVER",),
+                append_prefix=APPEND_PREFIX,
+                only_keep_epochsets_containing_all_epochs=only_keep_epochsets_containing_all_epochs                
+            )
+        elif version=="same_beh_first_two_stroke":
+            # Epochset defined by characters with same first stroke across epochs.
+            # regardless of second stroke and onwards.
+            D.sequence_char_taskclass_assign_char_seq(sequence_keep_these_indices=[0, 1])
+            APPEND_PREFIX = "same_stroke_0"
+            D.epochset_extract_common_epoch_sets(
+                trial_label="char_seq",
+                merge_sets_with_only_single_epoch=merge_sets_with_only_single_epoch,
+                merge_sets_with_only_single_epoch_name = ("LEFTOVER",),
+                append_prefix=APPEND_PREFIX,
+                only_keep_epochsets_containing_all_epochs=only_keep_epochsets_containing_all_epochs                
+            )
+        elif version=="char_seq_same_first_n_strokes":
+            # If a character occurs across all epochs, and across them it has the same 
+            # first stroke (tasksequencer), then place all of these trials into the extracted
+            # epochset. The rest of trials place in to LEFTOVER
+
+            assert False, "old code, change it."
+            # Get trials that have same first strokes
+            trialcodes_first = self._epochset_extract_common_stroke_index([0])
+
+            # Get trials that have same second stroke
+            trialcodes_second = self._epochset_extract_common_stroke_index([1])
+
+            trialcodes_both = [t for t in trialcodes_first if t in trialcodes_second]
+            trialcodes_first_notsecond = [t for t in trialcodes_first if t not in trialcodes_second]
+
+            chars_both = sorted(D.Dat[D.Dat["trialcode"].isin(trialcodes_both)]["character"].unique().tolist())
+            chars_first_notsecond = sorted(D.Dat[D.Dat["trialcode"].isin(trialcodes_first_notsecond)]["character"].unique().tolist())
+
+            print("BOTH")
+            for x in chars_both:
+                print(x)
+
+            print("FIRST")
+            for x in chars_first_notsecond:
+                print(x)
+
+            # for each trial assign it a classification
+            assert len([t for t in trialcodes_both if t in trialcodes_first_notsecond])==0 # - make sure exlcusive
+
+            names = []
+            for ind in range(len(D.Dat)):
+                tc = D.Dat.iloc[ind]["trialcode"]
+                
+                if tc in trialcodes_both:
+                    names.append("both")
+                elif tc in trialcodes_first_notsecond:
+                    names.append("first_not_second")
+                else:
+                    names.append("neither")
+                    
+            D.Dat["strokes12_same"] = names
+
+            tmp = D.grouping_get_inner_items("character", "strokes12_same")
+            for val in tmp.values():
+                assert len(val)==1, "a char can only be one..."         
+
+        if mutate:
+            self.Dat["epochset"] = D.Dat["epochset"]
+
+        # Return mapping to trialcode.
+        map_epochset_trialcode = D.grouping_get_inner_items("epochset", "trialcode")
+        if exclude_leftover:
+            map_epochset_trialcode = {k:v for k, v in map_epochset_trialcode.items() if not k==(APPEND_PREFIX, "LEFTOVER")}
+
+        return map_epochset_trialcode       
+
     def epochset_extract_common_epoch_sets(self, trial_label = "char_seq", epoch_label="epoch",
         n_min_each_conj_outer_inner=1, n_max_epochs=None, epochset_col_name="epochset",
         PRINT = False,
         merge_sets_with_only_single_epoch=False,
-        merge_sets_with_only_single_epoch_name = tuple(["LEFTOVER"])
-        ):
+        merge_sets_with_only_single_epoch_name = tuple(["LEFTOVER"]),
+        only_keep_epochsets_containing_all_epochs = False,
+        append_prefix=None):
         """
         Find groups of trials that share some feature (e.g., same character) and also occur across multiple
         epochs. Group the trials that occur across the exact same epochs. e..g, this finds tasks that 
@@ -5752,8 +5978,14 @@ class Dataset(object):
         - merge_sets_with_only_single_epoch, bool, if True, then any epochset that has only one level of epoch, 
         collect those and combine into a single epochset. this way you don't throw them out. new epochset
         name is "LEFTOVER"
+        -= only_keep_epochsets_containing_all_epochs, if True, then keeps only these epochsets, and all
+        the rest calls them <merge_sets_with_only_single_epoch_name>
+        - append_prefix, either None (ignores) or str, in which case appends this string to 
+        start of each epochset. e.g., (epoch1, epoch2) --> (append_prefix, epoch1, epoch2).
         """
         # - classify each task based on which epochs it spans
+
+        assert isinstance(merge_sets_with_only_single_epoch_name, tuple)
 
         # - For each char_seq, get its list of epochs that it is present in
         groupdict = self.grouping_get_inner_items(trial_label, epoch_label, 
@@ -5793,6 +6025,27 @@ class Dataset(object):
             # Merge these all into one new epochset
             self.supervision_epochs_merge_these(list_epochsets_with_only_one_epoch, 
                 merge_sets_with_only_single_epoch_name, epochset_col_name)
+
+        if only_keep_epochsets_containing_all_epochs:
+            epochs_all = tuple(sorted(self.Dat["epoch"].unique().tolist())) # tuple of all epochs
+            # for es in self.Dat["epochset"].tolist():
+            #     print(es, sorted(es), sorted(es)==epochs_all)
+            # assert False
+            list_epochset = [es if tuple(sorted(es))==epochs_all else merge_sets_with_only_single_epoch_name for es in self.Dat["epochset"].tolist()]
+            # print(epochs_all)
+            # print(self.Dat["epochset"].tolist())
+            # print(list_epochset)
+            # assert False
+            self.Dat["epochset"] = list_epochset
+
+        if append_prefix is not None:
+            list_es = self.Dat["epochset"].tolist()
+            list_es_new = []
+            for es in list_es:
+                assert isinstance(es, tuple)
+                list_es_new.append(tuple([append_prefix] + list(es)))
+            self.Dat["epochset"] = list_es_new
+
         print("-- Final epochsets:")
         print(self.Dat[epochset_col_name].value_counts())
 
@@ -5950,6 +6203,90 @@ class Dataset(object):
         # _chunk_sequence_is_correct(Tk.Tokens, print_chunk_seq=True)        
         return chunks, chunks_within
 
+        ###### OLD CODE RELATED TO EXTRACTION OF CHUNK BOUNDARIES!! i THINK ALL ARE PULLED INTO ABOIVE.
+        # This coped from 230615_analy_motor_timing_reaction
+        ##### Preprocess - get chunks boundaries
+
+        # [OLD!! Use the stuff below]
+        # from pythonlib.dataset.modeling.discrete import rules_map_rule_to_ruledict_extract_auto
+        # map_epoch_rulestring = rules_map_rule_to_ruledict_extract_auto(D)
+
+
+        # ruleinfo = D.grammarparses_rules_extract_info()
+        # def _mapper_shape_to_rank_for_this_epoch(epoch):
+        #     # map shapes to their abstract "role"
+        #     # epoch = D.Dat.iloc[ind]["epoch_orig"]
+            
+        #     if epoch in ["base"]:
+        #         return None
+        #     else:
+        # #         ruledict = map_epoch_rulestring[epoch]
+        #         ruledict = ruleinfo["ruledict_for_each_rule"][epoch]
+        #         if ruledict["categ"]=="ss" and ruledict["subcat"]=="rank":
+        #             shapes_in_order_of_roles = ruledict["params_good"]
+        #         else:
+        #             print(ruledict)
+        #             assert False, "code here: how to get list of shapes"
+        #         assert isinstance(shapes_in_order_of_roles, list) 
+        #         assert isinstance(shapes_in_order_of_roles[0], str)
+
+        #         map_shape_to_rank = {}
+        #         for i, shape in enumerate(shapes_in_order_of_roles):
+        #             map_shape_to_rank[shape] = i
+        #         return map_shape_to_rank
+
+        # dict_epoch_to_mappers = {}
+        # for epoch in D.Dat["epoch"].unique():
+        #     mapper = _mapper_shape_to_rank_for_this_epoch(epoch)
+        #     assert mapper is not None, "thne there is not 'correct' rank order. this is baseline?"
+        #     dict_epoch_to_mappers[epoch] = mapper  
+                
+            
+
+        # dict_epoch_to_mappers
+
+        # # for each trial, determine the chunks, and assign it to each stroke
+        # PLOT = False
+        # for ind in range(len(D.Dat)):
+        #     tokens = D.taskclass_tokens_extract_wrapper(ind, plot=PLOT, return_as_tokensclass=True)
+        #     epoch = D.Dat.iloc[ind]["epoch"]
+        #     map_shape_to_rank = dict_epoch_to_mappers[epoch]
+        #     tokens.chunks_update_by_shaperank(map_shape_to_rank)
+            
+
+        #### Find lollipops
+
+        # # confirm that correct trials have correct chunk sequencing
+        # def _chunk_sequence_is_correct(tokens, print_chunk_seq=False):
+            
+        #     if print_chunk_seq:
+        #         chunk_seq = [(tok["chunk_rank"], tok["chunk_within_rank"]) for tok in Tk.Tokens]
+        #         print(chunk_seq)
+
+        #     cr_prev = 0
+        #     cwr_prev = -1
+        #     for tok in Tk.Tokens:
+        #         if tok["chunk_rank"]==cr_prev:
+        #             # in same chunk as prev. 
+        #             if not tok["chunk_within_rank"]==cwr_prev+1:
+        #                 return False
+        #         elif tok["chunk_rank"]==cr_prev+1:
+        #             # new chunk. must reset cwr
+        #             assert tok["chunk_within_rank"]==0, "I do not understand why"
+        #         elif tok["chunk_rank"]>cr_prev:
+        #             # new chunk. skipped a chunk, but assume it is becuase it doesnt
+        #             # eixts in this task. this is an ok assukptiong, since will fail later if failes.
+        #             assert tok["chunk_within_rank"]==0, "I do not understand why"            
+        #         else:
+        #             # new chunk, and is lower rank. this is wrong
+        #             return False
+
+        #         cr_prev = tok["chunk_rank"]
+        #         cwr_prev = tok["chunk_within_rank"]
+        #     return True
+
+        # _chunk_sequence_is_correct(Tk.Tokens, print_chunk_seq=True)        
+
     def grammarparses_score_this_trial(self, ind):
         """ Score whether this trials behaviro is consistent with
         each of the rule's parses
@@ -6097,7 +6434,8 @@ class Dataset(object):
             if hasattr(Beh, "Alignsim_Datsegs"):
                 del Beh.Alignsim_Datsegs        
 
-    def sequence_char_taskclass_assign_char_seq(self, ver="task_matlab"):
+    def sequence_char_taskclass_assign_char_seq(self, ver="task_matlab", 
+            sequence_keep_these_indices=None):
         """ Assign a new column "char_seq" which is conjunction of character 
         and sequence, either beh sequence or task (groud truth matlab) sequene.
         This useful if want to find common beh across epochs, and there is variability 
@@ -6106,6 +6444,9 @@ class Dataset(object):
         - ver, how to define sequnce. 
         --- beh, the beh sequence on the trial
         --- task_matlab, the matlab objectclass sequence
+        - sequence_keep_these_indices, list of indices into seuqence, to slice seuqencwe. 
+        e.g., useful if you only care about indices 2 and 3...
+        If this is longer than the sequence for any char, then uses Nones for non-existing indicecs
         RETURNS:
         - new column (char_seq) for each trial
         """
@@ -6118,6 +6459,9 @@ class Dataset(object):
             else:
                 print(ver)
                 assert False, "code it!!"
+
+            if sequence_keep_these_indices:
+                sequence = tuple([sequence[i] if i<len(sequence) else None for i in sequence_keep_these_indices ])
             return (char, sequence)
 
         # - append new column charseq
@@ -6128,8 +6472,49 @@ class Dataset(object):
         self.Dat["char_seq"] = list_charseq      
         print(f".. Appended new column 'char_seq', version: {ver}")
 
+    def sequence_strokes_compute_01_sameness_status(self):
+        """
+        DEtermine sameness of the first 2 strokes for each trial's char
+        across epochs (all) --> either same both strokes, same first diff second,
+        or both different. 
+        RETURNS:
+        - modifies self.Dat, adding column "strokes01_sameness", which has
+        string categorical value (one of three possibiltiies.)
+        NOTE: only keeps chars that occur across all epochs.
+        """
 
+        # Get trialcodes that have same first storke and same (first, second) stroke
+        map_epochset_trialcode_0 = self.epochset_extract_wrapper("same_beh_first_stroke", 
+                                                             only_keep_epochsets_containing_all_epochs=True,
+                                                             exclude_leftover=True)
 
+        map_epochset_trialcode_01 = self.epochset_extract_wrapper("same_beh_first_two_stroke",
+                                                             only_keep_epochsets_containing_all_epochs=True,
+                                                             exclude_leftover=True)
+        assert len(map_epochset_trialcode_0.keys())==1, "kind of hacky, might need to fix this..."
+        assert len(map_epochset_trialcode_01.keys())==1
+        trialcodes_0 = list(map_epochset_trialcode_0.values())[0] # list of tc
+        trialcodes_01 = list(map_epochset_trialcode_01.values())[0]
+
+        # same first, diff 2nd stroke
+        trialcodes_0_not1 = [tc for tc in trialcodes_0 if tc not in trialcodes_01]
+
+        # assign back into self.Dat
+        names = []
+        for ind in range(len(self.Dat)):
+            tc = self.Dat.iloc[ind]["trialcode"]
+            
+            if tc in trialcodes_01:
+                names.append("both")
+            elif tc in trialcodes_0_not1:
+                names.append("first_not_second")
+            else:
+                names.append("neither")
+                
+        self.Dat["strokes01_sameness"] = names
+
+        
+        print("Appended to self.Dat: strokes01_sameness")
 
     def sequence_compute_one_to_one_beh_to_task(self, ind):
         """ Compute whether one to one mappibng between beh and task strokes.

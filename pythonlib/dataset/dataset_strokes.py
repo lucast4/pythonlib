@@ -28,7 +28,7 @@ class DatStrokes(object):
         - version, string, whether each datapoint is "beh" or "task"
         """
 
-        self.Dataset = Dataset
+        self.Dataset = Dataset.copy()
         self.Dat = None
         self.Params = {}
         self.Version = None

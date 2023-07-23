@@ -37,7 +37,7 @@ class BehaviorClass(object):
         self.StrokesOrdinal = None
 
         if ver=="dataset":
-            D = params["D"]
+            D = params["D"].copy()
             ind = params["ind"]
             Task = D.Dat.iloc[ind]["Task"]
 
@@ -473,7 +473,8 @@ class BehaviorClass(object):
         if input_grid_xy is None:
             print("recompute:", recompute)
             print("self.Alignsim_Datsegs:", self.Alignsim_Datsegs)
-            assert False, "to make sure all tasks in this dataset have same grid..."
+            print("SOLUTION: run D.taskclass_preprocess_wrapper() first")
+            assert False, "you need to pass in input_grid_xy if you are recompujting... to make sure all tasks in this dataset have same grid..."
 
         if expt is None:
             expt = self.Expt
