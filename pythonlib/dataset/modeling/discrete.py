@@ -55,6 +55,7 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("directionv2", ("down",))] = "D"
     grouping_map_tasksequencer_to_rule[("directionv2", ("up",))] = "U"
     grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "TR"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("topleft",))] = "TL"
 
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
@@ -101,6 +102,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('line', 'arcdeep', 'circle', 'downright'))] = "LCr3" # linecirclerow1/2 (diego)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'topleft'))] = "llCV1" # Diego, dirgrammardiego1 (7/20/23)
 
     grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
