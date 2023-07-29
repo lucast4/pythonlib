@@ -93,8 +93,12 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     sdir = f"{savedir}/score_epoch_x_rule_splitby"
     os.makedirs(sdir, exist_ok=True)
 
+    if "epochset" in bmh.columns:
+        LIST_SPLIT_BY = ["taskgroup", "probe", "epochset"]
+    else:
+        ["taskgroup", "probe"]
     if doplots:
-        for split_by in ["taskgroup", "probe"]:
+        for split_by in LIST_SPLIT_BY:
             # Old plots
             fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(split_by=split_by)
             fig1.savefig(f"{sdir}/splitby_{split_by}-trialdat-1.pdf")
