@@ -443,12 +443,100 @@ class BehModelHolder(object):
         #            row="score_name", aspect=2, height=4, kind="violin")
         # rotateLabel(fig)  
         # fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
+        try:
+            fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
+                       row="score_name", alpha=0.4, kind="point", aspect=1.5)
+            rotateLabel(fig)
+            if savedir:
+                fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-1.pdf")
+        except ValueError as err:
+            pass
 
-        fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
-                   row="score_name", alpha=0.4, jitter=True)
-        rotateLabel(fig)
+        try:
+            fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
+                       row="score_name", alpha=0.4, jitter=True)
+            rotateLabel(fig)
+            if savedir:
+                fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-2.pdf")
+        except ValueError as err:
+            pass
+
+        plt.close("all")
+
+        ###################################
+        # Split into characters
+        aspect = len(df["character"].unique())/20 
+        aspect = len(df["character"].unique())/20
+        if aspect<1:
+            aspect=1
+        if aspect>4:
+            aspect=4
+
+        fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+            kind="strip", aspect=aspect, alpha=0.2, jitter=True)
+        rotateLabel(fig)        
         if savedir:
-            fig.savefig(f"{savedir}/splitby_{split_by}-points-agents.pdf")
+            fig.savefig(f"{savedir}/splitby_{split_by}-characters-1.pdf")
+
+        fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+            kind="point", aspect=aspect)
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-characters-2.pdf")
+
+        ####### CHARS, split by agent
+        fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+            kind="strip", aspect=aspect, alpha=0.2, jitter=True,
+            row="agent")
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-characters-agent-1.pdf")
+
+        fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+            kind="point", aspect=aspect,
+            row="agent")
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-characters-agent-2.pdf")
+
+        plt.close("all")
+
+        ###################################
+        # Split into characters
+        aspect = len(df["character"].unique())/20
+        if aspect<1:
+            aspect=1
+        if aspect>4:
+            aspect=4
+
+        fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+            kind="strip", aspect=aspect, alpha=0.2, jitter=True)
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-1.pdf")
+
+        fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+            kind="point", aspect=aspect)
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-2.pdf")
+
+        ####### CHARS, split by agent
+        fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+            kind="strip", aspect=aspect, alpha=0.2, jitter=True,
+            col="agent")
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
+
+        fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+            kind="point", aspect=aspect,
+            col="agent")
+        rotateLabel(fig)        
+        if savedir:
+            fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
+
+        plt.close("all")
 
     def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
         list_classes=None, model_score_name_list =None, ALPHA = 0.2, sdir=None):

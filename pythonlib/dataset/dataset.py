@@ -5671,6 +5671,8 @@ class Dataset(object):
         elif prms["SEQUENCE_SUP"]=="off":
             # no seqsupervision
             pass
+        elif prms["SEQUENCE_SUP"]=="char_strokes":
+            supervstr+="|seqsup"
         else:
             print(prms)
             assert False

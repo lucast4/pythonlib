@@ -379,6 +379,7 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
             # "datind":ind,
             "trialcode":D.Dat.iloc[ind]["trialcode"],
             "taskgroup":D.Dat.iloc[ind]["taskgroup"],
+            "epochset":D.Dat.iloc[ind]["epochset"] if "epochset" in D.Dat.columns else None,
             "character":D.Dat.iloc[ind]["character"],
             "which_probe_blockset":which_probe_blockset
         })

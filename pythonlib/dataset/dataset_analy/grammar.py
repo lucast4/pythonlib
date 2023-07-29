@@ -27,6 +27,9 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False):
     from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_long
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
     
+    # get epochsets
+    D.epochset_apply_sequence_wrapper()
+
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
     list_rules = rules_related_rulestrings_extract_auto(D)
@@ -39,7 +42,10 @@ def preprocess_dataset_matlabrule(D):
     Each trial is success/failure based on ObjectClass
     """
     from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_matlabrule
-    
+        
+    # get epochsets
+    D.epochset_apply_sequence_wrapper()
+
     # 2) Get grammar scores.
     bm = generate_scored_beh_model_data_matlabrule(D)
 
