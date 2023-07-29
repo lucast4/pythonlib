@@ -99,7 +99,7 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         ["taskgroup", "probe"]
     if doplots:
         # Use only no-sup data for these
-        dfthis = bm.DatLong[bm.DatLong["superv_SEQUENCE_SUP"]=="off"]
+        dfthis = bmh.DatLong[bm.DatLong["superv_SEQUENCE_SUP"]=="off"]
         for split_by in LIST_SPLIT_BY:
             # Old plots
             fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by)
