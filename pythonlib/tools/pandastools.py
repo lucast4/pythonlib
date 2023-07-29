@@ -1858,6 +1858,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     # make a copy, becuase will have to append to this dataframe
     df = df.copy()
 
+    if lenient_allow_data_if_has_n_levels is None:
+        # levels_var must be extracted here from entire dataset 
+        assert levels_var is None, "you cant both rerquest to get all levels and also tell me which levels to get."
+        levels_var = df[var].unique().tolist()
+
     # throw out rows with "ignore?"
     if ignore_values_called_ignore:
         from pythonlib.tools.pandastools import filter_remove_rows_using_function_on_values
@@ -1972,11 +1977,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         # print and save text of sampel size fo alll concuutison
         from pythonlib.tools.expttools import writeStringsToFile
         if len(dfout)>0:
-            levels_var = sort_mixed_type(dfout[var].unique().tolist())
+            levels_var_this = sort_mixed_type(dfout[var].unique().tolist())
             list_s = []
             for lev_other, dftmp in dict_dfthis.items():
                 list_s.append(f"LEVEL OTHER: {lev_other}")
-                for lev in levels_var:
+                for lev in levels_var_this:
                     n = sum(dftmp[var]==lev)
                     if n>0:
                         list_s.append(f"    {lev} : [{n}]")
@@ -2014,6 +2019,9 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
     assert len(dfthis)>0
     # print(levels_to_check)
 
+    if lenient_allow_data_if_has_n_levels is None:
+        assert levels_to_check is not None, "this code doesnst know what all the levels are... so you must pass it in"
+    
     if levels_to_check is None:
         levels_to_check = dfthis[var].unique().tolist()
     # else:
