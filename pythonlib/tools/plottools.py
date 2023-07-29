@@ -403,6 +403,10 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     Will color differnetly by label.
     - downsample_auto, then subsamples in case there are too many datapts
     """
+
+    if labels is None:
+        labels = ["IGNORE_LABEL" for _ in range(X.shape[0])]
+
     if downsample_auto:
         import random
         thresh = 20000
@@ -427,6 +431,8 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             Xthis = X[inds]
             if text_to_plot is not None:
                 text_to_plot_this = [text_to_plot[i] for i in inds]
+            else:
+                text_to_plot_this = None
             if i==0:
                 # initiate a plot
                 fig, ax = plotScatterXreduced(Xthis, dimsplot, ax=ax,

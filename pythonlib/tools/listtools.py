@@ -218,10 +218,12 @@ def rankinarray1_of_minofarray2(array1, array2, look_for_max=False):
 
     return array1_ranks[idx], array1[idx], array2[idx], idx
 
-def random_inds_uniformly_distributed(vals, ntoget):
+def random_inds_uniformly_distributed(vals, ntoget, return_original_values=False):
     """ sorts vals incresaing, then returns unofmrly sampled values.
     PARAMS:
     - vals, array of numbers
+    - return_original_values, then instead of indices into vals returns the
+    corresponding vals
     RETURNS:
     - list of indices into original vals [NOT THE VALUES THEMSELVES]
     """
@@ -230,7 +232,12 @@ def random_inds_uniformly_distributed(vals, ntoget):
     idxs = np.linspace(0, len(inds)-1, ntoget)
     idxs = np.floor(idxs)
     idxs = np.array(idxs, dtype=int)
-    return inds[idxs]
+    indskeep = inds[idxs]
+
+    if return_original_values:
+        return [vals[i] for i in indskeep]
+    else:
+        return indskeep
 
 
 def powerset(iterable):
