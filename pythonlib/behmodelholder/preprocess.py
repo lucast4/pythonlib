@@ -202,6 +202,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
                 "taskgroup":D.Dat.iloc[ind]["taskgroup"],
                 "character":D.Dat.iloc[ind]["character"],
+                "epochset":D.Dat.iloc[ind]["epochset"] if "epochset" in D.Dat.columns else None,
+                "superv_SEQUENCE_SUP":D.Dat.iloc[ind]["superv_SEQUENCE_SUP"],                
                 "which_probe_blockset":which_probe_blockset,
                 "parsesdict":GD.parses_extract_generated(rule)
             })
@@ -380,6 +382,7 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
             "trialcode":D.Dat.iloc[ind]["trialcode"],
             "taskgroup":D.Dat.iloc[ind]["taskgroup"],
             "epochset":D.Dat.iloc[ind]["epochset"] if "epochset" in D.Dat.columns else None,
+            "superv_SEQUENCE_SUP":D.Dat.iloc[ind]["superv_SEQUENCE_SUP"],
             "character":D.Dat.iloc[ind]["character"],
             "which_probe_blockset":which_probe_blockset
         })
