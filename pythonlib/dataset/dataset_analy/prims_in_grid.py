@@ -23,6 +23,8 @@ def preprocess_dataset(D, doplots=False):
     SAVEDIR = D.make_savedir_for_analysis_figures("prims_in_grid")
     # USE tHIS!!!
 
+    D.preprocessGood(params=["beh_strokes_at_least_one"])
+
     # Determine if aborts were befaucs sequence error...
     D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
     D.grammarparsesmatlab_score_wrapper_append()
@@ -30,163 +32,141 @@ def preprocess_dataset(D, doplots=False):
     # get DatStrokes
     DS = DatStrokes(D)
 
+    D.seqcontext_preprocess()
+    D.taskclass_shapes_loc_configuration_assign_column()
+
     # Some params and metadat to save
 
-    # SAVE the conjunctions of shape and loc that were gotten
-    D.seqcontext_preprocess()
-    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
-    D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+    #############################
+    if doplots:
 
-    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch.txt"
-    D.grouping_print_n_samples(["aborted", "epoch", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-    path = f"{SAVEDIR}/shape_loc_grouping-by_character.txt"
-    D.grouping_print_n_samples(["aborted", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
-
-    path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_character.txt"
-    D.grouping_print_n_samples(["aborted", "epoch", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
-
-    path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
-    D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
-
-    ####### rew as function of n strokes in task
-    savedir = f"{SAVEDIR}/rew_vs_nstrokestask"
-    os.makedirs(savedir, exist_ok=True)
-    list_blocks = D.Dat["block"].unique().tolist()
-    D.Dat["aborted_int"] = np.array(D.Dat["aborted"], dtype=int) # or else plot will error.
-    for block in list_blocks:
-        dfthis = D.Dat[D.Dat["block"]==block]
-        if len(dfthis)>20:
-            fig = sns.pairplot(data=dfthis, vars=["beh_multiplier", "rew_total", "aborted_int"], 
-                         hue="seqc_nstrokes_task", plot_kws={"alpha":0.4}, height=3, aspect=1.5)
-            savefig(fig, f"{savedir}/rew_vs_nstrokestask-bk_{block}.pdf")        
-
-    #### Plot score/rew vs. location config.
-    savedir = f"{SAVEDIR}/locationconfig"
-    os.makedirs(savedir, exist_ok=True)
-    D.taskclass_shapes_loc_configuration_assign_column()
-    for y in ["beh_multiplier", "rew_total"]:
-        fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
-
-        fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
-
-    ######## LOOK FOR CONJUCNTIONS
-    if False:
-        # obsolete...
-        D.taskclass_shapes_loc_configuration_assign_column()
-        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
-        LIST_VAR = [
-            "seqc_3_loc_shape", # same n strokes, just diff sequence
-            "seqc_3_loc_shape", # same stim entirely
-            "seqc_3_loc_shape", # same loc config
-            "seqc_3_loc_shape", # same shape config
-
-            "seqc_2_loc_shape",
-            "seqc_2_loc_shape",
-            "seqc_2_loc_shape",
-            "seqc_2_loc_shape",
-
-            "seqc_1_loc_shape",
-            "seqc_1_loc_shape",
-            "seqc_1_loc_shape",
-            "seqc_1_loc_shape",
-
-            "seqc_nstrokes_beh", # diff  n strokes
-            "seqc_nstrokes_beh",
-            "seqc_nstrokes_beh",
-            ]
-        LIST_VARS_CONJUNCTION = [
-            ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
-            ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-            ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-            ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-
-            ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-            ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-            ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-            ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-
-            ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
-            ["taskconfig_shploc", "seqc_0_loc_shape"],
-            ["taskconfig_loc", "seqc_0_loc_shape"],
-            ["taskconfig_shp", "seqc_0_loc_shape"],
-
-            ["seqc_0_loc_shape"], # diff n strokes.
-            ["seqc_0_loc_shape", "seqc_1_loc_shape"],
-            ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-        ]           
-        for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
-            sdir = f"{SAVEDIR}/list_seqc_conjunctions"
-            os.makedirs(sdir, exist_ok=True)
-            path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
-            vars_others = ["aborted"] + vars_others
-            D.grouping_conjunctions_print_variables_save(var, vars_others, path)
-    else:
-        from neuralmonkey.metadat.analy.anova_params import conjunctions_print_plot_all
-        # which_level="trial"
-        # ANALY_VER = "seqcontext"
-        # animal = D.animals()[0]
-        conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="seqcontext")
-        plt.close("all")
-
-    # Pltoi cause of abort
-    LIST_OUTCOMES = [
-        ["online_abort_but_sequence_correct_so_far", "online_abort_but_sequence_correct_complete"],
-        ["sequence_incorrect_online_abort"]
-    ]
-    LIST_OUTCOMES_CODE = [
-        "grammarcorrect",
-        "grammarwrong"
-    ]
-
-    # sUCCESSES shoudl always use all trials
-    Dthis = D.copy()
-    Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-    if len(Dthis.Dat)>0:
-        DSthis = DatStrokes(Dthis)
-        savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
+        # Sequential context of strokes
+        savedir = f"{SAVEDIR}/stroke_sequential_contexts"
         os.makedirs(savedir, exist_ok=True)
-        dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-        dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-        
-        # Plto fraction of cases aborted
-        sdir = f"{savedir}/cause_of_abort_frac_of_success"
-        os.makedirs(sdir, exist_ok=True)
-        
-        from pythonlib.tools.snstools import heatmap
-        from pythonlib.tools.pandastools import convert_to_2d_dataframe
+        plot_sequential_context_strokes(DS, savedir)
 
-        assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-        assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
 
-        dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
-        dfheat_ntrials = dfheat_abort + dfheat_succ
+        # SAVE the conjunctions of shape and loc that were gotten
+        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
+        D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-        fig = heatmap(dfheat_abort_frac)[0]
-        savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch.txt"
+        D.grouping_print_n_samples(["aborted", "epoch", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-        fig = heatmap(dfheat_ntrials)[0]
-        savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+        path = f"{SAVEDIR}/shape_loc_grouping-by_character.txt"
+        D.grouping_print_n_samples(["aborted", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-        for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
-            Dthis = D.copy()
-            Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-            Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_character.txt"
+        D.grouping_print_n_samples(["aborted", "epoch", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+        path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
+        D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
+
+        ####### rew as function of n strokes in task
+        savedir = f"{SAVEDIR}/rew_vs_nstrokestask"
+        os.makedirs(savedir, exist_ok=True)
+        list_blocks = D.Dat["block"].unique().tolist()
+        D.Dat["aborted_int"] = np.array(D.Dat["aborted"], dtype=int) # or else plot will error.
+        for block in list_blocks:
+            dfthis = D.Dat[D.Dat["block"]==block]
+            if len(dfthis)>20:
+                fig = sns.pairplot(data=dfthis, vars=["beh_multiplier", "rew_total", "aborted_int"], 
+                             hue="seqc_nstrokes_task", plot_kws={"alpha":0.4}, height=3, aspect=1.5)
+                savefig(fig, f"{savedir}/rew_vs_nstrokestask-bk_{block}.pdf")        
+
+        #### Plot score/rew vs. location config.
+        savedir = f"{SAVEDIR}/locationconfig"
+        # D.taskclass_shapes_loc_configuration_assign_column()
+        os.makedirs(savedir, exist_ok=True)
+        for y in ["beh_multiplier", "rew_total"]:
+            fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
+
+            fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
+
+        ######## LOOK FOR CONJUCNTIONS
+        if False:
+            # obsolete...
+            D.taskclass_shapes_loc_configuration_assign_column()
+            from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+            LIST_VAR = [
+                "seqc_3_loc_shape", # same n strokes, just diff sequence
+                "seqc_3_loc_shape", # same stim entirely
+                "seqc_3_loc_shape", # same loc config
+                "seqc_3_loc_shape", # same shape config
+
+                "seqc_2_loc_shape",
+                "seqc_2_loc_shape",
+                "seqc_2_loc_shape",
+                "seqc_2_loc_shape",
+
+                "seqc_1_loc_shape",
+                "seqc_1_loc_shape",
+                "seqc_1_loc_shape",
+                "seqc_1_loc_shape",
+
+                "seqc_nstrokes_beh", # diff  n strokes
+                "seqc_nstrokes_beh",
+                "seqc_nstrokes_beh",
+                ]
+            LIST_VARS_CONJUNCTION = [
+                ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
+                ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+                ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+                ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+
+                ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+
+                ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
+                ["taskconfig_shploc", "seqc_0_loc_shape"],
+                ["taskconfig_loc", "seqc_0_loc_shape"],
+                ["taskconfig_shp", "seqc_0_loc_shape"],
+
+                ["seqc_0_loc_shape"], # diff n strokes.
+                ["seqc_0_loc_shape", "seqc_1_loc_shape"],
+                ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+            ]           
+            for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
+                sdir = f"{SAVEDIR}/list_seqc_conjunctions"
+                os.makedirs(sdir, exist_ok=True)
+                path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
+                vars_others = ["aborted"] + vars_others
+                D.grouping_conjunctions_print_variables_save(var, vars_others, path)
+        else:
+            from neuralmonkey.metadat.analy.anova_params import conjunctions_print_plot_all
+            # which_level="trial"
+            # ANALY_VER = "seqcontext"
+            # animal = D.animals()[0]
+            conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="seqcontext")
+            plt.close("all")
+
+        # Pltoi cause of abort
+        LIST_OUTCOMES = [
+            ["online_abort_but_sequence_correct_so_far", "online_abort_but_sequence_correct_complete"],
+            ["sequence_incorrect_online_abort"]
+        ]
+        LIST_OUTCOMES_CODE = [
+            "grammarcorrect",
+            "grammarwrong"
+        ]
+
+        # sUCCESSES shoudl always use all trials
+        Dthis = D.copy()
+        Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+        if len(Dthis.Dat)>0:
             DSthis = DatStrokes(Dthis)
-
-            savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+            savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
             os.makedirs(savedir, exist_ok=True)
-
             dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-            if dfabort is None:
-                # no data
-                continue
-            # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-     
+            dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+            
             # Plto fraction of cases aborted
             sdir = f"{savedir}/cause_of_abort_frac_of_success"
             os.makedirs(sdir, exist_ok=True)
@@ -206,10 +186,43 @@ def preprocess_dataset(D, doplots=False):
             fig = heatmap(dfheat_ntrials)[0]
             savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
 
-    #############################
-    if doplots:
+            for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
+                Dthis = D.copy()
+                Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+                Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+                DSthis = DatStrokes(Dthis)
+
+                savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+                os.makedirs(savedir, exist_ok=True)
+
+                dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
+                if dfabort is None:
+                    # no data
+                    continue
+                # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+         
+                # Plto fraction of cases aborted
+                sdir = f"{savedir}/cause_of_abort_frac_of_success"
+                os.makedirs(sdir, exist_ok=True)
+                
+                from pythonlib.tools.snstools import heatmap
+                from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+                assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
+                assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
+
+                dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
+                dfheat_ntrials = dfheat_abort + dfheat_succ
+
+                fig = heatmap(dfheat_abort_frac)[0]
+                savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+
+                fig = heatmap(dfheat_ntrials)[0]
+                savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+
         plotscore_all(DS, SAVEDIR)
         plotdrawings_all(DS, SAVEDIR)
+
 
     return DS, SAVEDIR
 
@@ -237,29 +250,30 @@ def plot_abort_cause(D, DS, SAVEDIR, abort_or_success="abort"):
     res = []
     for ind in inds_abort:
         tokens = D.taskclass_tokens_extract_wrapper(ind, "beh")
-        if abort_or_success=="abort":
-            # Only take the last index
-            tok_last = tokens[-1]
-            res.append({
-                "inddat":ind,
-                "trialcode":D.Dat.iloc[ind]["trialcode"],
-                "tok_last":tok_last,
-                "shape_last":tok_last["shape"],
-                "loc_last":tok_last["gridloc"],
-                "strokind_last":int(len(tokens))
-            })
-        elif abort_or_success=="success":
-            for j, tok in enumerate(tokens):
+        if len(tokens)>0:
+            if abort_or_success=="abort":
+                # Only take the last index
+                tok_last = tokens[-1]
                 res.append({
                     "inddat":ind,
                     "trialcode":D.Dat.iloc[ind]["trialcode"],
-                    "tok_last":tok,
-                    "shape_last":tok["shape"],
-                    "loc_last":tok["gridloc"],
-                    "strokind_last":j
+                    "tok_last":tok_last,
+                    "shape_last":tok_last["shape"],
+                    "loc_last":tok_last["gridloc"],
+                    "strokind_last":int(len(tokens))
                 })
-        else:
-            assert False
+            elif abort_or_success=="success":
+                for j, tok in enumerate(tokens):
+                    res.append({
+                        "inddat":ind,
+                        "trialcode":D.Dat.iloc[ind]["trialcode"],
+                        "tok_last":tok,
+                        "shape_last":tok["shape"],
+                        "loc_last":tok["gridloc"],
+                        "strokind_last":j
+                    })
+            else:
+                assert False
 
     dfres = pd.DataFrame(res)
 
@@ -521,3 +535,48 @@ def plotdrawings_all(DS, SAVEDIR, n_examples = 3):
 #             savefig(fig, path)
 
 #             plt.close("all")
+
+
+def plot_sequential_context_strokes(DS, savedir):
+    """ plot conjucjitions that exist for conv and divergents seuqneces
+    """
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+
+    LIST_N_MIN = [0, 4, 7]
+
+    def plot_context(df, VER, savedir, suffix):
+        
+        if VER=="divergent":
+            var = "CTXT_locshape_next"
+            vars_others = ["CTXT_loc_prev", "CTXT_shape_prev", "gridloc", "shape"]
+        elif VER=="convergent":
+            var = "CTXT_locshape_prev"
+            vars_others = ["CTXT_loc_next", "CTXT_shape_next", "gridloc", "shape"]
+        else:
+            assert False
+
+        for n_min in LIST_N_MIN:
+
+            path_text = f"{savedir}/divergent_locshape-n_min_{n_min}-{suffix}.txt"
+            path_fig = f"{savedir}/divergent_locshape-n_min_{n_min}-{suffix}.pdf"
+
+
+            extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min=n_min, 
+                                                    lenient_allow_data_if_has_n_levels=2, 
+                                                    PRINT_AND_SAVE_TO=path_text,
+                                                    plot_counts_heatmap_savedir=path_fig)
+
+    for VER in ["divergent", "convergent"]:
+
+        # 1) All data
+        df = DS.Dat
+        suffix = "ALLDATA"
+        plot_context(df, VER, savedir, suffix)
+
+        # 2) Each epoch
+        list_epoch = DS.Dat["epoch"].unique().tolist()
+        if len(list_epoch)>0:
+            for epoch in list_epoch:
+                df = DS.Dat[DS.Dat["epoch"]==epoch]
+                suffix = f"epoch_{epoch}"
+                plot_context(df, VER, savedir, suffix)
