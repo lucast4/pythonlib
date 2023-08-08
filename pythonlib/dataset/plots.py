@@ -70,7 +70,8 @@ def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=No
 ############## HELPERS THAT CALL plot_dat_grid_inputrowscols
 def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_levels = None, col_levels=None,
     max_n_per_grid=1, plotfuncbeh=None, max_cols = 40, max_rows = 40, plot_task=True, 
-    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell=None):
+    plotkwargs={}, strokes_by_order=False, xlabel_trialcode = True, titles_each_cell=None,
+    sort_colvar=False):
     """ [GOOD] flexible helper, can choose what variable to group by.
     INPUTS:
     - row_group and col_group are what variable to group trials by along rows or columns. e..g,
@@ -87,7 +88,6 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
 
     if strokes_by_order:
         plotkwargs["strokes_by_order"] = True
-
 
     def _assign_row_col_inds(dfthis, group, levels, new_col_name, other_group=None):
         # If give levels, and if not covers all trials, then will give uncovered trials -1.
@@ -127,6 +127,12 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
                 trialcode_list = None
 
         return dfthis, labels, trialcode_list
+
+    if sort_colvar:
+        if col_levels is None:
+            col_levels = sorted(dfthis[col_group].unique().tolist())
+        else:
+            col_levels = sorted(col_levels)
 
     dfthis, row_labels, trialcode_list_1 = _assign_row_col_inds(dfthis, row_group, row_levels, "row", col_group)
     dfthis, col_labels, trialcode_list_2 = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
@@ -384,7 +390,7 @@ def plot_one_trial_per_level(D):
 
 
 def plotwrapper_draw_grid_rows_cols(df, rowvar, colvar, n_examples_per_sublot=1,
-        plot_task=False, xlabel_trialcode=False):
+        plot_task=False, xlabel_trialcode=False, sort_colvar=False):
     """ [Good], plot grid of exmaple strokes, where you specify the categorical variable whose
     levels make up the rows and columns
     PARAMS:
@@ -404,6 +410,6 @@ def plotwrapper_draw_grid_rows_cols(df, rowvar, colvar, n_examples_per_sublot=1,
         assert "trialcode" in df.columns
 
     figbeh, figtask = _plot_beh_grid_flexible_helper(df, rowvar, colvar, plotfuncbeh=None,
-                              plot_task=False, max_n_per_grid=n_examples_per_sublot,
-                              xlabel_trialcode = xlabel_trialcode)
+                              plot_task=plot_task, max_n_per_grid=n_examples_per_sublot,
+                              xlabel_trialcode = xlabel_trialcode, sort_colvar=sort_colvar)
     return figbeh, figtask

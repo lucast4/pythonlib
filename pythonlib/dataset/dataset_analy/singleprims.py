@@ -23,6 +23,17 @@ def preprocess_dataset(D, PLOT=True):
         plot_drawings_grid_conjunctions(DS, SAVEDIR)
         # DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_to_extract_stroke_variations_in_single_subplot="gridsize", n_examples=1);
 
+
+        # Plot (row, col, location in suplot) = (size, shape, loc)
+        sdir = f"{SAVEDIR}/shape_size_loc_drawings"
+        os.makedirs(sdir, exist_ok=True)
+        niter = 5
+        for i in range(niter):
+            fig_beh, fig_task = DS.plotshape_row_col_size_loc()
+            savefig(fig_beh, f"{sdir}/iter_{i}-beh.pdf")      
+            savefig(fig_task, f"{sdir}/iter_{i}-task.pdf")      
+            plt.close("all")
+            
         ### PRint and plot conjucntions for neural analy
         from neuralmonkey.metadat.analy.anova_params import conjunctions_print_plot_all
         # which_level="trial"
@@ -54,7 +65,6 @@ def preprocess_dataset(D, PLOT=True):
                 
                 plt.close("all")
 
-
     return DS, SAVEDIR
 
 
@@ -71,15 +81,15 @@ def plot_drawings_grid_conjunctions(DS, SAVEDIR):
     os.makedirs(sdir, exist_ok=True)
     niter = 3
     for i in range(niter):
-        fig = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
+        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
         path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
         savefig(fig, path)
 
-        fig = DS.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
+        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
         path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
         savefig(fig, path)
 
-        fig = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
+        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
         path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
         savefig(fig, path)
 

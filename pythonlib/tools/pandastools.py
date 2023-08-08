@@ -848,8 +848,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         list_cat_2 = df[col2].unique()
 
     if dosort_colnames:
-        list_cat_1 = sorted(list_cat_1)
-        list_cat_2 = sorted(list_cat_2)
+        list_cat_1 = sort_mixed_type(list_cat_1)
+        list_cat_2 = sort_mixed_type(list_cat_2)
 
     arr = np.zeros((len(list_cat_1), len(list_cat_2)))
     for i, val1 in enumerate(list_cat_1):
@@ -1448,7 +1448,7 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             from .expttools import writeStringsToFile
             lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
             if sorted_by_keys:
-                lines = sorted(lines)
+                lines = sort_mixed_type(lines)
             header = "|".join(list_groupouter_grouping_vars)
             lines = [header] + lines
             print(lines)
@@ -1460,7 +1460,7 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
 
     if sorted_by_keys:
         list_keys = list(outdict.keys())
-        list_keys = sorted(list_keys)
+        list_keys = sort_mixed_type(list_keys)
         outdict = {k:outdict[k] for k in list_keys}
 
     for k, v in outdict.items():

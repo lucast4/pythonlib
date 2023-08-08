@@ -96,7 +96,8 @@ def concatDatasets(Dlist, do_cleanup=False):
         ct = 0
         dflist = []
         metadatlist = []
-        for D in Dlist:
+        BlockParamsDefaults = {}
+        for i, D in enumerate(Dlist):
             
             if len(D.Metadats)>1:
                 print("check that this is working.. only confied for if len is 1")
@@ -109,12 +110,21 @@ def concatDatasets(Dlist, do_cleanup=False):
 
             # Combine metadats
             metadatlist.extend([m for m in D.Metadats.values()])
+            # print(D.BlockParamsDefaults.keys())
+            assert list(D.BlockParamsDefaults.keys())==[0], "not coded for cases with > 1"
+            BlockParamsDefaults[i] = D.BlockParamsDefaults[0] # shift them up
 
             ct = ct+len(D.Metadats)
         Dnew.Dat = pd.concat(dflist)
         Dnew.Dat = Dnew.Dat.reset_index(drop=True)
         Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
+        Dnew.BlockParamsDefaults = BlockParamsDefaults
         print("Done!, new len of dataset", len(Dnew.Dat))
+
+        assert Dnew.BlockParamsDefaults.keys() == Dnew.Metadats.keys()
+        # print(Dnew.Dat["which_metadat_idx"].unique())
+        # print(BlockParamsDefaults.keys())
+        assert max(Dnew.Dat["which_metadat_idx"]) <= max(list(Dnew.BlockParamsDefaults.keys()))
     else:
         # OLD: did not update metadat.
         dflist = [D.Dat for D in Dlist]
