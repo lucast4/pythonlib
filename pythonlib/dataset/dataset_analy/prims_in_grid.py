@@ -28,6 +28,7 @@ def preprocess_dataset(D, doplots=False):
     # Determine if aborts were befaucs sequence error...
     D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
     D.grammarparsesmatlab_score_wrapper_append()
+    assert len(D.Dat)>0
 
     # get DatStrokes
     DS = DatStrokes(D)

@@ -34,7 +34,7 @@ class DatStrokes(object):
         self.Params = {}
         self.Version = None
 
-        self._prepare_dataset()
+        self._prepare_dataset() 
         self._extract_strokes_from_dataset(version=version)
         self._clean_preprocess()
 
@@ -71,18 +71,22 @@ class DatStrokes(object):
         """
 
         D = self.Dataset
+        assert len(D.Dat)>0
         if D.behclass_check_if_tokens_extracted() ==False:
             D.behclass_preprocess_wrapper()
             # # Generate all beh calss
             # D.behclass_generate_alltrials()
             # # For each compute datsegs
             # D.behclass_alignsim_compute()
+        assert len(D.Dat)>0
 
         # Prune cases where beh did not match any task strokes.
         D.behclass_clean()
+        assert len(D.Dat)>0
 
         # Sanity check that all gridloc are relative the same grid (across trials).
         D.taskclass_tokens_sanitycheck_gridloc_identical()
+        assert len(D.Dat)>0
 
     def _extract_strokes_from_dataset(self, version="beh", include_scale=True, 
             tokens_extract_keys=None, tokens_get_relations=True):
