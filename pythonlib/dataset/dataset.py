@@ -1206,10 +1206,10 @@ class Dataset(object):
         ygrid = np.sort(np.unique(ys.round(decimals=3)))
 
         try:
-            assert len(xgrid)<8, "this is weird, numerical precision?"
-            assert len(ygrid)<8, "this is weird, numerical precision?"
-            assert np.all(np.diff(xgrid)>0.1), "weird, numerical precision?"
-            assert np.all(np.diff(ygrid)>0.1)    
+            assert len(xgrid)<12, "this is weird, numerical precision?"
+            assert len(ygrid)<12, "this is weird, numerical precision?"
+            assert np.all(np.diff(xgrid)>0.01), "weird, numerical precision?"
+            assert np.all(np.diff(ygrid)>0.01)    
         except AssertionError as err:
             print(xgrid)
             print(ygrid)
