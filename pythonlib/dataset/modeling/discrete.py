@@ -113,6 +113,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3" # Diego, dirgrammardiego5 (8/14/23)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
         ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
