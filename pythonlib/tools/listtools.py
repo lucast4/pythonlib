@@ -23,25 +23,126 @@ def stringify_list(li, return_as_str=False, separator="--"):
         return out
 
 
+# def sort_mixed_type(mylist):
+#     """ Sort, works even if elements in mylist are mixed type.
+#     Uses convention for how to rank things of different type:
+#     str > num > list > other things > dict > cant hash
+#     """
+#     from numpy import ndarray
+
+#     def _convert_to_sortable(val):
+#         """ convert any item to number, so can compare them by sorting"""
+#         if isinstance(val, (list, tuple)):
+#             return sum([_convert_to_num(valval) for valval in val])
+#         elif isinstance(val, str):
+#             return hash(val)
+#         elif isinstance(val, (float, int, ndarray)):
+#             return val
+#         else:
+#             # NOTE: hash(None) is valid
+#             # if x is int, returns that
+#             return hash(val)
+
+#     def key(x):
+#         # x, item in list that want to sort. any type.
+#         try:
+#             if isinstance(x, (list, tuple)):
+#                 return (2, sum([_convert_to_sortable(val) for val in x]))
+#                 # x = sort_mixed_type(x)
+#                 # return (0, hash(tuple(x)))
+#             elif isinstance(x, str):
+#                 # return (0, _convert_to_num(x))
+#                 return (0, _convert_to_sortable(x))
+#             elif isinstance(x, (float, int, ndarray)):
+#                 return (1, _convert_to_sortable(x))
+#             elif isinstance(x, dict):
+#                 a = sum([_convert_to_sortable(val) for val in x.keys()])          
+#                 b = sum([_convert_to_sortable(val) for val in x.values()])          
+#                 return (4, a+b)
+#             else:
+#                 # eeverything else, hash
+#                 return (3, _convert_to_sortable(x))
+
+#         # elif isinstance(x, str):
+#         #     return x
+#         # elif isinstance(x, (float, int)):
+#         #     return x
+#         # else:
+#         #     # NOTE: hash(None) is valid
+#         #     # if x is int, returns that
+#         #     return (0, hash(x))
+#         except TypeError as err:
+#             # Bad, just put at end
+#             return (5, '')
+
+#     return sorted(mylist, key=lambda x: key(x))
+
 def sort_mixed_type(mylist):
     """ Sort, works even if elements in mylist are mixed type.
-    PROBLEMS:
-    if an element is a lsit of lsits. will then depend on input order.
-    eg: these are different
-        sort_mixed_type(['start', 'end', [[2]], [[None]], [1,2], (1,2), (99, 99)])
-        sort_mixed_type(['start', 'end', [[None]], [[2]], [1,2], (1,2), (99, 99)])
+    Uses convention for how to rank things of different type:
+    str > num > list > other things > dict > cant hash
+    IMPROVED over the above commented out version. here works
+    to try to maintain rank (within type) as much as possible, wheras
+    there would convert to hash and lose it (e.g., strings wouldnt properly compare).
     """
+    from numpy import ndarray
+
+    def _convert_to_num(val):
+        """ convert any item to number, so can compare them by sorting"""
+        if isinstance(val, (list, tuple)):
+            return sum([_convert_to_num(valval) for valval in val])
+        elif isinstance(val, str):
+            return hash(val)
+        elif isinstance(val, (float, int, ndarray)):
+            return val
+        else:
+            # NOTE: hash(None) is valid
+            # if x is int, returns that
+            return hash(val)
+
+    def _convert_to_sortable(val):
+        """ convert any item to sortable object"""
+        if isinstance(val, (list, tuple)):
+            return [_convert_to_sortable(valval) for valval in val]
+        elif isinstance(val, str):
+            return val
+        elif isinstance(val, (float, int, ndarray)):
+            return val
+        else:
+            # NOTE: hash(None) is valid
+            # if x is int, returns that
+            return hash(val)
 
     def key(x):
+        # is like _convert_to_sortable, but appends at onset an index that 
+        # ensures corect sorting across types.
+        # x, item in list that want to sort. any type.
         try:
-            if isinstance(x, list):
-                return (0, hash(tuple(x)))
+            if isinstance(x, (list, tuple)):
+                return (2, sum([_convert_to_sortable(val) for val in x]))
+            elif isinstance(x, str):
+                return (0, _convert_to_sortable(x))
+            elif isinstance(x, (float, int, ndarray)):
+                return (1, _convert_to_sortable(x))
+            elif isinstance(x, dict):
+                a = sum([_convert_to_sortable(val) for val in x.keys()])          
+                b = sum([_convert_to_sortable(val) for val in x.values()])          
+                return (4, a+b)
             else:
-                # NOTE: hash(None) is valid
-                return (0, hash(x))
+                # eeverything else, hash
+                return (3, _convert_to_sortable(x))
+
+        # elif isinstance(x, str):
+        #     return x
+        # elif isinstance(x, (float, int)):
+        #     return x
+        # else:
+        #     # NOTE: hash(None) is valid
+        #     # if x is int, returns that
+        #     return (0, hash(x))
         except TypeError as err:
-            # Place at back
-            return (1, '')
+            # Bad, just put at end
+            return (5, '')
 
     return sorted(mylist, key=lambda x: key(x))
 

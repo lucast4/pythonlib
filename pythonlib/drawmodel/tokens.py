@@ -17,22 +17,54 @@ class Tokens(object):
         self.Version = version
         self.Tokens = tuple(tokens) # order is immutable
 
-    def feature_location(self, i):
-        xloc, yloc = self.Tokens[i]["gridloc"]
+    def extract_locations_concrete(self, assign_to_tokens=True):
+        """ Return the concrete locations (2-tuples, xy) for each
+        tokens, in a list of tuples
+        PARAMS:
+        - assign_to_tokens, then modifies self.Tokens with new key: loc_concrete
+        """
+        list_prims = [t["Prim"] for t in self.Tokens]
+        list_loc = [p.extract_as("loc_concrete") for p in list_prims]
+
+        if assign_to_tokens:
+            for loc, tok in zip(list_loc, self.Tokens):
+                tok["loc_concrete"] = loc
+
+        return list_loc
+
+    def feature_location(self, i, ver="grid"):
+        """ get location of this token
+        PARAMS:
+        - ver, str, grid or concrete
+        RETURNS:
+        - xloc, yloc
+        """
+        
+        if ver=="grid":
+            xloc, yloc = self.Tokens[i]["gridloc"]
+        elif ver=="concrete":
+            # Check that concrete coords are present
+            if "loc_concrete" not in self.Tokens[0].keys():
+                self.extract_locations_concrete()
+            xloc, yloc = self.Tokens[i]["loc_concrete"]
+        else:
+            print(ver)
+            assert False
+
         return xloc, yloc
 
-    def featurepair_gridposdiff(self, i, j):
+    def featurepair_posdiff(self, i, j, ver="grid"):
         """ difference in grid position
         returns (x, y)
         """
-        pos1 = self.feature_location(i)
-        pos2 = self.feature_location(j)
+        pos1 = self.feature_location(i, ver=ver)
+        pos2 = self.feature_location(j, ver=ver)
         return pos2[0]-pos1[0], pos2[1] - pos1[1]
 
-    def featurepair_griddist(self, i, j):
+    def featurepair_dist(self, i, j, ver="grid"):
         """ Distance in grid, euclidian scalar
         """
-        (x,y) = self.featurepair_gridposdiff(i, j)
+        (x,y) = self.featurepair_posdiff(i, j, ver=ver)
         return (x**2 + y**2)**0.5
 
     def chunks_update_by_shaperank(self, map_shape_to_rank):

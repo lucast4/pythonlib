@@ -210,7 +210,8 @@ def preprocess_dataset(D, doplots=False):
                 from pythonlib.tools.pandastools import convert_to_2d_dataframe
 
                 assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-                assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
+                if len(dfheat_abort.index.tolist())>0:
+                    assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
 
                 dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
                 dfheat_ntrials = dfheat_abort + dfheat_succ

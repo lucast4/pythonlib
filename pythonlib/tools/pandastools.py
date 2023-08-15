@@ -1448,7 +1448,13 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             from .expttools import writeStringsToFile
             lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
             if sorted_by_keys:
+                # for l in lines[:10]:
+                #     print(l)
                 lines = sort_mixed_type(lines)
+                # print("----")
+                # for l in lines[:10]:
+                #     print(l)
+                # assert False
             header = "|".join(list_groupouter_grouping_vars)
             lines = [header] + lines
             print(lines)

@@ -1369,6 +1369,16 @@ class Dataset(object):
         self.Dat["taskconfig_shploc"] = list_shloc
 
 
+    def taskclass_shapes_extract_unique_alltrials(self):
+        """ REturn list of (sorted) shapes across all trial sin dataset,
+        unqiue.
+        """
+        shapes = []
+        for ind in range(len(self.Dat)):
+            shapes.extend(self.taskclass_shapes_extract(ind))
+
+        return sorted(list(set(shapes)))
+
     def taskclass_shapes_extract(self, ind):
         """ Return list of shape strings used in 
         this task, in order of indices in taskstrokes
@@ -1376,6 +1386,67 @@ class Dataset(object):
         tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
         shapes = [d["shape_oriented"] for d in tokens]
         return shapes
+
+    def taskfeatures_category_by(self, method="shape_repeat", params=None,
+        colname="taskfeat_cat"):
+        """ Give each trial a label for the catgegory of its tak,
+        based on specific kinds of features. often will depend just on the 
+        task image.
+        PARAMS;
+        - method, str, what features to use        
+        - params, flexible, for method
+        - colname, str, what to call the new col
+        RETURNS:
+        - assigns new column, default name "taskfeat_cat"
+        """
+
+        if method=="shape_repeat":
+            # For each shape that exists today, determine whether it eitehrh (i) doesnt exists in this trial,
+            # (ii) has at least 2 isntances separated in space by another shape. or 
+            # (iii) exists, but is not separated.
+            # - reutrns values like VNS-lNS-lNS, for 3 shapes V l l.
+            from pythonlib.drawmodel.task_features import shapes_has_separated_cases_of_shape
+
+            # Test each shape in the order it needs to be done given the rule.
+            list_shapes_today = self.taskclass_shapes_extract_unique_alltrials() # get list of shapes that exist today.
+
+            # Go thru each trial and classify
+            list_trial_code = []
+            for ind in range(len(self.Dat)):
+                T = self.Dat.iloc[ind]["Task"]
+                Tok = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
+                shapes_this_trial = [t["shape"] for t in Tok.Tokens]
+
+                dict_task_category = {}
+                for i, shape in enumerate(list_shapes_today):
+
+                    if shape not in shapes_this_trial:
+                        # shape doesnt exist
+                        # cat = "not_exist"
+                        cat = "NE"
+                    elif shapes_has_separated_cases_of_shape(T, shape_same=shape):
+                        # shape exists, with separted gap
+                        cat = "S"
+                    else:
+                        # exists, not separted
+                        cat = "NS"
+
+                    dict_task_category[shape] = cat
+                
+                # Give this trial a code
+                trial_code = "-".join([f"{shape[:1]}{dict_task_category[shape]}" for shape in list_shapes_today])
+                
+                # Collect
+                list_trial_code.append(trial_code)
+                    
+                print(ind, dict_task_category)
+        else:
+            print(method)
+            assert False
+
+        print(f"Assinging to column: self.Dat[{colname}]")
+        self.Dat[colname] = list_trial_code           
+
 
     def objectclass_get_active_chunk(self, ind):
         """ Get the active chunk thbat was used online, 
@@ -2025,6 +2096,9 @@ class Dataset(object):
                     dict_block_probes = self.grouping_get_inner_items("block", "probe")
                     blocks_with_probes = [bk for bk, probes in dict_block_probes.items() if sorted(probes)==[0,1]]
                     self.Dat = self.Dat[self.Dat["block"].isin(blocks_with_probes)]
+                elif p=="remove_baseline":
+                    # Remove trials that are baseline epoch.
+                    self.Dat = self.Dat[~self.Dat["epoch"].isin(["base", "baseline"])]
                 else:
                     print(p)
                     assert False, "dotn know this"

@@ -2,7 +2,7 @@
 Img --> parses (where parses are strokes)
 """
 import numpy as np
-import torch
+# import torch
 import matplotlib.pyplot as plt
 
 def extractJunctions(strokes, sketchpad_edges, image_edges):
@@ -103,6 +103,8 @@ def score_function(parses, ver="ink", normalization = "inverse", test=False,
     --- negative, ...
     """
     from pythonlib.drawmodel.features import strokeDistances, computeDistTraveled
+    if use_torch:
+        import torch
 
     if test:
         # then just return random number, one for each parse
@@ -165,6 +167,7 @@ def process_parse(parse, device=None, do_fit_spline=True):
     spline """
     from pybpl.data import unif_space
     from gns.omniglot.minimal_splines import fit_minimal_spline
+    import torch
 
     parse_ = []
     for stk in parse:
@@ -192,6 +195,7 @@ def get_topK_parses(img, k, score_fn, configs_per=100, trials_per=800,
     """
     from pybpl.matlab.bottomup import generate_random_parses
     from gns.inference.parsing.top_k import search_parse    
+    import torch
 
     # generate random walks (the "base parses")
     base_parses = generate_random_parses(I=img, seed=seed, **grp_kwargs)

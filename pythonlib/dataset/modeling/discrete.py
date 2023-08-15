@@ -20,6 +20,9 @@ MAP_EPOCHKIND_EPOCH = {
     "baseline":["base", "baseline"]
 }
 
+RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
+# bring in all the rules.
+
 MAP_EPOCH_EPOCHKIND = {}
 for epochkind, list_epoch in MAP_EPOCHKIND_EPOCH.items():
     for epoch in list_epoch:
@@ -1062,10 +1065,12 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
     for r in ["LVl1", "lVL1", "VlL1"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
     for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b"]:
+        # repeat A, repeat B, e... 
+        # Can do any order within A...
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR"]:
+    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
@@ -1086,6 +1091,10 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         for k, v in DICT_RULESTRINGS_CONSISTENT.items():
             print(k, ' -- ', v)
     for r in list_rules:
+        if r in RULES_IGNORE:
+            print(r)
+            print(RULES_IGNORE)
+            assert False, "remove this datapt first, this has no defined rule."
         if r not in DICT_RULESTRINGS_CONSISTENT.keys():
             print(r)
             print(DICT_RULESTRINGS_CONSISTENT)
@@ -1156,6 +1165,7 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
         ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
+        ("AnBmCk1", "L"):_get_rankdir_variations(["AnBmCk1"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("rndstr",): ["preset-null-rndstr"] #  
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
@@ -1165,8 +1175,6 @@ def _rules_related_rulestrings_extract_auto(list_rules):
         assert isinstance(key, tuple), "you prob forgot comma in the parantheses to make this a tuple"
         assert isinstance(values, list)
 
-    RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
-    # bring in all the rules.
 
     # 1) list of rules present in D
     # list_rules_dat = sorted(D.Dat["epoch_rule_tasksequencer"].unique().tolist())

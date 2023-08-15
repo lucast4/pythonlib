@@ -30,6 +30,9 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False):
     # get epochsets
     D.epochset_apply_sequence_wrapper()
 
+    # get taskfeatures (e.g., repeat circle, separated by line)
+    D.taskfeatures_category_by(method="shape_repeat", colname="taskfeat_cat")
+
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
     list_rules = rules_related_rulestrings_extract_auto(D)
@@ -45,6 +48,9 @@ def preprocess_dataset_matlabrule(D):
         
     # get epochsets
     D.epochset_apply_sequence_wrapper()
+
+    # get taskfeatures (e.g., repeat circle, separated by line)
+    D.taskfeatures_category_by(method="shape_repeat", colname="taskfeat_cat")
 
     # 2) Get grammar scores.
     bm = generate_scored_beh_model_data_matlabrule(D)
@@ -93,10 +99,12 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     sdir = f"{savedir}/score_epoch_x_rule_splitby"
     os.makedirs(sdir, exist_ok=True)
 
+    LIST_SPLIT_BY = ["taskgroup", "probe"]
     if "epochset" in bmh.DatLong.columns:
-        LIST_SPLIT_BY = ["taskgroup", "probe", "epochset"]
-    else:
-        ["taskgroup", "probe"]
+        LIST_SPLIT_BY.append("epochset")
+    if "taskfeat_cat" in bmh.DatLong.columns:
+        LIST_SPLIT_BY.append("taskfeat_cat")          
+      
     if doplots:
         # Use only no-sup data for these
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]

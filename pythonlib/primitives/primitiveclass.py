@@ -162,6 +162,10 @@ class PrimitiveClass(object):
         elif output=="params":
             """ A dict holding relevant params"""
             return self._extract_params()
+        elif output=="loc_concrete":
+            # 2-tuple, x and y coords.
+            par = self._extract_params(include_scale=include_scale)
+            return (par["cnr_x"], par["cnr_y"])
         else:
             print(output)
             assert False, "code it"

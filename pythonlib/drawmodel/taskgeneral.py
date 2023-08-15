@@ -1216,7 +1216,7 @@ class TaskClass(object):
 
     def tokens_generate(self, params = None, inds_taskstrokes=None, 
         track_order=True, hack_is_gridlinecircle=False, assert_computed=True,
-        include_scale=False, input_grid_xy=None):
+        include_scale=False, input_grid_xy=None, return_as_tokensclass=False):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
         PARAMS:
@@ -1239,14 +1239,20 @@ class TaskClass(object):
 
         # Check if it already exists.
         if hasattr(self, '_DatSegs') and self._DatSegs is not None and len(self._DatSegs)>0:
-            return self._DatSegs
+            tokens = self._DatSegs
         else:
             # Generate from scratch
             datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
                 hack_is_gridlinecircle=hack_is_gridlinecircle, 
                 include_scale=include_scale, input_grid_xy=input_grid_xy)
             self._DatSegs = datsegs
-            return self._DatSegs
+            tokens = self._DatSegs
+
+        if return_as_tokensclass:
+            from pythonlib.drawmodel.tokens import Tokens
+            return Tokens(tokens)
+        else:
+            return tokens
 
     def tokens_concat(self, tokens):
         """ concatenate these toeksn into a singl etoekn with average features
