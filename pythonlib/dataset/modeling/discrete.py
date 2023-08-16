@@ -123,6 +123,18 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
         ('lolli', ('D', 'R')))] = "LolDR" # gridlinecircleGOOD (diego), lollis (circles down and right)
 
