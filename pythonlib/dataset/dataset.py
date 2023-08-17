@@ -140,7 +140,8 @@ class Dataset(object):
         # Initialize things
         self._ParserPathBase = None
         self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
-        
+        self._BehClassExtracted = False
+
     def initialize_dataset(self, ver, params):
         """ main wrapper for loading datasets of all kinds, including
         monkey, model, etc.
@@ -1277,8 +1278,7 @@ class Dataset(object):
         - list of dict, a reordered tokens
         """
 
-        if "BehClass" not in self.Dat.columns:
-            self.behclass_preprocess_wrapper()
+        self.behclass_preprocess_wrapper()
 
         # mapper from taskstrokeinds to beh
         mapper_taskstroke_to_beh = {}
@@ -5203,7 +5203,8 @@ class Dataset(object):
 
     ############# DAT dataframe manipualtions
     def grouping_conjunctions_print_variables_save(self, var, list_vars_others, path,
-        n_min=0, ignore_values_called_ignore=True, plot_counts_heatmap_savedir=None):
+        n_min=0, ignore_values_called_ignore=True, plot_counts_heatmap_savedir=None,
+        DF = None):
         """
         Help print existing conjucntions of variables in self.Dat.
         PARAMS:
@@ -5215,15 +5216,23 @@ class Dataset(object):
         RETURNS:
         - prints text file at path (give)
         """
+
+        if DF is None:
+            DF = self.Dat
+            
         from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
         # n_min = 0 # leave here, to plot all levels. 
+        PRINT = False
+        DEBUG = False
         lenient_allow_data_if_has_n_levels = 2 # 2 allows plotting all cases
-        dfout, dict_dfs = extract_with_levels_of_conjunction_vars(self.Dat, var, list_vars_others, 
+        dfout, dict_dfs = extract_with_levels_of_conjunction_vars(DF, var, list_vars_others, 
                                                                   n_min=n_min, 
                                                                   lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
                                                                  PRINT_AND_SAVE_TO=path,
                                                                  ignore_values_called_ignore=ignore_values_called_ignore,
-                                                                 plot_counts_heatmap_savedir=plot_counts_heatmap_savedir)
+                                                                 plot_counts_heatmap_savedir=plot_counts_heatmap_savedir,
+                                                                 PRINT=PRINT,
+                                                                 DEBUG=DEBUG)
         return dfout, dict_dfs
 
     def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
@@ -5279,19 +5288,19 @@ class Dataset(object):
             take_top_n_inner=take_top_n_inner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
-    def behclass_preprocess_wrapper(self, reset_tokens=True):
+    def behclass_preprocess_wrapper(self, reset_tokens=True, skip_if_exists=True):
         """ Wrapper of general preprocess steps for entire datset
         PARAMS;
         - reset_tokens, then resets the tokens in TaskClass, if they exist
         """
 
-
-        self.behclass_generate_alltrials(reset_tokens=reset_tokens) 
-        self.behclass_alignsim_compute()        
-        self.behclass_tokens_extract_datsegs()
-        # for x in self.taskclass_tokens_extract_wrapper(1):
-        #     print(x)
-        # assert False
+        exists = self.behclass_check_if_tokens_extracted()
+        if skip_if_exists and exists:
+            # dont rerun
+            pass
+        else:
+            # generate
+            self._behclass_generate_alltrials(reset_tokens=reset_tokens)  
 
     def behclass_generate(self, indtrial, expt=None, reset_tokens=False):
         """ Generate the BehaviorClass object for this trial
@@ -5326,18 +5335,28 @@ class Dataset(object):
         Beh = BehaviorClass(params, "dataset", reset_tokens=reset_tokens)
         return Beh
 
-    def behclass_generate_alltrials(self, reset_tokens=False):
+    def _behclass_generate_alltrials(self, reset_tokens=False):
         """ Generate list of behClass objects, one for each trial,
         and stores as part of self.
         RETURNS:
         - self.Dat["BehClass"], list of beh class iunstance.
         """
         ListBeh = [self.behclass_generate(i, reset_tokens=reset_tokens) for i in range(len(self.Dat))]
-        self.Dat["BehClass"] = ListBeh
+        self.Dat["BehClass"] = ListBeh 
         
+        try:
+            self._behclass_alignsim_compute()
+            self._behclass_tokens_extract_datsegs(use_global_grid=True)         
+        except Exception as err:
+            # dont exit with partial behclass
+            del self.Dat["BehClass"]
+            raise err
+
         print("stored in self.Dat[BehClass]")
 
-    def behclass_tokens_extract_datsegs(self, use_global_grid=True):
+
+
+    def _behclass_tokens_extract_datsegs(self, use_global_grid=True):
         """ Extract, single time, all task datsegs toekns.
         PARAMS:
         - use_global_grid, bool, if True, then gets gridx and gridx across
@@ -5350,7 +5369,7 @@ class Dataset(object):
         else:
             input_grid_xy = None
 
-        print("Running D.behclass_tokens_extract_datsegs")
+        print("Running D._behclass_tokens_extract_datsegs")
         # if expt==""
         for i in range(len(self.Dat)):
             Beh = self.Dat.iloc[i]["BehClass"]
@@ -5358,7 +5377,7 @@ class Dataset(object):
             if i%200==0:
                 print(i)
 
-    def behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
+    def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
         """ Compute beh-task alignment. This is first step before extracting
         datsegs, or discretized behavior.
@@ -5437,8 +5456,7 @@ class Dataset(object):
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
         """
 
-        if "BehClass" not in self.Dat.columns:
-            self.behclass_preprocess_wrapper()
+        self.behclass_preprocess_wrapper()
 
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
@@ -5477,13 +5495,18 @@ class Dataset(object):
         Returns True if all BehClass for each trial already has
         datsegs (tokens) extracted.
         """
-        if "BehClass" not in self.Dat.columns:
-            return False
-        for ind in range(len(self.Dat)):
-            Beh = self.Dat.iloc[ind]["BehClass"]
-            if Beh.Alignsim_Datsegs is None:
+
+        if self._BehClassExtracted:
+            return True
+        else:
+            if "BehClass" not in self.Dat.columns:
                 return False
-        return True
+            for ind in range(len(self.Dat)):
+                Beh = self.Dat.iloc[ind]["BehClass"]
+                if Beh.Alignsim_Datsegs is None:
+                    return False
+            self._BehClassExtracted = True
+            return True
 
     ################# Supervision params
     # ie params that online guide supervision
@@ -6176,6 +6199,23 @@ class Dataset(object):
 
 
     # def grammar_rules_extract_rul
+    def grammarparses_print_plot_summarize(self, ind):
+        """
+        [Good] print and plot all things to summarize things about this trial.
+        """
+        print("=========================================")
+        print("BEH (taskstroke inds): ", self.grammarparses_extract_beh_taskstroke_inds(ind))
+
+        print("=========================================")
+        print("chunk_rank:", [(t["chunk_rank"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
+        print("chunk_within_rank:", [(t["chunk_within_rank"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
+        print("chunk_within_rank_fromlast:", [(t["chunk_within_rank_fromlast"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
+        print("chunk_n_in_chunk:", [(t["chunk_n_in_chunk"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
+        
+        print("=========================================")
+        self.grammarparses_grammardict_return(ind, True)
+
+
     def grammarparses_grammardict_return(self, ind, doplot=False):
         """
         """
@@ -6240,7 +6280,8 @@ class Dataset(object):
         assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
         return taskstroke_inds_beh_order
 
-    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind):
+    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
+        return_n_in_chunk=False):
         """
         For this trial, assign each beh stroke to a chunk index and to index within chunk,
         based on the matching parse, for the rule of this trial. e.g., lines to circles, 
@@ -6253,6 +6294,7 @@ class Dataset(object):
         RETURNS:
         - chunks, list of ints, 
         - chunks_within, list of ints, 
+        - (also modifes tokens for this trial)
         EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
         """
         epoch = self.Dat.iloc[ind]["epoch_orig"]
@@ -6279,10 +6321,11 @@ class Dataset(object):
         # based on this hier, assign chunks ids to each stroke
         PLOT = False
         Tk = self.taskclass_tokens_extract_wrapper(ind, "beh", plot=PLOT, return_as_tokensclass=True)
-        chunks, chunks_within = Tk.chunks_update_by_chunksobject(C)
+        return Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
+        # chunks, chunks_within = Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
         # print(ind, epoch, beh, C.Hier, Tk.chunks_update_by_chunksobject(C))
         # _chunk_sequence_is_correct(Tk.Tokens, print_chunk_seq=True)        
-        return chunks, chunks_within
+        # return chunks, chunks_within
 
         ###### OLD CODE RELATED TO EXTRACTION OF CHUNK BOUNDARIES!! i THINK ALL ARE PULLED INTO ABOIVE.
         # This coped from 230615_analy_motor_timing_reaction
