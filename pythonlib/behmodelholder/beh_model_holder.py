@@ -472,8 +472,10 @@ class BehModelHolder(object):
         if aspect>4:
             aspect=4
 
+        # fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+        #     kind="strip", aspect=aspect, alpha=0.2, jitter=True)
         fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-            kind="strip", aspect=aspect, alpha=0.2, jitter=True)
+            aspect=aspect, alpha=0.4, jitter=True)
         rotateLabel(fig)        
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-characters-1.pdf")
@@ -485,9 +487,11 @@ class BehModelHolder(object):
             fig.savefig(f"{savedir}/splitby_{split_by}-characters-2.pdf")
 
         ####### CHARS, split by agent
+        # fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+        #     kind="strip", aspect=aspect, alpha=0.2, jitter=True,
+        #     row="agent")
         fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-            kind="strip", aspect=aspect, alpha=0.2, jitter=True,
-            row="agent")
+            aspect=aspect, alpha=0.4, jitter=True, row="agent")
         rotateLabel(fig)        
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-characters-agent-1.pdf")
@@ -509,8 +513,10 @@ class BehModelHolder(object):
         if aspect>4:
             aspect=4
 
+        # fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+        #     kind="strip", aspect=aspect, alpha=0.2, jitter=True)
         fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-            kind="strip", aspect=aspect, alpha=0.2, jitter=True)
+            aspect=aspect, alpha=0.4, jitter=True)
         rotateLabel(fig)        
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-1.pdf")
@@ -522,16 +528,17 @@ class BehModelHolder(object):
             fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-2.pdf")
 
         ####### CHARS, split by agent
+        # fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+        #     kind="strip", aspect=aspect, alpha=0.2, jitter=True,
+        #     col="agent")
         fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-            kind="strip", aspect=aspect, alpha=0.2, jitter=True,
-            col="agent")
+            aspect=aspect, alpha=0.4, jitter=True, col="agent")
         rotateLabel(fig)        
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
 
         fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-            kind="point", aspect=aspect,
-            col="agent")
+            kind="point", aspect=aspect, col="agent")
         rotateLabel(fig)        
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
