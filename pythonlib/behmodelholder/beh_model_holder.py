@@ -467,7 +467,7 @@ class BehModelHolder(object):
         ###################################
         # Split into characters
         n_chars = len(df["character"].unique())
-        if n_chars<100:
+        if n_chars<80:
             aspect = n_chars/20 
             aspect = n_chars/20
             if aspect<1:

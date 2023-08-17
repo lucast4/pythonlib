@@ -68,16 +68,17 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
 
+    ################## Create save directiory
+    SDIR = D.make_savedir_for_analysis_figures("grammar")
+    savedir= f"{SDIR}/summary"
+    os.makedirs(savedir, exist_ok=True) 
+
     if reset_grammar_dat:
         D.GrammarDict = {}
 
     # 1) Get learning metaparams
     list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
-    ################## Create save directiory
-    SDIR = D.make_savedir_for_analysis_figures("grammar")
-    savedir= f"{SDIR}/summary"
-    os.makedirs(savedir, exist_ok=True) 
 
     # grammar_recompute_parses = False # just use the matlab ground truth
     if which_rules=="matlab":
@@ -132,7 +133,6 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         else:
             print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
 
-
         ######## CONJUNCTIONS PLOTS
         DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
         savedir = f"{SDIR}"
@@ -150,9 +150,13 @@ def conjunctions_preprocess(D):
 
     # remove baseline
     # D.grammarmatlab_successbinary_score()
+
+    # First remove baseline
+    D.preprocessGood(params=["remove_baseline", "one_to_one_beh_task_strokes"])
+
+    # Second get parses.
     D.grammarparses_successbinary_score()
-    D.preprocessGood(params=["remove_baseline", "correct_sequencing_binary_score"])
-    D.preprocessGood(params=["one_to_one_beh_task_strokes"])    
+    D.preprocessGood(params=["correct_sequencing_binary_score"])
 
     # Assign chunks info to tokens
     for ind in range(len(D.Dat)):
