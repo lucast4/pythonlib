@@ -196,16 +196,30 @@ def chunks_are_identical_full(ch1, hi1, fi1, ch2, hi2, fi2):
     return chunks_are_identical(ch1, ch2) and chunks_are_identical(hi1, hi2) and fi1==fi2
     
 
-def clean_chunk(chunk):
-    """input like this: [[1,3], 0], will output: [[0], [1, 3]]"""
-    chunk_clean = []
-    for c in chunk:
-        if isinstance(c, list):
-            chunk_clean.append(c)
-        elif isinstance(c, int):
-            chunk_clean.append([c])
+def clean_chunk(chunk, how_to_deal_with_flat="single_chunk"):
+    """input like this: [[1,3], 0], will output: [[0], [1, 3]]
+    PARAMS:
+    - how_to_deal_with_flat, str, how to deal with cases like chunk = [0,1,2]. 
+    --- "single_chunk" --> [[0,1,2]]
+    --- "mult_chunk" --> [[0], [1], [2]]
+    """
+    if all([isinstance(c, int) for c in chunk]):
+        if how_to_deal_with_flat=="single_chunk":
+            chunk_clean = [chunk]
+        elif how_to_deal_with_flat=="mult_chunk":
+            chunk_clean = [[c] for c in chunk]
         else:
-            assert False
+            print(how_to_deal_with_flat)
+            assert(False)
+    else:
+        chunk_clean = []
+        for c in chunk:
+            if isinstance(c, list):
+                chunk_clean.append(c)
+            elif isinstance(c, int):
+                chunk_clean.append([c])
+            else:
+                assert False
     return chunk_clean
 
 def sort_chunk(chunk):
