@@ -400,9 +400,8 @@ def taskgroups_assign_each_probe(D, only_give_names_to_probes=True, CLASSIFY_PRO
     - map_task_to_taskgroup, dict mapping from character name of probe --> category.
     """
 
-    if "BehClass" not in D.Dat.columns:
-        # Then extract. need this to know what is ground truth tasksequencer sequence
-        D.behclass_preprocess_wrapper()
+    # Then extract. need this to know what is ground truth tasksequencer sequence
+    D.behclass_preprocess_wrapper()
 
     # 1) compute_features_each_probe
     dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D, 

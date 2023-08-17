@@ -456,3 +456,44 @@ def list_roll(mylist, shift):
     shift = shift%len(mylist)
     return mylist[-shift:] + mylist[:-shift]
 
+
+def slice_list_relative_to_index_out_of_bounds(mylist, ind, npre=1, npost=1):
+    """
+    Pull out tokens precesding and following this index.
+    Any tokens that dont exist: replace with None.
+    RETURNS:
+    - tokens_prev, list of prev tokens,
+    - tok_this, a single token, for ind, 
+    - tokens_next, list of next tokens
+    (for pre and next, if doesnt exist, reuturns None for that item in the list)
+    EG:
+    - mylist = [0, 1, 2, 3, 4]
+    - ind = 2
+    - npre, npost = (4,4)
+    --> ([None, None, 0, 1], 2, [3, 4, None, None])
+    """
+
+    assert npre>=0
+    assert npost>=0
+    
+    if ind-npre<0:
+        on = 0
+    else:
+        on = ind-npre
+    n_nones = npre - ind
+    tokens_prev = [None for _ in range(n_nones)] + mylist[on:ind]
+
+    tok_this = mylist[ind]
+
+    if ind+npost+1>len(mylist):
+        off = len(mylist)
+    else:
+        off = ind+npost+1
+
+    n_nones = ind+npost+1 - len(mylist)
+    tokens_next = mylist[ind+1:ind+npost+1] + [None for _ in range(n_nones)]
+
+    assert len(tokens_prev)==npre, f"{len(tokens_prev)}, {npre}"
+    assert len(tokens_next)==npost, f"{len(tokens_next)}, {npost}"     
+
+    return tokens_prev, tok_this, tokens_next

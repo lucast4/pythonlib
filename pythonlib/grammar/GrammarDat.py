@@ -31,11 +31,11 @@ class GrammarDat(object):
             ind = input_data_dict["ind_dataset"]
             self.Dataset = input_data_dict["dataset"].copy()
             # self.DatasetInd = ind
-            self.DatasetTrialcode = D.Dat.iloc[ind]["trialcode"]
+            self.DatasetTrialcode = self.Dataset.Dat.iloc[ind]["trialcode"]
 
-            Beh = D.Dat.iloc[ind]["BehClass"]
-            Task = D.Dat.iloc[ind]["Task"]
-            expt_list = D.expts()
+            Beh = self.Dataset.Dat.iloc[ind]["BehClass"]
+            Task = self.Dataset.Dat.iloc[ind]["Task"]
+            expt_list = self.Dataset.expts()
             assert len(expt_list)==1, "modify code to input the expt for this specifig trial..."
             exptname = expt_list[0]
             self._input_data(Beh, Task, exptname)

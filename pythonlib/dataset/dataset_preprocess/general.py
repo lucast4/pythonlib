@@ -950,7 +950,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.Dat = applyFunctionToAllRows(D.Dat, F, "taskgroup")
 
     # Generate behclass. This is used frequenctly, so I decided to aklways do this
-    D.behclass_preprocess_wrapper()
+    D.behclass_preprocess_wrapper(skip_if_exists=False)
     
     ############## OLD THINGS, delete if not using (to avoid confusion)
     del D.Dat["supervision_params"] # from drawmonkey.

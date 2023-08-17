@@ -132,4 +132,148 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         else:
             print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
 
+
+        ######## CONJUNCTIONS PLOTS
+        DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
+        savedir = f"{SDIR}"
+        conjunctions_plot(D, DS, savedir, params_anova)
+
     return bmh, SDIR
+
+
+def conjunctions_preprocess(D):
+    """
+    Online sequenbce, plot all conjucntions for grammar neural analyses
+    """
+    from neuralmonkey.metadat.analy.anova_params import dataset_apply_params
+    from neuralmonkey.classes.snippets import datasetstrokes_extract
+
+    # remove baseline
+    # D.grammarmatlab_successbinary_score()
+    D.grammarparses_successbinary_score()
+    D.preprocessGood(params=["remove_baseline", "correct_sequencing_binary_score"])
+    D.preprocessGood(params=["one_to_one_beh_task_strokes"])    
+
+    # Assign chunks info to tokens
+    for ind in range(len(D.Dat)):
+        D.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(ind)
+
+    # Clean and extract dataset as would in neural analy
+    ListD = [D]
+    animal = D.animals(force_single=True)[0]
+    tmp = D.Dat["date"].unique()
+    assert len(tmp)==1
+    DATE = int(tmp[0])
+    which_level = "stroke"
+    ANALY_VER = "seqcontext"
+    anova_interaction = False
+
+    Dall, dataset_pruned_for_trial_analysis, TRIALCODES_KEEP, params_anova, params_anova_extraction = \
+        dataset_apply_params(ListD, animal, DATE, which_level, ANALY_VER, anova_interaction)
+
+    # list_features = ["chunk_rank", "chunk_within_rank", "chunk_within_rank", "chunk_n_in_chunk"]
+    list_features = []
+    DS = datasetstrokes_extract(dataset_pruned_for_trial_analysis, list_features=list_features)
+
+    return DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction
+
+
+def conjunctions_plot(D, DS, savedir, params_anova):
+    """ Make all plots and printed text for conjuctuions relevant for grammar, at level of
+    strokes during drawing
+    PARAMS:
+    - D, DS, savedir, params_anova, see output of conjunctions_preprocess
+    """
+
+    from neuralmonkey.metadat.analy.anova_params import _conjunctions_print_plot_all
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+    
+    # LIST_VAR = params_anova["LIST_VAR"]
+    # LIST_VARS_CONJUNCTION = params_anova["LIST_VARS_CONJUNCTION"]           
+
+    DS.context_define_local_context_motif(1,1)
+    DS.context_chunks_assign_columns()
+
+    ########## Rank within chunk
+    sdir = f"{savedir}/conjunctions_strokes/chunk_within_rank"
+    LIST_VAR = [
+        "chunk_within_rank",
+        "chunk_within_rank_fromlast",
+        ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_this_next", "chunk_rank", "epoch"],
+        ["CTXT_prev_this_next", "chunk_rank", "epoch"],
+    ]
+    DF = DS.Dat
+    _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+
+    ########## N prims in upcoming chunk
+    sdir = f"{savedir}/conjunctions_strokes/chunk_n_in_chunk"
+    LIST_VAR = [
+        "chunk_n_in_chunk",
+        "chunk_n_in_chunk",
+    ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_this_next", "chunk_diff_from_prev", "chunk_n_in_chunk_prev", "epoch"],
+        ["CTXT_prev_this_next", "chunk_diff_from_prev", "epoch"],
+    ]
+    DF = DS.Dat[DS.Dat["chunk_diff_from_prev"]==True]
+    if len(DF)>0:
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+
+    ########## Rule switching, chunk switch, whether dissociate rule switch from shape switch
+    sdir = f"{savedir}/conjunctions_strokes/chunk_diff_from_prev"
+    LIST_VAR = [
+        "chunk_diff_from_prev",
+    ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_this_next"],
+    ]
+    DF = DS.Dat
+    if len(DF)>0:
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+
+    ######## epoch encoding, context same
+    sdir = f"{savedir}/conjunctions_strokes/epoch_context1"
+    LIST_VAR = [
+        "epoch",
+    ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_this_next"],
+    ]
+    # DS.context_define_local_context_motif(1,1)
+    # DS.context_chunks_assign_columns()
+    DF = DS.Dat
+    if len(DF)>0:
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+
+    ######## epoch encoding, context same
+    sdir = f"{savedir}/conjunctions_strokes/epoch_context2"
+    LIST_VAR = [
+        "epoch",
+    ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_this_next"],
+    ]
+    DS.context_define_local_context_motif(2,1)
+    DS.context_chunks_assign_columns()
+    DF = DS.Dat
+    if len(DF)>0:
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+    # Restore to defaults
+    DS.context_define_local_context_motif(1,1)
+    DS.context_chunks_assign_columns()
+
+    ######## encoding of shape (otherwise context matched), 
+    sdir = f"{savedir}/conjunctions_strokes/shape_byepoch"
+    LIST_VAR = [
+        "shape",
+    ]
+    LIST_VARS_CONJUNCTION = [
+        ["CTXT_prev_next", "gridloc", "epoch"],
+    ]
+    DF, dictdf = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch", 
+                                                             vars_others=["CTXT_prev_next", "gridloc"], 
+                                                             n_min=2, lenient_allow_data_if_has_n_levels=2)
+    if len(DF)>0:
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)

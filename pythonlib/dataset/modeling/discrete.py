@@ -120,15 +120,15 @@ def _get_default_grouping_map_tasksequencer_to_rule():
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
-        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
+        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'left'))] = "AnBmCk1a" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
-        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
+        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'left'))] = "AnBmCk1b" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
-        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'left'))] = "AnBmCk1" # Pancho, dirgrammarPancho1 (8/2023)
+        ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'left'))] = "AnBmCk1c" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
@@ -336,6 +336,35 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 print(e)
                 assert False
 
+        def _getXYrev(e):
+            """ on diagoanl, where tl is positive
+            """
+            if isinstance(e, list) and len(e)==2:
+                # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+                x = -e[1]['x']
+                y = e[1]['y']
+                return x + y # projection onto (1,1)
+            elif isinstance(e, dict):
+                return -e['x'] + e['y']
+            else:
+                print(e)
+                assert False
+
+        def _getLeftThenUp(e):
+            """ left, but break ties using up.
+            """
+            if isinstance(e, list) and len(e)==2:
+                # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+                x = -e[1]['x']
+                y = e[1]['y']
+                return x + 0.01*y # projection onto (1,1)
+            elif isinstance(e, dict):
+                return -e['x'] + 0.01*e['y']
+            else:
+                print(e)
+                assert False
+
+        
         # print("TODO: break ties")
         # print("OBJECTS:", objects)
         # assert False
@@ -355,6 +384,12 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         elif direction in ["TR", "topright"]:
             # top right
             return sorted(objects, key=_getXY)
+        elif direction in ["TL"]:
+            # top left
+            return sorted(objects, key=_getXYrev)
+        elif direction in ["UL"]:
+            # left, then break ties with up
+            return sorted(objects, key=_getLeftThenUp)
         else:
             print(direction)
             assert False, 'invalid direction'
@@ -450,6 +485,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     list_chunks = [chunks] # only one way
 
     #### Define hierarchies
+    HOW_DEAL_FLAT="mult_chunk"
     ruledict = rules_map_rulestring_to_ruledict(rulestring)
     if ruledict["categ"]=="dir":
     # if rule in ["left", "right", "up", "down"]:
@@ -459,6 +495,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # assert False
         hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
         list_hier = [hier]
+        HOW_DEAL_FLAT = "single_chunk"
 
     elif ruledict["categ"]=="ss" and ruledict["subcat"] in ["rankdir"]:
         # shape sequence, e.g., lines to circles, where the order within lines is fixed,
@@ -655,6 +692,7 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     elif ruledict["categ"]=="rand":
         # Random sampling
         list_hier = [list(range(len(objects)))]
+        HOW_DEAL_FLAT="single_chunk"
 
     elif ruledict["categ"]=="preset":
         # Each task has a defined sequence in its matlab code (tasksequencer).
@@ -684,8 +722,8 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         assert False, "code up rule"
 
     ### Clean up the chunks
-    list_hier = [clean_chunk(hier) for hier in list_hier] 
-
+    list_hier = [clean_chunk(hier, how_to_deal_with_flat=HOW_DEAL_FLAT) for hier in list_hier] 
+    
     ### Expand chunks and fixed order to match number of identified hiers
     list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
     # print("list_fixed_order")
@@ -1086,7 +1124,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1"]:
+    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "llCV2", "llCV3"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
@@ -1155,7 +1193,7 @@ def rules_related_rulestrings_extract_auto(D):
     #     list_rules = D.Dat["epoch"].unique().tolist()  
     #     return _rules_related_rulestrings_extract_auto(list_rules)
 
-def _rules_related_rulestrings_extract_auto(list_rules):
+def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
     """
     Helper to get rulestrings that are related (i.e, altnerative hypotheses) to these
     rules
@@ -1176,12 +1214,17 @@ def _rules_related_rulestrings_extract_auto(list_rules):
     DICT_RELATED_RULES = {
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
         ("LVl1", "lVL1", "VlL1", "llV1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1")),
-        ("D", "U", "R", "L", "TR"):_get_direction_variations(["D", "U", "R", "L", "TR"]),
+        ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
+        ("TR",):_get_direction_variations(["TR"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
         ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
-        ("AnBmCk1", "L"):_get_rankdir_variations(["AnBmCk1"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
+        ("AnBmCk1a",):_get_rankdir_variations(["AnBmCk1a"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
+        ("AnBmCk1b",):_get_rankdir_variations(["AnBmCk1b"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
+        ("AnBmCk1c",):_get_rankdir_variations(["AnBmCk1c"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
+        ("llCV2",):_get_rankdir_variations(["llCV2"]) + _get_direction_variations(["L"]), #  dirgrammardiego4
+        ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("rndstr",): ["preset-null-rndstr"] #  
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
@@ -1190,6 +1233,7 @@ def _rules_related_rulestrings_extract_auto(list_rules):
     for key, values in DICT_RELATED_RULES.items():
         assert isinstance(key, tuple), "you prob forgot comma in the parantheses to make this a tuple"
         assert isinstance(values, list)
+
 
 
     # 1) list of rules present in D
@@ -1204,6 +1248,11 @@ def _rules_related_rulestrings_extract_auto(list_rules):
             if rulethis in RULES_IGNORE:
                 return []
             elif rulethis in rule_keys:
+                if DEBUG:
+                    print("Found rule!!")
+                    print("Rule:", rulethis)
+                    print("Key that contains that rule:", rule_keys)
+                    print("Rule strings of related rules:", rule_set)
                 FOUND = True
                 related_rules.extend(rule_set)
         assert FOUND, f"didnt find this rule in any sets: {rulethis}"

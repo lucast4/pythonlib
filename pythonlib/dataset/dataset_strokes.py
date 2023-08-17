@@ -72,12 +72,7 @@ class DatStrokes(object):
 
         D = self.Dataset
         assert len(D.Dat)>0
-        if D.behclass_check_if_tokens_extracted() ==False:
-            D.behclass_preprocess_wrapper()
-            # # Generate all beh calss
-            # D.behclass_generate_alltrials()
-            # # For each compute datsegs
-            # D.behclass_alignsim_compute()
+        D.behclass_preprocess_wrapper()
         assert len(D.Dat)>0
 
         # Prune cases where beh did not match any task strokes.
@@ -489,7 +484,6 @@ class DatStrokes(object):
         inds = self.find_indices_this_shape(shape, return_first_index=True)
         assert len(inds)==1
         return self.extract_strokes(inds=inds, ver_behtask=ver_behtask)[0]
-
 
 
     def extract_strokes_as_velocity(self, inds):
@@ -1393,6 +1387,44 @@ class DatStrokes(object):
 
 
     ############################### SEQUENTIAL CONTEXT
+    def context_define_local_context_motif(self, n_pre=1, n_post=1):
+        """ Give this stroek a value that represents its context, which is
+        conjunction of pre and post strokes.
+        PARAMS:
+        - n_pre, int, how many strokes preceding this (ind) to take. if not
+        this many exist, then the preceding will be given ...
+        RETURNS:
+        - appends two new columns:
+        --- CTXT_prev_next, which concatenates pre and post (tuple)
+        --- CTXT_prev_this_next, which concatenates pre, this, and post
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+
+        # if n_pre==1 and n_post==1:
+        if False:
+            self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_locshape_prev", "CTXT_locshape_next"], "CTXT_prev_next", use_strings=False)
+            self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_locshape_prev", "gridloc", "shape", "CTXT_locshape_next"], "CTXT_prev_this_next", use_strings=False)
+        else:
+            list_context = []
+            list_context_this = []
+            for ind in range(len(self.Dat)):
+                tokens_prev, tok_this, tokens_next = self.context_extract_tokens_pre_post_mult(ind, n_pre, n_post)
+
+                pre = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_prev]
+                this = (tok_this["gridloc"], tok_this["shape"])
+                post = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_next]
+
+                context = tuple(pre + post)
+                list_context.append(context)
+
+                context = tuple(pre + [this] + post)
+                list_context_this.append(context)
+
+            self.Dat['CTXT_prev_next'] = list_context
+            self.Dat["CTXT_prev_this_next"] = list_context_this
+
+
+
     def context_extract_strokeslength_list(self, ind, column="datseg"):
         """ A wrapper for extracting the entire trial's data that this stroke (ind) is in
         PARAMS:
@@ -1434,6 +1466,25 @@ class DatStrokes(object):
 
         return tok_prev, tok_this, tok_next
 
+    def context_extract_tokens_pre_post_mult(self, ind, n_pre=1, n_post=1):
+        """
+        Pull out tokens precesding and following this index.
+        Any tokens that dont exist: replace with None.
+        RETURNS:
+        - tokens_prev, list of prev tokens,
+        - tok_this, a single token, for ind, 
+        - tokens_next, list of next tokens
+        (for pre and next, if doesnt exist, reuturns None for that item in the list)
+        """
+        from pythonlib.tools.listtools import slice_list_relative_to_index_out_of_bounds
+        tokens, indstrok = self.context_extract_strokeslength_list(ind, "datseg")
+
+        # tokens = [0,1,2,3,4]
+        # print(indstrok)
+        tokens_prev, tok_this, tokens_next = slice_list_relative_to_index_out_of_bounds(tokens, indstrok, n_pre, n_post)
+
+        return tokens_prev, tok_this, tokens_next
+
     def context_chunks_diff(self, ind, first_stroke_diff_to_zero=False):
         """ Return the diffefence of this strokes chunk from that of the
         previous stroke.
@@ -1457,6 +1508,26 @@ class DatStrokes(object):
             chunk_diff = tok_this["chunk_rank"] - tok_prev["chunk_rank"]
             rank_within_diff = tok_this["chunk_within_rank"] - tok_prev["chunk_within_rank"]
         return chunk_diff, rank_within_diff
+
+
+    def context_chunks_assign_columns(self):
+        """ assign useful columsn related to chunk and context
+        """
+        # chunk diff from previous stroke?
+        list_chunk_diff = []
+        for ind in range(len(self.Dat)):
+            chunk_diff, rank_within_diff = self.context_chunks_diff(ind, first_stroke_diff_to_zero=True)
+            list_chunk_diff.append(chunk_diff)
+        self.Dat["chunk_diff_from_prev"] = list_chunk_diff 
+
+        list_chunk_n_in_chunk_prev = []
+        for ind in range(len(self.Dat)):
+            tok_prev, tok_this, tok_next = self.context_extract_tokens_pre_post(ind)
+            if tok_prev is None:
+                list_chunk_n_in_chunk_prev.append(None)
+            else:
+                list_chunk_n_in_chunk_prev.append(tok_prev["chunk_n_in_chunk"])
+        self.Dat["chunk_n_in_chunk_prev"] = list_chunk_n_in_chunk_prev
 
 
     ################################ SIMILARITY/CLUSTERING

@@ -1372,7 +1372,10 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
-    on a value of conjcjtions of vars_others.
+    on a third variable (value of conjcjtions of vars_others).
+    NOTE: this is better than extract_with_levels_of_conjunction_vars because here
+    can make separate subplots conditioned on a third variable. there is only one supblot
+    of 2 vars.
     PARAMS:
     - var1, var2, string, columns in df, categorical varlibels, will be axes of heatmsp
     - vars_others, list of str, columns in df, each conj is a sbuplot
@@ -1380,16 +1383,23 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     - fig
     """
 
-    df = append_col_with_grp_index(df, vars_others, "dummy", use_strings=False)
-
+    if vars_others is not None:
+        assert isinstance(vars_others, (list, tuple))
+        df = append_col_with_grp_index(df, vars_others, "dummy", use_strings=False)
+    else:
+        df["dummy"] = 0
     list_dummy = sort_mixed_type(df["dummy"].unique().tolist())
+
     list_var1 = sort_mixed_type(df[var1].unique().tolist())
     list_var2 = sort_mixed_type(df[var2].unique().tolist())
 
-    ncols = 3
+    if len(list_dummy)<3:
+        ncols = len(list_dummy)
+    else:
+        ncols = 3
     nrows = int(np.ceil(len(list_dummy)/ncols))
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*5, nrows*5))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*7, nrows*7), squeeze=False)
     for ax, dum in zip(axes.flatten(), list_dummy):
         dfthis = df[df["dummy"]==dum]
 
@@ -1936,7 +1946,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         for lev in levels_others:
 
             if PRINT:
-                print("---- getting this level (othervar):", lev)
+                print("=========== getting this level (othervar):", lev)
             # get data
             dfthis = df[df[var_conj_of_others] == lev]
 
@@ -1944,7 +1954,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
                 lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
                 PRINT=PRINT) 
             if DEBUG:
-                print(lev, var, levels_var, good)
+                print(lev, ' -- ',  var, ' -- ',  levels_var, ' -- ', good)
             if good:
                 # keep, first pruning to just the levels that passed
                 # print(len(dfthis))
@@ -1953,7 +1963,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
                 if prune_levels_with_low_n:
                     dfthis = dfthis[dfthis[var].isin(levels_passing)]
                     if PRINT:
-                        print(f"n for each level of {var}, for the othervar level {lev}")
+                        print(f"-- n for each level of {var}, for the othervar level {lev}")
                         for _lev in levels_passing:
                             print(_lev, "...", sum(dfthis[var]==_lev))
                 list_dfthis.append(dfthis)
@@ -1998,7 +2008,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         writeStringsToFile(PRINT_AND_SAVE_TO, list_s)
 
     if len(dfout)>0 and plot_counts_heatmap_savedir:
-        fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
+        if False:
+            fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
+        else:
+            fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
+                vars_others=None)
         savefig(fig, plot_counts_heatmap_savedir)
 
     return dfout, dict_dfthis

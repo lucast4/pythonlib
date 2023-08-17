@@ -257,11 +257,12 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
     DS.Dat["gap_from_prev_vel"] = vel
 
     # chunk diff from previous stroke?
-    list_chunk_diff = []
-    for ind in range(len(DS.Dat)):
-        chunk_diff, rank_within_diff = DS.context_chunks_diff(ind, first_stroke_diff_to_zero=True)
-        list_chunk_diff.append(chunk_diff)
-    DS.Dat["chunk_diff_from_prev"] = list_chunk_diff
+    DS.context_chunks_assign_columns()
+    # list_chunk_diff = []
+    # for ind in range(len(DS.Dat)):
+    #     chunk_diff, rank_within_diff = DS.context_chunks_diff(ind, first_stroke_diff_to_zero=True)
+    #     list_chunk_diff.append(chunk_diff)
+    # DS.Dat["chunk_diff_from_prev"] = list_chunk_diff 
 
     # Epoch
     DS.dataset_append_column("epoch")

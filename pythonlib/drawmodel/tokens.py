@@ -100,7 +100,7 @@ class Tokens(object):
         
         return chunk_rank, chunk_within_rank
 
-    def chunks_update_by_chunksobject(self, C):
+    def chunks_update_by_chunksobject(self, C, return_n_in_chunk=False):
         """ Assign each token to a chunk and a ordinal withn the chunk, based
         on the Hier defined in C.Hier. E..g, C could define concrete chunks, like lollis
         [[1,2], [0,4]], and this will assigns toeksn with strokeinds 1 and 2 to chunk 0, a
@@ -117,6 +117,14 @@ class Tokens(object):
 
         NOTE: the numbers index the order the chunks appear in C.Hier. If Fixed order is False,
         then these numbers are not meaningful, but simply are unique identifiers for items in Hier.
+
+        PARAMS:
+        - return_n_in_chunk, bool, if True, then returns for each index the number of 
+        items in the chunk that index is in. e.g,, if
+        chunk_rank = [0, 0, 0, 1, 1, 1, 2] 
+        chunk_within_rank = [0, 1, 2, 0, 1, 2, 0]
+        Then:
+        chunk_n_in_chunk = [3, 3, 3, 3, 3, 3, 1]
         """
 
         tokens = self.Tokens
@@ -135,13 +143,52 @@ class Tokens(object):
                 o = 0
             r_prev = r
             chunk_within_rank.append(o)
-        
+    
+        # For each item get the n items in that item's chunk        
+        n_current = chunk_within_rank[-1]
+        do_reset = True
+        chunk_n_in_chunk = []
+        for i in chunk_within_rank[::-1]:
+            # Travel backwards.
+            
+            if do_reset:
+                # Then you hit 0 on previous item. or this is the start
+                n_current = i+1 # n items in the chunk that is starting.
+                do_reset = False
+            
+            if i==0:
+                # Reset on next item
+                do_reset = True
+            
+            chunk_n_in_chunk.append(n_current)
+        chunk_n_in_chunk = chunk_n_in_chunk[::-1] # flip so is correct order.
+
+        # get rank from end of chunk, where -1 means is end
+        # e.g., if chunk_within_rank = [0,1,2,3,0,1,0, 1, 2, 3, 4]
+        # then chunk_within_rank_fromlast = [-4, -3, -2, -1, -2, -1, -5, -4, -3, -2, -1]
+        reset=True
+        out = []
+        for i in chunk_within_rank[::-1]:
+            if reset:
+                ct=0
+                reset=False
+            ct+=-1
+            if i==0:
+                reset=True
+            out.append(ct)
+        chunk_within_rank_fromlast = out[::-1]
+
         # 3) modify tokens
-        for t,r,o in zip(tokens, chunk_rank, chunk_within_rank):
+        for t,r,o,l,n in zip(tokens, chunk_rank, chunk_within_rank, chunk_within_rank_fromlast, chunk_n_in_chunk):
             t["chunk_rank"] = r
             t["chunk_within_rank"] = o
+            t["chunk_within_rank_fromlast"] = l
+            t["chunk_n_in_chunk"] = n
         
-        return chunk_rank, chunk_within_rank
+        if return_n_in_chunk:
+            return chunk_rank, chunk_within_rank, chunk_n_in_chunk
+        else:
+            return chunk_rank, chunk_within_rank
 
 
     def sequence_context_relations_calc(self):
