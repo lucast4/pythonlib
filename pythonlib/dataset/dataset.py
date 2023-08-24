@@ -1564,7 +1564,18 @@ class Dataset(object):
                 if k=="guidelight":
                     assert(np.all(v==1.))
                 else:
-                    assert(len(v)==0)
+                    # print("here")
+                    # print(bp["fade"])
+                    # print(k)
+                    # print(v)
+                    # print(v.shape)
+                    if len(v.shape)>0 and len(v)>0:
+                        # ok if v.shape is ()
+                        print(bp["fade"])
+                        print(k)
+                        print(v)
+                        print(v.shape)
+                        assert False
 
         # TT.ObjectClass["ChunksListClass"].print_summary()
         if plot_summary:
