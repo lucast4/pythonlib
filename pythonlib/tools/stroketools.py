@@ -9,6 +9,10 @@ import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
 
 # =============== TIME SERIES TOOLS
+def create_generate_strokes_fake_debug(nstrokes):
+    strokes = [np.random.rand(5,3) for _ in range(nstrokes)]
+    return strokes
+
 def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
     """interpoaltes each stroke, such that there are 
     N timesteps in each stroke. uses the actual time to interpoatle
@@ -1178,6 +1182,70 @@ def getBothDirections(strokes, fake_timesteps_ver = "in_order", fake_timesteps_p
             # plotDatStrokes(strokes, ax)
             plotDatStrokes(S, ax, plotver="strokes_order")
 
+def concatStrokesTimeGap(strokes, MINTIME, DEBUG=False):
+    """
+    PARAMS:
+    - MINTIME, in sec
+    """
+
+    # If adjacent strokes off and on close in time, then assume this is one stroke
+    # and is touhscreeen error.
+    def try_concatting_close_strokes(strokes_this):
+        """ concats adj strokes if finds
+        If dins contat, does it then immed returns. so max concats 1 gap.
+        """
+        from pythonlib.tools.stroketools import concatStrokesSpecific
+        list_concat = []
+        for i in range(len(strokes_this)-1):
+            j = i+1
+            s1 = strokes_this[i]
+            s2 = strokes_this[j]
+
+            toff = s1[-1, 2]
+            ton = s2[0, 2]
+
+            if ton - toff < MINTIME:
+
+                if DEBUG:
+                    print(i, j, toff, ton, MINTIME)
+
+                # then concat them
+                strokes_this = concatStrokesSpecific(strokes_this, [i, j])
+                return strokes_this, True
+
+        # failed to concat
+        return strokes_this, False
+
+    # Keep trying to concat until no concats
+    did_concat = True
+    while did_concat:
+        strokes, did_concat = try_concatting_close_strokes(strokes)
+
+    return strokes
+
+
+def concatStrokesSpecific(strokes, inds_concat):
+    """ Concat concescutive strok in strokes, returning strokes with
+    fewer strok
+    PARAMS:
+    - inds_concat, list of adjacent indices to concat into single strok
+    e.g, [1,2] for a len 4 strokes returns len 3, with first aned last unchagned,
+    but middle on concatted.
+    """
+    # make sure adjacent indices only
+    inds_concat = sorted(inds_concat)
+
+    i_prev = inds_concat[0]
+    for i in inds_concat[1:]:
+        assert i == i_prev+1
+        i_prev = i
+    for i in inds_concat:
+        assert i>=0
+        assert i<len(strokes)
+
+    strokes_new = strokes[:inds_concat[0]] + [np.concatenate([strokes[i] for i in inds_concat], axis=0)] + strokes[inds_concat[-1]+1:]
+
+    return strokes_new
 
 def concatStrokes(strokes, reorder=False, thresh=10, sanity_check=False):
     """ combines strokes (list of np array) into strokes of 
