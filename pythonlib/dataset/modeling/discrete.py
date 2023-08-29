@@ -357,9 +357,23 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
                 x = -e[1]['x']
                 y = e[1]['y']
-                return x + 0.01*y # projection onto (1,1)
+                return x + 0.1*y # projection onto (1,1)
             elif isinstance(e, dict):
-                return -e['x'] + 0.01*e['y']
+                return -e['x'] + 0.1*e['y']
+            else:
+                print(e)
+                assert False
+
+        def _getRightThenUp(e):
+            """ left, but break ties using up.
+            """
+            if isinstance(e, list) and len(e)==2:
+                # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+                x = e[1]['x']
+                y = e[1]['y']
+                return x + 0.1*y # projection onto (1,1)
+            elif isinstance(e, dict):
+                return e['x'] + 0.1*e['y']
             else:
                 print(e)
                 assert False
@@ -381,15 +395,18 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         elif direction in ['down', 'D']:
             # sort by descending y
             return sorted(objects, reverse=True, key=_getY)
-        elif direction in ["TR", "topright"]:
+        elif direction in ["TR"]:
             # top right
             return sorted(objects, key=_getXY)
-        elif direction in ["TL"]:
+        elif direction in ["TL", "topleft"]:
             # top left
             return sorted(objects, key=_getXYrev)
         elif direction in ["UL"]:
             # left, then break ties with up
             return sorted(objects, key=_getLeftThenUp)
+        elif direction in ["topright"]:
+            # typewriter: first right, ythrn break ties by up.
+            return sorted(objects, key=_getRightThenUp)
         else:
             print(direction)
             assert False, 'invalid direction'
@@ -1124,7 +1141,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "llCV2", "llCV3"]:
+    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "llCV1", "llCV2", "llCV3"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
@@ -1223,6 +1240,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("AnBmCk1a",):_get_rankdir_variations(["AnBmCk1a"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("AnBmCk1b",):_get_rankdir_variations(["AnBmCk1b"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("AnBmCk1c",):_get_rankdir_variations(["AnBmCk1c"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
+        ("llCV1",):_get_rankdir_variations(["llCV1"]) + _get_direction_variations(["L"]), #  dirgrammardiego1
         ("llCV2",):_get_rankdir_variations(["llCV2"]) + _get_direction_variations(["L"]), #  dirgrammardiego4
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2

@@ -231,6 +231,9 @@ class Dataset(object):
              "FEATURE_NAMES":FEATURE_NAMES, 
              "SCORE_COL_NAMES":SCORE_COL_NAMES}
 
+        # Cleanup
+
+
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
         """ MAIN loading function, use this for all loading purposes
         - animal_exp MAINt_rule = [aer1, aer2, ..] length of inputs, where aer1 is like (a, e, r)
@@ -253,6 +256,8 @@ class Dataset(object):
                 remove_online_abort = self.ParamsCleanup["remove_online_abort"]
                 )
             self._check_consistency()
+        else:
+            self._cleanup_reloading_saved_state()
 
 
     def _store_dataframes(self, inputs, append_list):
@@ -1633,6 +1638,13 @@ class Dataset(object):
 
 
     ############# CLEANUP
+    def _cleanup_reloading_saved_state(self):
+        # e..g, if loading saved datase4t using neuralmonkey
+        print("=== CLEANING UP self.Dat (_cleanup_reloading_saved_state) ===== ")
+        if not hasattr(self, "_BehClassExtracted"):
+            self._BehClassExtracted = None
+
+
     def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True): 
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
@@ -6445,6 +6457,9 @@ class Dataset(object):
         - appends columns to self.Dat, including success_binary_quick
         """
         from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
+
+        if "base" in self.Dat["epoch"] or "baseline" in self.Dat["epoch"]:
+            assert False, "You must remove baseline epochs, they dont have defined parses."
 
         # 1) Score each trial based on parses
         bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG)
