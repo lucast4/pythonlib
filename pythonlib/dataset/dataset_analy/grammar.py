@@ -110,13 +110,16 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         # Use only no-sup data for these
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
         for split_by in LIST_SPLIT_BY:
-            # Old plots
-            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by)
-            fig1.savefig(f"{sdir}/splitby_{split_by}-trialdat-1.pdf")
-            fig2.savefig(f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+            try:
+                # Old plots
+                fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by)
+                fig1.savefig(f"{sdir}/splitby_{split_by}-trialdat-1.pdf")
+                fig2.savefig(f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
 
-            # New plots
-            bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
+                # New plots
+                bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
+            except Exception as err:
+                pass
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  

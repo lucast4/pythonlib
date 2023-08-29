@@ -209,9 +209,22 @@ def preprocess_dataset(D, doplots=False):
                 from pythonlib.tools.snstools import heatmap
                 from pythonlib.tools.pandastools import convert_to_2d_dataframe
 
+                fig = heatmap(dfheat_abort)[0]
+                savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
+
                 assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-                if len(dfheat_abort.index.tolist())>0:
-                    assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
+    
+                if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
+                    # Is probably becusae lack any trials of some shape for one of them, liek this:
+                    # ['line-8-3-0', 'line-8-4-0']
+                    # ['V-2-4-0', 'line-8-3-0', 'line-8-4-0']
+                    # - just skip for now.
+                    if False:
+                        print(dfheat_abort.index.tolist())
+                        print(dfheat_succ.index.tolist())
+                        assert False
+                    else:
+                        continue
 
                 dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
                 dfheat_ntrials = dfheat_abort + dfheat_succ

@@ -59,6 +59,7 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("directionv2", ("up",))] = "U"
     grouping_map_tasksequencer_to_rule[("directionv2", ("topright",))] = "TR"
     grouping_map_tasksequencer_to_rule[("directionv2", ("topleft",))] = "TL"
+    grouping_map_tasksequencer_to_rule[("directionv2", ("UL",))] = "UL"
 
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
@@ -147,6 +148,11 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         'rows_direction', 
         ('up','left')
         )] = "rowsUL" # 
+
+    grouping_map_tasksequencer_to_rule[(
+        'rows_direction', 
+        ('up','snkLR')
+        )] = "rowsUsnkLR" # 8/21/23 - Diego, dirgrammardiego6
 
     grouping_map_tasksequencer_to_rule[(
         'cols_direction', 
@@ -1131,7 +1137,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
     assert isinstance(list_rules, list)
 
     DICT_RULESTRINGS_CONSISTENT = {}
-    for r in ["D", "U", "R", "L", "TR"]:
+    for r in ["D", "U", "R", "L", "TR", "UL"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
     for r in ["LVl1", "lVL1", "VlL1"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
@@ -1141,7 +1147,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "llCV1", "llCV2", "llCV3"]:
+    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "llCV1", "llCV2", "llCV3"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
@@ -1233,6 +1239,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("LVl1", "lVL1", "VlL1", "llV1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1")),
         ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
         ("TR",):_get_direction_variations(["TR"]),
+        ("UL",):_get_direction_variations(["UL"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
@@ -1241,6 +1248,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("AnBmCk1b",):_get_rankdir_variations(["AnBmCk1b"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("AnBmCk1c",):_get_rankdir_variations(["AnBmCk1c"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("llCV1",):_get_rankdir_variations(["llCV1"]) + _get_direction_variations(["L"]), #  dirgrammardiego1
+        ("AnBmCk2",):_get_rankdir_variations(["AnBmCk2"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("llCV2",):_get_rankdir_variations(["llCV2"]) + _get_direction_variations(["L"]), #  dirgrammardiego4
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2

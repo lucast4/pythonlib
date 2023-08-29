@@ -438,7 +438,11 @@ class DatStrokes(object):
             if indstrok==0:
                 # the first strok is time from raise
                 gap_from_prev_dur = me["ons"][indstrok] - me["raise"]
-                assert gap_from_prev_dur==mt["time_raise2firsttouch"], "just sanity"
+                if not gap_from_prev_dur==mt["time_raise2firsttouch"]:
+                    print(me)
+                    print(mt)
+                    print(gap_from_prev_dur)
+                    assert gap_from_prev_dur==mt["time_raise2firsttouch"], "just sanity"
             else:
                 gap_from_prev_dur = me["ons"][indstrok] - me["offs"][indstrok-1]
             list_gap_dur.append(gap_from_prev_dur)
