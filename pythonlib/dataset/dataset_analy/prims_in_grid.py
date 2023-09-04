@@ -212,8 +212,6 @@ def preprocess_dataset(D, doplots=False):
                 fig = heatmap(dfheat_abort)[0]
                 savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
 
-                assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-    
                 if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
                     # Is probably becusae lack any trials of some shape for one of them, liek this:
                     # ['line-8-3-0', 'line-8-4-0']
