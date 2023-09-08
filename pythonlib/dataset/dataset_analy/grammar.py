@@ -91,22 +91,22 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         print(which_rules)
         assert False
 
-    ####### 1) COmpare beh to all hypotheses (rules, discrete)
-    # Also make plots for rule-based analysis
-    savedir= f"{SDIR}/discrete_rules"
-    os.makedirs(savedir, exist_ok=True) 
-
-    # combine in single plot (all taskgroups)
-    sdir = f"{savedir}/score_epoch_x_rule_splitby"
-    os.makedirs(sdir, exist_ok=True)
-
-    LIST_SPLIT_BY = ["taskgroup", "probe"]
-    if "epochset" in bmh.DatLong.columns:
-        LIST_SPLIT_BY.append("epochset")
-    if "taskfeat_cat" in bmh.DatLong.columns:
-        LIST_SPLIT_BY.append("taskfeat_cat")          
-      
     if doplots:
+        ####### 1) COmpare beh to all hypotheses (rules, discrete)
+        # Also make plots for rule-based analysis
+        savedir= f"{SDIR}/discrete_rules"
+        os.makedirs(savedir, exist_ok=True) 
+
+        # combine in single plot (all taskgroups)
+        sdir = f"{savedir}/score_epoch_x_rule_splitby"
+        os.makedirs(sdir, exist_ok=True)
+
+        LIST_SPLIT_BY = ["taskgroup", "probe"]
+        if "epochset" in bmh.DatLong.columns:
+            LIST_SPLIT_BY.append("epochset")
+        if "taskfeat_cat" in bmh.DatLong.columns:
+            LIST_SPLIT_BY.append("taskfeat_cat")          
+      
         # Use only no-sup data for these
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
         for split_by in LIST_SPLIT_BY:

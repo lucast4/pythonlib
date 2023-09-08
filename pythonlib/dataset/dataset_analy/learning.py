@@ -306,7 +306,7 @@ def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary
     from pythonlib.tools.pandastools import convert_to_2d_dataframe, aggregGeneral
     sdirthis = f"{SDIR}/summary"
 
-    def _plot_counts_heatmat(dfGramScore, col1, col2, ax=None):
+    def _plot_counts_heatmap(dfGramScore, col1, col2, ax=None):
         
         if col2=="taskgroup":
             # then datapt is characters (not trials)
@@ -323,22 +323,26 @@ def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary
 
     col1 = "epoch_superv"
     col2 = "taskgroup"
-    dfthis, fig, ax = _plot_counts_heatmat(dfGramScore, col1, col2)
+    dfthis, fig, ax = _plot_counts_heatmap(dfGramScore, col1, col2)
     path = f"{sdirthis}/staticsummary.txt"
     fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
 
     col1 = "epoch_superv"
     col2 = "character"
-    dfthis, fig, ax = _plot_counts_heatmat(dfGramScore, col1, col2)
+    dfthis, fig, ax = _plot_counts_heatmap(dfGramScore, col1, col2)
     fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
 
-    taskgroups = dfGramScore["taskgroup"].unique()
-    for tg in taskgroups:
-        dfthis = dfGramScore[(dfGramScore["taskgroup"] == tg)]
-        col1 = "epoch_superv"
-        col2 = "character"
-        dfthis, fig, ax = _plot_counts_heatmat(dfthis, col1, col2)
-        fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-taskgroup_{tg}.pdf")
+    # separate plots for diff levels of a higher variable.
+    LIST_VAR = ["taskgroup", "epochset", "taskfeat_cat", "probe"]
+    for VAR in LIST_VAR:
+        levels = dfGramScore[VAR].unique()
+        for lev in levels:
+            dfthis = dfGramScore[(dfGramScore[VAR] == lev)]
+            col1 = "epoch_superv"
+            col2 = "character"
+            dfthis, fig, ax = _plot_counts_heatmap(dfthis, col1, col2)
+            fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-{VAR}_{lev}.pdf")    
+            plt.close("all")
 
 def plot_performance_each_char(dfGramScore, D, SDIR, column_binary_success="success_binary_quick"):
     """ Plot separate fro each characters, organized in different ways
