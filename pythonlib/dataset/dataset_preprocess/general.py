@@ -643,7 +643,7 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # (AB)(n), like lollipop, but hacked for today, hard coded for specific prims today.
             # 8/29/22
             p = tuple(["hack_220829"])
-        elif ver=="prot_prims_in_order_AND_directionv2":
+        elif ver in ["prot_prims_in_order_AND_directionv2", "prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY"]:
             # TYhen is hierarchcayl, first order by shape, then within shapes order by direction
             list_prims = prms[0]
             # each prim in list prims could be 3-list, like ['line', 1, 1] or 1-list, ['line']

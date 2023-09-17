@@ -116,6 +116,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'left'))] = "llCV2" # Diego, dirgrammardiego1 (7/20/23)
 
     grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'left'))] = "llCV2FstStk" # Diego, dirgrammardiego1 (7/20/23)
+
+    grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3" # Diego, dirgrammardiego5 (8/14/23)
 
@@ -1154,7 +1158,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
         # order across lollis (direction) and appending extra prims (any order)
         DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
-    for r in ["rndstr"]:
+    for r in ["rndstr", "llCV2FstStk"]:
         # Each task has a defined sequence in its matlab code (tasksequencer).
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
@@ -1252,7 +1256,8 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV2",):_get_rankdir_variations(["llCV2"]) + _get_direction_variations(["L"]), #  dirgrammardiego4
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
-        ("rndstr",): ["preset-null-rndstr"] #  
+        ("rndstr",): ["preset-null-rndstr"], #  
+        ("llCV2FstStk",): ["preset-null-llCV2FstStk"] # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
 
