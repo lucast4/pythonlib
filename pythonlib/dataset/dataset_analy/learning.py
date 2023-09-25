@@ -15,6 +15,7 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 import pandas as pd
 from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
+from pythonlib.tools.plottools import savefig
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 
@@ -299,7 +300,8 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
         print(err)
 
 
-def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary_quick"):
+def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary_quick",
+    suffix=None):
     """ Heatmap for n trials for each combo of conditions (e.g., epoch|supervsion, and taskgroup)
     i.e. rows are epoch/sup and cols are taskgroup. plots and saves figures.
     """
@@ -325,12 +327,18 @@ def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary
     col2 = "taskgroup"
     dfthis, fig, ax = _plot_counts_heatmap(dfGramScore, col1, col2)
     path = f"{sdirthis}/staticsummary.txt"
-    fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
+    if suffix:
+        savefig(fig, f"{sdirthis}/counts_heatmap_{col2}-{suffix}.pdf")
+    else:
+        savefig(fig, f"{sdirthis}/counts_heatmap_{col2}.pdf")
 
     col1 = "epoch_superv"
     col2 = "character"
     dfthis, fig, ax = _plot_counts_heatmap(dfGramScore, col1, col2)
-    fig.savefig(f"{sdirthis}/counts_heatmap_{col2}.pdf")
+    if suffix:
+        savefig(fig, f"{sdirthis}/counts_heatmap_{col2}-{suffix}.pdf")
+    else:
+        savefig(fig, f"{sdirthis}/counts_heatmap_{col2}.pdf")
 
     # separate plots for diff levels of a higher variable.
     LIST_VAR = ["taskgroup", "epochset", "taskfeat_cat", "probe"]
@@ -341,7 +349,11 @@ def plot_counts_heatmap(dfGramScore, SDIR, column_binary_success="success_binary
             col1 = "epoch_superv"
             col2 = "character"
             dfthis, fig, ax = _plot_counts_heatmap(dfthis, col1, col2)
-            fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-{VAR}_{lev}.pdf")    
+            # fig.savefig(f"{sdirthis}/counts_heatmap_{col2}-{VAR}_{lev}.pdf")    
+            if suffix:
+                savefig(fig, f"{sdirthis}/counts_heatmap_{col2}-{VAR}_{lev}-{suffix}.pdf")
+            else:
+                savefig(fig, f"{sdirthis}/counts_heatmap_{col2}-{VAR}_{lev}.pdf")
             plt.close("all")
 
 def plot_performance_each_char(dfGramScore, D, SDIR, column_binary_success="success_binary_quick"):
