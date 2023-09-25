@@ -133,6 +133,10 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             plot_performance_each_char(dfGramScore, D, SDIR)
             # 1) print all the taskgroups
             D.taskgroup_char_ntrials_print_save(SDIR)
+
+            # plot counts, only success triuals
+            df = bmh.DatLong[bmh.DatLong["success_binary_quick"]==True].reset_index(drop=True)
+            plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
         else:
             print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
 
