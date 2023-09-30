@@ -1103,6 +1103,16 @@ class Dataset(object):
         TT.objectclass_extract_all()
         return TT.ObjectClass
 
+    def taskclass_extract_tasksequencer_params(self, ind):
+        """ 
+        REturtn tasksequencer params used in ml2 to conditions the sequencing for this task.
+        RETURNS:
+        - sequence_ver, str name of type of sequ, e.g, 'directionv2'
+        - seuqence_params, list of params for this ver,e .g, [['left'], 'default', array(1.)]
+        """
+        T = self.Dat.iloc[ind]["Task"]
+        return T.ml2_tasksequencer_params_extract()
+
     def taskclass_extract_tstruct_index(self, ind):
         """ Return the tstruct index, where the tstruct is 
         the cell array of task sets defined in trainGetterv2 in matlab 
