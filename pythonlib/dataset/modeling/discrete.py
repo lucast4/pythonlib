@@ -210,6 +210,8 @@ def _get_default_grouping_map_tasksequencer_to_rule():
 
     grouping_map_tasksequencer_to_rule[('randomize_strokes', tuple(["randomize_strokes"]))] = "rndstr"
 
+    grouping_map_tasksequencer_to_rule[('specific_order', tuple(["indices"]))] = "SpcOrd1"
+
     return grouping_map_tasksequencer_to_rule
 
 
@@ -766,7 +768,19 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
 
+        # tp = D.blockparams_extract_single_taskparams(ind)
+        # # new, post 9/19/22 - using taskparams
+        # ver = tp["task_objectclass"]["tasksequencer_ver"]
+        # prms = tp["task_objectclass"]["tasksequencer_params"] # list.
+
+        print(ruledict)
+        print(Task.Params["input_params"])
         TT = Task.Params["input_params"]
+        print(1, TT)
+        print(2, TT.get_tasknew()["Grammar"])
+        print(3, TT.get_tasknew()["Grammar"]["Tasksequencer"])
+        assert False, "try to figure out specific_order mode. Q: does this include the specific indices?"
+
         C = TT.objectclass_extract_active_chunk()
         if C is not None:
             taskstroke_inds_correct_order = C.extract_strokeinds_as("flat")
@@ -1198,7 +1212,8 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
         # order across lollis (direction) and appending extra prims (any order)
         DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
-    for r in ["rndstr", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1", "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12"]:
+    for r in ["rndstr", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1", 
+        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"]:
         # Each task has a defined sequence in its matlab code (tasksequencer).
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
@@ -1297,6 +1312,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("rndstr",): ["preset-null-rndstr"], #  
+        ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
         ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
         ("AnBmCk2FstStk",): ["preset-null-AnBmCk2FstStk"],
         ("AnBmCk2NOFstStk",): ["preset-null-AnBmCk2NOFstStk"],

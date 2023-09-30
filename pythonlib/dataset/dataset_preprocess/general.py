@@ -681,6 +681,20 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         elif ver=="randomize_strokes":
             assert len(prms)==0
             p = tuple([ver])
+        elif ver=="specific_order":
+            # a concrete seuqence.
+            # e.g.
+            # specific_order
+            # e.g., prms= ['indices', array([2., 3., 1.])]            
+
+            meth_this = prms[0]
+            if meth_this=="indices":
+                indices = tuple(int(x) for x in prms[1])
+                # p = tuple([meth_this, indices])
+                p = tuple([meth_this])
+            else:
+                print(prms)
+                assert False, "what is this?"
         elif ver=="shape_chunk_concrete":
             # ver = shape_chunk_concrete
             # prms = ['lolli', ['D', 'R']]
