@@ -755,6 +755,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         print("First day (210427) need to take session 5. Second day take all. ..")
         assert False
 
+    # Generate behclass. This is used frequenctly, so I decided to aklways do this
+    D.behclass_preprocess_wrapper(skip_if_exists=False)
+
     # (2) Extract new derived varaibles
     # -- Plan time
     if "holdtime" in D.Dat.columns and "delaytime" in D.Dat.columns:
@@ -808,8 +811,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
                 # mt["time_go2raise"]
 
-
-
     ### EXTRACT FEATURES
     # - hausdorff, offline score
     if extract_features:
@@ -856,7 +857,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         score_alignment(D, GROUPING, GROUPING_LEVELS, SCORE_COL_NAMES)
     else:
         SCORE_COL_NAMES = []
-
 
     # - score beh sequence rank relative to parses
     if get_sequence_rank:
@@ -907,9 +907,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:
         assert traintest_reassign_method=="fixed", "I had previously hard coded as such"
     preprocess_task_train_test(D, expt, method=traintest_reassign_method)
-
-    # () Note that preprocess done
-    D._analy_preprocess_done=True
 
     # Append fixed taks setds information
     D.taskclass_extract_los_info_append_col()
@@ -995,11 +992,14 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
             return x["taskgroup"]
     D.Dat = applyFunctionToAllRows(D.Dat, F, "taskgroup")
 
-    # Generate behclass. This is used frequenctly, so I decided to aklways do this
-    D.behclass_preprocess_wrapper(skip_if_exists=False)
+    # # Generate behclass. This is used frequenctly, so I decided to aklways do this
+    # D.behclass_preprocess_wrapper(skip_if_exists=False)
     
     ############## OLD THINGS, delete if not using (to avoid confusion)
     del D.Dat["supervision_params"] # from drawmonkey.
+
+    # () Note that preprocess done
+    D._analy_preprocess_done=True
 
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 

@@ -5410,7 +5410,7 @@ class Dataset(object):
             Beh = self.Dat.iloc[i]["BehClass"]
             Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy)
             if i%200==0:
-                print(i)
+                print(i, "_behclass_tokens_extract_datsegs")
 
     def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
@@ -5430,7 +5430,7 @@ class Dataset(object):
             Beh.alignsim_compute(remove_bad_taskstrokes=remove_bad_taskstrokes, 
                 taskstrokes_thresh=taskstrokes_thresh)
             if i%200==0:
-                print(i)
+                print(i, "_behclass_alignsim_compute")
 
     def behclass_extract(self, inds_trials = None):
         """ Get list of behclass for these trials
