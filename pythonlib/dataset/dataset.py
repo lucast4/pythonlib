@@ -5819,7 +5819,11 @@ class Dataset(object):
             elif prms["COLOR_METHOD"]=="randomize_each_stroke":
                 # This can be in charseq, when colors are assigned
                 # randomly, e.g, Pancho 230125
-                supervstr+="|colrnd"                
+                supervstr+="|colrnd"
+            elif prms["COLOR_METHOD"]=="solid_sequence_mask":
+                # This then is like solid, but not using rule, instead signalling
+                # that this is trial using sequence_mask.
+                supervstr+="|colsqmsk"
             else:
                 print(prms)
                 print(self.Dat.iloc[ind]["epoch"])

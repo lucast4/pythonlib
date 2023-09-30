@@ -303,7 +303,15 @@ def _groupingParams(D, expt):
         # 10/17/22 - e..g, dircolro3b    
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer"]
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True            
+
+    elif "slots" in expt:
+        # 9/29/23 - e..g, slotscoldiego1
+        # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True            
 
@@ -385,7 +393,9 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = False
     else:
         # pass, just use defaults
-        pass
+        print(expt)
+        assert False, "Force you to input each expt name here... so dont have silent mistake."
+        # pass
 
     ### always reassign grouping by color instruction (even if not using it, doesnt do anythign)
     if "color_instruction" not in grouping_reassign_methods_in_order:
@@ -643,13 +653,31 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # (AB)(n), like lollipop, but hacked for today, hard coded for specific prims today.
             # 8/29/22
             p = tuple(["hack_220829"])
-        elif ver in ["prot_prims_in_order_AND_directionv2", "prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY"]:
+        elif ver in ["prot_prims_in_order_AND_directionv2", 
+            "prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY",
+            "prot_prims_in_order_AND_directionv2_FIRSTSTROKEEXCLUDE"]:
             # TYhen is hierarchcayl, first order by shape, then within shapes order by direction
             list_prims = prms[0]
             # each prim in list prims could be 3-list, like ['line', 1, 1] or 1-list, ['line']
             list_prims_str = [_convert_to_prim(x) for x in list_prims] # list of strings
             direction = prms[1][0] # topright
             p = tuple(list_prims_str + [direction])
+        elif ver in ["prot_prims_in_order_AND_directionv2_FLEXSTROKES"]:
+            # TYhen is hierarchcayl, first order by shape, then within shapes order by direction
+            list_prims = prms[0] # ['zigzagSq', array(1.), array(1.)], ['Lcentered', array(4.), array(4.)], ['line', array(6.), array(2.)], ['line', array(8.), array(1.)], ['line', array(9.), array(1.)], ['line', array(6.), array(1.)], ['arcdeep', array(4.), array(3.)], ['V', array(2.), array(4.)]]
+            # each prim in list prims could be 3-list, like ['line', 1, 1] or 1-list, ['line']
+            list_prims_str = [_convert_to_prim(x) for x in list_prims] # list of strings
+            direction = prms[1][0] # topright, or ['UL']
+
+            if len(prms[2].shape)==0:
+                inds_dont_shuffle = tuple([int(prms[2])]) # array([1., 2.]) --> (1,2)
+            else:
+                inds_dont_shuffle = tuple([int(x) for x in prms[2]]) # array([1., 2.]) --> (1,2)
+            inds_must_change = tuple([int(x) for x in prms[3]]) # array([3., 4., 5.]) --> (3,4,5)
+
+            p = tuple(list_prims_str + [direction] + [inds_dont_shuffle] + [inds_must_change])
+            # e.g,, ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2), (3, 4, 5))
+
         elif ver=="randomize_strokes":
             assert len(prms)==0
             p = tuple([ver])
