@@ -122,6 +122,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3" # Diego, dirgrammardiego5 (8/14/23)
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3FstStk" # Diego, dirgrammardiego5 (8/14/23)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
@@ -138,6 +142,42 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2FstStk" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FIRSTSTROKEEXCLUDE', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2NOFstStk" # Pancho, dirgrammarPancho1 (8/2023)
+
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1,), (2, 3, 4, 5)))] = "llCV3RndFlx1" #
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2), (3, 4, 5)))] = "llCV3RndFlx12" 
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2, 3), (4, 5)))] = "llCV3RndFlx123"
+
+
+
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left', (), (1, 2, 3, 4)))] = "AnBmCk2RndFlx0" # Pancho
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left', (1,), (2, 3, 4)))] = "AnBmCk2RndFlx1" # Pancho
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left', (1, 2), (3, 4)))] = "AnBmCk2RndFlx12" # Pancho
 
     grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
@@ -1158,7 +1198,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
         # order across lollis (direction) and appending extra prims (any order)
         DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
-    for r in ["rndstr", "llCV2FstStk"]:
+    for r in ["rndstr", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1", "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12"]:
         # Each task has a defined sequence in its matlab code (tasksequencer).
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
@@ -1257,7 +1297,16 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("rndstr",): ["preset-null-rndstr"], #  
-        ("llCV2FstStk",): ["preset-null-llCV2FstStk"] # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
+        ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
+        ("AnBmCk2FstStk",): ["preset-null-AnBmCk2FstStk"],
+        ("AnBmCk2NOFstStk",): ["preset-null-AnBmCk2NOFstStk"],
+        ("llCV3FstStk",): ["preset-null-llCV3FstStk"],
+        ("llCV3RndFlx123",): ["preset-null-llCV3RndFlx123"],
+        ("llCV3RndFlx12",): ["preset-null-llCV3RndFlx12"],
+        ("llCV3RndFlx1",): ["preset-null-llCV3RndFlx1"],
+        ("AnBmCk2RndFlx12",): ["preset-null-AnBmCk2RndFlx12"],
+        ("AnBmCk2RndFlx1",): ["preset-null-AnBmCk2RndFlx1"],
+        ("AnBmCk2RndFlx0",): ["preset-null-AnBmCk2RndFlx0"],
         # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
     }
 
