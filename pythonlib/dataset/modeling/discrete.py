@@ -767,19 +767,18 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # Each task has a defined sequence in its matlab code (tasksequencer).
         # e..g, rndstr was this, where a random sequence was sampled for eash task.
         # I.e. only a single specific sequence
+        
+        # This is the sequenver params!
+        # Task.ml2_tasksequencer_params_extract()
 
-        # tp = D.blockparams_extract_single_taskparams(ind)
-        # # new, post 9/19/22 - using taskparams
-        # ver = tp["task_objectclass"]["tasksequencer_ver"]
-        # prms = tp["task_objectclass"]["tasksequencer_params"] # list.
+        # print(ruledict)
+        # print(Task.Params["input_params"])
 
-        print(ruledict)
-        print(Task.Params["input_params"])
         TT = Task.Params["input_params"]
-        print(1, TT)
-        print(2, TT.get_tasknew()["Grammar"])
-        print(3, TT.get_tasknew()["Grammar"]["Tasksequencer"])
-        assert False, "try to figure out specific_order mode. Q: does this include the specific indices?"
+        # print(1, TT)
+        # print(2, TT.get_tasknew()["Grammar"])
+        # print(3, TT.get_tasknew()["Grammar"]["Tasksequencer"])
+        # assert False, "try to figure out specific_order mode. Q: does this include the specific indices?"
 
         C = TT.objectclass_extract_active_chunk()
         if C is not None:
