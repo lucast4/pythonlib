@@ -1630,7 +1630,9 @@ def sliceStrokes(strokes, twind, retain_n_strokes=False):
 
 
     def _slice(traj):
-        dim_time = traj.shape[1]-1 # num columns
+        assert traj.shape[1]>=2, "you dont have a time column..."
+        # dim_time = traj.shape[1]-1 # num columns
+        dim_time = 2
         # assume last col is time.
         inds = (traj[:, dim_time]>=twind[0]) & (traj[:, dim_time]<=twind[1])
         return traj[inds, :]

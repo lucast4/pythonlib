@@ -1064,7 +1064,19 @@ class Dataset(object):
 
         return inds, characters
 
+
     ############ WORKING WITH TASKS
+    def nstrokes_task_extract(self):
+        """ For each row, append column that is "strokes_task" the 
+        ground truth n strokes
+        """
+        list_n = []
+        for ind in range(len(self.Dat)):
+            n = len(self.Dat.iloc[ind]["strokes_task"])
+            list_n.append(n)
+        self.Dat["nstrokes_task"] = list_n
+        print("New column: nstrokes_task")
+    
     def taskclass_is_new_version(self, ind):
         """ Returns True if this trial; uses the new "PLanclass"
         versipn of tasks
