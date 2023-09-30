@@ -1710,6 +1710,20 @@ class TaskClass(object):
         else:
             return C
 
+    ############### TASKSEQUENCER
+    def ml2_tasksequencer_params_extract(self):
+        """ 
+        REturtn tasksequencer params used in ml2 to conditions the sequencing for this task.
+        RETURNS:
+        - sequence_ver, str name of type of sequ, e.g, 'directionv2'
+        - seuqence_params, list of params for this ver,e .g, [['left'], 'default', array(1.)]
+        """
+        O = self.ml2_objectclass_extract()
+        
+        sequence_ver = O["Grammar"]["Tasksequencer"]["sequence_ver"]
+        sequence_params = O["Grammar"]["Tasksequencer"]["sequence_params"]
+
+        return sequence_ver, sequence_params
 
     ######### PLOT
     def plotStrokes(self, ax= None, ordinal=False):

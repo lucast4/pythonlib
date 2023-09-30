@@ -876,6 +876,10 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         # same, but for rows
         assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
         dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+    elif norm_method=="all_div":
+        # divide by sum of all counts
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis/dfthis.sum().sum()
     elif norm_method=="col_sub":
         # normalize so by subtracting from each column its mean across rows
         dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)

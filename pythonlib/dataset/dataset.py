@@ -1064,7 +1064,19 @@ class Dataset(object):
 
         return inds, characters
 
+
     ############ WORKING WITH TASKS
+    def nstrokes_task_extract(self):
+        """ For each row, append column that is "strokes_task" the 
+        ground truth n strokes
+        """
+        list_n = []
+        for ind in range(len(self.Dat)):
+            n = len(self.Dat.iloc[ind]["strokes_task"])
+            list_n.append(n)
+        self.Dat["nstrokes_task"] = list_n
+        print("New column: nstrokes_task")
+    
     def taskclass_is_new_version(self, ind):
         """ Returns True if this trial; uses the new "PLanclass"
         versipn of tasks
@@ -1090,6 +1102,16 @@ class Dataset(object):
         TT = self.taskclass_extract_ml2(ind)
         TT.objectclass_extract_all()
         return TT.ObjectClass
+
+    def taskclass_extract_tasksequencer_params(self, ind):
+        """ 
+        REturtn tasksequencer params used in ml2 to conditions the sequencing for this task.
+        RETURNS:
+        - sequence_ver, str name of type of sequ, e.g, 'directionv2'
+        - seuqence_params, list of params for this ver,e .g, [['left'], 'default', array(1.)]
+        """
+        T = self.Dat.iloc[ind]["Task"]
+        return T.ml2_tasksequencer_params_extract()
 
     def taskclass_extract_tstruct_index(self, ind):
         """ Return the tstruct index, where the tstruct is 
@@ -5398,7 +5420,7 @@ class Dataset(object):
             Beh = self.Dat.iloc[i]["BehClass"]
             Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy)
             if i%200==0:
-                print(i)
+                print(i, "_behclass_tokens_extract_datsegs")
 
     def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
@@ -5418,7 +5440,7 @@ class Dataset(object):
             Beh.alignsim_compute(remove_bad_taskstrokes=remove_bad_taskstrokes, 
                 taskstrokes_thresh=taskstrokes_thresh)
             if i%200==0:
-                print(i)
+                print(i, "_behclass_alignsim_compute")
 
     def behclass_extract(self, inds_trials = None):
         """ Get list of behclass for these trials
