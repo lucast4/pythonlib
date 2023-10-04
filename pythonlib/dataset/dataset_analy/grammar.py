@@ -170,6 +170,9 @@ def conjunctions_preprocess(D):
     # First remove baseline
     D.preprocessGood(params=["remove_baseline", "one_to_one_beh_task_strokes"])
 
+    if len(D.Dat)==0:
+        return (None for _ in range(4))
+
     # Second get parses.
     D.grammarparses_successbinary_score()
     D.preprocessGood(params=["correct_sequencing_binary_score"])
