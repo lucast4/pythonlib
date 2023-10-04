@@ -64,6 +64,10 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     PARAMS:
     - which_rules, str, either to use ObjectClass matlab rule, or to regenreate
     parsesa nd ask if beh is compativle iwth any of the "same-rule" parses.
+    RETURNS:
+    - bmh
+    - SDIR
+    OR (None, None) if not enough data 
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
@@ -79,6 +83,8 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     # 1) Get learning metaparams
     list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
+    if len(D.Dat)==0:
+        return None, None
 
     # grammar_recompute_parses = False # just use the matlab ground truth
     if which_rules=="matlab":
