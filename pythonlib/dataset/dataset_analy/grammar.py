@@ -83,19 +83,20 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     # 1) Get learning metaparams
     list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
-    if len(D.Dat)==0:
-        return None, None
-
     # grammar_recompute_parses = False # just use the matlab ground truth
     if which_rules=="matlab":
         # use the ground truth objectclass
         bmh  = preprocess_dataset_matlabrule(D)
     elif which_rules=="recompute_parses":
+        print("******** len Dat:", len(D.Dat))
         bmh  = preprocess_dataset_recomputeparses(D)
         assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
     else:
         print(which_rules)
         assert False
+
+    if len(D.Dat)==0:
+        return None, None
 
     if doplots:
         ####### 1) COmpare beh to all hypotheses (rules, discrete)
@@ -148,8 +149,9 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 
         ######## CONJUNCTIONS PLOTS
         DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
-        savedir = f"{SDIR}"
-        conjunctions_plot(D, DS, savedir, params_anova)
+        if DS is not None:
+            savedir = f"{SDIR}"
+            conjunctions_plot(D, DS, savedir, params_anova)
 
     return bmh, SDIR
 
@@ -157,6 +159,7 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 def conjunctions_preprocess(D):
     """
     Online sequenbce, plot all conjucntions for grammar neural analyses
+    NOTE: returns None if D is empty after preprocessing.
     """
     from neuralmonkey.metadat.analy.anova_params import dataset_apply_params
     from neuralmonkey.classes.snippets import datasetstrokes_extract
@@ -170,6 +173,9 @@ def conjunctions_preprocess(D):
     # Second get parses.
     D.grammarparses_successbinary_score()
     D.preprocessGood(params=["correct_sequencing_binary_score"])
+
+    if len(D.Dat)==0:
+        return (None for _ in range(4))
 
     # Assign chunks info to tokens
     for ind in range(len(D.Dat)):
