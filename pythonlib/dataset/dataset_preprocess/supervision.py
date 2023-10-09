@@ -375,6 +375,13 @@ def extract_supervision_params(D, ind):
         SCREENPOST_DYNAMIC_VER = "not_sure"
         
 
+    # Whtehr cue and stim are flipped
+    if "fix_tp" in allparams.keys():
+        CUESTIM_FLIP = allparams["fix_tp"]["flip_cue_image_order"]==1
+    else:
+        assert int(D.Dat.iloc[ind]["date"]) < 231001
+        CUESTIM_FLIP = False
+
     params = {
         "ABORT_ON":ABORT_ON,
         "ABORT_MODES":ABORT_MODES,
@@ -414,7 +421,9 @@ def extract_supervision_params(D, ind):
         "SCREENPOST_ON":SCREENPOST_ON,
         "SCREENPOST_ALPHA":SCREENPOST_ALPHA,
         "SCREENPOST_SIZE":SCREENPOST_SIZE,
-        "SCREENPOST_DYNAMIC_VER":SCREENPOST_DYNAMIC_VER
+        "SCREENPOST_DYNAMIC_VER":SCREENPOST_DYNAMIC_VER,
+
+        "CUESTIM_FLIP":CUESTIM_FLIP
     }
 
 

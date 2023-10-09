@@ -65,6 +65,9 @@ def _groupingParams(D, expt):
     # }
     epoch_merge_dict = {}
 
+    # WHether epoch should include whether cue-stim flipped o this trial.
+    epoch_append_cue_stim_flip = False
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -190,6 +193,17 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
+
+    elif expt=="coldirgrammardiego1":
+        # 10/1/23 - grammar, but also flips cue-stim on random trails.
+
+        # grammar in name, it has rules.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+
+        epoch_append_cue_stim_flip = True # epoch includes info about whether cue and stim are flkipped.
 
     elif "neuralbiasdir" in expt:
         grouping_reassign = True
@@ -477,7 +491,7 @@ def _groupingParams(D, expt):
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
-        mapper_auto_rename_probe_taskgroups, epoch_merge_dict
+        mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
         mapper_character_to_category=None, append_probe_status=True,
@@ -795,7 +809,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print(len(D.Dat))
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
-        mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict \
+        mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict, \
+        epoch_append_cue_stim_flip \
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
@@ -982,8 +997,11 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.grouping_append_col(["date_MMDD", "epoch"], "date_epoch", use_strings=True, strings_compact=True)
 
     # Extract concise supervision stage
-    D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
-    D.supervision_semantic_string_append("supervision_stage_semantic")
+    if epoch_append_cue_stim_flip:
+        D.supervision_summarize_into_tuple(method="concise_cuestim", new_col_name="supervision_stage_concise")
+    else:
+        D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
+    D.supervision_semantic_string_append("supervision_stage_semantic") 
     
     def F(x):
         return (x["epoch"], x["supervision_stage_concise"])

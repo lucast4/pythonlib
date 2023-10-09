@@ -142,6 +142,8 @@ class Dataset(object):
         self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
         self._BehClassExtracted = False
 
+        self.ML2_FILEDATA = {}
+
     def initialize_dataset(self, ver, params):
         """ main wrapper for loading datasets of all kinds, including
         monkey, model, etc.
@@ -1064,6 +1066,67 @@ class Dataset(object):
 
         return inds, characters
 
+    ########### WORKING WITH RAW ML2 (monkeylogic) data
+    def ml2_extract_raw(self):
+        """ Extract fd for each datapt in self.Dat, and store in 
+        self.ML2_FILEDATA[(animal, date, expt, sess)]
+        """
+        # Extract filedata for all trials
+        from neuralmonkey.utils.monkeylogic import loadSingleDataQuick
+
+        if len(self.ML2_FILEDATA)==0:
+            for ind in range(len(self.Dat)):    
+                animal = self.Dat.iloc[ind]["animal"]
+                date = self.Dat.iloc[ind]["date"]
+                expt = self.Dat.iloc[ind]["expt"]
+                sess = self.Dat.iloc[ind]["session"]
+                key = (animal, date, expt, sess)
+                if key not in self.ML2_FILEDATA.keys():
+                    print("Loading fd for: ", key)
+                    fd = loadSingleDataQuick(animal, date, expt, sess)
+                    self.ML2_FILEDATA[key] = fd  
+
+    def _ml2_extract_fd_trial(self, ind):
+        """ Return fd and trial for this ind in self.Dat
+        RETURNS:
+        - fd, trial_ml2
+        """        
+        animal = self.Dat.iloc[ind]["animal"]
+        date = self.Dat.iloc[ind]["date"]
+        expt = self.Dat.iloc[ind]["expt"]
+        sess = self.Dat.iloc[ind]["session"]
+        key = (animal, date, expt, sess)
+        fd = self.ML2_FILEDATA[key]
+
+        trial_ml2 = self.Dat.iloc[ind]["trial"]
+
+        return fd, trial_ml2
+
+
+    def ml2_utils_getTrialsBehCodes(self, ind):
+        """
+        Get behcodes
+        RETURNS:
+        - behcodes_num, list of ints
+        - behcodes_time, list of times, in sec, matching the nums.
+        """
+        import neuralmonkey.utils.monkeylogic as ml
+
+        fd, trial_ml2 = self._ml2_extract_fd_trial(ind)
+        tmp = ml.getTrialsBehCodes(fd, trial_ml2)
+        behcodes_num = tmp["num"]
+        behcodes_time = tmp["time"]
+
+        return behcodes_num, behcodes_time
+
+
+    # def ml2_run_utils_fn(self, fn_str, ind):
+    #     """ Execute a call to function called fn_str in drawmonkey
+    #     repo (utils). It's signature must be taking (fd, trial, ...)
+    #     """
+    #     import neuralmonkey.utils.monkeylogic as ml
+
+    #     tmp = ml.getTrialsBehCodes(fd, trial_ml2)
 
     ############ WORKING WITH TASKS
     def nstrokes_task_extract(self):
@@ -5553,6 +5616,93 @@ class Dataset(object):
             self._BehClassExtracted = True
             return True
 
+    ################# Cue - related features
+    def cue_extract_cuestim_order_flipped(self, SANITY=False):
+        """ determine whether cue-stim order is flipped
+        PARAMS:
+        - SANITY, bool, if true, checks that behcodes are ordered as expected for
+        each trial based on whether flipped. this takes time since must load 
+        raw ml2 beh data.
+        NOTE:
+        Also do sanity checks that this flipping is correctly reflected in the 
+        ordering of the behcodes
+        RETURNS:
+        - Append a new column in self.Dat, self.Dat["CUE_csflipped"], bool.
+        NOTE: looks in supervision params already extracted, unless you run sanity check.
+        """
+
+        if SANITY:
+            # Extract raw ml2 data, will need below.
+            self.ml2_extract_raw()
+
+            def _behcode_get_occurances_ordered(behcodes_num,behcodes_time, codes_print=None, PRINT=False):
+                # Return list of occurances of behcodes, keeping only those in codes_print, returning
+                # in chronological order.   
+
+                if codes_print is None:
+                    # Hard codede times of behcodes that are relevant for determining that order has 
+                    # correctly been flipped.
+                    codes_print = [
+                        11, # fix cue on
+                        16, # touch fix,
+                        132, # rulecue 2
+                    #     91, 92, 21, # guide (default)
+                        91, # guide (default)
+                    #     93, 94, 22, # guide (flipped)
+                        22, # guide (flipped)
+                        71, # go
+                    ]
+
+                assert np.all(np.diff(behcodes_time)>0)
+
+                list_nums = []
+                for num, time in zip(behcodes_num, behcodes_time):
+                    if num in codes_print:
+                        if PRINT:
+                            print(num, " -- ", time)
+                        list_nums.append(num)
+
+                return list_nums
+
+            # list_nums = _behcode_get_occurances_ordered(codes_print, behcodes_num, behcodes_time)
+            # print(list_nums)
+
+
+        # COLLECT WHETHER IS FLIPPOED
+        list_flipped = []
+        for ind in range(len(self.Dat)):
+            if SANITY:
+                # Just use whatever has already been extracted
+                flipped1 = self.supervision_extract_params(ind)["CUESTIM_FLIP"]
+                flipped = self.blockparams_extract_single_taskparams(ind)["fix_tp"]["flip_cue_image_order"]==1
+                assert flipped == flipped1, "must be a coding bug."
+
+                # Save a new column
+                list_flipped.append(flipped)
+                
+                if SANITY:
+                    behcodes_num, behcodes_time = self.ml2_utils_getTrialsBehCodes(ind)
+                    list_nums = _behcode_get_occurances_ordered(behcodes_num, behcodes_time)
+                    
+                    if False:
+                        print(flipped, "--", list_nums)
+                    
+                    # NOTE: allow 11 and 16 to be both orders, since sometimes if touch fixation 
+                    # too early,then touch code occurs first.
+                    if flipped:
+                        assert list_nums==[11, 16, 22, 91, 71] or list_nums== [16, 11, 22, 91, 71]
+                    else:
+                        assert list_nums==[11, 16, 132, 91, 71] or list_nums== [16, 11, 132, 91, 71]
+            else:
+                # Just use whatever has already been extracted
+                flipped = self.supervision_extract_params(ind)["CUESTIM_FLIP"]
+
+        if SANITY:
+            print("PAssed sanity check!!")
+
+        print("Appendded column: CUE_csflipped")
+        self.Dat["CUE_csflipped"] = list_flipped
+
     ################# Supervision params
     # ie params that online guide supervision
     def supervision_extract_params(self, ind):
@@ -5889,6 +6039,9 @@ class Dataset(object):
         if method in ["concise"]:
             # grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
             grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR", "GUIDEDYN_ON"]    
+        elif method in ["concise_cuestim"]:
+            # grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON"]    
+            grouping_keys = ["SEQUENCE_SUP", "COLOR_ON", "COLOR_METHOD", "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR", "GUIDEDYN_ON", "CUESTIM_FLIP"]    
         elif method=="verbose":
             # grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
             grouping_keys = ["SEQUENCE_SUP", "SEQUENCE_ALPHA", "COLOR_ON", "COLOR_ITEMS_FADE_TO_DEFAULT_BINSTR", "COLOR_METHOD", "GUIDEDYN_ON", "VISUALFB_METH"]
