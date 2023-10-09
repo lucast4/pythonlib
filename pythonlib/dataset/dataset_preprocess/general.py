@@ -391,6 +391,17 @@ def _groupingParams(D, expt):
         grouping_reassign_params_in_order = [map_epoch_to_block]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
+    elif "stim1" in expt:
+        # e.g., primdiegostim1b, or primpanchostim1
+        # Is just single prims, but trials differentiated by whether stim or not, during
+        # stroke.
+        # Just use defaults.
+        pass
+    elif "priminvar" in expt:
+        # e.g., priminvar5
+        # Is just single prims
+        # Just use defaults.
+        pass
     else:
         # pass, just use defaults
         print(expt)
