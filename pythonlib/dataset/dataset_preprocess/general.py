@@ -416,6 +416,13 @@ def _groupingParams(D, expt):
         # Is just single prims
         # Just use defaults.
         pass
+    elif "gramstim" in expt:
+        # e.g,, gramstimpancho1
+        # single grammar, and stim on rtandom interleave trials.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
     else:
         # pass, just use defaults
         print(expt)
