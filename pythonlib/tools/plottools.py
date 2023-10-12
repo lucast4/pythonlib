@@ -896,3 +896,19 @@ def share_axes(axes, which="x"):
     else:
         print(which)
         assert False
+def plot_beh_codes(codes, times, ax=None, codenames=False,
+                  color="k", yval=1):
+    """ Help plot behcodes, which are int or str, along x axis correspnding
+    to times.
+    PARAMS:
+    """
+
+    assert codenames==False, "not coded"       
+     
+    if ax is None:
+        fig, ax = plt.subplots()
+        
+    for c,t in zip(codes, times):
+        ax.plot(t, yval, "o", mfc=color, mec=color)
+        ax.text(t, yval, c, color="m", fontsize=8)
+        
