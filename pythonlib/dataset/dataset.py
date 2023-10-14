@@ -1075,35 +1075,61 @@ class Dataset(object):
         from neuralmonkey.utils.monkeylogic import loadSingleDataQuick
 
         if len(self.ML2_FILEDATA)==0:
+            self.ML2_FILEDATA_ads_to_key = {}
             for ind in range(len(self.Dat)):    
                 animal = self.Dat.iloc[ind]["animal"]
                 date = self.Dat.iloc[ind]["date"]
-                expt = self.Dat.iloc[ind]["expt"]
                 sess = self.Dat.iloc[ind]["session"]
-                key = (animal, date, expt, sess)
-                if key not in self.ML2_FILEDATA.keys():
-                    print("Loading fd for: ", key)
-                    fd = loadSingleDataQuick(animal, date, expt, sess)
-                    self.ML2_FILEDATA[key] = fd  
+                # tc = self.Dat.iloc[ind]["trialcode"]
+                # expt = self.Dat.iloc[ind]["expt"] # NO! this is not ml2 expt. its datraset expt.
+                # try all the expts
+                mdidx = self.Dat.iloc[ind]["which_metadat_idx"]
+                # exptnames_ml2 = self.Metadats[mdidx]["exptnames"]
+                exptnames_ml2 = self.Metadats[mdidx]["metadat_probedat"]["exptnames"]
+                for expt in exptnames_ml2:
+                    key = (animal, date, expt, sess)
+                    if key not in self.ML2_FILEDATA.keys():
+                        print("Loading fd for: ", key)
+
+                        try:
+                            fd = loadSingleDataQuick(animal, date, expt, sess)
+                        except AssertionError as err:
+                            # Then didnt find this data. is fine. will error later if this
+                            # is not becuyase of that.
+                            continue
+
+                        self.ML2_FILEDATA[key] = fd  
+
+                        # Map from trial to key
+                        self.ML2_FILEDATA_ads_to_key[(animal, date, sess)] = key
+
+        print("Found these data pkl files:")
+        for k in self.ML2_FILEDATA.keys():
+            print(k)
 
     def _ml2_extract_fd_trial(self, ind):
         """ Return fd and trial for this ind in self.Dat
         RETURNS:
         - fd, trial_ml2
-        """        
-        animal = self.Dat.iloc[ind]["animal"]
-        date = self.Dat.iloc[ind]["date"]
-        expt = self.Dat.iloc[ind]["expt"]
-        sess = self.Dat.iloc[ind]["session"]
-        key = (animal, date, expt, sess)
+        """      
+        if False:  
+            animal = self.Dat.iloc[ind]["animal"]
+            date = self.Dat.iloc[ind]["date"]
+            expt = self.Dat.iloc[ind]["expt"]
+            sess = self.Dat.iloc[ind]["session"]
+            key = (animal, date, expt, sess)
+        else:
+            animal = self.Dat.iloc[ind]["animal"]
+            date = self.Dat.iloc[ind]["date"]
+            sess = self.Dat.iloc[ind]["session"]
+            key = self.ML2_FILEDATA_ads_to_key[(animal, date, sess)]
         fd = self.ML2_FILEDATA[key]
-
         trial_ml2 = self.Dat.iloc[ind]["trial"]
-
         return fd, trial_ml2
 
 
-    def ml2_utils_getTrialsBehCodes(self, ind):
+    def ml2_utils_getTrialsBehCodes(self, ind, codes_keep=None,
+        keep_only_codes_standard=False, PRINT = False):
         """
         Get behcodes
         RETURNS:
@@ -1117,8 +1143,70 @@ class Dataset(object):
         behcodes_num = tmp["num"]
         behcodes_time = tmp["time"]
 
+        assert np.all(np.diff(behcodes_time)>0)
+
+        if keep_only_codes_standard:
+            assert codes_keep is None
+            codes_keep = [
+                11, # fix cue on
+                16, # touch fix,
+                132, # rulecue 2
+            #     91, 92, 21, # guide (default)
+                91, # guide (default)
+            #     93, 94, 22, # guide (flipped)
+                22, # guide (flipped)
+                71, # go
+            ]
+
+        if codes_keep is not None:
+            behcodes_num_tmp = []
+            behcodes_time_tmp = []
+            for num, time in zip(behcodes_num, behcodes_time):
+                if num in codes_keep:
+                    behcodes_num_tmp.append(num)
+                    behcodes_time_tmp.append(time)
+            behcodes_num = behcodes_num_tmp
+            behcodes_time = behcodes_time_tmp
+
+        if PRINT:
+            for num, time in zip(behcodes_num, behcodes_time):
+                print(num, " -- ", time)
+
         return behcodes_num, behcodes_time
 
+    # def ml2_behcode_get_occurances_ordered(self, ind, behcodes_num, behcodes_time, 
+    #         codes_print=None, PRINT=False):
+    #     """Return list of occurances of behcodes, keeping only those in codes_print, returning
+    #     in chronological order. 
+    #     RETURNS:
+    #     - list_nums, list of ints, the 
+    #     """
+
+    #     if codes_print is None:
+    #         # Hard codede times of behcodes that are relevant for determining that order has 
+    #         # correctly been flipped.
+    #         codes_print = [
+    #             11, # fix cue on
+    #             16, # touch fix,
+    #             132, # rulecue 2
+    #         #     91, 92, 21, # guide (default)
+    #             91, # guide (default)
+    #         #     93, 94, 22, # guide (flipped)
+    #             22, # guide (flipped)
+    #             71, # go
+    #         ]
+
+    #     behcodes_num, behcodes_time = self.ml2_utils_getTrialsBehCodes(ind)
+    #     assert np.all(np.diff(behcodes_time)>0)
+
+    #     list_nums = []
+    #     for num, time in zip(behcodes_num, behcodes_time):
+    #         if num in codes_print:
+    #             if PRINT:
+    #                 print(num, " -- ", time)
+    #             list_nums.append(num)
+
+    #     return list_nums
 
     # def ml2_run_utils_fn(self, fn_str, ind):
     #     """ Execute a call to function called fn_str in drawmonkey
@@ -2733,7 +2821,8 @@ class Dataset(object):
         were train (got reinforcing feedback, might have practiced many times) or
         test (no reinforcing feedback, not many chances)
         INPUT:
-        - expt, str, the experiemnt name. will restrict tasks to just this expt.
+        - expt, str, the experiemnt name. will restrict tasks to just this expt. NOTE: 
+        this is not necesaritly rthe same as each pkl files expt.
         - epoch, int, the epoch number, 1, 2, ... Leave None is fine, unless there are
         multiple epohcs, in which case will throw error.
         - val, how many subsample of train to pull out as validation set. default is none, but 
