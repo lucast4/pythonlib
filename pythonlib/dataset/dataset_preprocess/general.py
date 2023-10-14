@@ -68,6 +68,9 @@ def _groupingParams(D, expt):
     # WHether epoch should include whether cue-stim flipped o this trial.
     epoch_append_cue_stim_flip = False
 
+    # Microstim
+    map_ttl_region = {}
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -199,7 +202,7 @@ def _groupingParams(D, expt):
 
         # grammar in name, it has rules.
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "cue_stim_flip"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
@@ -420,9 +423,14 @@ def _groupingParams(D, expt):
         # e.g,, gramstimpancho1
         # single grammar, and stim on rtandom interleave trials.
         grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "microstim_code"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+
+        map_ttl_region = {
+            3:"M1",
+            4:"pSMA"
+        }
     else:
         # pass, just use defaults
         print(expt)
@@ -485,13 +493,32 @@ def _groupingParams(D, expt):
                 def F(x):
                     return map_block_to_epoch[x["block"]]
                 D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch")
+            elif grmeth=="microstim_code":
+                # You must give mapping from ttl to string code.
+                assert len(map_ttl_region)>0
+
+                # 1) Assign stim code
+                from pythonlib.dataset.dataset_analy.microstim import preprocess_assign_stim_code
+                preprocess_assign_stim_code(D, map_ttl_region=map_ttl_region)
+
+                # 2) get grouping.
+                grouping_vars = ["epoch", "microstim_epoch_code"]
+                D.supervision_reassign_epoch_byvars(grouping_vars)
+            elif grmeth=="cue_stim_flip":
+                # on each trial whether cue_stim order is flipped.
+
+                # 1) Extract bools for whether flipped
+                D.cue_extract_cuestim_order_flipped()
+
+                # 2) get grouping.
+                grouping_vars = ["epoch", "CUE_csflipped"]
+                D.supervision_reassign_epoch_byvars(grouping_vars)
             else:
                 print(grmeth)
                 assert False
 
     # # fix a problem, sholdnt throw out epoch name
     # D.supervision_epochs_extract_orig() 
-
     if grouping_levels is None:
         # Then you did not enter it manually. extract it
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
