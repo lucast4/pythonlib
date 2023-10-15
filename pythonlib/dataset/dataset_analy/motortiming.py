@@ -46,7 +46,7 @@ def gapstrokes_preprocess_extract_strokes_gaps(D):
     ########### additional motor stuff
     return DS, SAVEDIR
 
-def gapstrokes_timing_plot_all(DS, savedir):
+def gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
     """
     Plot motor timing for gaps and strokes in multiple ways
     PARAMS:
@@ -56,13 +56,43 @@ def gapstrokes_timing_plot_all(DS, savedir):
 
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
 
+    if LIST_Y_PLOT is None:
+        # LIST_Y_PLOT = ["time_duration", "gap_from_prev_dur", "gap_from_prev_dur_log10", "gap_from_prev_vel", "velocity"] # all the intersting ones?
+        LIST_Y_PLOT = ["time_duration", "gap_from_prev_dur", "gap_from_prev_vel", "velocity"] # ones that usually want to plot
+
     # Jitter plot, vel vs. stroke index, for each context
     VAR_CONTEXT = "locshape_pre_this"
     VAR = "stroke_index_fromlast"
     VAR_HUE = "stroke_index"
 
 
-    for Y in ["gap_from_prev_vel", "velocity"]:
+    ####################################
+    # Simple, first plot stroke and gap dustributions, comparing them.
+    fig, axes = plt.subplots(1,2, figsize=(10,4))
+
+    ax = axes.flatten()[0]
+    tmax = np.max(np.r_[DS.Dat["gap_from_prev_dur"], DS.Dat["time_duration"]])
+    bins = np.linspace(0, tmax, 50)
+    ax.hist(DS.Dat["gap_from_prev_dur"], bins, histtype="step", label="gaps", density=True);
+    ax.hist(DS.Dat["time_duration"], bins, histtype="step", label="strokes", density=True);
+    ax.legend()
+    ax.set_title("all data")
+    ax.set_xlabel("duration (sec)")
+
+    ax = axes.flatten()[1]
+    tmax = np.percentile(np.r_[DS.Dat["gap_from_prev_dur"], DS.Dat["time_duration"]], [99])[0]
+    bins = np.linspace(0, tmax, 50)
+    ax.hist(DS.Dat["gap_from_prev_dur"], bins, histtype="step", label="gaps", density=True);
+    ax.hist(DS.Dat["time_duration"], bins, histtype="step", label="strokes", density=True);
+    ax.legend()
+    ax.set_title("zoomed (xmax = 99th percentile)")
+    ax.set_xlabel("duration (sec)")
+
+    savefig(fig, f"{savedir}/duration_strokes_vs_gaps_all.pdf")
+
+
+    ######################################
+    for Y in LIST_Y_PLOT:
         # Y = "val"
 
         ### first, prune to keep only context with at least 2 stroke indices
@@ -77,9 +107,8 @@ def gapstrokes_timing_plot_all(DS, savedir):
             DFTHIS = DFTHIS[DFTHIS["stroke_index"] == 0]
         #     DFTHIS = DFTHIS[DFTHIS["stroke_index"].isin([0,1,2])]
 
-        # COMPUTE NORMED (i.e., subtract values from last stroke index)
+        # NORM 1 (subtract last indec)
         def F(x):
-        #     print(x)
             sindlast = max(x["stroke_index_fromlast"]) # the least negative. usually -1.
             tmp = x[x["stroke_index_fromlast"]==sindlast][Y]
             valmean = np.mean(tmp)
@@ -92,8 +121,17 @@ def gapstrokes_timing_plot_all(DS, savedir):
             return x
         DFTHIS = DFTHIS.groupby(VAR_CONTEXT).apply(F)
 
+        # NORM 2 (divide last indec)
+        def F(x):
+            sindlast = max(x["stroke_index_fromlast"]) # the least negative. usually -1.
+            tmp = x[x["stroke_index_fromlast"]==sindlast][Y]
+            valmean = np.mean(tmp)
+            x[f"{Y}_DIVNORMED"] = x[Y]/valmean
+            return x
+        DFTHIS = DFTHIS.groupby(VAR_CONTEXT).apply(F)
+
         ###### plot
-        for valthis in [Y, f"{Y}_NORMED"]:
+        for valthis in [Y, f"{Y}_NORMED", f"{Y}_DIVNORMED"]:
             print("Plotting for ", valthis)
             # sns.catplot(data=DFTHIS, x=VAR, y=f"{Y}_NORMED", kind="point", alpha=0.2, row = "set_stroke_index_fromlast", hue="stroke_index")
             # sns.catplot(data=DFTHIS, x=VAR, y=f"{Y}_NORMED", jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", hue="stroke_index")
@@ -103,29 +141,29 @@ def gapstrokes_timing_plot_all(DS, savedir):
             savefig(fig, f"{savedir}/{valthis}-1.pdf")
             plt.close("all")
             
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= "set_stroke_index_fromlast")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= "set_stroke_index_fromlast", ci=68)
             savefig(fig, f"{savedir}/{valthis}-2.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, ci=68)
             savefig(fig, f"{savedir}/{valthis}-3.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, col="stroke_index")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, col="stroke_index", ci=68)
             savefig(fig, f"{savedir}/{valthis}-4.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, row = "set_stroke_index_fromlast")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, row = "set_stroke_index_fromlast", ci=68)
             savefig(fig, f"{savedir}/{valthis}-5.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast")    
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", ci=68)    
             savefig(fig, f"{savedir}/{valthis}-6.pdf")
             plt.close("all")
 
 
 def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess, 
-    n_min = 5):
+    n_min = 5, PLOT=True):
     """ 
     Compare timing of gaps and strokes across variables, controlling for sequential context
     PARAMS;
@@ -174,56 +212,59 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     print(len(DFTHIS))
     print(len(DFTHIS["context"].unique()))
 
-    ############# PLOTS
-    # %matplotlib inline
-    # yvar = "time_duration"
+    if PLOT:
+        ############# PLOTS
+        # %matplotlib inline
+        # yvar = "time_duration"
 
-    # For specific stroke index, and context
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
-               col="context", col_wrap=3, alpha=0.5)
-    savefig(fig, f"{SAVEDIR}/gap_vel-1.pdf")
+        # For specific stroke index, and context
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
+                   col="context", col_wrap=3, alpha=0.5)
+        savefig(fig, f"{SAVEDIR}/gap_vel-1.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
-               col="context", col_wrap=3, kind="point")
-    savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
+                   col="context", col_wrap=3, kind="point")
+        savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
-    savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
-    
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
-               col="context", col_wrap=3, alpha=0.5)
-    savefig(fig, f"{SAVEDIR}/gap_dur-1.pdf")
+        fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
+        savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
+        
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
+                   col="context", col_wrap=3, alpha=0.5)
+        savefig(fig, f"{SAVEDIR}/gap_dur-1.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
-               col="context", col_wrap=3, kind="point")
-    savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
-    
-    plt.close("all")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
+                   col="context", col_wrap=3, kind="point")
+        savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
+        
+        plt.close("all")
 
-    fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
-    savefig(fig, f"{SAVEDIR}/gap_dur-3.pdf")
+        fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
+        savefig(fig, f"{SAVEDIR}/gap_dur-3.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
-               col="context", col_wrap=3, alpha=0.5)
-    savefig(fig, f"{SAVEDIR}/stroke_dur-1.pdf")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
+                   col="context", col_wrap=3, alpha=0.5)
+        savefig(fig, f"{SAVEDIR}/stroke_dur-1.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
-               col="context", col_wrap=3, kind="point")
-    savefig(fig, f"{SAVEDIR}/stroke_dur-2.pdf")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
+                   col="context", col_wrap=3, kind="point")
+        savefig(fig, f"{SAVEDIR}/stroke_dur-2.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
-               col="context", col_wrap=3, alpha=0.5)
-    savefig(fig, f"{SAVEDIR}/stroke_vel-1.pdf")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
+                   col="context", col_wrap=3, alpha=0.5)
+        savefig(fig, f"{SAVEDIR}/stroke_vel-1.pdf")
 
-    fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
-               col="context", col_wrap=3, kind="point")
-    savefig(fig, f"{SAVEDIR}/stroke_vel-2.pdf")
+        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
+                   col="context", col_wrap=3, kind="point")
+        savefig(fig, f"{SAVEDIR}/stroke_vel-2.pdf")
 
-    fig = sns.pairplot(data=DFTHIS, x_vars=["gap_from_prev_dist"], y_vars=["gap_from_prev_dur"], hue=VAR,
-                      plot_kws={"alpha":0.25}, height=6)
-    savefig(fig, f"{SAVEDIR}/pair-gap_dist-vs-gap_dur-1.pdf")
+        fig = sns.pairplot(data=DFTHIS, x_vars=["gap_from_prev_dist"], y_vars=["gap_from_prev_dur"], hue=VAR,
+                          plot_kws={"alpha":0.25}, height=6)
+        savefig(fig, f"{SAVEDIR}/pair-gap_dist-vs-gap_dur-1.pdf")
 
-    plt.close("all")
+        plt.close("all")
+
+    return DS, DFTHIS
 
 
 def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
