@@ -168,8 +168,11 @@ def conjunctions_preprocess(D):
     # D.grammarmatlab_successbinary_score()
 
     # First remove baseline
+    # print(1, D.Dat["epoch"].unique())    
     D.preprocessGood(params=["remove_baseline", "one_to_one_beh_task_strokes"])
-
+    # print(2, D.Dat["epoch"].unique())
+    # assert False
+    
     if len(D.Dat)==0:
         return (None for _ in range(4))
 

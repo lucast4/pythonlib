@@ -18,7 +18,7 @@ def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
 
 	D.ml2_extract_raw()
 	PRINT=False
-	
+
 	for ind in range(len(D.Dat)):
 
 	    # get times of stim
@@ -63,3 +63,59 @@ def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
 	        assert ms_stroke["on"]==0
 	        
 	    plt.close("all")	
+
+def preprocess_assign_stim_code(D, map_ttl_region):
+	"""
+	Give each trial a string code for its stim params, which can vary across 
+	expts.
+	PARAMS:
+	- map_ttl_region, dict mapping from int ttl values to string , usually
+	breian regions, which will be the code.
+	"""
+
+	# if HACK:
+	# 	map_ttl_region = {
+	# 	    3:"M1",
+	# 	    4:"pSMA"
+	# 	}
+	# else:
+	# 	assert False, "code this input"
+
+	list_stim_code = []
+	for ind in range(len(D.Dat)):
+	    ms_fix = D.blockparams_extract_single_taskparams(ind)["microstim_fix"]
+	    ms_str = D.blockparams_extract_single_taskparams(ind)["microstim_stroke"]
+
+	    stim_code = []
+
+	    # FIxation
+	    stim_code.append(ms_fix["on"]==1)
+	    if ms_fix["on"]==1:
+	        ttls = [int(x[0]) for x in ms_fix["stimlist"]]
+	        assert len(set(ttls))==1
+	        stim_code.append(ttls[0])
+
+	    # Strokes
+	    stim_code.append(ms_str["on"]==1)
+	    if ms_str["on"]==1:
+	        ttls = [int(x[2]) for x in ms_str["stimlist"]]
+	        assert len(set(ttls))==1
+	        stim_code.append(ttls[0])
+	        
+	    # SHORTHANDS
+	    if all([x==False for x in stim_code]):
+	    	# Stim off
+	        sc = "off"
+	    else:
+	    	# Code it by its ttl
+	        ttls = stim_code[1::2]
+	        assert len(set(ttls))==1
+	        sc = map_ttl_region[ttls[0]]
+
+	    list_stim_code.append(sc)
+
+
+	# place stim code back into data
+	D.Dat["microstim_epoch_code"] = list_stim_code
+
+	print("New column: microstim_epoch_code")

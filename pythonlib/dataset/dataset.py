@@ -2295,6 +2295,7 @@ class Dataset(object):
                 elif p=="remove_baseline":
                     # Remove trials that are baseline epoch.
                     self.Dat = self.Dat[~self.Dat["epoch"].isin(["base", "baseline"])]
+                    self.Dat = self.Dat[~self.Dat["epoch_orig"].isin(["base", "baseline"])]
                 else:
                     print(p)
                     assert False, "dotn know this"
@@ -5766,8 +5767,6 @@ class Dataset(object):
                 flipped = self.blockparams_extract_single_taskparams(ind)["fix_tp"]["flip_cue_image_order"]==1
                 assert flipped == flipped1, "must be a coding bug."
 
-                # Save a new column
-                list_flipped.append(flipped)
                 
                 if SANITY:
                     behcodes_num, behcodes_time = self.ml2_utils_getTrialsBehCodes(ind)
@@ -5785,6 +5784,9 @@ class Dataset(object):
             else:
                 # Just use whatever has already been extracted
                 flipped = self.supervision_extract_params(ind)["CUESTIM_FLIP"]
+            
+            # Save a new column
+            list_flipped.append(flipped)
 
         if SANITY:
             print("PAssed sanity check!!")
@@ -5964,7 +5966,23 @@ class Dataset(object):
         """
         indskeep = self.Dat[~(self.Dat["epoch"].isin(["base", "baseline"]))].index.tolist()
         self.subsetDataframe(indskeep)
-        
+    
+    def supervision_reassign_epoch_byvars(self, vars, new_col_name = "epoch"):
+        """ Update epoch, using vars as grouping vars with epoch
+        PARAMS:
+        - vars, list of str, into self.Dat
+        """
+        print(" ------------- ")
+        print("Old epoch values:")
+        print(self.Dat["epoch"].value_counts())
+
+        print(" ------------- ")
+        self.grouping_append_col(vars, new_col_name, use_strings=True, strings_compact=True)
+
+        print(" ------------- ")
+        print("New epoch values:")
+        print(self.Dat["epoch"].value_counts())
+
     def supervision_reassign_epoch_rule_by_color_instruction(self):
 
         # 1) conjunction of color and epoch
