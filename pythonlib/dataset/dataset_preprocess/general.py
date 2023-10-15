@@ -435,6 +435,10 @@ def _groupingParams(D, expt):
             3:"M1",
             4:"pSMA"
         }
+    elif "primsingridrand" in expt or "primsingridfixed" in expt:
+        # Just regulare prims in grid
+        # Just use defaults.
+        pass
     else:
         # pass, just use defaults
         print(expt)
