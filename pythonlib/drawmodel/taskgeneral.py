@@ -545,8 +545,8 @@ class TaskClass(object):
         ylims = sketchpad[1,:]
         pts = self.Points
 
-        a = np.all((pts[:,0]>xlims[0]) & (pts[:,0]<xlims[1]))
-        b = np.all((pts[:,1]>ylims[0]) & (pts[:,1]<ylims[1]))
+        a = np.all((pts[:,0]>=xlims[0]) & (pts[:,0]<=xlims[1]))
+        b = np.all((pts[:,1]>=ylims[0]) & (pts[:,1]<=ylims[1]))
         if a==False or b==False:
             print(sketchpad)
             print(pts)
