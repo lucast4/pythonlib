@@ -1812,6 +1812,60 @@ def extract_with_levels_of_var(df, var, levels=None):
 
     return dict_levs, levels
 
+def assign_epochsets_group_by_matching_levels_of_var(df, var_outer_trials, var_inner,
+        epochset_col_name, PRINT=False, n_min_each_conj_outer_inner = 1, n_max_epochs = 10):
+    """
+    For each row, assign it a value that reflects the folliwing:
+    Find all trials that have the same level of <var_outer_trials>. 
+    Get the list of unique levels of <var_inner> across these trials.
+    All trials that have the same list are given the same id assigned to
+    a new column called <epochset_col_name>.
+    For example, see Dataset.epochset_extract_common_epoch_sets()
+    PARAMS:
+    - n_min_each_conj_outer_inner, int, only considers levels of <var_inner> that
+    have at least this many cases for a given level of <var_outer_trials>
+    NOTE: if n_min_each_conj_outer_inner>1, then you can get cass where epochsets are not accurate, since
+    will not include trials when defining epochset, but those trials will be given the epochset id... soluton 
+    would be to remove those trials...
+    n_max_epochs, int, if > this many levels of var_inner for a given level of var_outer_trials,
+    then doesnt include all >10 (how does this?)
+    RETURNS:
+    - appends new column to df called <epochset_col_name>.
+    """
+
+    # - For each char_seq, get its list of epochs that it is present in
+    groupdict = grouping_get_inner_items(df, var_outer_trials, var_inner,  
+        n_min_each_conj_outer_inner=n_min_each_conj_outer_inner, take_top_n_inner=n_max_epochs)
+    
+    # - make the epoch set hashable, and sorted
+    groupdict = {charseq:tuple(sorted(epoch_set)) for charseq, epoch_set in groupdict.items()}
+
+    if PRINT:
+        list_epochsets_unique = sorted(set([x for x in list(groupdict.values())]))
+        print("Unique classes of epochs spanned by individual tasks:")
+        for e in list_epochsets_unique:
+            print(e)
+
+    # - For each trial, map to one of these sets )
+    def F(x):
+        epoch_set = groupdict[x[var_outer_trials]]
+        return epoch_set
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
+    df = applyFunctionToAllRows(df, F, epochset_col_name)
+    print(f"Defined new column: {epochset_col_name}")
+
+    if PRINT:
+        print("... value_counts:")
+        print(df[epochset_col_name].value_counts())
+
+    # sanity checl
+    tmp = grouping_append_and_return_inner_items(df, [var_outer_trials], epochset_col_name)
+    for k, v in tmp.items():
+        assert len(v)==1
+
+    return df, list_epochsets_unique
+
+
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
     n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,

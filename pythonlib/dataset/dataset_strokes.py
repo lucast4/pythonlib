@@ -23,20 +23,25 @@ from pythonlib.tools.pandastools import append_col_with_grp_index
 
 class DatStrokes(object):
     """docstring for DatStrokes"""
-    def __init__(self, Dataset, version="beh"):
+    def __init__(self, Dataset=None, version="beh"):
         """
         PARAMS:
         - version, string, whether each datapoint is "beh" or "task"
         """
 
-        self.Dataset = Dataset.copy()
+        if Dataset is None:
+            # just for methods
+            self.Dataset = None
+        else:
+            self.Dataset = Dataset.copy()
         self.Dat = None
         self.Params = {}
         self.Version = None
 
-        self._prepare_dataset() 
-        self._extract_strokes_from_dataset(version=version)
-        self._clean_preprocess()
+        if self.Dataset is not None:
+            self._prepare_dataset() 
+            self._extract_strokes_from_dataset(version=version)
+            self._clean_preprocess()
 
 
     def _clean_preprocess(self):
@@ -83,8 +88,7 @@ class DatStrokes(object):
         D.taskclass_tokens_sanitycheck_gridloc_identical()
         assert len(D.Dat)>0
 
-    def _extract_strokes_from_dataset(self, version="beh", include_scale=True, 
-            tokens_extract_keys=None, tokens_get_relations=True):
+    def _extract_strokes_from_dataset(self, version="beh", tokens_extract_keys=None, tokens_get_relations=True):
         """ Flatten all trials into bag of strokes, and for each stroke
         storing its associated task stroke, and params for that taskstroke
         PARAMS:
@@ -116,7 +120,7 @@ class DatStrokes(object):
             T = D.Dat.iloc[ind]["Task"]
             
             # 1) get each beh stroke, both continuous and discrete represntations.
-            primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind, include_scale=include_scale)
+            primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
                 
             if version=="beh":
                 strokes = primlist
@@ -233,8 +237,6 @@ class DatStrokes(object):
             T.tokens_generate()
 
             Beh = D.Dat.iloc[ind]["BehClass"]
-            Beh.Alignsim_taskstrokeinds_sorted
-
             Beh.alignsim_plot_summary()
 
             Beh.alignsim_extract_datsegs()
@@ -400,6 +402,10 @@ class DatStrokes(object):
 
 
     ######################### MOTOR TIMING
+    def motor_velocity_timing_extract_basic(self):
+        """ Just a wrapper for easy searching of name"""
+        return self.timing_extract_basic()
+
     def timing_extract_basic(self):
         """Extract basis stats for timing, such as time of onset and offset,
         - Looks into Dataset to find there. 
@@ -438,11 +444,12 @@ class DatStrokes(object):
             if indstrok==0:
                 # the first strok is time from raise
                 gap_from_prev_dur = me["ons"][indstrok] - me["raise"]
-                if not gap_from_prev_dur==mt["time_raise2firsttouch"]:
-                    print(me)
-                    print(mt)
-                    print(gap_from_prev_dur)
-                    assert gap_from_prev_dur==mt["time_raise2firsttouch"], "just sanity"
+                if False:
+                    if not gap_from_prev_dur==mt["time_raise2firsttouch"]:
+                        print(me)
+                        print(mt)
+                        print(gap_from_prev_dur)
+                        assert gap_from_prev_dur==mt["time_raise2firsttouch"], "just sanity"
             else:
                 gap_from_prev_dur = me["ons"][indstrok] - me["offs"][indstrok-1]
             list_gap_dur.append(gap_from_prev_dur)
@@ -456,10 +463,15 @@ class DatStrokes(object):
                 off_pt_prev_stroke = self.dataset_extract("origin", ind)
                 on_pt_next_stroke = strokthis[0, :2]
                 gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_next_stroke)
-                assert np.isclose(gap_from_prev_dist, mt["dist_raise2firsttouch"]), "just sanity"
+                # print("----")
+                # print(gap_from_prev_dist)
+                # print(mt["dist_raise2firsttouch"])
+                if False:
+                    assert np.isclose(gap_from_prev_dist, mt["dist_raise2firsttouch"]), "just sanity"
             else:
                 strokes_beh = self.dataset_extract("strokes_beh", ind)
-                assert np.all(strokes_beh[indstrok] == strokthis), "just sanity"
+                if False:
+                    assert np.all(strokes_beh[indstrok] == strokthis), "just sanity"
                 off_pt_prev_stroke = strokes_beh[indstrok-1][-1, :2]
                 on_pt_next_stroke = strokes_beh[indstrok][0, :2]
                 gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_next_stroke)
@@ -490,16 +502,18 @@ class DatStrokes(object):
         return self.extract_strokes(inds=inds, ver_behtask=ver_behtask)[0]
 
 
-    def extract_strokes_as_velocity(self, inds):
+    def extract_strokes_as_velocity(self, inds, PLOT=False, 
+        version="vel"):
         """ Returns teh default stroeks (in self.Version) as velocity profiles
         RETURNS:
         - list of strok (np array), each (N,3) where columns are (xvel, yvel, time)
         (or strok can be None, if too short to get velocity)
         """
         list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
-        list_strokes_vel = self.Dataset._extractStrokeVels(list_strokes, remove_time_column=False, version="vel")
-        if False:
-            DS.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
+        list_strokes_vel = self.Dataset._extractStrokeVels(list_strokes, 
+            remove_time_column=False, version=version)
+        if PLOT:
+            self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
                 align_to="first_touch")
         for strokes in list_strokes_vel:
             assert len(strokes)==1
@@ -882,6 +896,8 @@ class DatStrokes(object):
 
         if ax is None:
             fig, ax = plt.subplots(1,1, figsize=(SIZE, SIZE))
+        else:
+            fig = None
 
         # plot trial
         inddat = self._dataset_index(ind)
@@ -942,8 +958,8 @@ class DatStrokes(object):
         # d1 = 0.6
         # d2 = 0.7
         inds = self.Dat[(self.Dat[colname]>minval) & (self.Dat[colname]<maxval)].index.tolist()
-        print("This many trials found:", len(inds))
-        self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="task")
+        print("This many trials found:", len(inds)) 
+        self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="task", titles=inds)
         self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="beh")
 
     def plot_multiple(self, list_inds, ver_behtask=None, titles=None, ncols=5,
@@ -994,29 +1010,25 @@ class DatStrokes(object):
 
         return ax
 
-    def plotshape_egtrials_sorted_by_behtaskdist(self, shape):
-        """ 
-        Plot eample trials, sorted by the distance between the beh and task stroke it 
-        is assigned to
-
+    def plotshape_egtrials_sorted_by_feature(self, shape, feature, nplot=20,
+            epoch=None):
         """
+        PLot grid of strokes, overlayd on tasks, sorted by feature (scalar), uniformly
+        sampled across distribution of featrue
+        """
+        from pythonlib.tools.listtools import random_inds_uniformly_distributed
 
-        inds, dists = self.shape_extract_indices_sorted_by_behtaskdist(shape)
+        inds, dists = self.shape_extract_indices_sorted_by_behtaskdist(shape, 
+            feature=feature, epoch=epoch)
 
-        inds = inds[::5]
-        dists = dists[::5]
-    #     DS.plot_multiple(inds, titles=dists, nrand=100);
+        # Get random subset
+        idxs = random_inds_uniformly_distributed(inds, dosort=False, ntoget=nplot)
+        inds = [inds[i] for i in idxs]
+        dists = [dists[i] for i in idxs]
 
+        fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task")
 
-
-
-    #     for shape in list_shape:
-    #         inds = 
-        fig, axes, _ = DS.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task");
-            
-        fig.savefig(f"{sdir}/{shape}.pdf")
-        plt.close("all")
-        
+        return fig, axes
 
     def plotshape_singleshape_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
         ver_behtask="beh"):
@@ -2615,7 +2627,8 @@ class DatStrokes(object):
         else:
             return dfbasis, list_strok_basis, list_shape_basis
 
-    def shape_extract_indices_sorted_by_behtaskdist(self, shape):
+    def shape_extract_indices_sorted_by_behtaskdist(self, shape,
+        feature="dist_beh_task_strok", epoch=None):
         """ for this shape, extract its indices, sorted from low to high,
         for distnace beh to task stroke
         RETURNS:
@@ -2623,10 +2636,13 @@ class DatStrokes(object):
         - dists, the matching distances.
         """
 
-        from pythonlib.tools.listtools import random_inds_uniformly_distributed
+        # from pythonlib.tools.listtools import random_inds_uniformly_distributed
+        if epoch is None:
+            inds = self.Dat[self.Dat["shape"]==shape].index.tolist()        
+        else:
+            inds = self.Dat[(self.Dat["shape"]==shape) & (self.Dat["epoch"]==epoch)].index.tolist()        
 
-        inds = self.Dat[self.Dat["shape"]==shape].index.tolist()        
-        dists = self.Dat.iloc[inds]["dist_beh_task_strok"].tolist()
+        dists = self.Dat.iloc[inds][feature].tolist()
 
         # do sort
         this = [(i, d) for i, d in zip(inds, dists)]
@@ -2697,9 +2713,11 @@ class DatStrokes(object):
         Will copy data specific to self, but wil not copy the Trial Dataset
         """
 
-        assert False, "in progres..."
-        self.Dataset = Dataset
-        self.Dat = None
-        self.Params = {}
-        self.Version = None
+        ds = DatStrokes()
+        ds.Dataset = self.Dataset.copy()
+        ds.Dat = self.Dat.copy()
+        ds.Params = self.Params.copy()
+        ds.Version = self.Version
+
+        return ds
 

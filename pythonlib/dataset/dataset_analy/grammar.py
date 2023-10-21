@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
+from pythonlib.tools.plottools import savefig
 import pandas as pd
 from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 from matplotlib import rcParams
@@ -19,7 +20,7 @@ from .learning import preprocess_dataset as learn_preprocess
 rcParams.update({'figure.autolayout': True})
 
 ## OLD, before changed it to make sure it only works with  matlab rules (not new parses)
-def preprocess_dataset_recomputeparses(D, DEBUG=False):
+def preprocess_dataset_recomputeparses(D, DEBUG=False, exclude_because_online_abort=False):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
@@ -38,9 +39,13 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False):
     list_rules = rules_related_rulestrings_extract_auto(D)
     bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG)
 
+    if exclude_because_online_abort:
+        # remove the rows from bm that have good sequence, but online abort.
+        bm.DatLong = bm.DatLong[~bm.DatLong["exclude_because_online_abort"]].reset_index(drop=True)
+
     return bm
 
-def preprocess_dataset_matlabrule(D):
+def preprocess_dataset_matlabrule(D, exclude_because_online_abort=False):
     """ Preprocess Dataset using matlab rules (NOT all parses)
     Each trial is success/failure based on ObjectClass
     """
@@ -54,6 +59,10 @@ def preprocess_dataset_matlabrule(D):
 
     # 2) Get grammar scores.
     bm = generate_scored_beh_model_data_matlabrule(D)
+
+    if exclude_because_online_abort:
+        # remove the rows from bm that have good sequence, but online abort.
+        bm.DatLong = bm.DatLong[~bm.DatLong["exclude_because_online_abort"]].reset_index(drop=True)
 
     return bm
 
@@ -116,20 +125,29 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
       
         # Use only no-sup data for these
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+        dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
         for split_by in LIST_SPLIT_BY:
-            try:
-                # Old plots
-                fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by)
-                fig1.savefig(f"{sdir}/splitby_{split_by}-trialdat-1.pdf")
-                fig2.savefig(f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+            # try:
+            # Old plots
+            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
+            savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
+            savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
 
-                # New plots
-                bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
-            except Exception as err:
-                pass
+            # agg version of old plots
+            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by) 
+            savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
+            savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
+            
+            # New plots
+            bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
+
+
+            # except Exception as err:
+            #     pass
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  
+        dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
         if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
             plot_performance_all(dfGramScore, list_blocksets_with_contiguous_probes, SDIR)
             plot_performance_timecourse(dfGramScore, list_blocksets_with_contiguous_probes, SDIR)

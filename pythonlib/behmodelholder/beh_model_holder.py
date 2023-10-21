@@ -10,6 +10,7 @@ See jupyter notebook for development of this code:
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from pythonlib.tools.snstools import rotateLabel
 
 
 
@@ -58,9 +59,11 @@ class BehModelHolder(object):
             self.DatWide = data
             assert False, "convert to long and save"
         elif input_ver=="long_form":
-            datawide_trial, datawide_agg = self._input_data_long_form(data)
-            self.DatWide = datawide_trial
-            self.DatWideAgg = datawide_agg
+            if False:
+                # Don't make these, make then in real time, so that can update DatLong.
+                datawide_trial, datawide_agg = self._input_data_long_form(data)
+                self.DatWide = datawide_trial
+                self.DatWideAgg = datawide_agg
             self.DatLong = data
         elif input_ver=="mbh":
             assert False, "not coded"
@@ -91,12 +94,13 @@ class BehModelHolder(object):
         # self.Map_rule_to_colname = Map_rule_to_colname
 
         # Aggregate so each row is conjucntion of (character", "score_name", "agent", "epoch)
-        from pythonlib.tools.pandastools import aggregGeneral
-        self.DatLongAgg = aggregGeneral(self.DatLong, ["character", "score_name", "agent", "epoch"], 
-            values=["score"], nonnumercols=["agent_kind", "agent_rule"])
-    
+        if False:
+            # Don't make these, make then in real time, so that can update DatLong.
+            self.datextract_datlong_agg()
+
         # Sanituy check of data
-        self._preprocess_sanity_check()
+        if False:
+            self._preprocess_sanity_check()
 
         ### ALIGNMENT - rank, compute all
         if False:
@@ -105,6 +109,18 @@ class BehModelHolder(object):
             ## Get colnames
             self.colnames_extract_alignment()
 
+
+    def datextract_datlong_agg(self, cols_grpby_append=None):
+        """
+        """
+        from pythonlib.tools.pandastools import aggregGeneral
+        cols_grpby = ["character", "score_name", "agent", "epoch"]
+        if cols_grpby_append is not None:
+            assert isinstance(cols_grpby_append, list)
+            cols_grpby.extend(cols_grpby_append)
+
+        self.DatLongAgg = aggregGeneral(self.DatLong, cols_grpby, 
+            values=["score"], nonnumercols=["agent_kind", "agent_rule"])
 
     def _preprocess_sanity_check(self):
         print("TODO! _preprocess_sanity_check")
@@ -391,6 +407,23 @@ class BehModelHolder(object):
         self.plot_score_scatter_compare_models(model_score_name_list[0], model_score_name_list[1])        
         self.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
+    def plot_score_cross_prior_model_splitby_agg(self, split_by="taskgroup",
+        cols_grpby_append=None):
+        """ bar plots crossing prior and model, plot separately for differelt levels of the variable
+        split_by
+        PARAMS;
+        - split_by, variabl eto split by, e.g., "taskgroup"
+        """
+
+        cols_grpby = ["block", split_by]
+        if cols_grpby_append is not None:
+            for x in cols_grpby_append:
+                if x not in cols_grpby:
+                    cols_grpby.append(split_by)        
+
+        self.datextract_datlong_agg(cols_grpby_append=cols_grpby)
+        fig1, fig2 = self.plot_score_cross_prior_model_splitby(self.DatLongAgg, split_by=split_by)
+        return fig1, fig2
 
     def plot_score_cross_prior_model_splitby(self, df=None, split_by="taskgroup"):
         """ bar plots crossing prior and model, plot separately for differelt levels of the variable
@@ -407,12 +440,21 @@ class BehModelHolder(object):
         #     df, "epoch", list_cols_keep=[split_by])[:5]
 
         # combine in single plot (all taskgroups)
+        # fig1 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+        #     row=split_by, col="score_name", kind="bar", ci=68)
+        # fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
+        #     row=split_by, col="score_name", kind="swarm", ci=68)
 
         fig1 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-            row=split_by, col="score_name", kind="bar")
+            row=split_by, col="block", kind="bar", ci=68)
         fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-            row=split_by, col="score_name", kind="swarm")
+            row=split_by, col="block", jitter=True, alpha=0.4)
+        
+        rotateLabel(fig1)
+        rotateLabel(fig2)
+
         return fig1, fig2
+
 
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
             savedir=None):
@@ -422,22 +464,23 @@ class BehModelHolder(object):
         - split_by, variabl eto split by, e.g., "taskgroup", or "taskcat_by_rule"
         """
         import seaborn as sns
-        from pythonlib.tools.snstools import rotateLabel
 
         if df is None:
             df = self.DatLong
 
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   col="score_name", col_wrap = 3, kind="point", aspect=1.5)
+                   col="score_name", col_wrap = 3, kind="point", ci=68, aspect=1.5)
         rotateLabel(fig)
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
 
-        fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   row="score_name", aspect=2, height=4, alpha=0.4, jitter=True)
-        rotateLabel(fig)  
-        if savedir:
-            fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
+        if False:
+            # hard to read, points too clumped.
+            fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+                       row="score_name", aspect=2, height=4, alpha=0.4, jitter=True)
+            rotateLabel(fig)  
+            if savedir:
+                fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
 
         # fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
         #            row="score_name", aspect=2, height=4, kind="violin")
@@ -445,7 +488,7 @@ class BehModelHolder(object):
         # fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
         try:
             fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
-                       row="score_name", alpha=0.4, kind="point", aspect=1.5)
+                       row="score_name", alpha=0.25, kind="point", ci=68, aspect=1.5)
             rotateLabel(fig)
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-1.pdf")
@@ -454,7 +497,7 @@ class BehModelHolder(object):
 
         try:
             fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
-                       row="score_name", alpha=0.4, jitter=True)
+                       row="score_name", alpha=0.25, jitter=True)
             rotateLabel(fig)
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-2.pdf")
@@ -478,13 +521,13 @@ class BehModelHolder(object):
             # fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
             #     kind="strip", aspect=aspect, alpha=0.2, jitter=True)
             fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-                aspect=aspect, alpha=0.4, jitter=True)
+                col="block", aspect=aspect, alpha=0.4, jitter=True)
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-characters-1.pdf")
 
             fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-                kind="point", aspect=aspect)
+                col="block", kind="point", ci=68, aspect=aspect)
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-characters-2.pdf")
@@ -510,7 +553,7 @@ class BehModelHolder(object):
 
             ###################################
             # Split into characters
-            aspect = len(df["character"].unique())/20
+            aspect = 0.5 + len(df["character"].unique())/20
             if aspect<1:
                 aspect=1
             if aspect>4:
@@ -518,14 +561,16 @@ class BehModelHolder(object):
 
             # fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
             #     kind="strip", aspect=aspect, alpha=0.2, jitter=True)
-            fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                aspect=aspect, alpha=0.4, jitter=True)
+            fig = sns.catplot(data=df, x="character", y="score", hue="agent", 
+                row=split_by, col="block",
+                aspect=aspect, alpha=0.3, jitter=True)
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-1.pdf")
 
-            fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                kind="point", aspect=aspect)
+            fig = sns.catplot(data=df, x="character", y="score", hue="agent", 
+                row=split_by, col="block",
+                kind="point", ci=68, aspect=aspect)
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-2.pdf")
@@ -541,7 +586,7 @@ class BehModelHolder(object):
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
 
             fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                kind="point", aspect=aspect, col="agent")
+                kind="point", ci=68, aspect=aspect, col="agent")
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
