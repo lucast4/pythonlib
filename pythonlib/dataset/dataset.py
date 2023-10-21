@@ -141,6 +141,7 @@ class Dataset(object):
         self._ParserPathBase = None
         self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
         self._BehClassExtracted = False
+        self.Log_preprocessGood = []    
 
         self.ML2_FILEDATA = {}
 
@@ -1861,6 +1862,23 @@ class Dataset(object):
         # print(sum(self.Dat["trial"] == 132))
         # assert False
 
+        # Remove motor events that are derived. should should be revomputed.
+        keys_keep = []
+        LIST_THIS = []
+        for ind in range(len(self.Dat)):
+            this = self.Dat.iloc[ind]["motortiming"]
+            this = {k:v for k,v in this.items() if k in keys_keep}
+            LIST_THIS.append(this)
+        self.Dat["motortiming"] = LIST_THIS
+
+        keys_keep = ["go_cue", "raise", "done_touch", "done_triggered"]
+        LIST_THIS = []
+        for ind in range(len(self.Dat)):
+            this = self.Dat.iloc[ind]["motorevents"]
+            this = {k:v for k,v in this.items() if k in keys_keep}
+            LIST_THIS.append(this)
+        self.Dat["motorevents"] = LIST_THIS
+
         # Make sure strokes are all in format (N,3)
         def F(x):
             strokes_beh = x["strokes_beh"]
@@ -1883,7 +1901,7 @@ class Dataset(object):
                 return self.Metadats[idx]["metadat_probedat"]["expt"]
             self.Dat = applyFunctionToAllRows(self.Dat, F, "expt")
 
-
+        ################ STROKES
         ###### remove strokes that are empty or just one dot
         if remove_dot_strokes:
             strokeslist = self.Dat["strokes_beh"].values
@@ -1891,6 +1909,21 @@ class Dataset(object):
                 strokes = [s for s in strokes if len(s)>1]
                 strokeslist[i] = strokes
             self.Dat["strokes_beh"] = strokeslist
+
+        # Cleanup strokes concatted with fixation touch.
+        self._cleanup_cut_strokes_whose_onset_is_at_fixation(PLOT_DISTROS=True, 
+            PLOT_EXAMPLE_BAD_TRIALS=True)
+
+        self._cleanup_remove_strokes_that_are_actually_fixation_or_done(
+            PLOT_EXAMPLE_BAD_TRIALS=True)
+
+        # Remove rows that now have no strokes
+        inds_bad = [i for i,strokes in enumerate(self.Dat["strokes_beh"]) if len(strokes)==0]
+        if len(inds_bad)>0:
+            print("REmoving this many rows becuase they have len 0 strokes:")
+            print(len(inds_bad))
+            print("These indices: ", inds_bad)
+        self.Dat = self.Dat.drop(index=inds_bad).reset_index(drop=True)
 
         ####### Remove columns of useless info.
         cols_to_remove = ["probe", "feedback_ver_prms", "feedback_ver",
@@ -1994,6 +2027,34 @@ class Dataset(object):
         # # fix a problem, sholdnt throw out epoch name
         # self.supervision_epochs_extract_orig()
 
+        # RE-extract stroke motor events and timing
+        # ORiginal items:
+            # {'nstrokes': 4,
+            #  'time_go2raise': 1.0335998000000073,
+            #  'time_raise2firsttouch': -2.4320000000000004,
+            #  'dist_raise2firsttouch': 14.599874703419573,
+            #  'sdur': 5.280000000000002,
+            #  'isi': 1.0879999999999992,
+            #  'time_touchdone': 0.4158021000000254,
+            #  'dist_touchdone': 479.12381428563003,
+            #  'dist_strokes': 1886.1317695259509,
+            #  'dist_gaps': 1292.682034468351}
+
+            #  {'go_cue': 6.022400199999993,
+            #  'raise': 5.912,
+            #  'ons': [4.624, 7.424, 8.744, 10.04],
+            #  'offs': [7.056, 8.408, 9.656, 10.992],
+            #  'done_touch': 11.376,
+            #  'done_triggered': 11.407802100000026}        
+        # currently just doing ons and offs
+        for ind in range(len(self.Dat)):
+            ons, offs = self.strokes_onsets_offsets(ind)
+            
+            # Place into ME
+            me = self.Dat.iloc[ind]["motorevents"]
+            me["ons"] = ons
+            me["offs"] = offs
+
         ####
         self.Dat = self.Dat.reset_index(drop=True)
 
@@ -2039,7 +2100,222 @@ class Dataset(object):
             return x["Task"].get_task_kind()
         self.Dat = applyFunctionToAllRows(self.Dat, F, "task_kind")
 
+        ################# RECOMPUTE MOTOR STUFF.
 
+
+    def _cleanup_remove_strokes_that_are_actually_fixation_or_done(self,
+            PLOT_EXAMPLE_BAD_TRIALS=False):
+        """ remove strokes that are actually "dots" at fixation or done. find cases
+        that are close to either (less than MAX_DIST) and are closer that that point
+        than to any other image strokes
+        RETURNS:
+        - updates self.Dat["strokes_beh"]
+        """
+
+        MAX_DIST = 100 # Emprically seems good.
+        from pythonlib.dataset.dataset_strokes import DatStrokes
+        ds = DatStrokes()
+
+        for location_to_test in ["origin", "donepos"]:
+            
+            list_stroks_remove = []
+            LIST_STROKES_BEH = []
+            list_inds_replaced = []
+            print("-- CHECKING ", location_to_test)
+            print("--- idat, trialcode, strok inds to remove, len strokes beofre remofe, len strokes after:")
+            for idat in range(len(self.Dat)):
+
+                strokes_beh = self.Dat.iloc[idat]["strokes_beh"]
+                loc_fix = self.Dat.iloc[idat][location_to_test]
+                trialcode = self.Dat.iloc[idat]["trialcode"]
+
+                inds_remove = []
+                for _is, strok in enumerate(strokes_beh):
+
+                    max_dist_strok_to_fix = np.max(np.linalg.norm(strok[:,[0,1]] - loc_fix, axis=1))
+
+                    if max_dist_strok_to_fix<MAX_DIST:
+
+                        # check that it is far from all strokes
+                        list_dists = []
+                        list_strok_task = self.Dat.iloc[idat]["strokes_task"]
+                        for st in list_strok_task:
+                            d = ds._dist_strok_pair(strok, st)
+                            list_dists.append(d)
+
+                        closer_to_fix_than_to_image = all([d>max_dist_strok_to_fix for d in list_dists])
+
+                        if closer_to_fix_than_to_image:
+
+                            # Then throw out this strok
+                            list_stroks_remove.append([idat, _is])
+                            inds_remove.append(_is)
+
+            #                 print(idat, _is, max_dist_strok_to_fix, ' -- ', list_dists, closer_to_fix_than_to_image)
+
+                if len(inds_remove)==0:
+                    # keep
+                    LIST_STROKES_BEH.append(strokes_beh)
+                else:
+                    # prune
+                    tmp = [strok for i, strok in enumerate(strokes_beh) if i not in inds_remove]
+                    print(idat, trialcode, inds_remove, len(strokes_beh), len(tmp))
+                    LIST_STROKES_BEH.append(tmp)
+                    list_inds_replaced.append(idat)
+
+            if len(list_inds_replaced)>0:
+                if PLOT_EXAMPLE_BAD_TRIALS:
+                    self.plotMultTrials(list_inds_replaced[:20])
+
+                self.Dat["strokes_beh"] = LIST_STROKES_BEH
+
+                if PLOT_EXAMPLE_BAD_TRIALS:
+                    self.plotMultTrials(list_inds_replaced[:20])
+
+    def _cleanup_cut_strokes_whose_onset_is_at_fixation(self, 
+        PLOT_DISTROS=False, PLOT_EXAMPLE_BAD_TRIALS=False, DEBUG=False):
+        """
+        Cleanup cases where ther first stroke reach from go is so quick that the fixation
+        hold is counted as part of the initial stroke., This occuers for Luca
+        on 230512.
+        DOes so in conservative way. Teh onset must be close to fixastion in space. 
+        There must be high velocity peak, and the peak must be close in space to onset.
+        RETURNS:
+        - (updates self.Dat["strokes_beh"])
+        - list_inds_replaced, list ints, indices into self.Dat, which were modded.
+        """
+
+        from pythonlib.tools.nptools import find_peaks_troughs
+
+        # In prep, get distribtions of some metrics across all data
+        # to be able to find outliers.
+        list_dist_to_fix = []
+        for idat in range(len(self.Dat)):
+            strokes_beh = self.Dat.iloc[idat]["strokes_beh"]
+
+            # === distnace from stroke onset to fixation
+            loc_on = strokes_beh[0][0,[0,1]]
+            loc_fix = self.Dat.iloc[idat]["origin"]
+
+            dist_to_fix = np.linalg.norm(loc_fix - loc_on)
+            list_dist_to_fix.append(dist_to_fix)
+        min_dist_allowed = np.percentile(list_dist_to_fix, [12])
+        min_dist_allowed = np.min([min_dist_allowed, 50])
+
+        # get distribution of strok speeds across all data
+        list_strokesspeed = self.extractStrokeVels(list(range(len(self.Dat))))
+
+        speeds_flat = []
+        for S in list_strokesspeed:
+            if S is not None:
+                for s in S:
+                    speeds_flat.append(s)
+        speeds_flat = np.concatenate(speeds_flat, axis=0)
+        max_speed_allowed = np.percentile(speeds_flat, [99])[0]
+        max_speed_allowed = np.max([max_speed_allowed, 1000])
+
+
+        if PLOT_DISTROS:
+            fig, ax = plt.subplots()
+            ax.hist(speeds_flat, bins=50)
+            ax.set_title(f"max allowed: {max_speed_allowed}")
+
+            fig, ax = plt.subplots()
+            ax.hist(list_dist_to_fix, bins=50)
+            ax.set_title(f"min allowed: {min_dist_allowed}")
+
+        # Each trial, see if recompute first stroke onset.
+        LIST_STROKES_BEH = []
+        list_inds_replaced = []
+        list_raise_time = []
+        print("* UDPATEING onset of first stroke [too close to fixation] (trial, new onset index):")
+        for idat in range(len(self.Dat)):
+            strokes_beh = self.Dat.iloc[idat]["strokes_beh"]
+            raise_time = self.Dat.iloc[idat]["motorevents"]["raise"]
+
+            # === distnace from stroke onset to fixation
+            loc_on = strokes_beh[0][0,[0,1]]
+            loc_fix = self.Dat.iloc[idat]["origin"]
+
+            dist_to_fix = np.linalg.norm(loc_fix - loc_on)
+            if DEBUG:
+                print(idat, dist_to_fix, loc_on, loc_fix)
+            if dist_to_fix>min_dist_allowed:
+                LIST_STROKES_BEH.append(strokes_beh)
+                continue
+
+            # === New onset will be at minimum in stroke speed.
+            strok_speed = self.extractStrokeVels([idat])[0][0][:,0] # (N,)
+            if np.max(strok_speed) < max_speed_allowed:
+                LIST_STROKES_BEH.append(strokes_beh)
+                continue
+
+            # FIND NEW STROKE ONSET
+            inds_peak, inds_trough = find_peaks_troughs(strok_speed, DEBUG)
+
+            # first peak that is greater than max 
+            inds_high = np.where(strok_speed>max_speed_allowed)[0].tolist()
+            tmp = [i for i in inds_peak if i in inds_high]
+            if not len(tmp)==1:
+                LIST_STROKES_BEH.append(strokes_beh)
+                continue
+
+            ind_peak_above_max_vel = tmp[0]
+
+            # first trough after this
+            idx_new_stroke_on = [i for i in inds_trough if i>ind_peak_above_max_vel][0]
+
+            # Find the time of raise, the trough preceding this peek
+            idx_new_raise = [i for i in inds_trough if i<ind_peak_above_max_vel][-1]
+
+            # sanity checks
+            # - only small fraction of stroke
+            if idx_new_stroke_on/len(strok_speed)>0.8:
+                # cutting off >0.8 of stroke. dont do this.
+                LIST_STROKES_BEH.append(strokes_beh)
+                continue
+                # FAIL = True
+
+            # location of peak in vel should be close to onsetl
+            if np.linalg.norm(strokes_beh[0][ind_peak_above_max_vel, [0,1]] - loc_fix)>200:
+                # Then ad-hoc ditsance is breached.
+                LIST_STROKES_BEH.append(strokes_beh)
+                continue
+
+            #################### new time of raise
+            raise_time = strokes_beh[0][idx_new_raise+1,2]
+            list_raise_time.append(raise_time)
+            # print(self.Dat.iloc[idat]["motorevents"])
+            # print(raise_time)
+            # print(idx_new_raise)
+
+            ##########  Create new stroke onset
+            strokes_beh = [strok.copy() for strok in strokes_beh]
+            # strok = strokes_beh[0][idx_new_stroke_on:, :]
+            strokes_beh[0] = strokes_beh[0][idx_new_stroke_on:, :]
+            LIST_STROKES_BEH.append(strokes_beh)
+
+            print(idat, " -- ", idx_new_stroke_on)
+
+            # print(idat, idx_new_stroke_on)
+            list_inds_replaced.append(idat)
+
+        if len(list_inds_replaced)>0:
+            if PLOT_EXAMPLE_BAD_TRIALS:
+                self.plotMultTrials(list_inds_replaced[:20])
+
+            self.Dat["strokes_beh"] = LIST_STROKES_BEH
+
+            if PLOT_EXAMPLE_BAD_TRIALS:
+                self.plotMultTrials(list_inds_replaced[:20])
+
+            # Update motor events
+            assert len(list_inds_replaced)==len(list_raise_time)
+            for idat, rt in zip(list_inds_replaced, list_raise_time):
+                me = self.Dat.iloc[idat]["motorevents"]
+                me["raise"] = rt
+
+        return list_inds_replaced
 
     def _cleanup_rename_characters(self):
         """ makes column called "character" which is the unique name for fixed tasks 
@@ -2136,12 +2412,24 @@ class Dataset(object):
             
         return pathlist
 
+    def preprocessGoodCheckLog(self, params_allowed_done):
+        """
+        Fails if finds that self has logged a param which is not included in 
+        params_allowed_done (list of str)
+        """
+        # if not all([p in self.Log_preprocessGood for p in params_allowed_done]):
+        if not all([p in params_allowed_done for p in self.Log_preprocessGood]):
+            print("Allowed params: ", params_allowed_done)
+            print("Actual done params: ", self.Log_preprocessGood)
+            assert False
 
     def preprocessGood(self, 
             # ver="modeling", 
             ver = None,
             params=None, apply_to_recenter="all",
-            frac_touched_min = None):
+            frac_touched_min = None,
+            nmin_trials = None,
+            DRY_RUN=False):
         """ save common preprocess pipelines by name
         returns a ordered list, which allows for saving preprocess pipeline.
         - ver, string. uses this, unless params given, in which case uses parasm
@@ -2149,160 +2437,200 @@ class Dataset(object):
         ver, otherwise usesparmas
         """
 
-        assert self.LockPreprocess==False, "need to unlock, or make a copy then unlock."
+        if DRY_RUN:
+            print("** DRY RUN!!")
+            # Make a copy and then run
+            D = self.copy()
+            D.preprocessGood(ver, params, apply_to_recenter, frac_touched_min, False)
 
-        if ver is None and params is None:
-            assert False, "must pass in one"
+        else:
 
-        if params is None:
-            if ver=="modeling":
-                # recenter tasks (so they are all similar spatial coords)
-                self.recenter(method="each_beh_center", apply_to=apply_to_recenter)
+            print("*** RUNNING D.preprocessGood using these params:")
+            print(params)
 
-                # interpolate beh (to reduce number of pts)
-                self.interpolateStrokes()
+            assert self.LockPreprocess==False, "need to unlock, or make a copy then unlock."
 
-                # subsample traisl in a stratified manner to amke sure good represnetaiton
-                # of all variety of tasks.
-                self.subsampleTrials()
+            if ver is None and params is None:
+                assert False, "must pass in one"
 
-                # Recompute task edges (i..e, bounding box)
-                self.recomputeSketchpadEdges()
+            if len(self.Dat)==0:
+                return
 
-                params = ["recenter", "interp", "subsample", "spad_edges"]
-            elif ver=="strokes":
-                # interpolate beh (to reduce number of pts)
-                self.interpolateStrokes()
+            ######## MODE 1 - PRESET PARAMS
+            if params is None:
+                assert isinstance(ver, str), "you made mistake? this actually is params?"
+                
+                if ver=="modeling":
+                    # recenter tasks (so they are all similar spatial coords)
+                    self.recenter(method="each_beh_center", apply_to=apply_to_recenter)
 
-                # subsample traisl in a stratified manner to amke sure good represnetaiton
-                # of all variety of tasks.
-                self.subsampleTrials()
-
-                params = ["interp", "subsample"]
-
-            else:
-                print(ver)
-                assert False, "not coded"
-        
-        self.Dat = self.Dat.reset_index(drop=True)
-
-        # Do each preprocess step in params.
-        for p in params:
-            print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
-            if len(self.Dat)>0:
-                if p=="recenter":
-                    self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
-                elif p=="interp":
+                    # interpolate beh (to reduce number of pts)
                     self.interpolateStrokes()
-                elif p=="interp_spatial_int":
-                    self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
-                        pts_or_interval="int")
-                    self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
-                        pts_or_interval="int")
-                elif p=="subsample":
+
+                    # subsample traisl in a stratified manner to amke sure good represnetaiton
+                    # of all variety of tasks.
                     self.subsampleTrials()
-                elif p=="spad_edges":
+
+                    # Recompute task edges (i..e, bounding box)
                     self.recomputeSketchpadEdges()
-                elif p=="rescale_to_1":
-                    self.rescaleStrokes()
-                elif p=="no_supervision":
-                    # Remove trials with online sequence supervision
-                    if False:
-                        LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
-                        self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
-                    else:
-                        # Better, since goes directly to what param matters.
-                        self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"]
-                elif p=="remove_online_abort":
-                    # Remove trials with online abort
-                    self.Dat = self.Dat[self.Dat["aborted"]==False]
-                elif p=="correct_sequencing_binary_score":
-                    # correct sequence matching at lesat one of the grammar parses.
-                    # strict, only if complete entire trial, and is correct sequnece. i..e
-                    # if correct so far, but online abort, then exclude.
-                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). or grammarmatlab_successbinary_score Cant do here, since might overwrite diesred states."
-                    inds_keep = []
-                    for i in range(len(self.Dat)):
-                        res = self.grammarparsesmatlab_score_wrapper(i)
-                        if res in ["sequence_correct"]:
-                            inds_keep.append(i)
-                    self.subsetDataframe(inds_keep)
-                elif p=="wrong_sequencing_binary_score":
-                    # incorrect sequencing. actually seuqenceing wrong, so does not include if failure is just due to onmien abort.
-                    assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). Cant do here, since might overwrite diesred states."
-                    inds_keep = []
-                    for i in range(len(self.Dat)):
-                        res = self.grammarparsesmatlab_score_wrapper(i)
-                        if res in ["sequence_incorrect_online_abort", "sequence_incorrect_but_no_abort"]:
-                            inds_keep.append(i)
-                    self.subsetDataframe(inds_keep)
-                elif p=="one_to_one_beh_task_strokes":
-                    # must use exactyl 
-                    list_good = []
-                    for i in range(len(self.Dat)):
-                        list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
-                    self.Dat = self.Dat[list_good]
-                elif p=="beh_strokes_at_least_one":
-                    # then only keep trials where at least one beh stroke was made
-                    list_good = []
-                    for i in range(len(self.Dat)):
-                        list_good.append(len(self.Dat.iloc[i]["strokes_beh"])>0)
-                    self.Dat = self.Dat[list_good]
-                elif p=="correct_sequencing":
-                    # Only if beh sequence is consistent with at least one acceptable rule 
-                    # based on the epoch.
-                    assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
-                    bm = self.grammarmatlab_wrapper_extract()
-                    self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
-                elif p=="frac_touched_ok":
-                    assert frac_touched_min is not None
-                    # To see what is good value, try:
-                    # plot_trials_after_slicing_within_range_values(self, colname, minval, 
-                    # maxval, plot_hist=True):
-                    self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
-                elif p=="fixed_tasks_only":
-                    self.Dat = self.Dat[self.Dat["random_task"]==False]
-                elif p=="remove_repeated_trials":
-                    # remove trials that repeat the same task immediately after each otehr. only keep the first 
-                    # iter in a set of repeated trials.
-                    inds_repeated = self.taskclass_find_repeat_trials()
-                    inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
-                    self.subsetDataframe(inds_keep)
-                elif p=="only_dates_with_probes":
-                    # Only keep dates that have at least one probe task. Useful for looking
-                    # at generalziation.
-                    # [OPTIONAL] Only keep days with probe tasks
-                    grpdict = self.grouping_get_inner_items("date", "probe")
-                    dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
-                    print("Dates with probe tasks: ", dates_good)
-                    self.filterPandas({"date":dates_good}, "modify")
-                elif p=="probes_only":
-                    # only probe trials
-                    self.Dat = self.Dat[self.Dat["probe"]==1]
-                elif p=="sanity_gridloc_identical":
-                    # Sanity check that all gridloc are relative the same grid (across trials).
-                    self.taskclass_tokens_sanitycheck_gridloc_identical()
-                elif p=="taskgroup_reassign_simple_neural":
-                    # Reassign values to column "taskgroup" so values are simple, they ignore probe
-                    # (since this is present in column "probes") and ignore suffixes (e..g,
-                    # E or I, without n strokes..)
-                    self.taskgroup_reassign_ignoring_whether_is_probe(CLASSIFY_PROBE_DETAILED=False)                
-                elif p=="only_blocks_with_probes":
-                    # only keep trials from blcoks that have both probes and non-probe tasks.
-                    dict_block_probes = self.grouping_get_inner_items("block", "probe")
-                    blocks_with_probes = [bk for bk, probes in dict_block_probes.items() if sorted(probes)==[0,1]]
-                    self.Dat = self.Dat[self.Dat["block"].isin(blocks_with_probes)]
-                elif p=="remove_baseline":
-                    # Remove trials that are baseline epoch.
-                    self.Dat = self.Dat[~self.Dat["epoch"].isin(["base", "baseline"])]
-                    self.Dat = self.Dat[~self.Dat["epoch_orig"].isin(["base", "baseline"])]
+
+                    params = ["recenter", "interp", "subsample", "spad_edges"]
+                elif ver=="strokes":
+                    # interpolate beh (to reduce number of pts)
+                    self.interpolateStrokes()
+
+                    # subsample traisl in a stratified manner to amke sure good represnetaiton
+                    # of all variety of tasks.
+                    self.subsampleTrials()
+
+                    params = ["interp", "subsample"]
+
                 else:
-                    print(p)
-                    assert False, "dotn know this"
-                self.Dat = self.Dat.reset_index(drop=True)
-                print(f"after: {len(self.Dat)}")
-        
-        return params
+                    print(ver)
+                    assert False, "not coded"
+
+            ######## MODE 2 - LIST OF PARAMS
+            else:
+                # log what preprocesses done.
+                self.Log_preprocessGood.extend(params)
+
+                # Do each preprocess step in params.
+                for p in params:
+                    print(f"-- Len of D, before applying this param: {p}, ... {len(self.Dat)}")
+                    if p=="recenter":
+                        self.recenter(method="each_beh_center", apply_to = apply_to_recenter) 
+                    elif p=="interp":
+                        self.interpolateStrokes()
+                    elif p=="interp_spatial_int":
+                        self.interpolateStrokesSpatial(strokes_ver = "strokes_beh", 
+                            pts_or_interval="int")
+                        self.interpolateStrokesSpatial(strokes_ver = "strokes_task", 
+                            pts_or_interval="int")
+                    elif p=="subsample":
+                        self.subsampleTrials()
+                    elif p=="spad_edges":
+                        self.recomputeSketchpadEdges()
+                    elif p=="rescale_to_1":
+                        self.rescaleStrokes()
+                    elif p=="no_supervision":
+                        # Remove trials with online sequence supervision
+                        if False:
+                            LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
+                            self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
+                        else:
+                            # Better, since goes directly to what param matters.
+                            self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"]
+                    elif p=="remove_online_abort":
+                        # Remove trials with online abort
+                        self.Dat = self.Dat[self.Dat["aborted"]==False]
+                    elif p=="correct_sequencing_binary_score":
+                        # correct sequence matching at lesat one of the grammar parses.
+                        # strict, only if complete entire trial, and is correct sequnece. i..e
+                        # if correct so far, but online abort, then exclude.
+                        assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). or grammarmatlab_successbinary_score Cant do here, since might overwrite diesred states."
+                        inds_keep = []
+                        for i in range(len(self.Dat)):
+                            res = self.grammarparsesmatlab_score_wrapper(i)
+                            if res in ["sequence_correct"]:
+                                inds_keep.append(i)
+                        self.subsetDataframe(inds_keep)
+                    elif p=="wrong_sequencing_binary_score":
+                        # incorrect sequencing. actually seuqenceing wrong, so does not include if failure is just due to onmien abort.
+                        assert "success_binary_quick" in self.Dat.columns, "first run self.grammarparses_successbinary_score(False). Cant do here, since might overwrite diesred states."
+                        inds_keep = []
+                        for i in range(len(self.Dat)):
+                            res = self.grammarparsesmatlab_score_wrapper(i)
+                            if res in ["sequence_incorrect_online_abort", "sequence_incorrect_but_no_abort"]:
+                                inds_keep.append(i)
+                        self.subsetDataframe(inds_keep)
+                    elif p=="one_to_one_beh_task_strokes_allow_unfinished":
+                        """ each task stroke is maatched to max one beh stroke. is ok
+                        if didnt get all task strokes
+                        """
+                        list_good = []
+                        for i in range(len(self.Dat)):
+                            list_good.append(self.sequence_compute_each_task_stroke_only_one_beh(i))
+                        self.Dat = self.Dat[list_good]
+                    elif p=="one_to_one_beh_task_strokes":
+                        # must use exactyl 
+                        list_good = []
+                        for i in range(len(self.Dat)):
+                            list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
+                        self.Dat = self.Dat[list_good]
+                    elif p=="beh_strokes_at_least_one":
+                        # then only keep trials where at least one beh stroke was made
+                        list_good = []
+                        for i in range(len(self.Dat)):
+                            list_good.append(len(self.Dat.iloc[i]["strokes_beh"])>0)
+                        self.Dat = self.Dat[list_good]
+                    elif p=="correct_sequencing":
+                        # Only if beh sequence is consistent with at least one acceptable rule 
+                        # based on the epoch.
+                        assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
+                        bm = self.grammarmatlab_wrapper_extract()
+                        self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
+                    elif p=="frac_touched_ok":
+                        assert frac_touched_min is not None
+                        # To see what is good value, try:
+                        # plot_trials_after_slicing_within_range_values(self, colname, minval, 
+                        # maxval, plot_hist=True):
+                        self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
+                    elif p=="fixed_tasks_only":
+                        self.Dat = self.Dat[self.Dat["random_task"]==False]
+                    elif p=="remove_repeated_trials":
+                        # remove trials that repeat the same task immediately after each otehr. only keep the first 
+                        # iter in a set of repeated trials.
+                        inds_repeated = self.taskclass_find_repeat_trials()
+                        inds_keep = [i for i in range(len(self.Dat)) if i not in inds_repeated]
+                        self.subsetDataframe(inds_keep)
+                    elif p=="only_dates_with_probes":
+                        # Only keep dates that have at least one probe task. Useful for looking
+                        # at generalziation.
+                        # [OPTIONAL] Only keep days with probe tasks
+                        grpdict = self.grouping_get_inner_items("date", "probe")
+                        dates_good = [date for date, probes in grpdict.items() if len(probes)>1]
+                        print("Dates with probe tasks: ", dates_good)
+                        self.filterPandas({"date":dates_good}, "modify")
+                    elif p=="probes_only":
+                        # only probe trials
+                        self.Dat = self.Dat[self.Dat["probe"]==1]
+                    elif p=="sanity_gridloc_identical":
+                        # Sanity check that all gridloc are relative the same grid (across trials).
+                        self.taskclass_tokens_sanitycheck_gridloc_identical()
+                    elif p=="taskgroup_reassign_simple_neural":
+                        # Reassign values to column "taskgroup" so values are simple, they ignore probe
+                        # (since this is present in column "probes") and ignore suffixes (e..g,
+                        # E or I, without n strokes..)
+                        self.taskgroup_reassign_ignoring_whether_is_probe(CLASSIFY_PROBE_DETAILED=False)                
+                    elif p=="only_blocks_with_probes":
+                        # only keep trials from blcoks that have both probes and non-probe tasks.
+                        dict_block_probes = self.grouping_get_inner_items("block", "probe")
+                        blocks_with_probes = [bk for bk, probes in dict_block_probes.items() if sorted(probes)==[0,1]]
+                        self.Dat = self.Dat[self.Dat["block"].isin(blocks_with_probes)]
+                    elif p=="remove_baseline":
+                        # Remove trials that are baseline epoch.
+                        self.Dat = self.Dat[~self.Dat["epoch"].isin(["base", "baseline"])]
+                        self.Dat = self.Dat[~self.Dat["epoch_orig"].isin(["base", "baseline"])]
+                    elif p=="only_blocks_with_n_min_trials":
+                        # Keep only blocks that have at least nmin num trials.
+                        print("Keeping only_blocks_with_n_min_trials")
+                        if nmin_trials is None:
+                            nmin_trials = 20
+                        grpdict = self.grouping_get_inner_items("block")
+                        blocks_keep = []
+                        for bk, inds in grpdict.items():
+                            print("block: ", bk, "ntrials: ", len(inds))
+                            if len(inds)>=nmin_trials:
+                                print("keeping bk: ", bk)
+                                blocks_keep.append(bk)
+                        self.Dat = self.Dat[self.Dat["block"].isin(blocks_keep)]
+                    else:
+                        print(p)
+                        assert False, "dotn know this"
+                    self.Dat = self.Dat.reset_index(drop=True)
+                    print(f"after: {len(self.Dat)}")
+                
+            return params
 
 
     #################### VARIOUS UTILS
@@ -5624,18 +5952,49 @@ class Dataset(object):
         else:
             assert False
 
-    def behclass_extract_taskstroke_inds_in_beh_order(self, indtrial):
+    def behclass_extract_taskstroke_inds_in_beh_order(self, indtrial, 
+        version="first_touch_using_max_align"):
         """ Return indices into taskstrokes (the default indices) in order
         best aligned to beh strokes. By defualt excludes taskstrokes that were not "gotten"
-        at all
+        at all. This is in order of "first touch"
         RETURNS:
         - list of ints, e.g,, [0 4 2] means got taskstrokes 0, 4, and 2 in that order, and
         missed strokes 3 and 1.
         """
         Beh = self.Dat.iloc[indtrial]["BehClass"]
-        return Beh.Alignsim_taskstrokeinds_sorted
+        if version=="first_touch":
+            # In order that sorts the taskstrokes the best to match beh. this is like first tocuh.
+            # THis means that more taskstrokes inds can be gotten than exist beh strokes, 
+            # if a behs troke gets multipel taskstrokes. 
+            inds = Beh.Alignsim_taskstrokeinds_sorted
+        elif version=="each_beh_max_align":
+            # independelty check for each beh what its best matching task stroke is.
+            # this allow a beh to match to mulitple task storkes.
+            inds = Beh.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices
+        elif version=="first_touch_using_max_align":
+            # The unique indices in 
+            # Beh.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices and return
+            # then in order
+            inds = []
+            for i in Beh.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices:
+                if i not in inds:
+                    inds.append(i)
+        else:
+            print(version)
+            assert False
 
-    def behclass_extract_beh_and_task(self, indtrial, include_scale=True):
+        # TO LOOK FOR DIFFERENCS ACORSS THE ABOVE>
+        # for ind in range(len(D.Dat)):
+        #     tmp1 = D.behclass_extract_taskstroke_inds_in_beh_order(ind, "first_touch")
+        #     tmp2 = D.behclass_extract_taskstroke_inds_in_beh_order(ind, "each_beh_max_align")
+        #     tmp3 = D.behclass_extract_taskstroke_inds_in_beh_order(ind, "first_touch_using_max_align")
+        #     if not tmp1==tmp3:
+        #         print(ind, tmp1, tmp2, tmp3)
+
+        return inds
+
+
+    def behclass_extract_beh_and_task(self, indtrial):
         """ Extract both beh (oist of PrimitiveClass) and task
         (List of datsegs) for this trial, they will be length of 
         num beh strokes.
@@ -5645,10 +6004,10 @@ class Dataset(object):
         [in order and num of BEH]
         - datsegs_behlength, tokens, same length as primlist, for the best match for
         each beh stroke [in order and num of BEH]
-        - datsegs_tasklength, tokens, same length as num task strokes, in order of first time
-        each task stroke gotten by beh. [in order of BEH, but num of TASK]
+        - datsegs_tasklength_firsttouch, tokens, same length as task seg that weret touched, 
+        in order of first time each task stroke gotten by beh. [in order of BEH, but num of TASK TOUCHED]
         - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
-        order that they are gotten (based on alignsim). Each tuple: 
+        order that they are gotten (identical to datsegs_tasklength_firsttouch). Each tuple: 
         (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes indiicating
         for which beh strkes this task stroke was the first task stroke the bhe stroke touched,
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
@@ -5659,13 +6018,14 @@ class Dataset(object):
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        out_combined, datsegs_behlength, datsegs_tasklength = Beh.alignsim_extract_datsegs_both_beh_task(include_scale=include_scale)
+        out_combined, datsegs_behlength, datsegs_tasklength_firsttouch = Beh.alignsim_extract_datsegs_both_beh_task()
 
         # Assocaite each beh prim with a datseg.
         if False:
             # These can differ if beh stroke doesnt match task
             assert len(Beh.Strokes) == len(datsegs_behlength)
-        return Beh.Strokes, datsegs_behlength, datsegs_tasklength, out_combined
+            
+        return Beh.Strokes, datsegs_behlength, datsegs_tasklength_firsttouch, out_combined
 
     def behclass_clean(self):
         """ Clean by removing any trials where all beh strokes fail to m atch even a single
@@ -5676,7 +6036,8 @@ class Dataset(object):
         trials_good = []
         for ind in range(len(self.Dat)):
             Beh = self.Dat.iloc[ind]["BehClass"]
-            n1 = len(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
+            n1 = len(Beh.alignsim_extract_datsegs())
+            # n1 = len(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
             # n2 = len(Beh.Strokes)
             if n1==0:
                 trials_bad.append(ind)
@@ -6418,6 +6779,7 @@ class Dataset(object):
         from pythonlib.tools.pandastools import applyFunctionToAllRows
         self.Dat = applyFunctionToAllRows(self.Dat, F, epochset_col_name)
         print(f"Defined new column: {epochset_col_name}")
+        
         if PRINT:
             print("... value_counts:")
             print(self.Dat[epochset_col_name].value_counts())
@@ -6586,7 +6948,9 @@ class Dataset(object):
         taskstroke ind was first touchhed! So might be shorter than the num beh strokes...
         """
         taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
-        assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
+        if False:
+            # not true any more, since is using first_touch_using_max_align
+            assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
         return taskstroke_inds_beh_order
 
     def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
@@ -6952,6 +7316,25 @@ class Dataset(object):
         
         print("Appended to self.Dat: strokes01_sameness")
 
+    def sequence_compute_each_task_stroke_only_one_beh(self, ind):
+        """ This is like one to one, but allows that the num
+        beh strokes is less than num task strokes. just enforces that
+        each task stroke is matched by max 1 beh stroke. ie. not allowed
+        to use two+ beh strokes on one task stroke.
+        RETURNS: bool.
+        """
+
+        # Get task strokes in order of gotten, and for each get the
+        # beh strokes for which this task stroek was the first gotten
+        # e.g,
+        # [[0], [1], [], [2], [3]] means 3rd task stroke was not gotten, or it
+        # was gotten along with 2nd task stroke by the 2nd beh stroke.
+        this = [t[0] for t in self.behclass_extract_beh_and_task(ind)[3]] 
+        # n_beh = len(self.Dat.iloc[ind]["strokes_beh"])
+        # n_task = len(self.Dat.iloc[ind]["strokes_task"])
+        matches = all([len(t)<=1 for t in this]) # eahc task stroke gotten is matched to its own beh stroke
+        return matches
+
     def sequence_compute_one_to_one_beh_to_task(self, ind):
         """ Compute whether one to one mappibng between beh and task strokes.
         i.e, each beh stroke matehd to a singel task stroke, and vice versa.
@@ -7074,7 +7457,6 @@ class Dataset(object):
             Beh.alignsim_plot_summary()
 
             print("*** Behavior order: ", taskstroke_inds_beh_order)
-            # print(Beh.Alignsim_taskstrokeinds_foreachbeh_sorted)
         # 2) Get target sequence
         out = self.objectclass_wrapper_extract_sequence_chunk_color(ind, ploton)
         C = out["active_chunk"]
@@ -7519,7 +7901,7 @@ class Dataset(object):
         return list_strokes_vel
 
 
-    def extractStrokeVels(self, list_inds):
+    def extractStrokeVels(self, list_inds, version="speed"):
         """ extract stroke as instantaneous velocities
         INPUT:
         - list_inds, list of ints, for which strokes to use. If "all", then gets all.
@@ -7534,7 +7916,7 @@ class Dataset(object):
         if list_inds == "all":
             list_inds = self.Dat.index.tolist()
         list_strokes = self.Dat.iloc[list_inds]["strokes_beh"].tolist()
-        return self._extractStrokeVels(list_strokes)
+        return self._extractStrokeVels(list_strokes, version=version)
         # list_strokes_vel = []
         # for ind in list_inds:
         #     strokes = self.Dat.iloc[ind]["strokes_beh"]
@@ -7732,6 +8114,18 @@ class Dataset(object):
         else:
             return fig
         # return idxs
+
+    def strokes_onsets_offsets(self, ind):
+        """
+        RETURNS:
+        - onsets, list of nums, time in sec, onsets of strokes
+        - offsets, list ofn ums
+        """
+
+        strokes_beh = self.Dat.iloc[ind]["strokes_beh"]
+        ons = [s[0, 2] for s in strokes_beh]
+        offs = [s[-1, 2] for s in strokes_beh]
+        return ons, offs
 
     def strokes_to_velocity_speed(self, strokes, ver="vel"):
         """ Helper to convert strokes to velocities

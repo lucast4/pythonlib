@@ -455,8 +455,12 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     - strokesspeed, which should be list of Nx2 arrays, where col2 is time.
     the timesteps for both of these outputs will match exactly the time inputs for
     strokes.
-
+    
+    UPDATE 10/15/23 - to cmpute speed after ALL steps for computing velocity (interpoalte, filter) otherwise
+    you get negative values for speed...
     """
+
+    strokes = [x.copy() for x in strokes]
 
     if clean:
         lowpass_freq = 5
@@ -466,7 +470,6 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     if ploton:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 25))
-
     
     if do_pre_filter:
         strokes = strokesFilter(strokes, Wn = [None, fs_new/2], 
@@ -525,13 +528,18 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
                 strok_vels[:,i] = diff5pt(strok[:,i], h=per)
 
             # Conver to speed
-            strok_speeds = np.linalg.norm(strok_vels[:,[0,1]], axis=1).reshape(-1,1)
+            if False:
+                # Do below instead, after interpolating vel. reason: to avoid having negative speeds.
+                strok_speeds = np.linalg.norm(strok_vels[:,[0,1]], axis=1).reshape(-1,1)
 
             # ------------- 4) interpolate and upsample velocity back to original timesteps.
             # 1) velocities
+            # print(strok_vels.shape)
+            # print(time.shape)
             strok_vels_t = np.concatenate([strok_vels, time], axis=1)
             kind_upsample = "cubic" # doesnt matter too much, cubix vs. linear
             # seems like cubic better.
+
             if ploton:
                 for col in [0,1]:
                     axv= plt.subplot(5, 1,2 )
@@ -539,47 +547,74 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
                     axv.plot(strok_vels_t[:,2], strok_vels_t[:,col],  "-o",label=f"vel, dim{col}")
             
             strok_vels_t = strokesInterpolate2([strok_vels_t], N=["npts", n_orig], kind=kind_upsample)[0]
-            
+            strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate)[0]
             if ploton:
+                ax = plt.subplot(5, 1, 4)
+                plt.title("after filter (verlay x and y)")
+
                 for col in [0,1]:
-                    axv.plot(strok_vels_t[:,2], strok_vels_t[:,col], "-o", label=f"vel, dim{col}")
+                    ax.plot(strok_vels_t[:,2], strok_vels_t[:,col], "-o", label="vel, after filter")
                 plt.legend()
+
+            strokes_vels.append(strok_vels_t)
+
+            ################## SPEED
                 
             # 2) speed
-            strok_speeds_t = np.concatenate([strok_speeds, strok_speeds, time], axis=1)
+            strok_speeds = np.linalg.norm(strok_vels_t[:,[0,1]], axis=1).reshape(-1,1) # (N,1)
+            # print(strok_speeds.shape)
+            # print(strok_vels_t.shape)
+            # print(strok_vels_t[:,2][:,None].shape)
+            strok_speeds_t = np.concatenate([strok_speeds, strok_speeds, strok_vels_t[:,2][:,None]], axis=1)
+            # assert False
             if ploton:
                 axs= plt.subplot(5, 1, 3)
                 plt.title("overlaying before and after upsample")
                 for col in [0]:
                     axs.plot(strok_speeds_t[:,2], strok_speeds_t[:,col], "-o", label=f"speed")
             
-            strok_speeds_t = strokesInterpolate2([strok_speeds_t],  N=["npts", n_orig], kind=kind_upsample)[0]
+            if False:
+                # vels have already been interpoalted...
+                strok_speeds_t = strokesInterpolate2([strok_speeds_t],  N=["npts", n_orig], kind=kind_upsample)[0]
+            
+            assert np.all(strok_speeds_t[:,0]>=0)
+            
             if ploton:
                 for col in [0]:
                     axs.plot(strok_speeds_t[:,2], strok_speeds_t[:,col], "-o",label=f"speed")
                 plt.legend()
 
-            strokes_vels.append(strok_vels_t)
             strokes_speeds.append(strok_speeds_t[:,[0, 2]])
 
     # -- filter velocity to smooth
-    strokes_vel = strokesFilter(strokes_vels, Wn = [None, lowpass_freq], fs = sample_rate)
-    if ploton:
-        ax = plt.subplot(5, 1, 4)
-        plt.title("after filter (verlay x and y)")
+    if False:
+        # Do this above now, before convert to speed
+        strokes_vels = strokesFilter(strokes_vels, Wn = [None, lowpass_freq], fs = sample_rate)
+        if ploton:
+            ax = plt.subplot(5, 1, 4)
+            plt.title("after filter (verlay x and y)")
 
-        for S in strokes_vel:
-            for col in [0,1]:
-                ax.plot(S[:,2], S[:,col], "-o", label="vel, after filter")
-        plt.legend()
+            for S in strokes_vels:
+                for col in [0,1]:
+                    ax.plot(S[:,2], S[:,col], "-o", label="vel, after filter")
+            plt.legend()
             
-    # -------- filter speed
-    tmp = [np.concatenate([S[:,0, None], S[:,0, None], S[:,1, None]], axis=1) for S in strokes_speeds]
-    # print(tmp)
-    strokes_speeds = strokesFilter(tmp, Wn = [None, lowpass_freq], fs = sample_rate)
-    # print(strokes_speeds)
-    # assert False
-    strokes_speeds = [np.concatenate([S[:,0, None], S[:,2, None]], axis=1) for S in strokes_speeds]
+    if False:
+        # dont filter, you've already filter vels avbove.
+        # -------- filter speed
+        tmp = [np.concatenate([S[:,0, None], S[:,0, None], S[:,1, None]], axis=1) for S in strokes_speeds]
+        strokes_speeds = strokesFilter(tmp, Wn = [None, lowpass_freq], fs = sample_rate)
+        strokes_speeds = [np.concatenate([S[:,0, None], S[:,2, None]], axis=1) for S in strokes_speeds]
+
+    for s in strokes_speeds:
+        if not np.all((s[:,0]>=0) | (np.isnan(s[:,0]))):
+            print(s)
+            print(s[:,0]<0)
+            print(np.isnan(s[:,0]))
+            print(np.all(np.isnan(s[:,0])))
+            print((s[:,0]>=0) | (np.isnan(s[:,0])))
+            assert False
+
     if ploton:
         ax = plt.subplot(5, 1, 5)
         plt.title("after filter")
@@ -587,7 +622,7 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
             for col in [0]:
                 ax.plot(S[:,1], S[:,col], "-o", label="speed, after filter")    
     
-    return strokes_vel, strokes_speeds
+    return strokes_vels, strokes_speeds
 
 
 

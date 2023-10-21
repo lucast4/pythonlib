@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 ### 
 # np.r_ is for quick contaneation.
@@ -145,3 +146,35 @@ def sort_by_labels(X, labels, axis=0):
     labels = [labels[i] for i in inds]
     
     return X, labels
+
+def find_peaks_troughs(vals, PLOT=False):
+    """ Find indices of peaks and troughs in vals
+    Does so by looking at diffs
+    PARAMS:
+    - vals, (1,N) or (N,) array of values.
+    RETURNS:
+    - inds_peaks, inds_troughs, list of ints, indices into vals.
+    """
+    
+    # Peaks are where the diffs change sign from pos to neg. and similarly
+    # for troughs
+    
+    if len(vals.shape)>1:
+        assert vals.shape[1]==1
+        vals = vals.squeeze()
+
+    valsdiff = np.diff(vals, axis=0)
+    assert len(valsdiff)==len(vals)-1, "prob shape issue fior vals"
+
+    inds_troughs = list(np.where(np.diff(np.sign(np.diff(vals)))>0)[0]+1)
+    inds_peaks = list(np.where(np.diff(np.sign(np.diff(vals)))<0)[0]+1)
+
+    if PLOT:
+        fig, ax = plt.subplots()
+        ax.plot(range(len(vals)), vals, "ok")
+        for idx in inds_troughs:
+            ax.plot(idx, 0, "xr")
+        for idx in inds_peaks:
+            ax.plot(idx, 0, "xb")        
+
+    return inds_peaks, inds_troughs

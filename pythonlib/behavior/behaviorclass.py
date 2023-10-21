@@ -90,9 +90,9 @@ class BehaviorClass(object):
             motordat = D.get_motor_stats(ind)
 
             # - gap durations
-            gap_durations = np.array(motordat["ons"])[1:] - np.array(motordat["offs"])[:-1]
-            stroke_durations = np.array(motordat["offs"]) - np.array(motordat["ons"])
-
+            if False:
+                gap_durations = np.array(motordat["ons"])[1:] - np.array(motordat["offs"])[:-1]
+                stroke_durations = np.array(motordat["offs"]) - np.array(motordat["ons"])
 
             ##### MASKS
             # mask, to pick out only the first sucesful getting of each prim.
@@ -150,8 +150,8 @@ class BehaviorClass(object):
                 "taskstrokeinds_dists":list_distances.reshape(-1,), # nparray
                 "taskstrokeinds_beh_singleonly":inds_task_single, # np array, either single task ind, or nan
                 "shapes_beh":labels,
-                "gap_durations":gap_durations,
-                "stroke_durations":stroke_durations,
+                # "gap_durations":gap_durations,
+                # "stroke_durations":stroke_durations,
                 # "maskinds_repeated_beh": np.array(inds_task_mask, dtype=int)
                 "maskinds_repeated_beh": np.array(inds_task_mask), # true if this beh mathces taskind that has not been gotetn yuet
                 "maskinds_singlematch_beh": maskinds_single, # True if this beh matches only one task stroke
@@ -311,6 +311,7 @@ class BehaviorClass(object):
         elif ver=="task":
             strokes = self.Dat["strokes_task"]
         elif ver=="task_after_alignsim":
+            # THIS IS first touch
             strokes = self.Dat["strokes_task"]
             idxs = self.Alignsim_taskstrokeinds_sorted
             strokes = [strokes[i] for i in idxs]
@@ -400,6 +401,20 @@ class BehaviorClass(object):
         - remove_bad_taskstrokes, bool, will not include taskstrokes whos max sim (across
         beh strokes) is less that taskstrokes_thresh. This will prune smat_sorted and idxs, but
         not smat, which is always the input order of taskstrokes.
+        RETURNS:
+        - self.Alignsim_taskstrokeinds_sorted, the best ordering of taskstrokes to match
+        behstrokes, where each taskstorke is used max 1 time. can be 0 times if it is removed.
+        and so is possibly shorter than num taskstrokes if remove_bad_taskstrokes
+        is on, but the indices will still index into the original list.
+        - self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices, the "FINAL" list of taskstroke inds,
+        one for each beh stroke. IMPORANT: this does NOT index into original taskstrokes, but insteas
+        into the pruned and sorted list of taskstrokes (pruend only if any not gotten). 
+        NOTE: this differs from idxs, since the latter only uses each taskstroke
+        a single time, since it is the best way to sort taskstrokes. idxs_beh is the "FINAL" version,
+        since it allows for a given taskstroke to be matched >1 time (e.g. got it with 2 beh strokes.)
+        NOTE: in RARE cases, it is possible for an index to exist in Alignsim_taskstrokeinds_sorted, but not 
+        in Alignsim_taskstrokeinds_foreachbeh_sorted_origindices, because in the latter it independently
+        tries to match each beh stroke to its best task stroke.
         """
         from pythonlib.drawmodel.behtaskalignment import aligned_distance_matrix
         import numpy as np
@@ -416,22 +431,27 @@ class BehaviorClass(object):
             # smat = smat[:, indstokeep]
             # print(smat)
             # print(indstokeep)
-            idxs = [i for i in idxs if i in indstokeep]
+            idxs = [i for i in idxs if i in indstokeep] # Only keep taskstrokes that are gotten.
             smat_sorted = smat[:, idxs]
 
         if smat_sorted.shape[1]==0:
             # due to thresholding this datapoint is empty. 
             # i..e, no beh stroke matches even one task stroke
             self.Alignsim_taskstrokeinds_sorted = idxs
-            self.Alignsim_taskstrokeinds_foreachbeh_sorted = []
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices = []
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices = []
             self.Alignsim_simmat_sorted = smat_sorted
             self.Alignsim_simmat_unsorted = smat
             self.Alignsim_Datsegs = None
         else:
             # Compute for each beh stroke the best matching task stroke, based on the max similarity
             # [1,2,2,0] means behstroke 0 is aligned to takstroke 0, etc... after taskstrokes are sorted.
+            # NOTE: this differs from idxs, since the latter only uses each taskstroke
+            # a single time, since it is the best way to sort taskstrokes. idxs_beh is the "FINAL" version,
+            # since it allows for a given taskstroke to be matched >1 time (e.g. got it with 2 beh strokes.)
             try:
                 idxs_beh = np.argmax(smat_sorted, axis=1)
+                idxs_beh_into_original_taskstrokeinds = [idxs[i] for i in idxs_beh]
             except Exception as err:
                 self.plotStrokes()
                 self.plotTaskStrokes()
@@ -446,10 +466,15 @@ class BehaviorClass(object):
                 raise err
 
             self.Alignsim_taskstrokeinds_sorted = idxs
-            self.Alignsim_taskstrokeinds_foreachbeh_sorted = idxs_beh
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices = idxs_beh
+            self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices = idxs_beh_into_original_taskstrokeinds
             self.Alignsim_simmat_sorted = smat_sorted
             self.Alignsim_simmat_unsorted = smat
             self.Alignsim_Datsegs = None
+
+        # sanity checks, to confirm my udnerstanding of what shoudl happen.
+        assert len(set(idxs))==len(idxs), "should be unique indices, since they are sort indices."
+
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
             include_scale=True, input_grid_xy=None):
@@ -463,12 +488,22 @@ class BehaviorClass(object):
         e..g, things like size of sketchpad grid. None, to use self.Expt
         RETURNS:
         - datsegs, list of dicts, each w same keys, each a single token, length of beh strokes
+        MODIFIES:
+        - self.Alignsim_Datsegs, length of the taskstrokes that are NOT pruned, in the order
+        that sorts them so that they best match beahvior. No taskstroke is used more than once.
+        This means Alignsim_Datsegs[2] doesnt necesasiyl match strokes_beh[2]. Can think of this
+        as taskstroke inds ordered by their "first touich"
+        - self.Alignsim_Datsegs_BehLength, legnth of beh stroke, where each index is corresponds to
+        its same index in beh. This means can have a tasktrokes used multipe times. THis is based on
+        indepednetly matching each beh stroke to its best-matching task stroke.
         """
-
+        import copy
+        
         if not recompute:
             # Load cached datsegs
             if self.Alignsim_Datsegs is not None:
                 return self.Alignsim_Datsegs
+
         # If you are computing, then you should pass in input_grid_xy
         if input_grid_xy is None:
             print("recompute:", recompute)
@@ -483,61 +518,92 @@ class BehaviorClass(object):
         params = {
             "expt":expt}
 
-        # Now use the aligned task inds
-        inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
-
+        # Genrate tokens, taskstroke inds order.
         Task = self.task_extract()
         hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
         Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
             assert_computed=False,
             include_scale=include_scale, input_grid_xy=input_grid_xy) # generate the defualt order
+
+        # Now use the aligned task inds
+        inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
         datsegs = Task.tokens_reorder(inds_taskstrokes)
+        # Saved cached datsegs
+        self.Alignsim_Datsegs = datsegs
 
         if plot_print_on:
             for x in datsegs:
                 print(x)
             self.alignsim_plot_summary()
 
-        # Saved cached datsegs
-        self.Alignsim_Datsegs = datsegs
-
         # Extract best guess for behavior-length datsegs
-        datsegs_behlength = [datsegs[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
-        self.Alignsim_Datsegs_BehLength = datsegs
+        datsegs_behlength = [copy.copy(datsegs[i]) for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices]
+        self.Alignsim_Datsegs_BehLength = datsegs_behlength
+ 
+        # Sanity cehcek, confirming that I am sure what is coming out.
+        tmp = Task.tokens_reorder(self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices)
+        assert len(tmp)==len(self.Alignsim_Datsegs_BehLength)
+        for t1, t2 in zip(tmp, self.Alignsim_Datsegs_BehLength):
+            assert t1["ind_taskstroke_orig"] == t2["ind_taskstroke_orig"], "bug somewhere"
 
+        # Sanity check
+        assert [t["ind_taskstroke_orig"] for t in self.Alignsim_Datsegs] == self.Alignsim_taskstrokeinds_sorted, "no idea. mistake somewhere"
+        assert [t["ind_taskstroke_orig"] for t in self.Alignsim_Datsegs_BehLength] == self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices, "no idea. mistake somewhere"
         return datsegs
 
-    def alignsim_extract_datsegs_both_beh_task(self, include_scale=True):
+    def alignsim_extract_datsegs_both_beh_task(self, DEBUG=False):
         """
         [GOOD] get summary of beh and task strokes, including their alignemnet.
         RETURNS:
-        - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
-        order that they are gotten (based on alignsim). Each tuple: 
+        - out_combined. Combined representaion, list (length num taskstrokes, but might be less
+        if any were pruned!) of tuples, and in order that they are gotten by first touch (based on alignsim). Each tuple: 
         (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into self.Strokes,
         strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
+        - datsegs_behlength, see notes within
+        - datsegs_firsttouch, see notes within. matches out_combined.
         """        
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.
-        datsegs_tasklength = self.alignsim_extract_datsegs(include_scale=include_scale) 
-        datsegs_behlength = [datsegs_tasklength[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted]
+        datsegs_firsttouch = self.alignsim_extract_datsegs() 
 
+        if DEBUG:
+            print(len(datsegs_firsttouch))
+            print(self.Alignsim_taskstrokeinds_sorted)
+            print(self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices)
+            print(self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices)
+            assert False
+
+        # datsegs_behlength = [datsegs_firsttouch[i] for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices]
+        datsegs_behlength = self.Alignsim_Datsegs_BehLength
+
+        # Combined representaion, list (length num taskstrokes) of tuples, each tuple:
         # Combined representaion, list (length num taskstrokes) of tuples, each tuple:
         # (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into self.Strokes,
         # strokesbeh are those sliced strokes, and dseg_task is the single dseg for thsi taskstroke,
-
         def find_inds_behstroke_aligned_to_this_taskstroke(indtask_get):
-            return [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted) if indtask==indtask_get]
+            return [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices) if indtask==indtask_get]
 
         out_combined = []
-        for i, dseg_task in enumerate(datsegs_tasklength):
+        for i, dseg_task in enumerate(datsegs_firsttouch):
+
             # get all the beh that are aligned with this task
             inds_beh = find_inds_behstroke_aligned_to_this_taskstroke(i)
+
+            # sanity check
+            indtask_orig = dseg_task["ind_taskstroke_orig"]
+            tmp = [indbeh for indbeh, indtask in enumerate(self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices) if indtask==indtask_orig]
+            if not tmp == inds_beh:
+                print(inds_beh)
+                print(tmp)
+                print(dseg_task)
+                print(datsegs_firsttouch)
+                assert False
+
             # beh = [{"indbeh":i, "behstroke":self.Strokes[i]} for i in inds_beh]
             strokesbeh = [self.Strokes[i] for i in inds_beh]
             out_combined.append((inds_beh, strokesbeh, dseg_task))
 
-        return out_combined, datsegs_behlength, datsegs_tasklength
-
+        return out_combined, datsegs_behlength, datsegs_firsttouch
 
     def alignsim_plot_summary(self):
         """Plot results of alignments
