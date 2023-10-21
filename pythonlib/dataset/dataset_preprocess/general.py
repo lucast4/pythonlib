@@ -827,6 +827,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     from pythonlib.drawmodel.strokedists import distscalarStrokes
     from pythonlib.dataset.dataset_preprocess.probes import taskgroups_assign_each_probe
 
+    assert extract_motor_stats==False,  "not needed"
+    
     if hasattr(D, "_analy_preprocess_done"):
         if D._analy_preprocess_done:
             assert False, "already done preprocess!! You probably ran this in Dataset(). You can just skip this current call to preprocessDat()"
@@ -884,12 +886,13 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
             mt = D.Dat.iloc[ind]["motortiming"]
 
             # if hve strokes, then must have raise
-            if len(me["ons"])>0:
+            if len(D.Dat.iloc[ind]["strokes_beh"])>0:
+            # if len(me["ons"])>0:
                 if np.isnan(me["raise"]):
                     print(me)
                     assert False, "Fix this AND RECOMPUTE MOTORTIMING. Easiest: reextract dataset from drawmonkey."
                 assert not np.isnan(me["go_cue"]), "Fix this AND RECOMPUTE MOTORTIMING"
-                assert len(me["ons"]) == len(me["offs"]), "Fix this AND RECOMPUTE MOTORTIMING"
+                # assert len(me["ons"]) == len(me["offs"]), "Fix this AND RECOMPUTE MOTORTIMING"
 
                 # mt["time_go2raise"]
 

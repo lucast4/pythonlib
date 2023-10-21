@@ -127,6 +127,9 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
 
     from pythonlib.tools.plottools import colorGradient
 
+    if len(strokes)==0:
+        return
+        
     # What format was passed in for strokes_values?
     if isinstance(strokes_values[0], np.ndarray) and (strokes_values[0].shape[0]>1 or strokes_values[0].shape[1]>1):
         # Then is list of arrays

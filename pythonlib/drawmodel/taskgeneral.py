@@ -1273,7 +1273,7 @@ class TaskClass(object):
         return tok
 
     def tokens_reorder(self, inds_taskstrokes):
-        """ Return datsegs in any desired order.
+        """ Return copy of datsegs in any desired order.
         NOTE: This must regenerate datsegs, becuasse the relational features need to know
         about ordering.
         """

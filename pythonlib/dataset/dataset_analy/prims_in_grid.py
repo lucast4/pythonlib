@@ -35,7 +35,7 @@ def preprocess_dataset(D, doplots=False):
 
     D.seqcontext_preprocess()
     D.taskclass_shapes_loc_configuration_assign_column()
-
+ 
     # Some params and metadat to save
 
     #############################

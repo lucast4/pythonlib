@@ -12,7 +12,7 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 
 
-def gapstrokes_preprocess_extract_strokes_gaps(D):
+def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None):
     """
     GAPSTROKES -- analysis of gaps and strokes... 
     Extract stroke and gaps and their timings, etc.
@@ -22,15 +22,22 @@ def gapstrokes_preprocess_extract_strokes_gaps(D):
     """
     SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("motortiming_gapstrokes")
 
-    # To do this analysis, you must onlyu include cases with one to one match of beh to task stroke.
-    # Otherwise there is mismatch: chekcing if beh matches parses uses "first touch" whereas assigning chunk
-    # to beh stroke must to for each beh stroke, regardless of whether is first touch.
-    # D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
-    D.preprocessGood(params=["one_to_one_beh_task_strokes"])
+    if False: # I dont think the below holds. its just for grammarchunks_preprocess_and_plot
+        # To do this analysis, you must onlyu include cases with one to one match of beh to task stroke.
+        # Otherwise there is mismatch: chekcing if beh matches parses uses "first touch" whereas assigning chunk
+        # to beh stroke must to for each beh stroke, regardless of whether is first touch.
+        # D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
+        D.preprocessGood(params=["one_to_one_beh_task_strokes"])
+    else:
+        D.preprocessGood(params=["one_to_one_beh_task_strokes_allow_unfinished"])
 
     # Generate DatStrokes
     from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
+
+    # From pig
+    D.seqcontext_preprocess()
+    D.taskclass_shapes_loc_configuration_assign_column()
 
     ############### PREPROCESS
     DS.timing_extract_basic()
@@ -42,11 +49,16 @@ def gapstrokes_preprocess_extract_strokes_gaps(D):
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape"], "shape_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_loc_prev", "gridloc"], "loc_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"], "locshape_pre_this", use_strings=False)
+    DS.Dat = append_col_with_grp_index(DS.Dat, ["shape", "gridloc", "stroke_index"], "sh_loc_idx", use_strings=True)
 
     ########### additional motor stuff
     return DS, SAVEDIR
 
 def gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
+    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D)
+    return _gapstrokes_timing_plot_all(DS, SAVEDIR, LIST_Y_PLOT)
+
+def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
     """
     Plot motor timing for gaps and strokes in multiple ways
     PARAMS:
@@ -172,6 +184,8 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     VARS_CONTEXT = ["CTXT_loc_prev", "gridloc", "epoch"]
     VARS_CONTEXT = ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"]
     e.g., compare timing for probes vs. non-probes.
+    - params_preprocess, 
+    e.g., params_preprocess = ["no_supervision", "one_to_one_beh_task_strokes", "correct_sequencing_binary_score", "only_blocks_with_probes"]
     RETURNS:
     - Saves figures...
     """
@@ -196,6 +210,8 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
 
     # Get data strokes
     DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D)
+    D.preprocessGoodCheckLog(params_preprocess+["one_to_one_beh_task_strokes_allow_unfinished"])
+
     DS.dataset_append_column("probe")
     DS.dataset_append_column("epoch")
     DS.dataset_append_column(VAR)
@@ -220,46 +236,66 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
         # For specific stroke index, and context
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
                    col="context", col_wrap=3, alpha=0.5)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_vel-1.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
                    col="context", col_wrap=3, kind="point")
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
 
         fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
         
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
                    col="context", col_wrap=3, alpha=0.5)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_dur-1.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
                    col="context", col_wrap=3, kind="point")
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
         
         plt.close("all")
 
         fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/gap_dur-3.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
                    col="context", col_wrap=3, alpha=0.5)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/stroke_dur-1.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
                    col="context", col_wrap=3, kind="point")
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/stroke_dur-2.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x=VAR, y="time_duration", hue="context", kind="point", aspect=0.5)
+        rotateLabel(fig)
+        savefig(fig, f"{SAVEDIR}/stroke_dur-3.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
                    col="context", col_wrap=3, alpha=0.5)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/stroke_vel-1.pdf")
 
         fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
                    col="context", col_wrap=3, kind="point")
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/stroke_vel-2.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x=VAR, y="velocity", hue="context", kind="point", aspect=0.5)
+        rotateLabel(fig)
+        savefig(fig, f"{SAVEDIR}/stroke_vel-3.pdf")
+
 
         fig = sns.pairplot(data=DFTHIS, x_vars=["gap_from_prev_dist"], y_vars=["gap_from_prev_dur"], hue=VAR,
                           plot_kws={"alpha":0.25}, height=6)
+        rotateLabel(fig)
         savefig(fig, f"{SAVEDIR}/pair-gap_dist-vs-gap_dur-1.pdf")
 
         plt.close("all")
@@ -276,6 +312,7 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
         SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("motortiming_grammarchunks")
 
     # Remove all baseline (i.e., for grammar)
+    assert False, "use preprocessGood here"
     D.Dat = D.Dat[~D.Dat["epoch"].isin(["base", "baseline"])].reset_index(drop=True)
 
     D.grammarparses_successbinary_score()
@@ -550,7 +587,6 @@ def _plotscatter_durvsdist_all(DS, savedir):
 def _plot_velocity_all(DS):
     assert False, "IN PROGRESS! not that useful, since dur is not that linear wrt time..."
 
-    from pythonlib.tools.snstools import rotateLabel
 
     for epoch in list_epoch:
         print(epoch)
