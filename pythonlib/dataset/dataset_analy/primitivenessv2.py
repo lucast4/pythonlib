@@ -235,17 +235,29 @@ def plot_triallevel_results(DS, contrast, savedir):
     """
     from pythonlib.tools.snstools import rotateLabel
 
+    list_block = DS.Dat["block"].unique().tolist()
+    
+    N_MIN_PER_BLOCK = 10
+
     for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
         for sh in ["sh_loc_idx", "shape", "shapeabstract"]:
-            fig = sns.catplot(data=DS.Dat, x=contrast, col=sh, 
-                row="block", y=y, alpha=0.4)
-            rotateLabel(fig)
-            savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-1.pdf")
+            for bk in list_block:
 
-            fig = sns.catplot(data=DS.Dat, x=contrast, col=sh, 
-                row="block", y=y, kind="point", ci=68)
-            rotateLabel(fig)
-            savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-2.pdf")
+                dfthis = DS.Dat[DS.Dat["block"]==bk]
+                if len(dfthis)>N_MIN_PER_BLOCK:
+
+                    print("primitivenessv2.plot_triallevel_results()", y, sh, bk)
+                    fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
+                        col_wrap=4, y=y, alpha=0.4)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
+
+                    fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
+                        col_wrap=4, y=y, kind="point", ci=68)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-2.pdf")
+
+                    plt.close("all")
 
         # fig = sns.catplot(data=DS.Dat, x="shape", y=y, hue=contrast, kind="point", ci=68)
         fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
@@ -267,6 +279,8 @@ def plot_triallevel_results(DS, contrast, savedir):
         rotateLabel(fig)
         savefig(fig, f"{savedir}/sh_loc_idx-triallevel-{contrast}-{y}-2.pdf")
 
+        plt.close("all")
+
 def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir):
     """ Plot and same summary of results
     """
@@ -274,15 +288,14 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir):
 
     for y in ["mean_sim_score", "dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
         fig = sns.catplot(data=dfres, x=contrast, y=y)
-        # fig = sns.catplot(data=dfres, x=contrast, col="block", col_wrap=4, y=y)
         rotateLabel(fig)
         savefig(fig, f"{savedir}/grplevel-{contrast}-{y}-1.pdf")
 
         fig = sns.catplot(data=dfres, x=contrast, y=y, kind="point", ci=68)
-        # fig = sns.catplot(data=dfres, x=contrast, y=y, kind="point",
-        #     col="block", col_wrap=4, ci=68)
         rotateLabel(fig)
         savefig(fig, f"{savedir}/grplevel-{contrast}-{y}-2.pdf")
+
+        plt.close("all")
 
     # fig = sns.catplot(data=dfres, x=contrast, y="mean_sim_score")
     # rotateLabel(fig)

@@ -11,6 +11,7 @@ See jupyter notebook for development of this code:
 import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.snstools import rotateLabel
+from pythonlib.tools.plottools import savefig
 
 
 
@@ -408,7 +409,7 @@ class BehModelHolder(object):
         self.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
     def plot_score_cross_prior_model_splitby_agg(self, split_by="taskgroup",
-        cols_grpby_append=None):
+        cols_grpby_append=None, sdir=None, suffix=None):
         """ bar plots crossing prior and model, plot separately for differelt levels of the variable
         split_by
         PARAMS;
@@ -422,10 +423,12 @@ class BehModelHolder(object):
                     cols_grpby.append(split_by)        
 
         self.datextract_datlong_agg(cols_grpby_append=cols_grpby)
-        fig1, fig2 = self.plot_score_cross_prior_model_splitby(self.DatLongAgg, split_by=split_by)
-        return fig1, fig2
 
-    def plot_score_cross_prior_model_splitby(self, df=None, split_by="taskgroup"):
+        self.plot_score_cross_prior_model_splitby(self.DatLongAgg, split_by=split_by,
+            sdir=sdir, suffix=suffix)
+
+    def plot_score_cross_prior_model_splitby(self, df=None, split_by="taskgroup",
+            sdir=None, suffix=""):
         """ bar plots crossing prior and model, plot separately for differelt levels of the variable
         split_by
         PARAMS;
@@ -445,16 +448,22 @@ class BehModelHolder(object):
         # fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
         #     row=split_by, col="score_name", kind="swarm", ci=68)
 
-        fig1 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-            row=split_by, col="block", kind="bar", ci=68)
-        fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-            row=split_by, col="block", jitter=True, alpha=0.4)
-        
-        rotateLabel(fig1)
-        rotateLabel(fig2)
+        # Split by blocks
+        list_block = df["block"].unique().tolist()
+        for bk in list_block:
+            dfthis = df[df["block"]==bk]
 
-        return fig1, fig2
+            fig = sns.catplot(data=dfthis, x="agent_rule", y="score", hue="agent_kind", 
+                col=split_by, col_wrap=4, kind="bar", ci=68)
+            rotateLabel(fig)
+            if sdir is not None:
+                savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-1.pdf") 
 
+            fig = sns.catplot(data=dfthis, x="agent_rule", y="score", hue="agent_kind", 
+                col=split_by, col_wrap=4, jitter=True, alpha=0.4)
+            rotateLabel(fig)
+            if sdir is not None:
+                savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
 
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
             savedir=None):

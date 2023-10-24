@@ -8,25 +8,36 @@ from pythonlib.tools.plottools import savefig
 import seaborn as sns
 import pandas as pd
 import numpy as np
+from pythonlib.tools.exceptions import NotEnoughDataException
 
 def plot_all_wrapper(D):
     """ 
     """
 
-    # Grammar
-    from pythonlib.dataset.dataset_analy.grammar import pipeline_generate_and_plot_all
-    pipeline_generate_and_plot_all(D)
-
     # primitiveness
     from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline
-    preprocess_plot_pipeline(D)
+    Dcopy = D.copy()
+    preprocess_plot_pipeline(Dcopy)
 
     # single prims.
     from pythonlib.dataset.dataset_analy.singleprims import preprocess_dataset
-    preprocess_dataset(D, PLOT=True)
+    Dcopy = D.copy()
+    preprocess_dataset(Dcopy, PLOT=True)
 
     # motor timing
-    plot_motortiming(D)
+    Dcopy = D.copy()
+    plot_motortiming(Dcopy)
+
+    # Grammar
+    try:
+        from pythonlib.dataset.dataset_analy.grammar import pipeline_generate_and_plot_all
+        Dcopy = D.copy()
+        pipeline_generate_and_plot_all(Dcopy)
+    except NotEnoughDataException as err:
+        # skip, since rules are not defined
+        pass
+    except Exception as err:
+        raise err
 
 def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
     """ Wuick plot , for each stim trial, of 
@@ -219,41 +230,43 @@ def plot_motortiming(D):
     VAR = "epoch"
     DS, DFTHIS = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess);
 
-    # Take controlled data --> plot a single distribution, one for each (context, index) combo
-    DFTHIS = append_col_with_grp_index(DFTHIS, ["stroke_index", "context"], "strk_idx_ctxt", use_strings=False)
+    if len(DFTHIS)>0:
 
-    # Remove strk_idx_ctxt that have too few data, or else makes plot harder to interpret.
-    n_min_each_conj_outer_inner = 3
-    DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
-                                                                                    var_outer_trials="strk_idx_ctxt", 
-                                                                                    var_inner="epoch",
-                                                                                    epochset_col_name="epochset", 
-                                                                                    PRINT=True, n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
-    # Plot as function of storke index
-    n_min_each_conj_outer_inner = 3
-    DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
-                                                                                    var_outer_trials="locshape_pre_this", 
-                                                                                    var_inner="stroke_index",
-                                                                                    epochset_col_name="stroke_index_set", 
-                                                                                    PRINT=True,
-                                                                                   n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
+        # Take controlled data --> plot a single distribution, one for each (context, index) combo
+        DFTHIS = append_col_with_grp_index(DFTHIS, ["stroke_index", "context"], "strk_idx_ctxt", use_strings=False)
 
-    print("SAVING FIGURES AT: ", SAVEDIR)
-    for y in ["gap_from_prev_dur", "time_duration"]:
-        fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", kind="point", aspect=2)
-        rotateLabel(fig)    
-        savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt.pdf")
+        # Remove strk_idx_ctxt that have too few data, or else makes plot harder to interpret.
+        n_min_each_conj_outer_inner = 3
+        DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
+                                                                                        var_outer_trials="strk_idx_ctxt", 
+                                                                                        var_inner="epoch",
+                                                                                        epochset_col_name="epochset", 
+                                                                                        PRINT=True, n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
+        # Plot as function of storke index
+        n_min_each_conj_outer_inner = 3
+        DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
+                                                                                        var_outer_trials="locshape_pre_this", 
+                                                                                        var_inner="stroke_index",
+                                                                                        epochset_col_name="stroke_index_set", 
+                                                                                        PRINT=True,
+                                                                                       n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
 
-        fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", row="epochset", kind="point")
-        rotateLabel(fig)    
-        savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt-grp_by_epochset.pdf")
+        print("SAVING FIGURES AT: ", SAVEDIR)
+        for y in ["gap_from_prev_dur", "time_duration"]:
+            fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", kind="point", aspect=2)
+            rotateLabel(fig)    
+            savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt.pdf")
 
-        plt.close("all")
-        
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
-        rotateLabel(fig)    
-        savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
+            fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", row="epochset", kind="point")
+            rotateLabel(fig)    
+            savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt-grp_by_epochset.pdf")
 
-        plt.close("all")
+            plt.close("all")
+            
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
+            rotateLabel(fig)    
+            savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
+
+            plt.close("all")
 
     return DS, DFTHIS

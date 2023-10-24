@@ -224,81 +224,86 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     DS.Dat = append_col_with_grp_index(DS.Dat, VARS_CONTEXT, new_col_name="context")
     DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=["context"], 
                                            n_min = n_min, lenient_allow_data_if_has_n_levels=2)
-    print(len(DS.Dat))
-    print(len(DFTHIS))
-    print(len(DFTHIS["context"].unique()))
 
-    if PLOT:
-        ############# PLOTS
-        # %matplotlib inline
-        # yvar = "time_duration"
+    if len(DFTHIS)>0:
+        print(len(DS.Dat))
+        print(len(DFTHIS))
+        print(len(DFTHIS["context"].unique()))
 
-        # For specific stroke index, and context
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
-                   col="context", col_wrap=3, alpha=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_vel-1.pdf")
+        if PLOT:
+            ############# PLOTS
+            # %matplotlib inline
+            # yvar = "time_duration"
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
-                   col="context", col_wrap=3, kind="point")
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
+            # For specific stroke index, and context
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
+                       col="context", col_wrap=3, alpha=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_vel-1.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
-        
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
-                   col="context", col_wrap=3, alpha=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_dur-1.pdf")
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_vel", hue=VAR,
+                       col="context", col_wrap=3, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
-                   col="context", col_wrap=3, kind="point")
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
-        
-        plt.close("all")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
+            
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
+                       col="context", col_wrap=3, alpha=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_dur-1.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/gap_dur-3.pdf")
+            plt.close("all")
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
-                   col="context", col_wrap=3, alpha=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_dur-1.pdf")
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
+                       col="context", col_wrap=3, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
+            
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
-                   col="context", col_wrap=3, kind="point")
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_dur-2.pdf")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/gap_dur-3.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x=VAR, y="time_duration", hue="context", kind="point", aspect=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_dur-3.pdf")
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
+                       col="context", col_wrap=3, alpha=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_dur-1.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
-                   col="context", col_wrap=3, alpha=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_vel-1.pdf")
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="time_duration", hue=VAR,
+                       col="context", col_wrap=3, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_dur-2.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
-                   col="context", col_wrap=3, kind="point")
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_vel-2.pdf")
+            plt.close("all")
 
-        fig = sns.catplot(data=DFTHIS, x=VAR, y="velocity", hue="context", kind="point", aspect=0.5)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/stroke_vel-3.pdf")
+            fig = sns.catplot(data=DFTHIS, x=VAR, y="time_duration", hue="context", kind="point", aspect=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_dur-3.pdf")
+
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
+                       col="context", col_wrap=3, alpha=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_vel-1.pdf")
+
+            fig = sns.catplot(data=DFTHIS, x="stroke_index", y="velocity", hue=VAR,
+                       col="context", col_wrap=3, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_vel-2.pdf")
+
+            fig = sns.catplot(data=DFTHIS, x=VAR, y="velocity", hue="context", kind="point", aspect=0.5)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/stroke_vel-3.pdf")
 
 
-        fig = sns.pairplot(data=DFTHIS, x_vars=["gap_from_prev_dist"], y_vars=["gap_from_prev_dur"], hue=VAR,
-                          plot_kws={"alpha":0.25}, height=6)
-        rotateLabel(fig)
-        savefig(fig, f"{SAVEDIR}/pair-gap_dist-vs-gap_dur-1.pdf")
+            fig = sns.pairplot(data=DFTHIS, x_vars=["gap_from_prev_dist"], y_vars=["gap_from_prev_dur"], hue=VAR,
+                              plot_kws={"alpha":0.25}, height=6)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR}/pair-gap_dist-vs-gap_dur-1.pdf")
 
-        plt.close("all")
+            plt.close("all")
 
     return DS, DFTHIS
 
