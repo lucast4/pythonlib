@@ -431,9 +431,13 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
+        # map_ttl_region = {
+        #     3:"M1",
+        #     4:"pSMA"
+        # }
         map_ttl_region = {
-            3:"M1",
-            4:"pSMA"
+            3:"TTL3",
+            4:"TTL4"
         }
     elif "primsingridrand" in expt or "primsingridfixed" in expt:
         # Just regulare prims in grid

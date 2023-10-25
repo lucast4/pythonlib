@@ -128,19 +128,25 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
         for split_by in LIST_SPLIT_BY:
             # try:
+            
             # Old plots
-            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
-            savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
-            savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+            bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by,
+                sdir=sdir, suffix="trialdat") 
+
+            # fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
+            # savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
+            # savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
 
             # agg version of old plots
-            fig1, fig2 = bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by) 
-            savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
-            savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
+            bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
+                sdir=sdir, suffix="aggdat") 
+            # savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
+            # savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
             
             # New plots
             bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
 
+            plt.close("all")
 
             # except Exception as err:
             #     pass

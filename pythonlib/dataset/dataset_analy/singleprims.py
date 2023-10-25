@@ -97,26 +97,30 @@ def plot_drawings_grid_conjunctions(DS, SAVEDIR):
     
     # SEPARATE for each epoch
     DS.dataset_append_column("epoch") 
-    list_epoch = DS.Dat["epoch"]
+    list_epoch = DS.Dat["epoch"].unique().tolist()
     for ep in list_epoch:
         ds = DS.copy()
         ds.Dat = ds.Dat[ds.Dat["epoch"]==ep]
 
-        sdir = f"{SAVEDIR}/drawings_grid_conjunctions/epoch_{ep}"
-        os.makedirs(sdir, exist_ok=True)
+        if len(ds.Dat)>8:
+            sdir = f"{SAVEDIR}/drawings_grid_conjunctions/epoch_{ep}"
+            os.makedirs(sdir, exist_ok=True)
 
-        niter = 3
-        for i in range(niter):
-            fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
-            path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
-            savefig(fig, path)
+            niter = 3
+            for i in range(niter):
 
-            fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
-            path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
-            savefig(fig, path)
+                print("singleprims.plot_drawings_grid_conjunctions()", ep, i)
 
-            fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
-            path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
-            savefig(fig, path)
+                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
+                path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
+                savefig(fig, path)
 
-            plt.close("all")
+                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
+                path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
+                savefig(fig, path)
+
+                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
+                path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
+                savefig(fig, path)
+
+                plt.close("all")

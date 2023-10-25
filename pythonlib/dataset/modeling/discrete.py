@@ -7,6 +7,7 @@ from pythonlib.tools.stringtools import decompose_string
 import pandas as pd
 import numpy as np
 from pythonlib.dataset.dataset_analy.motifs_search_unordered import find_object_groups_new
+from pythonlib.tools.exceptions import NotEnoughDataException
 
 ####### 
 MAP_EPOCHKIND_EPOCH = {
@@ -1350,7 +1351,10 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
                     print("Rule strings of related rules:", rule_set)
                 FOUND = True
                 related_rules.extend(rule_set)
-        assert FOUND, f"didnt find this rule in any sets: {rulethis}"
+        if FOUND==False:
+            # assert FOUND, f"didnt find this rule in any sets: {rulethis}"
+            print(f"didnt find this rule in any sets: {rulethis}")
+            raise NotEnoughDataException
         return list(set(related_rules))
 
     list_rules_related =[]

@@ -37,7 +37,7 @@ elif MACHINE == "ltbonobo":
 	PATH_DATA_BEHAVIOR_RAW = "/home/kgg/mnt/Freiwald/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER = "/home/kgg/mnt/Freiwald/kgupta/macaque_data"
 	PATH_NEURALMONKEY = f"{HOME}/Desktop/neuralmonkey/neuralmonkey"
-	PATH_DATA_NEURAL_RAW = "/mnt/Freiwald/ltian/recordings"
+	PATH_DATA_NEURAL_RAW = "/home/kgg/mnt/Freiwald/ltian/recordings"
 	PATH_DATA_NEURAL_PREPROCESSED = "/data4/Kedar/neural_preprocess"
 	# PATH_MATLAB = "/usr/local/MATLAB/R2022b/bin/matlab"
 	PATH_MATLAB = "/data1/programs/MATLAB/R2021a/bin/matlab"
