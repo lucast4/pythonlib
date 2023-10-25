@@ -253,7 +253,7 @@ def plot_triallevel_results(DS, contrast, savedir):
                     rotateLabel(fig)
                     savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
 
-                    fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind=point, ci=68)
+                    fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind="point", ci=68)
                     # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
                     #     col_wrap=4, y=y, kind="point", ci=68)
                     rotateLabel(fig)
