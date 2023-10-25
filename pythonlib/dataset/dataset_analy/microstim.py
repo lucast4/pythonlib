@@ -244,7 +244,8 @@ def plot_motortiming(D):
         rotateLabel(fig)    
         savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", row="epochset", kind="point")
+        fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", row="epochset", kind="point",
+            aspect=2)
         rotateLabel(fig)    
         savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt-grp_by_epochset.pdf")
 
