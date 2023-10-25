@@ -151,6 +151,15 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             # except Exception as err:
             #     pass
 
+            # Plot timecourse, one plot for each epoch
+            list_levels = D.Dat[split_by].unique().tolist()
+            for lev in list_levels:
+                df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
+                fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=3, y="success_binary_quick", 
+                            hue="session",
+                            height=3, aspect=3, alpha=0.25)
+                savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")            
+
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  
         dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
