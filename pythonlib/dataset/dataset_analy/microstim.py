@@ -201,7 +201,7 @@ def preprocess_assign_stim_code(D, map_ttl_region):
 
 
 
-def plot_motortiming(D):
+def plot_motortiming(D, PLOT=True):
     """
     Plots of timing (gaps and strokes) effects of stimulation, controlling for
     stroke and seuqence context (and stroke index).
@@ -228,9 +228,10 @@ def plot_motortiming(D):
     VARS_CONTEXT = ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"]
     params_preprocess = ["remove_baseline", "no_supervision", "only_blocks_with_n_min_trials"]
     VAR = "epoch"
-    DS, DFTHIS = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess);
+    DS, DFTHIS = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, 
+        params_preprocess, PLOT=PLOT)
 
-    if len(DFTHIS)>0:
+    if len(DFTHIS)>0 and PLOT:
 
         # Take controlled data --> plot a single distribution, one for each (context, index) combo
         DFTHIS = append_col_with_grp_index(DFTHIS, ["stroke_index", "context"], "strk_idx_ctxt", use_strings=False)
@@ -252,7 +253,7 @@ def plot_motortiming(D):
                                                                                        n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
 
         print("SAVING FIGURES AT: ", SAVEDIR)
-        for y in ["gap_from_prev_dur", "time_duration"]:
+        for y in ["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel", "time_duration", "distcum", "velocity"]:
             fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", kind="point", aspect=2)
             rotateLabel(fig)    
             savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt.pdf")

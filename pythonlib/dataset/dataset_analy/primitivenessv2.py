@@ -247,21 +247,23 @@ def plot_triallevel_results(DS, contrast, savedir):
                 if len(dfthis)>N_MIN_PER_BLOCK:
 
                     print("primitivenessv2.plot_triallevel_results()", y, sh, bk)
+
                     fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
                         col_wrap=4, y=y, alpha=0.4)
                     rotateLabel(fig)
                     savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
 
-                    fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
-                        col_wrap=4, y=y, kind="point", ci=68)
+                    fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind=point, ci=68)
+                    # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
+                    #     col_wrap=4, y=y, kind="point", ci=68)
                     rotateLabel(fig)
                     savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-2.pdf")
 
                     plt.close("all")
 
-        # fig = sns.catplot(data=DS.Dat, x="shape", y=y, hue=contrast, kind="point", ci=68)
-        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
-            kind="point", ci=68)
+        # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
+        #     kind="point", ci=68)
+        fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, row="shape", kind="point", ci=68)
         rotateLabel(fig)
         savefig(fig, f"{savedir}/all-{contrast}-{y}.pdf")
 
@@ -274,8 +276,9 @@ def plot_triallevel_results(DS, contrast, savedir):
         savefig(fig, f"{savedir}/sh_loc_idx-triallevel-{contrast}-{y}-1.pdf")
 
         # sns.catplot(data=DS.Dat, x="epoch", y=contrast, hue="sh_loc_idx", col="sh_loc_idx", kind="point")
-        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="sh_loc_idx",
-                          col_wrap=4, kind="point")
+        # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="sh_loc_idx",
+        #                   col_wrap=4, kind="point")
+        fig = sns.catplot(data=DS.Dat, x="sh_loc_idx", y=y, hue=contrast, kind="point", ci=68)
         rotateLabel(fig)
         savefig(fig, f"{savedir}/sh_loc_idx-triallevel-{contrast}-{y}-2.pdf")
 
