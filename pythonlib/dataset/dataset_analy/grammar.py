@@ -158,7 +158,9 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
                 fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=3, y="success_binary_quick", 
                             hue="session",
                             height=3, aspect=3, alpha=0.25)
-                savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")            
+                savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
+
+                plt.close("all")         
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  
