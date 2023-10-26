@@ -835,6 +835,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     """
     from pythonlib.tools.snstools import heatmap
 
+    assert isinstance(val_name, str)
+
     # If col2 is None, then give a dummy varaible, so that this code runs
     if col2 is None:
         # then is really a 1d plot
@@ -1964,6 +1966,8 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
 
         # remove rows that are IGNORE
         df = filter_remove_rows_using_function_on_values(df, var, _keep, reset_index=True)
+        # print(df)
+        # assert False
         if vars_others is not None:
             for v in vars_others:
                 if len(df)>0:
@@ -1980,8 +1984,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
         if vars_others is None:
             # then place a dummy variable so that entire thing is one level
             vars_others = ["dummy_var"]
-            assert "dummy_var" not in df.columns
-            df.loc[:, "dummy_var"] = "IGNORE"
+            # if "dummy_var" in df.columns:
+            #     df = df.drop("dummy_var", axis=1)
+            # assert "dummy_var" not in df.columns
+            df.loc[:, "dummy_var"] = "dummy"
             REMOVE_DUMMY = True
         else:
             assert isinstance(vars_others, list)
