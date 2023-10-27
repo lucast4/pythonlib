@@ -101,10 +101,13 @@ def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
 def preprocess_assign_stim_code(D, map_ttl_region):
     """
     Give each trial a string code for its stim params, which can vary across 
-    expts.
+    expts. Code indicates both the map_ttl_region, and which time windows
+    within trial are being stimmed (as a string code).
     PARAMS:
     - map_ttl_region, dict mapping from int ttl values to string , usually
     breian regions, which will be the code.
+    EXAMPLE:
+    - 
     """
 
     # if HACK:
@@ -121,11 +124,54 @@ def preprocess_assign_stim_code(D, map_ttl_region):
         ms_fix = D.blockparams_extract_single_taskparams(ind)["microstim_fix"]
         ms_str = D.blockparams_extract_single_taskparams(ind)["microstim_stroke"]
 
-        stim_code = []
+        ## Parse when stim occured on this trial, abstractly.
+        def _parse_stim_strokes(ms_str):
+            """ Return a list of stims that are assigned to this trial, such as
+            e./.g, [('go_cue',), ('on', 1), ('on', 2), ('on', 3), ('on', 4), ('off', 1), ('off', 2), ('off', 3)]
+            """
+            _list_stims =[]
+            for x in ms_str["stimlist"]:
+                if x[0]=="go_cue":
+                    _list_stims.append(("go_cue",))
+                elif x[0] in ["on", "off"]:
+                    indstroke = int(x[1])
+                    _list_stims.append((x[0], indstroke))
+                else:
+                    print(x[0])
+                    print(x)
+                    assert False, "dont know this"
+            return _list_stims
 
-        ttl_codes = [] #collect across all stims.
+        # Collect a string code for which time windows wihtin trial.
+        stim_window_code = ""
+        if ms_fix["on"]==1:
+            stim_window_code+="f"
+        if ms_str["on"]==1:
+            # could be go_cue, stroke onsets, or stroke offsets
+            _list_stims = _parse_stim_strokes(ms_str)
+            _list_stim_kinds_unique = sorted(list(set([x[0] for x in _list_stims]))) # ['on', 'go_cue', 'off']
+            # print(_list_stims)
+            # print(_list_stim_kinds_unique)
+
+            for _stim in _list_stim_kinds_unique:
+                if _stim=="go_cue":
+                    stim_window_code+="g"
+                elif _stim=="on":
+                    stim_window_code+="n"
+                elif _stim=="off":
+                    stim_window_code+="o"
+                else:
+                    print(_stim)
+                    assert False
+
+        # print(" --------------- ", ind)
+        # print(ms_fix)
+        # print(ms_str)
+        # print(stim_window_code)
 
         # FIxation
+        stim_code = []
+        ttl_codes = [] #collect across all stims.
         stim_code.append(ms_fix["on"]==1)
         if ms_fix["on"]==1:
             ttls = [int(x[0]) for x in ms_fix["stimlist"] if int(x[0]) in map_ttl_region.keys()]
@@ -140,9 +186,8 @@ def preprocess_assign_stim_code(D, map_ttl_region):
             assert len(set(ttls))==1
             stim_code.append(ttls[0])
             ttl_codes.append(ttls[0])
-            
-        # print(ms_fix)
-        # print(ms_str)
+        
+        stim_code = sorted(stim_code) # so it is unqiue
         # print(stim_code)
 
         # SHORTHANDS
@@ -154,6 +199,9 @@ def preprocess_assign_stim_code(D, map_ttl_region):
             # ttls = stim_code[1::2]
             assert len(set(ttl_codes))==1
             sc = map_ttl_region[ttl_codes[0]]
+
+            # and append the code indicating WHEN in trial it is stimmed
+            sc = f"{sc}-{stim_window_code}"
 
         list_stim_code.append(sc)
 
