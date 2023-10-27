@@ -353,7 +353,8 @@ def plot_drawings_results(DS, savedir):
         for ep in list_epoch:
             for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
                 fig, axes = DS.plotshape_egtrials_sorted_by_feature(sh, y, epoch=ep)
-                savefig(fig, f"{savedir}/egtrials-{y}-{sh}-epoch_{ep}.pdf")
+                if fig is not None:
+                    savefig(fig, f"{savedir}/egtrials-{y}-{sh}-epoch_{ep}.pdf")
             plt.close("all")
 
 

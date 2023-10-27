@@ -1026,9 +1026,11 @@ class DatStrokes(object):
         inds = [inds[i] for i in idxs]
         dists = [dists[i] for i in idxs]
 
-        fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task")
-
-        return fig, axes
+        if len(inds)>0:
+            fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task")
+            return fig, axes
+        else:
+            return None, None
 
     def plotshape_singleshape_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
         ver_behtask="beh"):

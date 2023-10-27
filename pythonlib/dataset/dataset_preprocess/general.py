@@ -196,7 +196,32 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
+    elif expt=="primpanchostim1" or expt=="primdiegostim1" or expt=="primdiegostim1b":
+        # e.g., primdiegostim1b, or primpanchostim1
+        # Is just single prims, but trials differentiated by whether stim or not, during
+        # stroke.
+        # Just use defaults.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["microstim_code"]
+        map_ttl_region = {
+            3:"M1",
+        }
+    elif "gramstim" in expt or "gramdirstim" in expt or "dirdirstim" in expt:
+        # e.g,, gramstimpancho1
+        # single grammar, and stim on rtandom interleave trials.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "microstim_code"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
 
+        # map_ttl_region = {
+        #     3:"M1",
+        #     4:"pSMA"
+        # }
+        map_ttl_region = {
+            3:"TTL3",
+            4:"TTL4"
+        }
     elif expt=="coldirgrammardiego1":
         # 10/1/23 - grammar, but also flips cue-stim on random trails.
 
@@ -408,37 +433,11 @@ def _groupingParams(D, expt):
         grouping_reassign_params_in_order = [map_epoch_to_block]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
-    elif expt=="primpanchostim1" or expt=="primdiegostim1" or expt=="primdiegostim1b":
-        # e.g., primdiegostim1b, or primpanchostim1
-        # Is just single prims, but trials differentiated by whether stim or not, during
-        # stroke.
-        # Just use defaults.
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["microstim_code"]
-        map_ttl_region = {
-            3:"M1",
-        }
     elif "priminvar" in expt:
         # e.g., priminvar5
         # Is just single prims
         # Just use defaults.
         pass
-    elif "gramstim" in expt or "gramdirstim" in expt:
-        # e.g,, gramstimpancho1
-        # single grammar, and stim on rtandom interleave trials.
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "microstim_code"]
-        traintest_reassign_method = "supervision_except_color"
-        mapper_auto_rename_probe_taskgroups = True
-
-        # map_ttl_region = {
-        #     3:"M1",
-        #     4:"pSMA"
-        # }
-        map_ttl_region = {
-            3:"TTL3",
-            4:"TTL4"
-        }
     elif "primsingridrand" in expt or "primsingridfixed" in expt:
         # Just regulare prims in grid
         # Just use defaults.
@@ -453,7 +452,6 @@ def _groupingParams(D, expt):
     if "color_instruction" not in grouping_reassign_methods_in_order:
         # grouping_reassign = Tr
         grouping_reassign_methods_in_order.append("color_instruction")
-
 
     ############### OPTIONAL:
     # Filter dataframe
