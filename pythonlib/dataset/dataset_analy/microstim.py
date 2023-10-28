@@ -17,7 +17,7 @@ def plot_all_wrapper(D):
     # primitiveness
     from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline
     Dcopy = D.copy()
-    preprocess_plot_pipeline(Dcopy)
+    preprocess_plot_pipeline(Dcopy, microstim_version=True)
 
     # single prims.
     from pythonlib.dataset.dataset_analy.singleprims import preprocess_dataset

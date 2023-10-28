@@ -12,7 +12,7 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 
 
-def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None):
+def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, microstim_version=False):
     """
     GAPSTROKES -- analysis of gaps and strokes... 
     Extract stroke and gaps and their timings, etc.
@@ -50,6 +50,18 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None):
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_loc_prev", "gridloc"], "loc_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"], "locshape_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["shape", "gridloc", "stroke_index"], "sh_loc_idx", use_strings=True)
+
+    ##
+    if microstim_version:
+        print("KEEPING data so that each locshape_pre_this x epoch_orig has at least one datapt per stim condition")
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars, grouping_append_and_return_inner_items
+        DS.dataset_append_column("epoch_orig")
+        DS.dataset_append_column("microstim_epoch_code")
+        DS.dataset_append_column("block")
+        # Then enforce that each locshape_pre_this x epoch_orig has at least one datapt per stim condition
+        # group to make a new var
+        DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"], 
+                                               n_min=1)
 
     ########### additional motor stuff
     return DS, SAVEDIR

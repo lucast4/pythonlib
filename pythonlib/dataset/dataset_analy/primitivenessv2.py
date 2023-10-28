@@ -18,16 +18,17 @@ from pythonlib.tools.plottools import savefig
 import seaborn as sns
 import os
 
-def preprocess_plot_pipeline(D, PLOT=True):
+def preprocess_plot_pipeline(D, PLOT=True, microstim_version=False):
     """
     Wrapper to Preprocess and plot
     """
     # from pythonlib.dataset.dataset_analy.primitivenessv2 import plot_timecourse_results, plot_drawings_results, preprocess, extract_grouplevel_motor_stats, plot_grouplevel_results, plot_triallevel_results
 
-    grouping = ["shape", "gridloc", "epoch"]
+    # grouping = ["shape", "gridloc", "epoch"]
+    grouping = ["locshape_pre_this", "epoch"]
 
     ############### Extract data
-    DS, SAVEDIR = preprocess(D, True)
+    DS, SAVEDIR = preprocess(D, True, microstim_version=microstim_version)
     dfres, grouping = extract_grouplevel_motor_stats(DS, D, grouping)
 
     if PLOT:
@@ -58,7 +59,7 @@ def preprocess_plot_pipeline(D, PLOT=True):
 
     return DS, SAVEDIR, dfres, grouping
 
-def preprocess(D, prune_strokes=True):
+def preprocess(D, prune_strokes=True, microstim_version=False):
     """ Entire pipeline to extract motor, image, and other stats
     """
     
@@ -67,7 +68,7 @@ def preprocess(D, prune_strokes=True):
         DS, _ = preprocess_dataset(D)
     else:
         from pythonlib.dataset.dataset_analy.motortiming import gapstrokes_preprocess_extract_strokes_gaps
-        DS, _ = gapstrokes_preprocess_extract_strokes_gaps(D)
+        DS, _ = gapstrokes_preprocess_extract_strokes_gaps(D, microstim_version=microstim_version)
 
     # Compute image similarity.
     DS.distgood_compute_beh_task_strok_distances()
@@ -76,6 +77,7 @@ def preprocess(D, prune_strokes=True):
     DS.timing_extract_basic()
 
     DS.dataset_append_column("block")
+    DS.dataset_append_column("epoch_orig")
 
     if prune_strokes:
         # Then, ad-hoc params, for removing the really bad strokes.
@@ -128,7 +130,7 @@ def extract_grouplevel_motor_stats(DS, D, grouping=None, PLOT = False,
     - map_shape_to_newold, dict from shape(str) to str ("new" or "old") whch is 
     used for expts comparing new vs. old shapes (categorization expts).
     """
-    
+
     # First group trials into (shape, loc) or whatever you want
     if grouping is None:
         grouping = ["shape", "gridloc"]
@@ -163,6 +165,11 @@ def extract_grouplevel_motor_stats(DS, D, grouping=None, PLOT = False,
         assert len(tmp)==1
         shape=tmp[0]
 
+        # shape 
+        tmp = DS.Dat.iloc[inds]["epoch_orig"].unique().tolist()
+        assert len(tmp)==1
+        epoch_orig=tmp[0]
+
         ########## COLLECT PAIRWISE MOTOR DIST
     #     strokes_vel = DS.extract_strokes_as_velocity(inds)
         strokes = DS.Dat.iloc[inds]["strok"].tolist()
@@ -188,7 +195,8 @@ def extract_grouplevel_motor_stats(DS, D, grouping=None, PLOT = False,
             "grp":grpname,
             "mean_sim_score":score,
             "distancever":distancever,
-            "inds_DS":inds
+            "inds_DS":inds,
+            "epoch_orig":epoch_orig,
         })
 
         # for any key in grouping, also get it
@@ -236,30 +244,33 @@ def plot_triallevel_results(DS, contrast, savedir):
     from pythonlib.tools.snstools import rotateLabel
 
     list_block = DS.Dat["block"].unique().tolist()
-    
+    list_epoch_orig = DS.Dat["epoch_orig"].unique().tolist()
+
     N_MIN_PER_BLOCK = 10
-
     for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
-        for sh in ["sh_loc_idx", "shape", "shapeabstract"]:
-            for bk in list_block:
+        # for sh in ["sh_loc_idx", "shape", "shapeabstract"]:
+        for sh in ["locshape_pre_this", "shape", "shapeabstract"]:
+            for epoch_orig in list_epoch_orig:
+                for bk in list_block:
 
-                dfthis = DS.Dat[DS.Dat["block"]==bk]
-                if len(dfthis)>N_MIN_PER_BLOCK:
+                    dfthis = DS.Dat[(DS.Dat["block"]==bk) & (DS.Dat["epoch_orig"]==epoch_orig)]
 
-                    print("primitivenessv2.plot_triallevel_results()", y, sh, bk)
+                    if len(dfthis)>N_MIN_PER_BLOCK:
 
-                    fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
-                        col_wrap=4, y=y, alpha=0.4)
-                    rotateLabel(fig)
-                    savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
+                        print("primitivenessv2.plot_triallevel_results()", y, sh, bk)
 
-                    fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind="point", ci=68, aspect=2.5)
-                    # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
-                    #     col_wrap=4, y=y, kind="point", ci=68)
-                    rotateLabel(fig)
-                    savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-2.pdf")
+                        fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
+                            col_wrap=4, y=y, alpha=0.4)
+                        rotateLabel(fig)
+                        savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
 
-                    plt.close("all")
+                        fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind="point", ci=68, aspect=3)
+                        # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
+                        #     col_wrap=4, y=y, kind="point", ci=68)
+                        rotateLabel(fig)
+                        savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}-2.pdf")
+
+                        plt.close("all")
 
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
         #     kind="point", ci=68)
@@ -270,17 +281,17 @@ def plot_triallevel_results(DS, contrast, savedir):
         plt.close("all")
 
         ###############
-        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="sh_loc_idx",
+        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="locshape_pre_this",
                           col_wrap=4, jitter=True, alpha=0.4)
         rotateLabel(fig)
-        savefig(fig, f"{savedir}/sh_loc_idx-triallevel-{contrast}-{y}-1.pdf")
+        savefig(fig, f"{savedir}/locshape_pre_this-triallevel-{contrast}-{y}-1.pdf")
 
         # sns.catplot(data=DS.Dat, x="epoch", y=contrast, hue="sh_loc_idx", col="sh_loc_idx", kind="point")
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="sh_loc_idx",
         #                   col_wrap=4, kind="point")
-        fig = sns.catplot(data=DS.Dat, x="sh_loc_idx", y=y, hue=contrast, kind="point", ci=68, aspect=2.5)
+        fig = sns.catplot(data=DS.Dat, x="locshape_pre_this", y=y, hue=contrast, kind="point", ci=68, aspect=2.5)
         rotateLabel(fig)
-        savefig(fig, f"{savedir}/sh_loc_idx-triallevel-{contrast}-{y}-2.pdf")
+        savefig(fig, f"{savedir}/locshape_pre_this-triallevel-{contrast}-{y}-2.pdf")
 
         plt.close("all")
 
@@ -288,7 +299,7 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir):
     """ Plot and same summary of results
     """
     from pythonlib.tools.snstools import rotateLabel
-
+    
     for y in ["mean_sim_score", "dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
         fig = sns.catplot(data=dfres, x=contrast, y=y)
         rotateLabel(fig)
@@ -299,38 +310,18 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir):
         savefig(fig, f"{savedir}/grplevel-{contrast}-{y}-2.pdf")
 
         plt.close("all")
+    
+        fig = sns.catplot(data=dfres, x="locshape_pre_this", y=y, row="epoch_orig", hue=contrast, 
+                    kind="point", aspect=3, alpha=0.5)
+        rotateLabel(fig)
+        savefig(fig, f"{savedir}/grplevel-each_locshape_pre_this-{contrast}-{y}.pdf")
 
-    # fig = sns.catplot(data=dfres, x=contrast, y="mean_sim_score")
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-mean_sim_score.pdf")
 
-    # fig = sns.catplot(data=dfres, x=contrast, y="mean_sim_score", kind="point",  ci=68)
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-mean_sim_score-2.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="dist_beh_task_strok")
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-dist_beh_task_strok.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="dist_beh_task_strok", kind="point",  ci=68)
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-dist_beh_task_strok-2.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="time_duration")
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-time_duration.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="time_duration", kind="point",  ci=68)
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-time_duration-2.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="velocity")
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-velocity.pdf")
-
-    # fig = sns.catplot(data=dfres, x=contrast, y="velocity", kind="point",  ci=68)
-    # rotateLabel(fig)
-    # savefig(fig, f"{savedir}/{contrast}-velocity-2.pdf")
+        from pythonlib.tools.snstools import plotgood_lineplot
+        fig = plotgood_lineplot(dfres, contrast, y, "locshape_pre_this",
+                         lines_add_ci=True, rowvar="epoch_orig", include_mean=True)
+        rotateLabel(fig)
+        savefig(fig, f"{savedir}/grplevel-lineplot-{contrast}-{y}.pdf")
 
     plt.close("all")
 
