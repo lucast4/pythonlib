@@ -1252,7 +1252,7 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
     dflong_norm = pd.melt(dfpivot_norm, id_vars=grplist_index)
 
     ## Sign-rank: do stats for each level
-    if do_pvals:
+    if do_pvals or PLOT:
         list_lev = [x for x in df[var_contrast].unique().tolist() if not x==lev_default_contrast]
         pvals = []
         means = []
