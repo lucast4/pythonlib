@@ -5,10 +5,15 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 
+def signrank_wilcoxon(x1, x2=None):
+    return stats.wilcoxon(x1, y=x2) 
+
 def ttest_paired(x1, x2=None, ignore_nan=False):
     """ x1, x2 arrays, with same lenght
     if x2 is None, then assumes is comparing to 0s.
     Automatically removes any rows with nans
+    RETURNS:
+    - ttest result object.
     """
     if x2 is None:
         x2 = np.zeros_like(x1)
@@ -23,17 +28,17 @@ def zscore(val, vals_dist):
     """ zscore val relative to the vals_dist distribtion"""
     return (val - np.mean(vals_dist)) / np.std(vals_dist)
     
-def statsTtestPaired(df1, df2, varname, pairedon="human"):
-    """ttest between two variables, assume it is paired at level of human (i.e, eachhuman 1pt each var pts)"""
-    df12 = pd.merge(df1, df2, on=pairedon)
-#     print(df12)
-    return stats.ttest_rel(df12[f"{varname}_x"], df12[f"{varname}_y"])
+# def statsTtestPaired(df1, df2, varname, pairedon="human"):
+#     """ttest between two variables, assume it is paired at level of human (i.e, eachhuman 1pt each var pts)"""
+#     df12 = pd.merge(df1, df2, on=pairedon)
+# #     print(df12)
+#     return stats.ttest_rel(df12[f"{varname}_x"], df12[f"{varname}_y"])
 
-def statsTtestUnpaired(df1, df2, varname):
-    return stats.ttest_ind(df1[f"{varname}"], df2[f"{varname}"])
+# def statsTtestUnpaired(df1, df2, varname):
+#     return stats.ttest_ind(df1[f"{varname}"], df2[f"{varname}"])
 
-def statsRanksum(df1, df2, varname):
-    return stats.ranksums(df1[f"{varname}"], df2[f"{varname}"])
+# def statsRanksum(df1, df2, varname):
+#     return stats.ranksums(df1[f"{varname}"], df2[f"{varname}"])
 
 # NOT YET DONE!!!
 if False:
@@ -124,11 +129,11 @@ def permutationTest(data, funstat, funshuff, N, plot=True, side="two"):
         fig = plt.figure()
         plt.hist(stats_shuff)
         plt.axvline(x=stat_actual, color="r")
-        plt.title(f"p={p:.3f}")
+        plt.title(f"p={p:.3f} | {1-p:.3f}")
     else: 
         fig = None
     
-    if len(stats_shuff_collected)>0:
+    if collect_shuffstats:
         return p, stat_actual_collected, stats_shuff_collected, fig
     else:
         return p, fig
@@ -155,3 +160,24 @@ def permutationTest(data, funstat, funshuff, N, plot=True, side="two"):
         plt.title("this should be uniformly distributed")
         print("frac cases of p<0.05 should be around 0.05")
         print(sum(np.array(pvals)<0.05)/500)
+
+
+def plotmod_pvalues(ax, xvals, pvals, pthresh=0.05):
+    """ Plot values on top of plots where each x locaiton is a 
+    distribution with its own p value
+    """
+
+    assert len(xvals)==len(pvals)
+
+    YLIM = ax.get_ylim()
+    y = YLIM[0] + 0.75*YLIM[1]-YLIM[0]
+    # xrang = XLIM[1] - XLIM[0]
+
+    for x, p in zip(xvals, pvals):
+        if p<pthresh:
+            col = "r"   
+        else:
+            col = "k"
+        ax.text(x, y, f"{p:.2E}", color=col, rotation=45, alpha=0.5)
+
+

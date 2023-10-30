@@ -16,7 +16,7 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
     if fill:
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
-def rotate_x_labels(ax, rotation):
+def rotate_x_labels(ax, rotation=45):
     
     # draw the figure (update)
     ax.figure.canvas.draw_idle()
