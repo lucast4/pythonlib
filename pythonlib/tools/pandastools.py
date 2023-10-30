@@ -11,6 +11,7 @@ import numpy as np
 from pythonlib.tools.listtools import sort_mixed_type
 import matplotlib.pyplot as plt
 from pythonlib.tools.plottools import savefig
+import seaborn as sns
 
 def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     """ merge df1 and 2, with output being same length
@@ -984,7 +985,7 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     (2) do this directly (since it aggs by taking mean.)
     """
 
-    dftmp = pd.pivot_table(data=df, index=index, columns=columns, values=values, aggfunc=aggfunc)
+    dftmp = pd.pivot_table(data=df, index=index, columns=columns, values=values, aggfunc=aggfunc).copy()
 
     if col_strings_ignore is None:
         col_strings_ignore = []
@@ -1207,7 +1208,99 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
         return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF
 
 
-# dfsummary, dfsummaryflat = summarize_featurediff(Dall.Dat, GROUPING,GROUPING_LEVELS,FEATURE_NAMES)
+def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
+    lev_default_contrast=None, PLOT=False, do_normalization=True,
+    do_pvals=False):
+    """ [GOOD] Normalize data within groupings by a the mean value across trials
+    of specific level of a categorical (contrast) variable
+    
+    E.g., consider all trials for a character x block, with measurement "score". 
+    You want to normalize the sccore each level of "epoch"
+    to the score across trials for a specific level of epoch (e.g, baseline). 
+        var_contrast = "epoch"
+        grplist_index = ["character", "block"]
+        y_var = "score"
+        lev_default_contrast = "baseline"
+    PARAMS:
+    - df, long-form dataframe.
+    - PLOT, bool, summaries. Scatterplot of distribution vs. each level of var_contrast, along wiht
+    sign-rank p values.
+    - datamod_normalize_row_after_grouping, bool, 
+    RETURNS:
+    - dfpivot, dfpivot_norm, dflong_norm, stats
+    NOTE:
+    - this is more general versin of summarize_featurediff, which only compares a pair of levels
+    (e.g., treatement vs. baseline).
+    """
+    from pythonlib.tools.statstools import ttest_paired, signrank_wilcoxon, plotmod_pvalues
+
+    if lev_default_contrast is None:
+        lev_default_contrast = df[var_contrast].unique().tolist()[0]
+
+    ## Pivot 
+    # - each row is a single level of conjucntion of vars in grplist_index
+    # - separate columns for each level of var_contrast, holding its value (mean
+    # across trials if needed) of y_var.
+    dfpivot = pivot_table(df, index=grplist_index, columns=[var_contrast], values=[y_var])
+
+    ## For each row, normalize by subtracting the rows value for the default level of var_contrast
+    dfpivot_norm = dfpivot.copy()
+    if do_normalization:
+        dfpivot_norm[y_var] = dfpivot_norm[y_var] - dfpivot_norm[y_var][lev_default_contrast].values[:,None]
+    
+    ## Convert from wide- to long-form
+    dflong_norm = pd.melt(dfpivot_norm, id_vars=grplist_index)
+
+    ## Sign-rank: do stats for each level
+    if do_pvals:
+        list_lev = [x for x in df[var_contrast].unique().tolist() if not x==lev_default_contrast]
+        pvals = []
+        means = []
+        for lev in list_lev:
+            vals = dfpivot_norm[y_var][lev].values
+        #     res = ttest_paired(vals)
+            res = signrank_wilcoxon(vals)
+            pvals.append(res.pvalue)
+            means.append(np.mean(vals))
+        stats = {
+            "levels":list_lev,
+            "pvals":pvals,
+            "means":means
+        }
+    else:
+        stats = {}
+
+    if PLOT:
+        # fig = sns.catplot(data=dflong_norm, x=var_contrast, y="value", jitter=True, alpha=0.7)
+        # plt.axhline(0, color="k")
+        
+        # fig, ax = plt.subplots()
+        # x = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], len(pvals))
+        # plotmod_pvalues(ax, x, pvals)
+        # ax.set_xticks(x, labels=list_lev);    
+
+        list_lev_plot = [lev_default_contrast] + list_lev
+        pvals_plot = [1.] + pvals
+
+        x = dflong_norm[var_contrast]
+        y = dflong_norm["value"]
+        fig, ax = plt.subplots(1,1,figsize=(8,6))
+
+        # sns.scatterplot(ax=ax, x=x, y=y, x_jitter=True)
+        # sns.swarmplot(ax=ax, x=x, y=y)
+        ax.axhline(0, color="k", alpha=0.5)
+        sns.stripplot(ax=ax, x=x, y=y, jitter=True, alpha=0.7, order=list_lev_plot)
+        sns.pointplot(ax=ax, x=x, y=y, jitter=True, alpha=0.7, order=list_lev_plot,
+            linestyles="", color="k")
+        # sns.histplot(ax=ax, x=x, y=y, alpha=0.7, order=list_lev_plot)
+        plotmod_pvalues(ax, range(len(list_lev_plot)), pvals_plot)
+        ax.set_ylabel(f"{y_var} minus {lev_default_contrast}")
+        ax.set_title(f"each dat = {grplist_index}")
+    else:
+        fig = None
+
+    return dfpivot, dfpivot_norm, dflong_norm, stats, fig
+
 
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                                     F = None, return_as_dict=False, 
@@ -1342,7 +1435,8 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     return groupdict
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
-    groupinner="index", groupouter_levels=None, new_col_name="grp"):
+    groupinner="index", groupouter_levels=None, new_col_name="grp",
+    return_df=False):
     """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
     Useful if e./g., you want to get all indices for each of the levels in a combo group,
     where the group is defined by conjunction of two columns.
@@ -1365,8 +1459,11 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
 
     # 2) Get dict of eaceh group
     groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
-    
-    return groupdict
+        
+    if return_df:
+        return groupdict, df
+    else:
+        return groupdict
 
 def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     """ Returns the min and max n across conjjunctiosn of list_groupouter_grouping_vars
@@ -1482,8 +1579,13 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
 
     if sorted_by_keys:
         list_keys = list(outdict.keys())
+        # print(list_keys)
         list_keys = sort_mixed_type(list_keys)
+        # print(list_keys)
+        # adsfsf
         outdict = {k:outdict[k] for k in list_keys}
+        # print(k)
+        # asdsad
 
     for k, v in outdict.items():
         print(k, ':    ', v)
@@ -2179,3 +2281,117 @@ def sort_rows_by_trialcode(dfthis):
     # 2) sort
     return dfthis.sort_values(by="trialcode_tuple").reset_index(drop=True)
 
+
+
+def shuffle_dataset_singlevar_hierarchical(df, var_shuff, list_grp_hier, 
+        maintain_block_temporal_structure=False, 
+        shift_level="datapt", DEBUG=False):
+    """ 
+    HIerarhical shuffle, which means shuffle within each level of the categorical
+    variable <var_grp_hier>. E.g., var_grp_hier is "character", then shuffle 
+    onle within each char
+    PARAMS:
+    - var_shuff, str, the variable to shuffle.
+    - list_grp_hier, list of str, grouping variable conjunction.
+    """
+
+    # Only shuffle within groups
+    list_df = []
+    for dfthis in df.groupby(list_grp_hier):
+        # get shuffled version (copy)
+        if DEBUG:
+            print("-------------")
+            print(dfthis[1].loc[:, list_grp_hier+[var_shuff]])
+        _dfshuff = shuffle_dataset_singlevar(dfthis[1].copy(), var_shuff, 
+            maintain_block_temporal_structure, shift_level, DEBUG)
+        if DEBUG:
+            print(_dfshuff.loc[:, list_grp_hier+[var_shuff]])
+        # assert False
+        list_df.append(_dfshuff)
+
+    # Concat
+    return pd.concat(list_df).reset_index(drop=True)
+
+def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True, 
+        shift_level="datapt", DEBUG=False):
+    """ returns a copy of df, with var labels shuffled
+    NOTE: confirmed that does not affect df
+    PARAMS:
+    - maintain_block_temporal_structure, bool, if True, then shuffles by
+    circular shifting of trials. THis is better if you didn't randopmly interleave 
+    trials. It is a better estimate of variance of shuffles. 
+    """
+    import random
+    from pythonlib.tools.stringtools import decompose_string
+    from pythonlib.tools.listtools import extract_novel_unique_items_in_order
+    from pythonlib.tools.listtools import list_roll
+
+    levels_orig = df[var].tolist()
+    # shuffle a copy
+    levels_orig_shuff = [lev for lev in levels_orig]
+
+    # maintain_block_temporal_structure=False
+    if maintain_block_temporal_structure:
+        # make sure dataframe is in order of trials.
+
+        def tc_to_tupleints(tc):
+            """ 
+            tc "2022-1-10" --> tupleints (2022, 1, 10)
+            """
+            this = decompose_string(tc, "-")
+            return [int(x) for x in this]
+
+        trialcodes = df["trialcode"].tolist()
+        trialcodes_sorted = sorted(trialcodes, key=lambda x: tc_to_tupleints(x))
+        if not trialcodes==trialcodes_sorted:
+            print("Trialcodes, -- , trialcodes_sorted")
+            for t1, t2 in zip(trialcodes, trialcodes_sorted):
+                print(t1, t2)
+            assert False, "ok, you need to code this. sort dataframe"
+        # return the levels in this order
+        # print(trialcodes)
+        # print(sorted(trialcodes))
+        # this = [(x, y) for x, y in zip(levels_orig, trialcodes)]
+
+        if shift_level=="trial":
+            # then shift to not break within-trial correlations
+            possible_shifts = extract_novel_unique_items_in_order(trialcodes)[1]
+            shift = random.sample(possible_shifts, 1)[0]
+        elif shift_level=="datapt":
+            # shift at any datpt.
+            shift = random.randint(0, len(levels_orig)-1) # 0, 1, 2, ... n-1, possible shifts
+        else:
+            print(shift_level)
+            assert False
+
+        # Do shuffle
+        # Dont use this. it converts list of tuples to list of list.
+        # levels_orig_shuff = np.roll(levels_orig_shuff, -shift).tolist() # negative, so that works for trial.
+        levels_orig_shuff = list_roll(levels_orig_shuff, -shift)
+
+        if DEBUG:
+            print("trialcodes, levels(orig):")
+            for t1, t2 in zip(trialcodes, levels_orig):
+                print(t1, t2)   
+            # print(possible_shifts)
+            # print(levels_orig)
+            print(levels_orig_shuff)
+            print(shift)
+            assert False
+    else:
+        # independently shuffle eachj location
+        random.shuffle(levels_orig_shuff)
+
+    dfthis_shuff = df.copy(deep=False)
+    dfthis_shuff[var] = levels_orig_shuff
+
+    if False:
+        # dont need this sanity check
+        if type(levels_orig_shuff[0])!=type(levels_orig[0]):
+            print("orig: ", levels_orig)
+            print("shuffed:", levels_orig_shuff)
+            print(type(levels_orig_shuff[0]))
+            print(type(levels_orig[0]))
+            assert False
+    
+    return dfthis_shuff
