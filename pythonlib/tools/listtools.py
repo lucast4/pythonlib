@@ -119,7 +119,14 @@ def sort_mixed_type(mylist):
         # x, item in list that want to sort. any type.
         try:
             if isinstance(x, (list, tuple)):
-                return (2, sum([_convert_to_sortable(val) for val in x]))
+                # print([_convert_to_sortable(val) for val in x])
+                # adsad
+                if False:
+                    # Not sure why I did this... it doesnt sort properly for things 
+                    # like: ('dirshape-185-10-457836', 'L|TTL3-f', 61),
+                    return (2, sum([_convert_to_sortable(val) for val in x]))
+                else:
+                    return (2, [_convert_to_sortable(val) for val in x])
             elif isinstance(x, str):
                 return (0, _convert_to_sortable(x))
             elif isinstance(x, (float, int, ndarray)):
