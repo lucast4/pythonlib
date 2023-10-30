@@ -1372,8 +1372,9 @@ class DatStrokes(object):
         if list_grouping_vars is None:
             list_grouping_vars = ["shape_oriented", "gridloc"]
 
-        groupdict = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
-            "index", new_col_name=new_col_name)
+        groupdict, df = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
+            "index", new_col_name=new_col_name, return_df=True)
+        self.Dat = df
 
         return groupdict
 

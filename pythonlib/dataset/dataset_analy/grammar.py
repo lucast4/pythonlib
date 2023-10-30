@@ -127,7 +127,6 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
         dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
         for split_by in LIST_SPLIT_BY:
-            # try:
             
             # Old plots
             bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by,
@@ -160,7 +159,17 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
                             height=3, aspect=3, alpha=0.25)
                 savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
 
-                plt.close("all")         
+                plt.close("all") 
+
+        # Do permutation test of whether score is significant across epochs
+        # (e.g., if using microstim to perturb baehavior)
+        if not np.all(bmh.DatLong["epoch"] == bmh.DatLong["epoch_orig"]):
+            # Then epoch is different from epoch_orig
+            bmh.stats_score_permutation_test(split_plots_by="epoch_orig", 
+                savedir=sdir)        
+        else:
+            bmh.stats_score_permutation_test(split_plots_by="epoch", 
+                savedir=sdir)        
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  

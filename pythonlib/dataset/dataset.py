@@ -6821,14 +6821,15 @@ class Dataset(object):
                 list_es_new.append(tuple([append_prefix] + list(es)))
             self.Dat["epochset"] = list_es_new
 
-        print("-- Final epochsets:")
-        print(self.Dat[epochset_col_name].value_counts())
+        if PRINT:
+            print("-- Final epochsets:")
+            print(self.Dat[epochset_col_name].value_counts())
 
-        print(f"-- FINAL RESULTS ({epochset_col_name}, {trial_label}, {epoch_label}):")
-        self.grouping_print_n_samples([epochset_col_name, trial_label, epoch_label])
+            print(f"-- FINAL RESULTS ({epochset_col_name}, {trial_label}, {epoch_label}):")
+            self.grouping_print_n_samples([epochset_col_name, trial_label, epoch_label])
 
-        print(f"-- FINAL RESULTS ({epochset_col_name}, {epoch_label}, {trial_label}):")
-        self.grouping_print_n_samples([epochset_col_name, epoch_label, trial_label])
+            print(f"-- FINAL RESULTS ({epochset_col_name}, {epoch_label}, {trial_label}):")
+            self.grouping_print_n_samples([epochset_col_name, epoch_label, trial_label])
 
     ############### PROBES stuff
     def probes_extract_blocks_with_probe_tasks(self):

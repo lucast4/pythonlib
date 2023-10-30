@@ -718,3 +718,68 @@ class BehModelHolder(object):
             fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1_largetext.pdf")
 
 
+    def stats_score_permutation_test(self, var = "epoch", y = "score", INDEX=None,
+            split_plots_by = "epoch_orig", savedir=None, nperms=1000):
+        """
+        Is perofrmanc significantly difference across epochs? (<var>)
+        Permtuation test, where shuffling of scores (success/fail) is done within each level of 
+        INDEX. Uses metric that takes difference from max vs. min scoring level of epoch.
+        By default runs separately for each epoch_orig,<split_plots_by>, since this was for microstim, where epoch orig is
+        different from epoch (includes microstim info).
+        PARAMS:
+        - split_plots_by, leave None to not split.
+        """
+        from pythonlib.tools.pandastools import datamod_normalize_row_after_grouping, extract_with_levels_of_conjunction_vars
+        from pythonlib.tools.statstools import permutationTest
+        from pythonlib.tools.pandastools import shuffle_dataset_singlevar, shuffle_dataset_singlevar_hierarchical
+
+        if INDEX is None:
+            INDEX = ['character', 'block']
+
+        def funstat(_data):
+            """ Get the difference between scores (avg across chars) for the best and worse epoch """
+            dfpivot, dfpivot_norm, dflong_norm, stats, fig = datamod_normalize_row_after_grouping(_data, 
+                                                                                                  var, INDEX, 
+                                                                                                  y, PLOT=False,
+                                                                                                 do_normalization=False,
+                                                                                                 do_pvals=False)   
+            if True:
+                res = np.max(dfpivot[y].mean(axis=0)) - np.min(dfpivot[y].mean(axis=0))
+            else:
+                res = np.std(dfpivot[y].mean(axis=0))
+            return res
+
+        def funshuff(_data):
+            """ Shuffle hierarhcaylly (within each lev of INDEX)
+            """
+            return shuffle_dataset_singlevar_hierarchical(_data, y, INDEX)
+
+        ## Run separately for each epoch_orig
+        if split_plots_by is None:
+            # Then dont split. use dummy variable
+            self.DatLong["dummyvar"] = "dummy"
+            split_plots_by = "dummyvar"
+
+        list_epoch_orig = self.DatLong[split_plots_by].unique().tolist()
+        for epoch_orig in list_epoch_orig:
+            data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
+        #     data = bm.DatLong.copy()
+
+            n = len(data)
+            print(len(data))
+            # first, prune so each char has all epochs
+            data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
+                                                                  PRINT=False, DEBUG=False)
+            print(len(data))
+
+            if len(data)<=0.1*n:
+                data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
+                data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
+                                                                      PRINT=True, DEBUG=True)
+                assert False, "why lost so  much data? a bug?"
+
+            p, fig = permutationTest(data, funstat, funshuff, nperms, True)
+            if savedir:
+                savefig(fig, f"{savedir}/STATS_permtest-{y}_across_{var}-{split_plots_by}_{epoch_orig}.pdf") 
+
+        

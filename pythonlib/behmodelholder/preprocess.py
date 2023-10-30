@@ -67,6 +67,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     --- one row for conjunction of trial x rule (in list_rules).
     """
     from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
+    
+    D.preprocessGood(params=["remove_baseline"])
 
     ################## Generate behclass
     D.behclass_preprocess_wrapper()
@@ -197,6 +199,7 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "beh_got_first_stroke":beh_got_first_stroke,
                 "exclude_because_online_abort":exclude_because_online_abort,
                 "epoch":D.Dat.iloc[ind]['epoch'],
+                "epoch_orig":D.Dat.iloc[ind]['epoch_orig'],
                 "block": D.Dat.iloc[ind]["block"],
                 # "datind":ind,
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
@@ -290,6 +293,8 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
     #     from pythonlib.dataset.dataset_analy.learning import preprocess_dataset as learn_preprocess
     #     learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
+    D.preprocessGood(params=["remove_baseline"])
+
     ################## Generate behclass
     D.behclass_preprocess_wrapper()
 
@@ -378,6 +383,7 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
             "beh_got_first_stroke":beh_got_first_stroke,
             "exclude_because_online_abort":exclude_because_online_abort,
             "epoch":D.Dat.iloc[ind]['epoch'],
+            "epoch_orig":D.Dat.iloc[ind]['epoch_orig'],
             "block": D.Dat.iloc[ind]["block"],
             # "datind":ind,
             "trialcode":D.Dat.iloc[ind]["trialcode"],

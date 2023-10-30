@@ -12,8 +12,10 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 
 
-def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, microstim_version=False):
+def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, 
+        microstim_version=False, prune_strokes=False):
     """
+    [GOOD}]
     GAPSTROKES -- analysis of gaps and strokes... 
     Extract stroke and gaps and their timings, etc.
     Not related to grammar
@@ -35,12 +37,36 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, micros
     from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
 
+    # Compute motor timing
+    DS.timing_extract_basic()
+    DS.dataset_append_column("block")
+    DS.dataset_append_column("epoch_orig")
+
     # From pig
     D.seqcontext_preprocess()
     D.taskclass_shapes_loc_configuration_assign_column()
+    
+    # Compute image similarity.
+    DS.distgood_compute_beh_task_strok_distances()
+
+    if prune_strokes:
+        # Then, ad-hoc params, for removing the really bad strokes.
+        # These determed from Luca primsingridrand data.
+
+        if False:
+            DS.plot_multiple_after_slicing_within_range_values("distcum", 0, 61, True)
+            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 20, 35, True)        
+            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 35, 400, True)        
+
+        methods = ["stroke_too_short", "beh_task_dist_too_large"]
+        params = {
+            "min_stroke_length":60,
+            "min_beh_task_dist":35
+        }
+        DS.clean_preprocess_data(methods=methods, params=params)
+
 
     ############### PREPROCESS
-    DS.timing_extract_basic()
     vel = DS.Dat["gap_from_prev_dist"]/DS.Dat["gap_from_prev_dur"]
     DS.Dat["gap_from_prev_vel"] = vel
 
@@ -187,7 +213,7 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
 
 
 def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess, 
-    n_min = 5, PLOT=True):
+    n_min = 5, PLOT=True, microstim_version=False):
     """ 
     Compare timing of gaps and strokes across variables, controlling for sequential context
     PARAMS;
@@ -221,7 +247,7 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     # D.Dat["supervision_stage_semantic"].value_counts()
 
     # Get data strokes
-    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D)
+    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D, microstim_version=microstim_version)
     D.preprocessGoodCheckLog(params_preprocess+["one_to_one_beh_task_strokes_allow_unfinished"])
 
     DS.dataset_append_column("probe")

@@ -209,47 +209,9 @@ def preprocess_assign_stim_code(D, map_ttl_region):
     D.Dat["microstim_epoch_code"] = list_stim_code
 
     print("New column: microstim_epoch_code")
+    
 
-# def primitiveness_preprocess_plot(D):
-#     """
-#     """
-#     from pythonlib.dataset.dataset_analy.primitivenessv2 import plot_timecourse_results, plot_drawings_results, preprocess, extract_grouplevel_motor_stats, plot_grouplevel_results, plot_triallevel_results
-
-#     grouping = ["shape", "gridloc", "epoch"]
-
-#     ############### Extract data
-#     DS, SAVEDIR = preprocess(D, True)
-#     dfres, grouping = extract_grouplevel_motor_stats(DS, D, grouping)
-
-#     ############### PLOTS
-
-#     # Plot, comparing mean across levels of contrast variable.
-#     # Each datapt is a single level of grouping.
-#     savedir = f"{SAVEDIR}/grouplevel"
-#     os.makedirs(savedir, exist_ok=True)
-#     contrast = "epoch"
-#     plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir)
-
-#     # Plot, each datapt a single trial.
-#     savedir = f"{SAVEDIR}/triallevel"
-#     os.makedirs(savedir, exist_ok=True)
-#     contrast = "epoch"
-#     plot_triallevel_results(DS, contrast, savedir)
-
-#     # Plot drawings
-#     savedir = f"{SAVEDIR}/drawings"
-#     os.makedirs(savedir, exist_ok=True)
-#     plot_drawings_results(DS, savedir)
-
-#     # Plot timecourses
-#     savedir = f"{SAVEDIR}/timecourse"
-#     os.makedirs(savedir, exist_ok=True)
-#     plot_timecourse_results(DS, savedir, "epoch")
-
-
-
-
-def plot_motortiming(D, PLOT=True):
+def plot_motortiming(D, PLOT=True, microstim_version=True):
     """
     Plots of timing (gaps and strokes) effects of stimulation, controlling for
     stroke and seuqence context (and stroke index).
@@ -261,6 +223,10 @@ def plot_motortiming(D, PLOT=True):
     from pythonlib.tools.pandastools import append_col_with_grp_index
     from pythonlib.tools.snstools import rotateLabel
     from pythonlib.tools.pandastools import assign_epochsets_group_by_matching_levels_of_var
+    from pythonlib.stats.lme import lme_categorical_fit_plot
+    from pythonlib.tools.pandastools import datamod_normalize_row_after_grouping
+
+    PLOT_BY_STROKE_INDEX_SET = False
 
     # Prep dataset
     D.grouping_get_inner_items("block", "epoch")
@@ -277,7 +243,7 @@ def plot_motortiming(D, PLOT=True):
     params_preprocess = ["remove_baseline", "no_supervision", "only_blocks_with_n_min_trials"]
     VAR = "epoch"
     DS, DFTHIS = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, 
-        params_preprocess, PLOT=PLOT)
+        params_preprocess, PLOT=PLOT, microstim_version=microstim_version)
 
     if len(DFTHIS)>0 and PLOT:
 
@@ -292,13 +258,14 @@ def plot_motortiming(D, PLOT=True):
                                                                                         epochset_col_name="epochset", 
                                                                                         PRINT=True, n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
         # Plot as function of storke index
-        n_min_each_conj_outer_inner = 3
-        DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
-                                                                                        var_outer_trials="locshape_pre_this", 
-                                                                                        var_inner="stroke_index",
-                                                                                        epochset_col_name="stroke_index_set", 
-                                                                                        PRINT=True,
-                                                                                       n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
+        if PLOT_BY_STROKE_INDEX_SET:
+            n_min_each_conj_outer_inner = 3
+            DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
+                                                                                            var_outer_trials="locshape_pre_this", 
+                                                                                            var_inner="stroke_index",
+                                                                                            epochset_col_name="stroke_index_set", 
+                                                                                            PRINT=True,
+                                                                                           n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
 
         print("SAVING FIGURES AT: ", SAVEDIR)
         for y in ["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel", "time_duration", "distcum", "velocity"]:
@@ -312,10 +279,40 @@ def plot_motortiming(D, PLOT=True):
 
             plt.close("all")
             
-            fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
-            rotateLabel(fig)    
-            savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
+            if PLOT_BY_STROKE_INDEX_SET:
+                # Too large, and sparse, I dont use anwyay
+                fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
+                rotateLabel(fig)    
+                savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
 
             plt.close("all")
+
+            ####### PLOTS OF CONTRAST ACROSS LEVELS.
+            INDEX = ["strk_idx_ctxt", "epoch_orig", "block"]
+            if "microstim_epoch_code" in DFTHIS.columns:
+                fixed_treat = "microstim_epoch_code"
+                lev_treat_default = "off"
+            else:
+                fixed_treat = "epoch"
+                lev_treat_default = None
+
+            if True:
+                # Linear mixed effects
+                # This doesnt make sense, since there is only one datapt per group
+                RES, fig, ax = lme_categorical_fit_plot(DFTHIS, y=y, fixed_treat=fixed_treat, 
+                        lev_treat_default=lev_treat_default, 
+                        rand_grp_list=INDEX, PLOT=True)
+                savefig(fig, f"{SAVEDIR}/LME-{fixed_treat}-{y}.pdf")
+
+            # Plot normalized to the default level.
+            _, _, _, _, fig = datamod_normalize_row_after_grouping(DFTHIS, 
+                                                                  fixed_treat, 
+                                                                  INDEX, 
+                                                                  y,
+                                                                  lev_treat_default,
+                                                                  PLOT=True
+                                                                 )
+            savefig(fig, f"{SAVEDIR}/NORM-{fixed_treat}-{y}.pdf")
+
 
     return DS, DFTHIS
