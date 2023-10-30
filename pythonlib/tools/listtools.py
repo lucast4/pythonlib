@@ -77,7 +77,7 @@ def stringify_list(li, return_as_str=False, separator="--"):
 
 #     return sorted(mylist, key=lambda x: key(x))
 
-def sort_mixed_type(mylist):
+def sort_mixed_type(mylist, DEBUG=False):
     """ Sort, works even if elements in mylist are mixed type.
     Uses convention for how to rank things of different type:
     str > num > list > other things > dict > cant hash
@@ -100,10 +100,25 @@ def sort_mixed_type(mylist):
             # if x is int, returns that
             return hash(val)
 
+    def _is_list_of_comparable_types(mylist):
+        # Reutnr True if all itesm in _x are in this set of types.
+        # i./.e, is a one-level
+        comparable_types = (str, float, int, ndarray)
+        if DEBUG:
+            print([type(this) for this in mylist])
+        return all([isinstance(this, comparable_types) for this in mylist])
+
     def _convert_to_sortable(val):
         """ convert any item to sortable object"""
         if isinstance(val, (list, tuple)):
-            return [_convert_to_sortable(valval) for valval in val]
+            if _is_list_of_comparable_types(val):
+                # concatenate into a long string
+                tmp = "" 
+                for x in val:
+                    tmp+=f"{x}"
+                return tmp
+            else:
+                return [_convert_to_sortable(valval) for valval in val]
         elif isinstance(val, str):
             return val
         elif isinstance(val, (float, int, ndarray)):
@@ -117,13 +132,17 @@ def sort_mixed_type(mylist):
         # is like _convert_to_sortable, but appends at onset an index that 
         # ensures corect sorting across types.
         # x, item in list that want to sort. any type.
+
         try:
+            if DEBUG:
+                print("----", x)
+            # if _is_list_of_comparable_types(x):
+            #     return (2, [_convert_to_sortable(val) for val in x])
             if isinstance(x, (list, tuple)):
                 # print([_convert_to_sortable(val) for val in x])
                 # adsad
-                if False:
-                    # Not sure why I did this... it doesnt sort properly for things 
-                    # like: ('dirshape-185-10-457836', 'L|TTL3-f', 61),
+                if True:
+                    # Need to do this. nested lists...
                     return (2, sum([_convert_to_sortable(val) for val in x]))
                 else:
                     return (2, [_convert_to_sortable(val) for val in x])
