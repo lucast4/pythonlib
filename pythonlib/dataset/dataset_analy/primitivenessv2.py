@@ -409,7 +409,7 @@ def plot_timecourse_results(DS, savedir, contrast="epoch"):
 
     DS.dataset_append_column("tvalfake")
     DS.dataset_append_column("session")
-
+    list_epoch_orig = DS.Dat["epoch_orig"].unique().tolist()
     for epoch_orig in list_epoch_orig:
         dfthis = DS.Dat[DS.Dat["epoch_orig"]==epoch_orig]
         for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
