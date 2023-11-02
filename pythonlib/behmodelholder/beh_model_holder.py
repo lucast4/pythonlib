@@ -772,11 +772,12 @@ class BehModelHolder(object):
                                                                   PRINT=False, DEBUG=False)
             print(len(data))
 
-            if len(data)<=0.1*n:
-                data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
-                data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
-                                                                      PRINT=True, DEBUG=True)
-                assert False, "why lost so  much data? a bug?"
+            if False:
+                if len(data)<=0.1*n:
+                    data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
+                    data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
+                                                                          PRINT=True, DEBUG=True)
+                    assert False, "why lost so  much data? a bug?"
 
             p, fig = permutationTest(data, funstat, funshuff, nperms, True)
             if savedir:

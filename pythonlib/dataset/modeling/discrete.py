@@ -123,6 +123,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3" # Diego, dirgrammardiego5 (8/14/23)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'UL'))] = "llCV3b" # Diego, gramstimdiego (11/1/23)
     
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY', 
@@ -1205,7 +1209,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
     for r in ["(AB)n"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "llCV1", "llCV2", "llCV3"]:
+    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "llCV1", "llCV2", "llCV3", "llCV3b"]:
         # e.g., gridlinecircle3, lines to circles, and within lines is to right.
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
     for r in ["LolDR"]:
@@ -1310,6 +1314,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("AnBmCk2",):_get_rankdir_variations(["AnBmCk2"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("llCV2",):_get_rankdir_variations(["llCV2"]) + _get_direction_variations(["L"]), #  dirgrammardiego4
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
+        ("llCV3b",):_get_rankdir_variations(["llCV3b"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("rndstr",): ["preset-null-rndstr"], #  
         ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
