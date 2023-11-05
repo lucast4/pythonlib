@@ -105,6 +105,7 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         assert False
 
     if len(D.Dat)==0:
+        print("NO DATA!!")
         return None, None
 
     if doplots:
@@ -126,6 +127,26 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         # Use only no-sup data for these
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
         dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
+
+        ############### SPLIT BY TIME (TIME BINS)
+        # bin trials and assing to dataframe
+        from pythonlib.tools.nptools import bin_values
+        list_sess = dfthis["session"].unique().tolist()
+        for sess in list_sess:
+            dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
+            # sort by trial
+            dfthissess = dfthissess.sort_values(by="trial")
+            for nbins in [2,4,8]:
+                vals = dfthissess["trial"].tolist()
+                timebins = bin_values(vals, nbins)
+                dfthissess["trial_binned"] = timebins
+
+                y = "success_binary_quick"
+                for split_by in LIST_SPLIT_BY:
+                    fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", ci=68)
+                    savefig(fig, f"{sdir}/binned_time-nbins_{nbims}-sess_{sess}-splitby_{split_by}.pdf")   
+
+
         for split_by in LIST_SPLIT_BY:
             
             # Old plots
@@ -154,7 +175,7 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             list_levels = D.Dat[split_by].unique().tolist()
             for lev in list_levels:
                 df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
-                fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=3, y="success_binary_quick", 
+                fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=2, y="success_binary_quick", 
                             hue="session",
                             height=3, aspect=3, alpha=0.25)
                 savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
@@ -170,6 +191,12 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         else:
             bmh.stats_score_permutation_test(split_plots_by="epoch", 
                 savedir=sdir)        
+
+        ############# time-dependence
+        sdir = f"{savedir}/by_time"
+        os.makedirs(sdir, exist_ok=True)
+        plot_binned_by_time(D, sdir)
+        plot_trial_by_trial(D, sdir)
 
         ######### 2) Plot summary
         dfGramScore = bmh.DatLong  
@@ -199,6 +226,150 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 
     return bmh, SDIR
 
+
+def plot_binned_by_time(D, sdir):
+    """ bin trials by their times. change over session?"""
+
+    LIST_SPLIT_BY = ["probe", "epochset"]
+
+    Dc = D.copy()
+    Dc.preprocessGood(params=["remove_baseline", "no_supervision"])
+    dfthis = Dc.Dat
+    print(len(dfthis))
+
+    ############### SPLIT BY TIME (TIME BINS)
+    # bin trials and assing to dataframe
+    from pythonlib.tools.nptools import bin_values
+    list_sess = dfthis["session"].unique().tolist()
+    for sess in list_sess:
+        dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
+        # sort by trial
+        dfthissess = dfthissess.sort_values(by="trial")
+        for nbins in [2,4,8]:
+            vals = dfthissess["trial"].tolist()
+            timebins = bin_values(vals, nbins)
+            dfthissess["trial_binned"] = timebins
+
+            y = "success_binary_quick"
+            for split_by in LIST_SPLIT_BY:
+                fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", ci=68)
+                savefig(fig, f"{sdir}/binned_time-nbins_{nbins}-sess_{sess}-splitby_{split_by}.pdf")   
+
+                plt.close("all")
+
+
+
+def plot_trial_by_trial(D, sdir):
+    """ to lookk closely at whether trials post stim have lasting effets
+    """
+
+    Dc = D.copy()
+    Dc.preprocessGood(params=["remove_baseline", "no_supervision"])
+    dfthis = Dc.Dat
+    print(len(dfthis))
+
+    # Plot timecourse and visualize
+    # sns.relplot(data=dfthis, x="trial", y="success_binary_quick", hue="microstim_epoch_code",
+    #            aspect=8, alpha=0.5, style="block", row="session")
+
+    # sns.relplot(data=dfthis, x="trial", hue="success_binary_quick", y="microstim_epoch_code",
+    #            aspect=8, alpha=0.5, style="block", row="session")
+
+    fig = sns.relplot(data=dfthis, x="trial", hue="microstim_epoch_code", y="block",
+               aspect=10, alpha=0.5, style="success_binary_quick", row="session")
+    savefig(fig, f"{sdir}/TIMECOURSE.pdf")   
+
+    ####### ALINGED TO STIM TRIALS.
+    for n in [1,2,3,4]:
+        # y = "success_seq_nmatch"
+        y = "success_binary_quick"
+        EXCLUDE_IF_ABORT=False
+        PRINT = False
+
+        # run a sliding window over trials
+        list_sess = dfthis["session"].unique().tolist()
+        for sess in list_sess:
+            dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
+
+            # sort by trial
+            dfthissess = dfthissess.sort_values(by="trial")
+            
+            list_dfwindows = []
+            for i_center in range(n, len(dfthissess)-n):
+                dfwind = dfthissess.iloc[i_center-n:i_center+n+1].reset_index(drop=True)
+                
+                ## CRITERIA FOR EXCLUSION
+                if EXCLUDE_IF_ABORT:
+                    if np.any(dfwind["exclude_because_online_abort"]):
+                        continue
+                
+                if not np.all(dfwind["microstim_epoch_code"][:n]=="off"):
+        #             print(dfwind["microstim_epoch_code"][:n])
+                    continue
+                
+                if not np.all(dfwind["microstim_epoch_code"][n+1:]=="off"):
+                    continue
+                    
+                assert np.all(np.diff(dfwind["trial"])>0)
+                
+                list_dfwindows.append(dfwind) # get n flanking each side.
+
+                if PRINT:
+                    print(i_center, "----", dfwind["trial"].tolist())
+
+            DICT_LISTS_VALUES = {}
+
+            for dfwind in list_dfwindows:
+
+                # only keep if middle index is stim
+                STIM_CODE = dfwind.iloc[n]["microstim_epoch_code"]
+
+                # get timecoures of variable.
+                succs = 1*dfwind[y].values
+
+                if STIM_CODE not in DICT_LISTS_VALUES.keys():
+                    DICT_LISTS_VALUES[STIM_CODE] = [succs]
+                else:
+                    DICT_LISTS_VALUES[STIM_CODE].append(succs)        
+
+                if False:
+                    if STIM_CODE=="off":
+                        ax = axes.flatten()[0]
+                    elif STIM_CODE=="TTL3-fgon":
+                        ax = axes.flatten()[1]
+                    elif STIM_CODE=="TTL4-fgon":
+                        ax = axes.flatten()[2]
+                    else:
+                        print(STIM_CODE)
+                        assert False
+
+                    ax.plot(xs, succs, "ok", alpha=0.005)
+
+            for k,v in DICT_LISTS_VALUES.items():
+                DICT_LISTS_VALUES[k] = np.stack(v, axis=0) # (ndat, ntimes)
+
+            # plot
+            fig, axes = plt.subplots(1,3, figsize=(6,3))
+
+            xs = np.arange(2*n+1)
+
+            for ax, (stim_code, values_mat) in zip(axes.flatten(), DICT_LISTS_VALUES.items()):
+                values_mean = np.mean(values_mat, axis=0)    
+                ax.plot(xs, values_mean, "-ok")
+                ax.set_title(stim_code)
+                
+                ax.set_ylabel(f"n={values_mat.shape[0]}")
+                ax.set_xlabel(f"trials, aligned at middle trial")
+
+                if y=="success_seq_nmatch":
+                    ax.set_ylim(0,6)
+                elif y=="success_binary_quick":
+                    ax.set_ylim(0,1)
+                else:
+                    assert False
+
+            savefig(fig, f"{sdir}/ALIGNED_TRIALS-n_{n}-sess_{sess}.pdf")   
+            plt.close("all")
 
 def conjunctions_preprocess(D):
     """

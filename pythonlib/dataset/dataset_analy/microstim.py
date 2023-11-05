@@ -91,12 +91,17 @@ def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
 
             ax.set_ylim([-3, 5])
             ax.set_ylabel("0:trial events; 1:strokes: 2: stim")
-            fig.savefig(f"{sdir}/trial_{ind}.png")
+            tc = D.Dat.iloc[ind]["trialcode"]
+            tr = D.Dat.iloc[ind]["trial"]
+            ax.set_title(f"tc_{tc}|trial_{tr}")
+            print(f"{sdir}/trial_{tr}.png")
+            fig.savefig(f"{sdir}/trial_{tr}.png")
+            # assert False
+            plt.close("all")    
         else:
             assert ms_fix["on"]==0
             assert ms_stroke["on"]==0
             
-        plt.close("all")    
 
 def preprocess_assign_stim_code(D, map_ttl_region):
     """
