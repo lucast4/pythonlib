@@ -128,25 +128,6 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
         dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
         dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
 
-        ############### SPLIT BY TIME (TIME BINS)
-        # bin trials and assing to dataframe
-        from pythonlib.tools.nptools import bin_values
-        list_sess = dfthis["session"].unique().tolist()
-        for sess in list_sess:
-            dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
-            # sort by trial
-            dfthissess = dfthissess.sort_values(by="trial")
-            for nbins in [2,4,8]:
-                vals = dfthissess["trial"].tolist()
-                timebins = bin_values(vals, nbins)
-                dfthissess["trial_binned"] = timebins
-
-                y = "success_binary_quick"
-                for split_by in LIST_SPLIT_BY:
-                    fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", ci=68)
-                    savefig(fig, f"{sdir}/binned_time-nbins_{nbims}-sess_{sess}-splitby_{split_by}.pdf")   
-
-
         for split_by in LIST_SPLIT_BY:
             
             # Old plots
