@@ -465,6 +465,8 @@ class BehModelHolder(object):
             if sdir is not None:
                 savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
 
+            plt.close("all")
+
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
             savedir=None):
         """Plot score as function of "split_by" categorical levels, where levels are on
@@ -782,5 +784,8 @@ class BehModelHolder(object):
             p, fig = permutationTest(data, funstat, funshuff, nperms, True)
             if savedir:
                 savefig(fig, f"{savedir}/STATS_permtest-{y}_across_{var}-{split_plots_by}_{epoch_orig}.pdf") 
+
+            plt.close("all")
+
 
         

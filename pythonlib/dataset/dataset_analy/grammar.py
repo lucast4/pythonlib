@@ -330,7 +330,8 @@ def plot_trial_by_trial(D, sdir):
                 DICT_LISTS_VALUES[k] = np.stack(v, axis=0) # (ndat, ntimes)
 
             # plot
-            fig, axes = plt.subplots(1,3, figsize=(6,3))
+            nstimcodes = len(DICT_LISTS_VALUES.keys())
+            fig, axes = plt.subplots(1,nstimcodes, figsize=(6,3))
 
             xs = np.arange(2*n+1)
 
