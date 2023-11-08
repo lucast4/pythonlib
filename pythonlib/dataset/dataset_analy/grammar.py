@@ -393,7 +393,11 @@ def plot_trial_by_trial(D, sdir):
 
             # plot
             nstimcodes = len(DICT_LISTS_VALUES.keys())
-            fig, axes = plt.subplots(1,nstimcodes, figsize=(6,3))
+            if nstimcodes==0:
+                continue
+            elif nstimcodes==1:
+                nstimcodes=2 # for unsqueezing
+            fig, axes = plt.subplots(1, nstimcodes, figsize=(6,3))
 
             xs = np.arange(2*n+1)
 

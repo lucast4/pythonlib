@@ -1261,6 +1261,8 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
         for lev in list_lev:
             vals = dfpivot_norm[y_var][lev].values
         #     res = ttest_paired(vals)
+            # Remove nans
+            vals = vals[~np.isnan(vals)]
             res = signrank_wilcoxon(vals)
             if np.isnan(res.pvalue):
                 print(vals)

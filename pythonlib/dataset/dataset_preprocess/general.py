@@ -433,6 +433,16 @@ def _groupingParams(D, expt):
         grouping_reassign_params_in_order = [map_epoch_to_block]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
+
+    # NO-- this day triggered by hand
+    # elif expt=="priminvar5b" and int(D.Dat["date"].unique().tolist()[0])==231004:
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["microstim_code"]
+    #     map_ttl_region = {
+    #         3:"TTL3",
+    #         4:"TTL4",
+    #     }
+
     elif "priminvar" in expt:
         # e.g., priminvar5
         # Is just single prims
