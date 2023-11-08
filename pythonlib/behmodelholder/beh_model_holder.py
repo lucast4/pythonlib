@@ -115,7 +115,7 @@ class BehModelHolder(object):
         """
         """
         from pythonlib.tools.pandastools import aggregGeneral
-        cols_grpby = ["character", "score_name", "agent", "epoch"]
+        cols_grpby = ["character", "score_name", "agent", "epoch", "epoch_orig"]
         if cols_grpby_append is not None:
             assert isinstance(cols_grpby_append, list)
             cols_grpby.extend(cols_grpby_append)
@@ -409,7 +409,7 @@ class BehModelHolder(object):
         self.plot_score_scatter_compare_epochs(model_score_name_list[0], epoch1, epoch2)        
 
     def plot_score_cross_prior_model_splitby_agg(self, split_by="taskgroup",
-        cols_grpby_append=None, sdir=None, suffix=None):
+        cols_grpby_append=None, sdir=None, suffix=None, var="agent_rule"):
         """ bar plots crossing prior and model, plot separately for differelt levels of the variable
         split_by
         PARAMS;
@@ -425,10 +425,10 @@ class BehModelHolder(object):
         self.datextract_datlong_agg(cols_grpby_append=cols_grpby)
 
         self.plot_score_cross_prior_model_splitby(self.DatLongAgg, split_by=split_by,
-            sdir=sdir, suffix=suffix)
+            sdir=sdir, suffix=suffix, var=var)
 
     def plot_score_cross_prior_model_splitby(self, df=None, split_by="taskgroup",
-            sdir=None, suffix=""):
+            sdir=None, suffix="", var="agent_rule"):
         """ bar plots crossing prior and model, plot separately for differelt levels of the variable
         split_by
         PARAMS;
@@ -448,24 +448,30 @@ class BehModelHolder(object):
         # fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
         #     row=split_by, col="score_name", kind="swarm", ci=68)
 
+        NMIN = 5
+
         # Split by blocks
         list_block = df["block"].unique().tolist()
         for bk in list_block:
             dfthis = df[df["block"]==bk]
 
-            fig = sns.catplot(data=dfthis, x="agent_rule", y="score", hue="agent_kind", 
-                col=split_by, col_wrap=4, kind="bar", ci=68)
-            rotateLabel(fig)
-            if sdir is not None:
-                savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-1.pdf") 
+            if len(dfthis)>NMIN:
 
-            fig = sns.catplot(data=dfthis, x="agent_rule", y="score", hue="agent_kind", 
-                col=split_by, col_wrap=4, jitter=True, alpha=0.4)
-            rotateLabel(fig)
-            if sdir is not None:
-                savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
+                fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
+                    col="epoch_orig",
+                    row=split_by, kind="bar", ci=68)
+                rotateLabel(fig)
+                if sdir is not None:
+                    savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-1.pdf") 
 
-            plt.close("all")
+                fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
+                    col="epoch_orig", 
+                    row=split_by, jitter=True, alpha=0.4)
+                rotateLabel(fig)
+                if sdir is not None:
+                    savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
+
+                plt.close("all")
 
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
             savedir=None):
@@ -479,11 +485,20 @@ class BehModelHolder(object):
         if df is None:
             df = self.DatLong
 
+        col = "epoch_orig"
+        # col = "score_name"
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   col="score_name", col_wrap = 3, kind="point", ci=68, aspect=1.5)
+                   col=col, col_wrap = 3, kind="point", ci=68, aspect=1.5)
         rotateLabel(fig)
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
+
+        if False:
+            fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
+                       col="score_name", col_wrap = 3, kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            if savedir:
+                fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
 
         if False:
             # hard to read, points too clumped.
@@ -720,8 +735,9 @@ class BehModelHolder(object):
             fig.savefig(f"{savedir}/aggbytask_scatter_mod2minus1_largetext.pdf")
 
 
-    def stats_score_permutation_test(self, var = "epoch", y = "score", INDEX=None,
-            split_plots_by = "epoch_orig", savedir=None, nperms=1000):
+    def stats_score_permutation_test(self, var = "epoch", y = "score", INDEX=('character', 'block'),
+            split_plots_by = "epoch_orig", savedir=None, nperms=1000,
+            suffix="", df=None):
         """
         Is perofrmanc significantly difference across epochs? (<var>)
         Permtuation test, where shuffling of scores (success/fail) is done within each level of 
@@ -735,16 +751,26 @@ class BehModelHolder(object):
         from pythonlib.tools.statstools import permutationTest
         from pythonlib.tools.pandastools import shuffle_dataset_singlevar, shuffle_dataset_singlevar_hierarchical
 
-        if INDEX is None:
-            INDEX = ['character', 'block']
+        # if INDEX is None:
+        #     INDEX = ['character', 'block']
+
+        if isinstance(INDEX, tuple):
+            INDEX = list(INDEX)
 
         def funstat(_data):
             """ Get the difference between scores (avg across chars) for the best and worse epoch """
-            dfpivot, dfpivot_norm, dflong_norm, stats, fig = datamod_normalize_row_after_grouping(_data, 
-                                                                                                  var, INDEX, 
-                                                                                                  y, PLOT=False,
-                                                                                                 do_normalization=False,
-                                                                                                 do_pvals=False)   
+            if INDEX is not None:
+                dfpivot, dfpivot_norm, dflong_norm, stats, fig = datamod_normalize_row_after_grouping(_data, 
+                                                                                                      var, INDEX, 
+                                                                                                      y, PLOT=False,
+                                                                                                     do_normalization=False,
+                                                                                                     do_pvals=False)   
+            else:
+                dfpivot = _data
+            # print(dfpivot)
+            # print(dfpivot[y].mean(axis=0))
+            # assert False
+
             if True:
                 res = np.max(dfpivot[y].mean(axis=0)) - np.min(dfpivot[y].mean(axis=0))
             else:
@@ -754,38 +780,47 @@ class BehModelHolder(object):
         def funshuff(_data):
             """ Shuffle hierarhcaylly (within each lev of INDEX)
             """
-            return shuffle_dataset_singlevar_hierarchical(_data, y, INDEX)
+            if INDEX is None:
+                return shuffle_dataset_singlevar(_data, y, maintain_block_temporal_structure=False)
+            else:
+                return shuffle_dataset_singlevar_hierarchical(_data, y, INDEX)
+
+        if df is None:
+            df = self.DatLong
 
         ## Run separately for each epoch_orig
         if split_plots_by is None:
             # Then dont split. use dummy variable
-            self.DatLong["dummyvar"] = "dummy"
+            df["dummyvar"] = "dummy"
             split_plots_by = "dummyvar"
+        if INDEX is None:
+            # use variable
+            df["dummyvar"] = "dummy"
+            INDEX = ["dummyvar"]
 
-        list_epoch_orig = self.DatLong[split_plots_by].unique().tolist()
+        list_epoch_orig = df[split_plots_by].unique().tolist()
         for epoch_orig in list_epoch_orig:
-            data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
-        #     data = bm.DatLong.copy()
+            data = df[df[split_plots_by]==epoch_orig].reset_index(drop=True)
 
-            n = len(data)
-            print(len(data))
-            # first, prune so each char has all epochs
-            data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
-                                                                  PRINT=False, DEBUG=False)
-            print(len(data))
+            if INDEX is not None:
+                n = len(data)
+                print(len(data))
+                # first, prune so each char has all epochs
+                data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
+                                                                      PRINT=False, DEBUG=False)
+                print(len(data))
 
             if False:
                 if len(data)<=0.1*n:
-                    data = self.DatLong[self.DatLong[split_plots_by]==epoch_orig].reset_index(drop=True)
+                    data = df[df[split_plots_by]==epoch_orig].reset_index(drop=True)
                     data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
                                                                           PRINT=True, DEBUG=True)
                     assert False, "why lost so  much data? a bug?"
 
             p, fig = permutationTest(data, funstat, funshuff, nperms, True)
             if savedir:
-                savefig(fig, f"{savedir}/STATS_permtest-{y}_across_{var}-{split_plots_by}_{epoch_orig}.pdf") 
-
-            plt.close("all")
+                savefig(fig, f"{savedir}/STATS_permtest-{y}_across_{var}-{split_plots_by}_{epoch_orig}-{suffix}.pdf") 
+                plt.close("all")
 
 
         

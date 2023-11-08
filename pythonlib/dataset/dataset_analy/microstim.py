@@ -29,15 +29,16 @@ def plot_all_wrapper(D):
     plot_motortiming(Dcopy)
 
     # Grammar
-    try:
-        from pythonlib.dataset.dataset_analy.grammar import pipeline_generate_and_plot_all
-        Dcopy = D.copy()
-        pipeline_generate_and_plot_all(Dcopy)
-    except NotEnoughDataException as err:
-        # skip, since rules are not defined
-        pass
-    except Exception as err:
-        raise err
+    if np.any(D.Dat["task_kind"]=="prims_on_grid"):
+        try:
+            from pythonlib.dataset.dataset_analy.grammar import pipeline_generate_and_plot_all
+            Dcopy = D.copy()
+            pipeline_generate_and_plot_all(Dcopy)
+        except NotEnoughDataException as err:
+            # skip, since rules are not defined
+            pass
+        except Exception as err:
+            raise err
 
 def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
     """ Wuick plot , for each stim trial, of 
@@ -103,7 +104,7 @@ def plot_overview_behcode_timings(D, sdir, STIM_DUR = 0.5):
             assert ms_stroke["on"]==0
             
 
-def preprocess_assign_stim_code(D, map_ttl_region):
+def preprocess_assign_stim_code(D, map_ttl_region, code_ignore_within_trial_time=False):
     """
     Give each trial a string code for its stim params, which can vary across 
     expts. Code indicates both the map_ttl_region, and which time windows
@@ -111,6 +112,8 @@ def preprocess_assign_stim_code(D, map_ttl_region):
     PARAMS:
     - map_ttl_region, dict mapping from int ttl values to string , usually
     breian regions, which will be the code.
+    - code_ignore_within_trial_time, then will code simply by ttl, not by when
+    in trial it stimmed.
     EXAMPLE:
     - 
     """
@@ -206,7 +209,8 @@ def preprocess_assign_stim_code(D, map_ttl_region):
             sc = map_ttl_region[ttl_codes[0]]
 
             # and append the code indicating WHEN in trial it is stimmed
-            sc = f"{sc}-{stim_window_code}"
+            if not code_ignore_within_trial_time:
+                sc = f"{sc}-{stim_window_code}"
 
         list_stim_code.append(sc)
 

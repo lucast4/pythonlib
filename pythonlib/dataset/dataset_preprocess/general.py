@@ -508,8 +508,15 @@ def _groupingParams(D, expt):
                 assert len(map_ttl_region)>0
 
                 # 1) Assign stim code
-                from pythonlib.dataset.dataset_analy.microstim import preprocess_assign_stim_code
-                preprocess_assign_stim_code(D, map_ttl_region=map_ttl_region)
+                from pythonlib.dataset.dataset_analy.microstim import preprocess_assign_stim_code 
+                if D.animals()==["Diego"] and D.Dat["date"].unique().tolist()==['231025']:
+                    # Then sess 1 and 2 had diff windows, but 2 is not enough trials to be its own,
+                    # so combine them
+                    code_ignore_within_trial_time = True
+                else:
+                    code_ignore_within_trial_time = False
+                preprocess_assign_stim_code(D, map_ttl_region=map_ttl_region, 
+                    code_ignore_within_trial_time=code_ignore_within_trial_time)
 
                 # 2) get grouping.
                 grouping_vars = ["epoch", "microstim_epoch_code"]

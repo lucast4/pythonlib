@@ -281,11 +281,13 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
 
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data_matlabrule(D, binary_rule=False, 
-        DEBUG=False, return_as_bmh_object=True, remove_repeated_trials=False):
+        DEBUG=False, return_as_bmh_object=True, remove_repeated_trials=False,
+        USE_DATASET_DF=True):
     """High-level extraction for each trial whether it was success given the matlab objectclass
     sequence. Does not try to extract new parses. binary success on each trial
     PARAMS:
     - binary_rule, bool, whether to get for eahc trial a binary code for bollean rules
+    - USE_DATASET_DF, then merges D.Dat into output Dataframe.
     """
     from pythonlib.dataset.modeling.discrete import _rules_consistent_rulestrings_extract_auto
 
@@ -370,12 +372,17 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
         else:
             which_probe_blockset = np.nan
 
+        ######## Extract string edit distnace scores.
+        from pythonlib.tools.string_edit_dist import nmatch_until_first_diff
+        d_nmatch = nmatch_until_first_diff(taskstroke_inds_beh_order, order_correct)
+
         results.append({
             "agent_kind":"model",
             "agent_rule":epoch_i, 
             "score_name":"binsucc",
             "score":success_binary,
             "success_binary_quick":success_binary,            
+            "dist_nmatch_until_diff":d_nmatch,            
             "probe":D.Dat.iloc[ind]["probe"],
             "epoch_superv":D.Dat.iloc[ind]["epoch_superv"],
             "beh_sequence_wrong":beh_sequence_wrong,
@@ -401,6 +408,13 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
         LIST_exclude_because_online_abort.append(exclude_because_online_abort)
 
     dfGramScore = pd.DataFrame(results)
+
+    if USE_DATASET_DF:
+        # merge the dataframes
+        assert np.all(dfGramScore["trialcode"]==D.Dat["trialcode"])
+        columns_keep = [x for x in dfGramScore.columns if (x not in D.Dat or x=="trialcode")]
+        dfGramScore = dfGramScore.loc[:, columns_keep]
+        dfGramScore = pd.merge(dfGramScore, D.Dat, on="trialcode", suffixes=(None, None)) # suffixes flag means it will throw error if olverapping columns
 
     # Append things to dfgramscore
     D.Dat["success_binary_quick"] = LIST_success_binary

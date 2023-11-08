@@ -67,145 +67,207 @@ def preprocess_dataset_matlabrule(D, exclude_because_online_abort=False):
     return bm
 
 def pipeline_generate_and_plot_all(D, which_rules="matlab", 
-    reset_grammar_dat=False, doplots=True, remove_repeated_trials=True):
+    reset_grammar_dat=False, doplots=True, remove_repeated_trials=True,
+    save_suffix=None, run_inner_loop_only=False):
     """ Entire pipeline to extract data and plot, for 
     a single dataset
     PARAMS:
     - which_rules, str, either to use ObjectClass matlab rule, or to regenreate
     parsesa nd ask if beh is compativle iwth any of the "same-rule" parses.
     RETURNS:
-    - bmh
+    - bmh, with removed trials that are "exclude_because_online_abort"
     - SDIR
     OR (None, None) if not enough data 
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
 
-    ################## Create save directiory
-    SDIR = D.make_savedir_for_analysis_figures("grammar")
-    savedir= f"{SDIR}/summary"
-    os.makedirs(savedir, exist_ok=True) 
+    # Remove baselione
+    D.preprocessGood(params=["remove_baseline"])
 
-    if reset_grammar_dat:
-        D.GrammarDict = {}
-
-    # 1) Get learning metaparams
-    list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
-
-    # grammar_recompute_parses = False # just use the matlab ground truth
-    if which_rules=="matlab":
-        # use the ground truth objectclass
-        bmh  = preprocess_dataset_matlabrule(D)
-    elif which_rules=="recompute_parses":
-        print("******** len Dat:", len(D.Dat))
-        bmh  = preprocess_dataset_recomputeparses(D)
-        assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
+    ################# AD HOC SPLITTING OF DATASETS
+    # if D.animals()==["Diego"] and D.Dat["date"].unique().tolist()==['231025'] and not run_inner_loop_only:
+    if False and not run_inner_loop_only:
+        # Then split sess
+        list_sess = sorted(D.Dat["session"].unique().tolist())
+        for sess in list_sess:
+            Dcopy = D.copy()
+            Dcopy.Dat = Dcopy.Dat[Dcopy.Dat["session"]==sess].reset_index(drop=True)
+            bmh, SDIR = pipeline_generate_and_plot_all(Dcopy, which_rules, 
+                reset_grammar_dat, doplots, remove_repeated_trials, 
+                save_suffix=f"sess_{sess}", run_inner_loop_only=True)
     else:
-        print(which_rules)
-        assert False
+        ################## Create save directiory
+        SDIR = D.make_savedir_for_analysis_figures("grammar")
+        if save_suffix is not None:
+            SDIR = f"{SDIR}/{save_suffix}"
 
-    if len(D.Dat)==0:
-        print("NO DATA!!")
-        return None, None
-
-    if doplots:
-        ####### 1) COmpare beh to all hypotheses (rules, discrete)
-        # Also make plots for rule-based analysis
-        savedir= f"{SDIR}/discrete_rules"
+        savedir= f"{SDIR}/summary"
         os.makedirs(savedir, exist_ok=True) 
 
-        # combine in single plot (all taskgroups)
-        sdir = f"{savedir}/score_epoch_x_rule_splitby"
-        os.makedirs(sdir, exist_ok=True)
+        if reset_grammar_dat:
+            D.GrammarDict = {}
 
-        LIST_SPLIT_BY = ["taskgroup", "probe"]
-        if "epochset" in bmh.DatLong.columns:
-            LIST_SPLIT_BY.append("epochset")
-        if "taskfeat_cat" in bmh.DatLong.columns:
-            LIST_SPLIT_BY.append("taskfeat_cat")          
-      
-        # Use only no-sup data for these
-        dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
-        dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
+        # 1) Get learning metaparams
+        list_blocksets_with_contiguous_probes = learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
-        for split_by in LIST_SPLIT_BY:
-            
-            # Old plots
-            bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by,
-                sdir=sdir, suffix="trialdat") 
+        # Epochsets
+        # print(D.Dat)
+        # print(len(D.Dat))
+        # print(D.Dat["epoch"])
+        # assert False
+        D.sequence_strokes_compute_01_sameness_status() # strokes01_sameness
 
-            # fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
-            # savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
-            # savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
-
-            # agg version of old plots
-            bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
-                sdir=sdir, suffix="aggdat") 
-            # savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
-            # savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
-            
-            # New plots
-            bmh.plot_score_cross_prior_model_splitby_v2(df=dfthis, split_by=split_by, savedir=sdir)
-
-            plt.close("all")
-
-            # except Exception as err:
-            #     pass
-
-            # Plot timecourse, one plot for each epoch
-            list_levels = D.Dat[split_by].unique().tolist()
-            for lev in list_levels:
-                df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
-                fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=2, y="success_binary_quick", 
-                            hue="session",
-                            height=3, aspect=3, alpha=0.25)
-                savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
-
-                plt.close("all") 
-
-        # Do permutation test of whether score is significant across epochs
-        # (e.g., if using microstim to perturb baehavior)
-        if not np.all(bmh.DatLong["epoch"] == bmh.DatLong["epoch_orig"]):
-            # Then epoch is different from epoch_orig
-            bmh.stats_score_permutation_test(split_plots_by="epoch_orig", 
-                savedir=sdir)        
+        # grammar_recompute_parses = False # just use the matlab ground truth
+        if which_rules=="matlab":
+            # use the ground truth objectclass
+            bmh  = preprocess_dataset_matlabrule(D)
+        elif which_rules=="recompute_parses":
+            print("******** len Dat:", len(D.Dat))
+            bmh  = preprocess_dataset_recomputeparses(D)
+            assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
         else:
-            bmh.stats_score_permutation_test(split_plots_by="epoch", 
-                savedir=sdir)        
+            print(which_rules)
+            assert False
 
-        ############# time-dependence
-        sdir = f"{savedir}/by_time"
-        os.makedirs(sdir, exist_ok=True)
-        plot_binned_by_time(D, sdir)
-        plot_trial_by_trial(D, sdir)
+        if len(D.Dat)==0:
+            print("NO DATA!!")
+            return None, None
 
-        ######### 2) Plot summary
-        dfGramScore = bmh.DatLong  
-        dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
-        if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
-            plot_performance_all(dfGramScore, list_blocksets_with_contiguous_probes, SDIR)
-            plot_performance_timecourse(dfGramScore, list_blocksets_with_contiguous_probes, SDIR)
-            plot_performance_static_summary(dfGramScore, list_blocksets_with_contiguous_probes, SDIR, False)
-            plot_performance_static_summary(dfGramScore, list_blocksets_with_contiguous_probes, SDIR, True)
-            plot_counts_heatmap(dfGramScore, SDIR)
-            plot_performance_trial_by_trial(dfGramScore, D, SDIR)
-            plot_performance_each_char(dfGramScore, D, SDIR)
-            # 1) print all the taskgroups
-            D.taskgroup_char_ntrials_print_save(SDIR)
+        if doplots:
+            ####### 1) COmpare beh to all hypotheses (rules, discrete)
+            # Also make plots for rule-based analysis
+            savedir= f"{SDIR}/discrete_rules"
+            os.makedirs(savedir, exist_ok=True) 
 
-            # plot counts, only success triuals
-            df = bmh.DatLong[bmh.DatLong["success_binary_quick"]==True].reset_index(drop=True)
-            plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
-        else:
-            print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
+            # combine in single plot (all taskgroups)
+            sdir = f"{savedir}/score_epoch_x_rule_splitby"
+            os.makedirs(sdir, exist_ok=True)
 
-        ######## CONJUNCTIONS PLOTS
-        DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
-        if DS is not None:
-            savedir = f"{SDIR}"
-            conjunctions_plot(D, DS, savedir, params_anova)
+            LIST_SPLIT_BY = ["taskgroup", "probe", "strokes01_sameness"]
+            if "epochset" in bmh.DatLong.columns:
+                LIST_SPLIT_BY.append("epochset")
+            if "taskfeat_cat" in bmh.DatLong.columns:
+                LIST_SPLIT_BY.append("taskfeat_cat")          
+          
+            # Use only no-sup data for these
+            # dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+            # dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
+            bmh.DatLong = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+            bmh.DatLong = bmh.DatLong[bmh.DatLong["exclude_because_online_abort"]==False].reset_index(drop=True)
 
-    return bmh, SDIR
+            for split_by in LIST_SPLIT_BY:
+                
+                # Old plots
+                bmh.plot_score_cross_prior_model_splitby(df=bmh.DatLong, split_by=split_by,
+                    sdir=sdir, suffix="trialdat") 
+
+                # fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
+                # savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
+                # savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+
+                # agg version of old plots
+                bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
+                    sdir=sdir, suffix="aggdat") 
+                # savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
+                # savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
+                
+                # New plots
+                bmh.plot_score_cross_prior_model_splitby_v2(df=bmh.DatLong, split_by=split_by, savedir=sdir)
+
+                plt.close("all")
+
+                # except Exception as err:
+                #     pass
+
+                # Plot timecourse, one plot for each epoch
+                list_levels = D.Dat[split_by].unique().tolist()
+                for lev in list_levels:
+                    df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
+                    fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=2, y="success_binary_quick", 
+                                hue="session",
+                                height=3, aspect=3, alpha=0.25)
+                    savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
+
+                    plt.close("all") 
+
+            # Do permutation test of whether score is significant across epochs
+            # (e.g., if using microstim to perturb baehavior)
+            if not np.all(bmh.DatLong["epoch"] == bmh.DatLong["epoch_orig"]):
+                # Then epoch is different from epoch_orig
+                bmh.stats_score_permutation_test(split_plots_by="epoch_orig", 
+                    savedir=sdir)        
+                bmh.stats_score_permutation_test(split_plots_by="epoch_orig", 
+                    savedir=sdir, suffix="flat")        
+            bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir)
+            bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir, suffix="flat")
+
+            ### MICROSTIM PLOTS
+            if "microstim_epoch_code" in bmh.DatLong.columns:
+                CODE_OFF = "off"
+                sdir = f"{savedir}/MICROSTIM-score_epoch_x_rule_splitby"
+                os.makedirs(sdir, exist_ok=True)
+
+                for split_by in LIST_SPLIT_BY:
+                    bmh.plot_score_cross_prior_model_splitby(df=bmh.DatLong, split_by=split_by,
+                        sdir=sdir, suffix="trialdat", var="microstim_epoch_code") 
+                    if False:
+                        # afgg doesnt have the variables.
+                        bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
+                            sdir=sdir, suffix="aggdat", var="microstim_epoch_code") 
+                
+                bmh.stats_score_permutation_test(var="microstim_epoch_code", savedir=sdir, split_plots_by="epoch_orig")
+                bmh.stats_score_permutation_test(var="microstim_epoch_code", savedir=sdir, split_plots_by=None)
+
+                bmh.stats_score_permutation_test(var="microstim_epoch_code", savedir=sdir, split_plots_by="epoch_orig", suffix="flat")
+                bmh.stats_score_permutation_test(var="microstim_epoch_code", savedir=sdir, split_plots_by=None, suffix="flat")
+
+                # compare each one to off
+                list_code = bmh.DatLong["microstim_epoch_code"].unique().tolist()
+                for code in list_code:
+                    if code==CODE_OFF:
+                        continue
+                    dfthis = bmh.DatLong[bmh.DatLong["microstim_epoch_code"].isin([CODE_OFF, code])].reset_index(drop=True)
+
+                    bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by="epoch_orig", suffix=f"code_{code}")
+                    bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by=None, suffix=f"code_{code}")
+
+                    bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by="epoch_orig", suffix=f"code_{code}-flat")
+                    bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by=None, suffix=f"code_{code}-flat")
+
+            ############# time-dependence
+            sdir = f"{savedir}/by_time"
+            os.makedirs(sdir, exist_ok=True)
+            plot_binned_by_time(D, sdir)
+            plot_trial_by_trial(D, sdir)
+
+            ######### 2) Plot summary
+            # dfGramScore = bmh.DatLong  
+            # dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
+            if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
+                plot_performance_all(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR)
+                plot_performance_timecourse(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR)
+                plot_performance_static_summary(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR, False)
+                plot_performance_static_summary(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR, True)
+                plot_counts_heatmap(bmh.DatLong, SDIR)
+                plot_performance_trial_by_trial(bmh.DatLong, D, SDIR)
+                plot_performance_each_char(bmh.DatLong, D, SDIR)
+                # 1) print all the taskgroups
+                D.taskgroup_char_ntrials_print_save(SDIR)
+
+                # plot counts, only success triuals
+                df = bmh.DatLong[bmh.DatLong["success_binary_quick"]==True].reset_index(drop=True)
+                plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
+            else:
+                print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
+
+            ######## CONJUNCTIONS PLOTS
+            DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
+            if DS is not None:
+                savedir = f"{SDIR}"
+                conjunctions_plot(D, DS, savedir, params_anova)
+
+        return bmh, SDIR
 
 
 def plot_binned_by_time(D, sdir):

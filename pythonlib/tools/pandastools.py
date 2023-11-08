@@ -1234,6 +1234,8 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
     """
     from pythonlib.tools.statstools import ttest_paired, signrank_wilcoxon, plotmod_pvalues
 
+    assert grplist_index is not None
+    
     if lev_default_contrast is None:
         lev_default_contrast = df[var_contrast].unique().tolist()[0]
 
@@ -1260,6 +1262,10 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
             vals = dfpivot_norm[y_var][lev].values
         #     res = ttest_paired(vals)
             res = signrank_wilcoxon(vals)
+            if np.isnan(res.pvalue):
+                print(vals)
+                print(np.isnan(vals))
+                assert False
             pvals.append(res.pvalue)
             means.append(np.mean(vals))
         stats = {

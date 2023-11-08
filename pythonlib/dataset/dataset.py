@@ -1783,6 +1783,23 @@ class Dataset(object):
         }
         return out
 
+    ############### MICROSTIM
+    def microstim_assign_catch_trial_objectclass(self, PRINT=False):
+        """ catch trial means there were no objclass rules
+        on this trial. STIM and non-stim CATCH
+        Appends new col to self.Dat["catch_trial"]
+        """
+
+        list_catch = []
+        for ind in range(len(self.Dat)):
+            nrules = len(self.blockparams_extract_single_combined_task_and_block(ind)["task_objectclass"]["RuleList"])
+            # append True if there are no rules
+            list_catch.append(nrules==0)
+        self.Dat["catch_trial"]=list_catch
+        print("New column catch_trial")
+        if PRINT:
+            # should be correlated
+            D.grouping_print_n_samples(["catch_trial", "epochset"])        
 
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
@@ -7291,9 +7308,24 @@ class Dataset(object):
 
         map_epochset_trialcode_01 = self.epochset_extract_wrapper("same_beh_first_two_stroke",
                                                              only_keep_epochsets_containing_all_epochs=True,
-                                                             exclude_leftover=True)
-        assert len(map_epochset_trialcode_0.keys())==1, "kind of hacky, might need to fix this..."
-        assert len(map_epochset_trialcode_01.keys())==1
+                                                             exclude_leftover=True) 
+
+        try:
+            assert len(map_epochset_trialcode_0.keys())==1, "kind of hacky, might need to fix this... PROBAABLY YOU NEED OT REMOVE BASELINE FIRST"
+            assert len(map_epochset_trialcode_01.keys())==1
+        except Exception as err:
+            print(map_epochset_trialcode_0)
+            print("---")
+            print(map_epochset_trialcode_01)
+            map_epochset_trialcode_0 = self.epochset_extract_wrapper("same_beh_first_stroke", 
+                                                         only_keep_epochsets_containing_all_epochs=False,
+                                                         exclude_leftover=True)
+
+            print("probaly problem is having extra epochs that lead this flag to fail (only_keep_epochsets_containing_all_epochs)")
+            print("SOlution is to remove unneeded epochs")
+            print(map_epochset_trialcode_0)
+            print(self.Dat["epoch"].value_counts())
+            raise err
         trialcodes_0 = list(map_epochset_trialcode_0.values())[0] # list of tc
         trialcodes_01 = list(map_epochset_trialcode_01.values())[0]
 
