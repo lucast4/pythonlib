@@ -13,7 +13,8 @@ from pythonlib.tools.snstools import rotateLabel
 
 
 def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, 
-        microstim_version=False, prune_strokes=False):
+        microstim_version=False, prune_strokes=False,
+        VARS_CONTEXT=None):
     """
     [GOOD}]
     GAPSTROKES -- analysis of gaps and strokes... 
@@ -33,6 +34,9 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
     else:
         D.preprocessGood(params=["one_to_one_beh_task_strokes_allow_unfinished"])
 
+    if params_preprocess is not None:
+        D.preprocessGood(params=params_preprocess)
+        
     # Generate DatStrokes
     from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
@@ -41,6 +45,8 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
     DS.timing_extract_basic()
     DS.dataset_append_column("block")
     DS.dataset_append_column("epoch_orig")
+    DS.dataset_append_column("probe")
+    DS.dataset_append_column("epoch")
 
     # From pig
     D.seqcontext_preprocess()
@@ -76,14 +82,17 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_loc_prev", "gridloc"], "loc_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"], "locshape_pre_this", use_strings=False)
     DS.Dat = append_col_with_grp_index(DS.Dat, ["shape", "gridloc", "stroke_index"], "sh_loc_idx", use_strings=True)
+    ## Extract sequential context, user-defiined
+    if VARS_CONTEXT is None:
+        DS.Dat["context"] = DS.Dat["locshape_pre_this"] # Default
+    else:
+        DS.Dat = append_col_with_grp_index(DS.Dat, VARS_CONTEXT, new_col_name="context")
 
     ##
     if microstim_version:
         print("KEEPING data so that each locshape_pre_this x epoch_orig has at least one datapt per stim condition")
         from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars, grouping_append_and_return_inner_items
-        DS.dataset_append_column("epoch_orig")
         DS.dataset_append_column("microstim_epoch_code")
-        DS.dataset_append_column("block")
         # Then enforce that each locshape_pre_this x epoch_orig has at least one datapt per stim condition
         # group to make a new var
         DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"], 
@@ -213,8 +222,10 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
 
 
 def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess, 
-    n_min = 5, PLOT=True, microstim_version=False):
+    n_min = 3, PLOT=True, microstim_version=False):
     """ 
+    [NOTE: is identical to gapstrokes_preprocess_extract_strokes_gaps, except prunes byu conjucntion'
+    at end]
     Compare timing of gaps and strokes across variables, controlling for sequential context
     PARAMS;
     - VAR, string, the variable whos levels are compared
@@ -233,35 +244,30 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     ###### EXTRACT DATASET STROKES, PREPROCESSED
     # restrict to cases without online supervision
     D.grammarmatlab_successbinary_score()
-    D.preprocessGood(params=params_preprocess)
-
-    # Keep just the final testing block
-    # only blocks with probes
-    # dict_block_probes = D.grouping_get_inner_items("block", "probe")
-
-    # blocks_with_probes = [bk for bk, probes in dict_block_probes.items() if sorted(probes)==[0,1]]
-    # print(len(D.Dat))
-    # D.Dat = D.Dat[D.Dat["block"].isin(blocks_with_probes)]
-    # print(len(D.Dat))
-
-    # D.Dat["supervision_stage_semantic"].value_counts()
+    # D.preprocessGood(params=params_preprocess)
 
     # Get data strokes
-    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D, microstim_version=microstim_version)
+    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D, 
+        params_preprocess=params_preprocess,
+        microstim_version=microstim_version,
+        VARS_CONTEXT=VARS_CONTEXT)
     D.preprocessGoodCheckLog(params_preprocess+["one_to_one_beh_task_strokes_allow_unfinished"])
-
-    DS.dataset_append_column("probe")
-    DS.dataset_append_column("epoch")
-    DS.dataset_append_column(VAR)
 
     SAVEDIR = D.make_savedir_for_analysis_figures_BETTER(f"motortiming_gapstrokes_byvariable/{VAR}")
     print("Saving figures at: ", SAVEDIR)
 
     # If the same first shape/loc occurs for both probe=0 and 1
     # If the same first loc occurs for both probe=0 and 1 (e./.g, novel prims)
-    DS.Dat = append_col_with_grp_index(DS.Dat, VARS_CONTEXT, new_col_name="context")
+    # DS.Dat = append_col_with_grp_index(DS.Dat, VARS_CONTEXT, new_col_name="context")
+
+    # Extract only ocntexts that have each level of the VAR (or at lesat lenient_allow_data_if_has_n_levels
+    # many levels)
+    DS.dataset_append_column(VAR)
+    #print("**** len DS (1)", len(DS.Dat))
+    # NOTE: This prunes too much, like 50% of trials in one test case.
     DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=["context"], 
                                            n_min = n_min, lenient_allow_data_if_has_n_levels=2)
+    #print("**** len DS (2)", len(DFTHIS))
 
     if len(DFTHIS)>0:
         print(len(DS.Dat))

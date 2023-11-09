@@ -29,7 +29,8 @@ def preprocess_plot_pipeline(D, PLOT=True, microstim_version=False):
 
     ############### Extract data
     DS, SAVEDIR = preprocess(D, True, microstim_version=microstim_version)
-    dfres, grouping = extract_grouplevel_motor_stats(DS, grouping, microstim_version=microstim_version)
+    dfres, grouping = extract_grouplevel_motor_stats(DS, grouping, 
+        microstim_version=microstim_version)
 
     if PLOT:
         ############### PLOTS
@@ -62,14 +63,17 @@ def preprocess_plot_pipeline(D, PLOT=True, microstim_version=False):
 def preprocess(D, prune_strokes=True, microstim_version=False):
     """ Entire pipeline to extract motor, image, and other stats
     """
-    
+        
+    params_preprocess = ["remove_baseline", "no_supervision", "only_blocks_with_n_min_trials"]
+
     if False:
         from pythonlib.dataset.dataset_analy.prims_in_grid import preprocess_dataset
         DS, _ = preprocess_dataset(D)
     else:
         from pythonlib.dataset.dataset_analy.motortiming import gapstrokes_preprocess_extract_strokes_gaps
         DS, _ = gapstrokes_preprocess_extract_strokes_gaps(D,
-            microstim_version=microstim_version, prune_strokes=prune_strokes)
+            microstim_version=microstim_version, prune_strokes=prune_strokes,
+            params_preprocess=params_preprocess)
 
     SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("primitivenessv2")
 
@@ -243,23 +247,33 @@ def plot_triallevel_results(DS, contrast, savedir):
     list_block = DS.Dat["block"].unique().tolist()
     list_epoch_orig = DS.Dat["epoch_orig"].unique().tolist()
 
+    if False:
+        # Was previously in microstim.plot_motortiming
+        DS.Dat = append_col_with_grp_index(DS.Dat, ["stroke_index", "locshape_pre_this"], "strk_idx_ctxt", use_strings=False)
+        CONTEXT_VAR = "strk_idx_ctxt"
+    else:
+        CONTEXT_VAR = "locshape_pre_this"
+
     N_MIN_PER_BLOCK = 10
-    for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]:
+    # LIST_SHAPE = ["locshape_pre_this", "shape", "shapeabstract"]
+    LIST_SHAPE = ["locshape_pre_this"]
+    for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum", "gap_from_prev_dur", 
+        "gap_from_prev_dist", "gap_from_prev_vel"]:
         # for sh in ["sh_loc_idx", "shape", "shapeabstract"]:
         for bk in list_block:
-            for sh in ["locshape_pre_this", "shape", "shapeabstract"]:
+            for sh in LIST_SHAPE:
                 for epoch_orig in list_epoch_orig:
 
-                    dfthis = DS.Dat[(DS.Dat["block"]==bk) & (DS.Dat["epoch_orig"]==epoch_orig)]
+                    dfthis = DS.Dat[(DS.Dat["block"]==bk) & (DS.Dat["epoch_orig"]==epoch_orig)].reset_index(drop=True)
 
                     if len(dfthis)>N_MIN_PER_BLOCK:
 
-                        print("primitivenessv2.plot_triallevel_results()", y, sh, bk)
+                        print("primitivenessv2.plot_triallevel_results()", y, sh, bk, epoch_orig)
 
                         fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
                             col_wrap=4, y=y, alpha=0.4)
                         rotateLabel(fig)
-                        savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-bk_{bk}-1.pdf")
+                        savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}-1.pdf")
 
                         fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind="point", ci=68, aspect=3)
                         # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
@@ -269,34 +283,34 @@ def plot_triallevel_results(DS, contrast, savedir):
 
                         plt.close("all")
 
-                ####### PLOTS OF CONTRAST ACROSS LEVELS.
-                dfthis = DS.Dat[(DS.Dat["block"]==bk)]
+                        ####### PLOTS OF CONTRAST ACROSS LEVELS.
+                        # dfthis = DS.Dat[(DS.Dat["block"]==bk)]
+                        INDEX = [sh, "epoch_orig", "block"]
+                        if "microstim_epoch_code" in dfthis.columns:
+                            fixed_treat = "microstim_epoch_code"
+                            lev_treat_default = "off"
+                        else:
+                            fixed_treat = "epoch"
+                            lev_treat_default = None
 
-                INDEX = [sh, "epoch_orig", "block"]
-                if "microstim_epoch_code" in dfthis.columns:
-                    fixed_treat = "microstim_epoch_code"
-                    lev_treat_default = "off"
-                else:
-                    fixed_treat = "epoch"
-                    lev_treat_default = None
+                        # Linear mixed effects
+                        RES, fig, axes = lme_categorical_fit_plot(dfthis, y, fixed_treat, 
+                            lev_treat_default, rand_grp_list=INDEX, PLOT = True)
+                        savefig(fig, f"{savedir}/LME-{fixed_treat}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}.pdf")
 
-                # Linear mixed effects
-                RES, fig, axes = lme_categorical_fit_plot(dfthis, y, fixed_treat, 
-                    lev_treat_default, rand_grp_list=INDEX, PLOT = True)
-                savefig(fig, f"{savedir}/LME-{fixed_treat}-{sh}-{y}-epochorig-bk_{bk}.pdf")
+                        # Plot normalized to the default level.
+                        _, _, _, _, fig = datamod_normalize_row_after_grouping(dfthis, 
+                                                                              fixed_treat, 
+                                                                              INDEX, 
+                                                                              y,
+                                                                              lev_treat_default,
+                                                                              PLOT=True
+                                                                             )
+                        savefig(fig, f"{savedir}/NORM-{fixed_treat}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}.pdf")
 
-                # Plot normalized to the default level.
-                _, _, _, _, fig = datamod_normalize_row_after_grouping(dfthis, 
-                                                                      fixed_treat, 
-                                                                      INDEX, 
-                                                                      y,
-                                                                      lev_treat_default,
-                                                                      PLOT=True
-                                                                     )
-                savefig(fig, f"{savedir}/NORM-{fixed_treat}-{sh}-{y}-epochorig-bk_{bk}.pdf")
+                        plt.close("all")
 
-                plt.close("all")
-
+        ############### PLOTS ACROSS ALL DATA
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
         #     kind="point", ci=68)
         fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, row="shape", kind="point", ci=68, aspect=1.5)

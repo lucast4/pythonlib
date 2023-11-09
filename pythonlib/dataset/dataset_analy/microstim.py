@@ -25,8 +25,10 @@ def plot_all_wrapper(D):
     preprocess_dataset(Dcopy, PLOT=True)
 
     # motor timing
-    Dcopy = D.copy()
-    plot_motortiming(Dcopy)
+    if False:
+        # all folded into primitiveness now
+        Dcopy = D.copy()
+        plot_motortiming(Dcopy)
 
     # Grammar
     if np.any(D.Dat["task_kind"]=="prims_on_grid"):
@@ -238,8 +240,8 @@ def plot_motortiming(D, PLOT=True, microstim_version=True):
     PLOT_BY_STROKE_INDEX_SET = False
 
     # Prep dataset
-    D.grouping_get_inner_items("block", "epoch")
-    SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("microstim/motortiming")
+    D.grouping_get_inner_items("block", "epoch") 
+    SAVEDIR_BASE = D.make_savedir_for_analysis_figures_BETTER("microstim/motortiming")
     
     if False:
         for ind in range(len(D.Dat)):
@@ -251,77 +253,100 @@ def plot_motortiming(D, PLOT=True, microstim_version=True):
     VARS_CONTEXT = ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"]
     params_preprocess = ["remove_baseline", "no_supervision", "only_blocks_with_n_min_trials"]
     VAR = "epoch"
-    DS, DFTHIS = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, 
-        params_preprocess, PLOT=PLOT, microstim_version=microstim_version)
+    DS, DFTHIS_ORIG = gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, 
+        params_preprocess, PLOT=False, microstim_version=microstim_version)
+    # Take controlled data --> plot a single distribution, one for each (context, index) combo
+    DFTHIS_ORIG = append_col_with_grp_index(DFTHIS_ORIG, ["stroke_index", "context"], "strk_idx_ctxt", use_strings=False)
 
-    if len(DFTHIS)>0 and PLOT:
+    if len(DFTHIS_ORIG)>0 and PLOT:
 
-        # Take controlled data --> plot a single distribution, one for each (context, index) combo
-        DFTHIS = append_col_with_grp_index(DFTHIS, ["stroke_index", "context"], "strk_idx_ctxt", use_strings=False)
+        for context_var in ["context", "strk_idx_ctxt"]:
 
-        # Remove strk_idx_ctxt that have too few data, or else makes plot harder to interpret.
-        n_min_each_conj_outer_inner = 3
-        DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
-                                                                                        var_outer_trials="strk_idx_ctxt", 
-                                                                                        var_inner="epoch",
-                                                                                        epochset_col_name="epochset", 
-                                                                                        PRINT=True, n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
-        # Plot as function of storke index
-        if PLOT_BY_STROKE_INDEX_SET:
+            DFTHIS = DFTHIS_ORIG.copy()
+
+            SAVEDIR = f"{SAVEDIR_BASE}/contextvar_{context_var}"
+            os.makedirs(SAVEDIR, exist_ok=True)
+
+            # Remove strk_idx_ctxt that have too few data, or else makes plot harder to interpret.
             n_min_each_conj_outer_inner = 3
+            # print("**** len DS (3)", len(DFTHIS))
             DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
-                                                                                            var_outer_trials="locshape_pre_this", 
-                                                                                            var_inner="stroke_index",
-                                                                                            epochset_col_name="stroke_index_set", 
-                                                                                            PRINT=True,
-                                                                                           n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
-
-        print("SAVING FIGURES AT: ", SAVEDIR)
-        for y in ["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel", "time_duration", "distcum", "velocity"]:
-            fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", kind="point", aspect=2)
-            rotateLabel(fig)    
-            savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt.pdf")
-
-            fig = sns.catplot(data=DFTHIS, x="strk_idx_ctxt", y=y, hue="epoch", row="epochset", kind="point")
-            rotateLabel(fig)    
-            savefig(fig, f"{SAVEDIR}/{y}-vs-strk_idx_ctxt-grp_by_epochset.pdf")
-
-            plt.close("all")
-            
+                                                                                            var_outer_trials=context_var, 
+                                                                                            var_inner="epoch",
+                                                                                            epochset_col_name="epochset", 
+                                                                                            PRINT=True, n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
+            #print("**** len DS (4)", len(DFTHIS))
+            #assert False
+            # Plot as function of storke index
             if PLOT_BY_STROKE_INDEX_SET:
-                # Too large, and sparse, I dont use anwyay
-                fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
+                n_min_each_conj_outer_inner = 3
+                DFTHIS, list_epochsets_unique= assign_epochsets_group_by_matching_levels_of_var(DFTHIS, 
+                                                                                                var_outer_trials="locshape_pre_this", 
+                                                                                                var_inner="stroke_index",
+                                                                                                epochset_col_name="stroke_index_set", 
+                                                                                                PRINT=True,
+                                                                                               n_min_each_conj_outer_inner=n_min_each_conj_outer_inner)
+
+            print("SAVING FIGURES AT: ", SAVEDIR)
+            for y in ["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel", "time_duration", "distcum", "velocity"]:
+                
+                fig = sns.catplot(data=DFTHIS, x=context_var, y=y, hue="epoch", kind="point", aspect=3, row="epoch_orig")
                 rotateLabel(fig)    
-                savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
+                savefig(fig, f"{SAVEDIR}/{y}-vs-{context_var}.pdf")
 
-            plt.close("all")
+                fig = sns.catplot(data=DFTHIS, x=context_var, y=y, hue="epoch", row="epochset", kind="point", col="epoch_orig")
+                rotateLabel(fig)    
+                savefig(fig, f"{SAVEDIR}/{y}-vs-{context_var}-grp_by_epochset.pdf")
 
-            ####### PLOTS OF CONTRAST ACROSS LEVELS.
-            INDEX = ["strk_idx_ctxt", "epoch_orig", "block"]
-            if "microstim_epoch_code" in DFTHIS.columns:
-                fixed_treat = "microstim_epoch_code"
-                lev_treat_default = "off"
-            else:
-                fixed_treat = "epoch"
-                lev_treat_default = None
+                plt.close("all")
+                
+                if PLOT_BY_STROKE_INDEX_SET:
+                    # Too large, and sparse, I dont use anwyay
+                    fig = sns.catplot(data=DFTHIS, x="stroke_index", y=y, hue="epoch", row="locshape_pre_this", col="stroke_index_set", kind="point")
+                    rotateLabel(fig)    
+                    savefig(fig, f"{SAVEDIR}/{y}-vs-stroke_index-grp_by_stroke_index_set.pdf")
 
-            if True:
-                # Linear mixed effects
-                # This doesnt make sense, since there is only one datapt per group
-                RES, fig, ax = lme_categorical_fit_plot(DFTHIS, y=y, fixed_treat=fixed_treat, 
-                        lev_treat_default=lev_treat_default, 
-                        rand_grp_list=INDEX, PLOT=True)
-                savefig(fig, f"{SAVEDIR}/LME-{fixed_treat}-{y}.pdf")
+                plt.close("all")
 
-            # Plot normalized to the default level.
-            _, _, _, _, fig = datamod_normalize_row_after_grouping(DFTHIS, 
-                                                                  fixed_treat, 
-                                                                  INDEX, 
-                                                                  y,
-                                                                  lev_treat_default,
-                                                                  PLOT=True
-                                                                 )
-            savefig(fig, f"{SAVEDIR}/NORM-{fixed_treat}-{y}.pdf")
+                ####### PLOTS OF CONTRAST ACROSS LEVELS.
+                INDEX = [context_var, "epoch_orig", "block"]
+                if "microstim_epoch_code" in DFTHIS.columns:
+                    fixed_treat = "microstim_epoch_code"
+                    lev_treat_default = "off"
+                else:
+                    fixed_treat = "epoch"
+                    lev_treat_default = None
+
+                if True:
+                    # Linear mixed effects
+                    # This doesnt make sense, since there is only one datapt per group
+                    RES, fig, ax = lme_categorical_fit_plot(DFTHIS, y=y, fixed_treat=fixed_treat, 
+                            lev_treat_default=lev_treat_default, 
+                            rand_grp_list=INDEX, PLOT=True)
+                    savefig(fig, f"{SAVEDIR}/LME-{fixed_treat}-{y}.pdf")
+
+                # Plot normalized to the default level.
+                _, _, _, _, fig = datamod_normalize_row_after_grouping(DFTHIS, 
+                                                                      fixed_treat, 
+                                                                      INDEX, 
+                                                                      y,
+                                                                      lev_treat_default,
+                                                                      PLOT=True
+                                                                     )
+                savefig(fig, f"{SAVEDIR}/NORM-{fixed_treat}-{y}.pdf")
+
+                # ## ALso seaprately for each epoch-orig
+                # for epoch_orig in list_epoch_orig:
+
+                #     _, _, _, _, fig = datamod_normalize_row_after_grouping(DFTHIS, 
+                #                                                           fixed_treat, 
+                #                                                           INDEX, 
+                #                                                           y,
+                #                                                           lev_treat_default,
+                #                                                           PLOT=True
+                #                                                          )
+                #     savefig(fig, f"{SAVEDIR}/NORM-{fixed_treat}-{y}.pdf")
+
 
 
     return DS, DFTHIS
