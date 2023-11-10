@@ -7252,6 +7252,55 @@ class Dataset(object):
             if hasattr(Beh, "Alignsim_Datsegs"):
                 del Beh.Alignsim_Datsegs        
 
+    def sequence_tasksequencer_shapeseq_assign(self):
+        """
+        For each trial, extract its correct sequence of shapes
+        based on tasksequencer rule, as a tuple of ints, where the ints
+        are codes for shapes. Auto extracts the map based on ruledict
+        RETURNS:
+        - assigns new column to self.Dat["taskconfig_shp_code"], with 
+        sorted tuple of ints (codes to shapes)
+        """
+
+        list_epoch = self.Dat["epoch_orig"].unique().tolist()
+        ruledict_by_epoch = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
+
+        ## Get map betwen index and shape, separaltey for each epoch
+        MAP_CODE_SHAPE_byepoch = {}
+        MAP_SHAPE_CODE_byepoch = {}
+        for epoch in list_epoch:
+            if ruledict_by_epoch[epoch]["categ"]=="ss":
+                # Then this is sahpe sequence
+                shapes_ordered = ruledict_by_epoch[epoch]["params_good"][0]
+                
+                # give a code
+                map_code_shape = {}
+                map_shape_code = {}
+                for i, sh in enumerate(shapes_ordered):
+                    map_code_shape[i] = sh
+                    map_shape_code[sh] = i
+                    
+                MAP_CODE_SHAPE_byepoch[epoch] = map_code_shape
+                MAP_SHAPE_CODE_byepoch[epoch] = map_shape_code
+
+        ## For each trial, get its list of shapes, in codenum
+        list_shcode =[]
+        for ind in range(len(self.Dat)):
+            shapes = self.Dat.iloc[ind]["taskconfig_shp"]
+            epoch_orig = self.Dat.iloc[ind]["epoch_orig"]
+            if epoch_orig in MAP_SHAPE_CODE_byepoch.keys():
+                map_shape_code = MAP_SHAPE_CODE_byepoch[epoch_orig]
+                shapes_code = tuple(sorted([map_shape_code[sh] for sh in shapes]))
+            else:
+                shapes_code = tuple(["UNKNOWN"])
+            list_shcode.append(shapes_code)
+            
+        print("New column in self.Dat[taskconfig_shploc_code]")
+        self.Dat["taskconfig_shp_code"] = list_shcode
+
+        return MAP_CODE_SHAPE_byepoch, MAP_SHAPE_CODE_byepoch
+
+
     def sequence_char_taskclass_assign_char_seq(self, ver="task_matlab", 
             sequence_keep_these_indices=None):
         """ Assign a new column "char_seq" which is conjunction of character 
@@ -7300,11 +7349,6 @@ class Dataset(object):
         string categorical value (one of three possibiltiies.)
         NOTE: only keeps chars that occur across all epochs.
         """
-
-        if len(self.Dat["epoch"].unique().tolist())==1:
-            # Then only one epoch, tann
-            self.Dat["strokes01_sameness"] = "neither"
-            return
 
         # Get trialcodes that have same first storke and same (first, second) stroke
         map_epochset_trialcode_0 = self.epochset_extract_wrapper("same_beh_first_stroke", 

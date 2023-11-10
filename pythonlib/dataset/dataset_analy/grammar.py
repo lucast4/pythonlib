@@ -85,6 +85,9 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
     # Remove baselione
     D.preprocessGood(params=["remove_baseline"])
 
+    # Get shape code seuqence
+    D.sequence_tasksequencer_shapeseq_assign()
+
     ################# AD HOC SPLITTING OF DATASETS
     # if D.animals()==["Diego"] and D.Dat["date"].unique().tolist()==['231025'] and not run_inner_loop_only:
     if False and not run_inner_loop_only:
@@ -144,7 +147,7 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             sdir = f"{savedir}/score_epoch_x_rule_splitby"
             os.makedirs(sdir, exist_ok=True)
 
-            LIST_SPLIT_BY = ["taskgroup", "probe", "strokes01_sameness"]
+            LIST_SPLIT_BY = ["taskconfig_shp_code", "taskgroup", "probe", "strokes01_sameness"]
             if "epochset" in bmh.DatLong.columns:
                 LIST_SPLIT_BY.append("epochset")
             if "taskfeat_cat" in bmh.DatLong.columns:
