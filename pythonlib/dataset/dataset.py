@@ -7262,6 +7262,9 @@ class Dataset(object):
         sorted tuple of ints (codes to shapes)
         """
 
+        if "taskconfig_shp" not in self.Dat.columns:
+            self.taskclass_shapes_loc_configuration_assign_column()
+
         list_epoch = self.Dat["epoch_orig"].unique().tolist()
         ruledict_by_epoch = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
 
