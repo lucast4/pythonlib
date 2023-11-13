@@ -205,6 +205,13 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir)
             bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir, suffix="flat")
 
+            #### Separate p-vals for each epochset.
+            # make grouping var
+            if "epochset" in bmh.DatLong.columns:
+                from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+                _, bmh.DatLong = grouping_append_and_return_inner_items(bmh.DatLong, ["epochset", "epoch_orig"], new_col_name="epochset_epoch", return_df=True)
+                bmh.stats_score_permutation_test(split_plots_by = "epochset_epoch", savedir=sdir)
+
             ### MICROSTIM PLOTS
             if "microstim_epoch_code" in bmh.DatLong.columns:
                 CODE_OFF = "off"
