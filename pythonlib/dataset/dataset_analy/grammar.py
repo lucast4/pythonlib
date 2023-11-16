@@ -161,38 +161,41 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 
             for split_by in LIST_SPLIT_BY:
                 
-                # Old plots
-                bmh.plot_score_cross_prior_model_splitby(df=bmh.DatLong, split_by=split_by,
-                    sdir=sdir, suffix="trialdat") 
+                try:
+                    # Old plots
+                    bmh.plot_score_cross_prior_model_splitby(df=bmh.DatLong, split_by=split_by,
+                        sdir=sdir, suffix="trialdat") 
 
-                # fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
-                # savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
-                # savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
+                    # fig1, fig2 = bmh.plot_score_cross_prior_model_splitby(df=dfthis, split_by=split_by) 
+                    # savefig(fig1, f"{sdir}/splitby_{split_by}-trialdat-1.pdf") 
+                    # savefig(fig2, f"{sdir}/splitby_{split_by}-trialdat-2.pdf")
 
-                # agg version of old plots
-                bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
-                    sdir=sdir, suffix="aggdat") 
-                # savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
-                # savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
-                
-                # New plots
-                bmh.plot_score_cross_prior_model_splitby_v2(df=bmh.DatLong, split_by=split_by, savedir=sdir)
+                    # agg version of old plots
+                    bmh.plot_score_cross_prior_model_splitby_agg(split_by=split_by,
+                        sdir=sdir, suffix="aggdat") 
+                    # savefig(fig1, f"{sdir}/splitby_{split_by}-aggdat-1.pdf") 
+                    # savefig(fig2, f"{sdir}/splitby_{split_by}-aggdat-2.pdf")
+                    
+                    # New plots
+                    bmh.plot_score_cross_prior_model_splitby_v2(df=bmh.DatLong, split_by=split_by, savedir=sdir)
 
-                plt.close("all")
+                    plt.close("all")
 
-                # except Exception as err:
-                #     pass
+                    # except Exception as err:
+                    #     pass
 
-                # Plot timecourse, one plot for each epoch
-                list_levels = D.Dat[split_by].unique().tolist()
-                for lev in list_levels:
-                    df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
-                    fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=2, y="success_binary_quick", 
-                                hue="session",
-                                height=3, aspect=3, alpha=0.25)
-                    savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
+                    # Plot timecourse, one plot for each epoch
+                    list_levels = D.Dat[split_by].unique().tolist()
+                    for lev in list_levels:
+                        df = D.Dat[(D.Dat["exclude_because_online_abort"]==False) & (D.Dat[split_by]==lev)]
+                        fig=sns.relplot(data=df, x="tvalfake", col="epoch", col_wrap=2, y="success_binary_quick", 
+                                    hue="session",
+                                    height=3, aspect=3, alpha=0.25)
+                        savefig(fig, f"{sdir}/timecourse-splitby_{split_by}-lev_{lev}.pdf")   
 
-                    plt.close("all") 
+                        plt.close("all") 
+                except Exception as err:
+                    print("[grammar] Skipping for split_by=", split_by)
 
             # Do permutation test of whether score is significant across epochs
             # (e.g., if using microstim to perturb baehavior)
@@ -246,10 +249,11 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
                     bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by=None, suffix=f"code_{code}-flat")
 
             ############# time-dependence
-            sdir = f"{savedir}/by_time"
-            os.makedirs(sdir, exist_ok=True)
-            plot_binned_by_time(D, sdir)
-            plot_trial_by_trial(D, sdir)
+            if "microstim_epoch_code" in bmh.DatLong.columns:
+                sdir = f"{savedir}/by_time"
+                os.makedirs(sdir, exist_ok=True)
+                plot_binned_by_time(D, sdir)
+                plot_trial_by_trial(D, sdir)
 
             ######### 2) Plot summary
             # dfGramScore = bmh.DatLong  

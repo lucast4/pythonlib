@@ -7353,6 +7353,11 @@ class Dataset(object):
         NOTE: only keeps chars that occur across all epochs.
         """
 
+        # If there is only one epoch, then no point running
+        if len(self.Dat["epoch"].unique().tolist())==1:
+            self.Dat["strokes01_sameness"] = "neither"
+            return
+
         # Get trialcodes that have same first storke and same (first, second) stroke
         map_epochset_trialcode_0 = self.epochset_extract_wrapper("same_beh_first_stroke", 
                                                              only_keep_epochsets_containing_all_epochs=True,
