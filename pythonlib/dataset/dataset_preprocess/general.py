@@ -373,12 +373,6 @@ def _groupingParams(D, expt):
     elif "charstrokeseq" in expt:
         grouping_reassign = False
 
-    elif "grammar" in expt:
-        # Assume that if grammar in name, it has rules.
-        grouping_reassign = True
-        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
-        traintest_reassign_method = "supervision_except_color"
-        mapper_auto_rename_probe_taskgroups = True
     elif "gridlinecircle" in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer"]
@@ -452,6 +446,13 @@ def _groupingParams(D, expt):
         # Just regulare prims in grid
         # Just use defaults.
         pass
+    # elif "grammar" in expt:
+    elif "gram" in expt:
+        # Assume that if grammar in name, it has rules.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
     else:
         # pass, just use defaults
         print(expt)

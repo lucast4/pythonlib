@@ -754,6 +754,8 @@ class BehModelHolder(object):
         # if INDEX is None:
         #     INDEX = ['character', 'block']
 
+        print("DOING stats_score_permutation_test with params:", var, y, INDEX, split_plots_by)
+
         if isinstance(INDEX, tuple):
             INDEX = list(INDEX)
 
