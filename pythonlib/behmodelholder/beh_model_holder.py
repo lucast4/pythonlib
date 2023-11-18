@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pythonlib.tools.snstools import rotateLabel
 from pythonlib.tools.plottools import savefig
-
+from pythonlib.tools.exceptions import NotEnoughDataException
 
 
 class BehModelHolder(object):
@@ -772,6 +772,9 @@ class BehModelHolder(object):
             # print(dfpivot)
             # print(dfpivot[y].mean(axis=0))
             # assert False
+
+            if len(dfpivot)==0:
+                raise NotEnoughDataException
 
             if True:
                 res = np.max(dfpivot[y].mean(axis=0)) - np.min(dfpivot[y].mean(axis=0))

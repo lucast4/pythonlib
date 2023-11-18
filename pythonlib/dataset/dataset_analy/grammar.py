@@ -205,7 +205,12 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
                     savedir=sdir)        
                 bmh.stats_score_permutation_test(split_plots_by="epoch_orig", 
                     savedir=sdir, suffix="flat")        
-            bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir)
+            try:
+                bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir)
+            except NotEnoughDataException as err:
+                pass
+            except Exception as err:
+                raise err
             bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir, suffix="flat")
 
             #### Separate p-vals for each epochset.
