@@ -777,6 +777,9 @@ class BehModelHolder(object):
                 raise NotEnoughDataException
 
             if True:
+                # print(dfpivot[y].mean(axis=0))
+                # print(dfpivot[y].mean(axis=0)[0])
+                # res = dfpivot[y].mean(axis=0)[0] - dfpivot[y].mean(axis=0)[1]
                 res = np.max(dfpivot[y].mean(axis=0)) - np.min(dfpivot[y].mean(axis=0))
             else:
                 res = np.std(dfpivot[y].mean(axis=0))
@@ -807,6 +810,7 @@ class BehModelHolder(object):
         for epoch_orig in list_epoch_orig:
             data = df[df[split_plots_by]==epoch_orig].reset_index(drop=True)
 
+
             if INDEX is not None:
                 n = len(data)
                 print(len(data))
@@ -814,6 +818,11 @@ class BehModelHolder(object):
                 data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
                                                                       PRINT=False, DEBUG=False)
                 print(len(data))
+
+            # Only continue if data has multip,e levels of var
+            if len(data[var].unique().tolist())==1:
+                print("SKIPPING, not enough levels of ", var)
+                continue
 
             if False:
                 if len(data)<=0.1*n:
