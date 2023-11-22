@@ -11,6 +11,7 @@ First made when doing similarity matrix stuff for beh data (e.g, stroke similari
 import matplotlib.pyplot as plt
 import numpy as np
 from ..tools.nptools import sort_by_labels as sbl
+from pythonlib.tools.plottools import savefig
 
 class Clusters(object):
     """docstring for Clusters"""
@@ -62,6 +63,7 @@ class Clusters(object):
 
         self.ClusterResults = {}
         self.DistanceMatrices = {}
+        self.ClusterComputeAllResults = {}
 
     @property
     def Xinput(self):
@@ -329,6 +331,37 @@ class Clusters(object):
 
 
     ################### DO CLUSTERING
+    def cluster_compute_feature_scores_assignment(self):
+        """ for each trial, assign to a feature based simply on max
+        of the similarity score
+        """
+
+        # self.Xinput is matric similarities.
+        sims_max = self.Xinput.max(axis=1)
+        sims_min = self.Xinput.min(axis=1)
+        sims_median = np.median(self.Xinput, axis=1)
+        # sims_mean = self.Xinput.mean(axis=1)
+        sims_concentration = (sims_max - sims_min)/(sims_max + sims_min)
+        sims_concentration_v2 = (sims_max - sims_median)/(sims_max + sims_median)
+        
+        # which shape does it match the best
+        inds_maxsim = np.argmax(self.Xinput, axis=1)
+        cols_maxsim = [self.LabelsCols[i] for i in inds_maxsim]
+
+        # entropy
+        from scipy.stats import entropy
+        simmat_entropy= entropy(self.Xinput, axis=1)
+
+        # Save it
+        self.ClusterComputeAllResults["max_sim"] = {
+            "colinds_maxsim":inds_maxsim,
+            "collabels_maxsim":cols_maxsim,
+            "sims_max":sims_max,
+            "sims_concentration":sims_concentration,
+            "sims_concentration_v2":sims_concentration_v2,
+            "sims_entropy":simmat_entropy,
+        }
+
     def cluster_compute_all(self, PCAdim_touse=5, gmm_n_mixtures=None,
         perplist = None,
         things_to_do = ("tsne", "gmm", "gmm_using_tsne"),
@@ -351,21 +384,27 @@ class Clusters(object):
             gmm_tsne_perp_to_use = gmm_tsne_perp_to_use,
             things_to_do = things_to_do)
 
-        self.ClusterComputeAllResults = OUT
+        for k, v in OUT.items():
+            self.ClusterComputeAllResults[k] = v
 
-    def cluster_pca_plot_all(self):
+        # Also do the assignments
+        self.cluster_compute_feature_scores_assignment()
+
+    def cluster_pca_plot_all(self, savedir=None):
         """ Plot results of PCA, including sunbset of data
         projected, and variance explained
         """
         pcamodel = self.ClusterComputeAllResults["pca_model"]
         fig, axes = plt.subplots(2,2)
-
         ax = axes.flatten()[0]
         ax.plot(pcamodel.explained_variance_, "-o")
+        if savedir:
+            savefig(fig, f"{savedir}/pca_explained_variance.pdf")
 
         fig, X, labels_col, labels_row = self._plot_heatmap_data(pcamodel.components_, range(len(pcamodel.components_)), 
             self.LabelsCols, SIZE=5, rotation=90)
-        # fig.axes.flatten()[0].set_ylabel("components, decreased var")
+        if savedir:
+            savefig(fig, f"{savedir}/pca_heatmap_loadings.pdf")
 
 
     def cluster_plot_scatter(self, space="pca", label="shape", perp=15,
@@ -375,12 +414,16 @@ class Clusters(object):
 
         from pythonlib.tools.plottools import plotScatterOverlay
         data = self.cluster_extract_data(space, perp=perp)
-        labels = self.cluster_extract_label(label, gmm_n=gmm_n)
+        if label is not None:
+            labels = self.cluster_extract_label(label, gmm_n=gmm_n)
+        else:
+            labels = None
 
         if dims:
             data = data[:, [dims[0], dims[1]]]
 
-        plotScatterOverlay(data, labels, ax=ax)   
+        fig, axes = plotScatterOverlay(data, labels, ax=ax)   
+        return fig, axes
 
     def cluster_extract_label(self, kind, gmm_n=None, nrand=None):
         """ 
@@ -390,6 +433,9 @@ class Clusters(object):
         """
         if kind=="shape":
             return self.Labels
+        elif kind=="col_max_sim":
+            # The label of column that is max sim for each row (e.g, the basis shape).
+            return self.ClusterComputeAllResults["max_sim"]["collabels_maxsim"]
         elif kind=="gmm":
             mod = self.cluster_extract_model("gmm", gmm_n=gmm_n)
             Xpca_input_models = self.cluster_extract_data("pca_inputted_into_models")
@@ -428,6 +474,8 @@ class Clusters(object):
             modthis = [mod for mod in self.ClusterComputeAllResults["models_tsne"] if mod["perp"]==perp]
             assert len(modthis)==1, "didnt find this perp..."
             return modthis[0]["D_fit"]
+        elif kind=="max_sim":
+            return self.ClusterComputeAllResults["max_sim"]
         else:
             assert False
   
@@ -503,6 +551,26 @@ class Clusters(object):
             return self.ClusterComputeAllResults["models_gmm_using_tsne"]
         else:
             assert False, "code it"
+
+    def cluster_gmm_extract_best_n(self, ver="gmm_using_tsne"):
+        """ Get the N that has the best cross-validated score
+        PARAMS;
+        - var, either "gmm_using_tsne" or "gmm"[default]
+        """
+
+        list_mod = self.cluster_results_extract_all(ver)
+        list_n = []
+        list_crossval = []
+        list_bic = []
+        for mod in list_mod:
+            list_n.append(mod["n"])
+            list_crossval.append(mod["cross_val_score"])    
+            list_bic.append(mod["bic"])
+
+        # list_n
+        gmm_n_best = list_n[np.argmax(list_crossval)]
+
+        return gmm_n_best, list_n, list_crossval, list_bic
 
     def cluster_tsne_extract_list_perp(self):
         """

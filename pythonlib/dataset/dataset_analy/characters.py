@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pythonlib.tools.plottools import savefig
 
 def debug_eyeball_distance_metric_goodness(D):
     """ Script to comapre distnaces by eye to what loloks good. Iterates over distance metrics,
@@ -267,7 +268,8 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
         df = D.Dat[D.Dat["block"]==bk]
         if sum(~df[scorename].isna())>0:
             fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
-            fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+            savefig(fig, f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+            # fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
 
         plt.close("all")
 
@@ -487,7 +489,8 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
 
     from pythonlib.tools.pandastools import convert_to_1d_dataframe_hist
     shapes, vals, fig, ax = convert_to_1d_dataframe_hist(DS.Dat, "clust_sim_max_colname", True)
-    fig.savefig(f"{sdir}/hist_n_matches.pdf")
+    # fig.savefig(f"{sdir}/hist_n_matches.pdf")
+    savefig(fig, f"{sdir}/hist_n_matches.pdf")
 
     # fig = DS.plot_examples_grid("clust_sim_max_colname", col_levels=shapes, nrows=5)
     fig = DS.plotshape_multshapes_trials_grid("clust_sim_max_colname", 
@@ -509,7 +512,8 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
 
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
     dfthis, fig, ax, rgba_values = convert_to_2d_dataframe(DS.Dat, "character", "clust_sim_max_colname", True, annotate_heatmap=False);
-    fig.savefig(f"{sdir}/hist_n_matches_2d_heat_characters.pdf")
+    # fig.savefig(f"{sdir}/hist_n_matches_2d_heat_characters.pdf")
+    savefig(fig, f"{sdir}/hist_n_matches_2d_heat_characters.pdf")
 
 
     # for each basis strok, get the distribution of scores for beh strokes that match it
@@ -529,11 +533,12 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
     from pythonlib.tools.pandastools import extract_trials_spanning_variable
     nrand = 40
     trials_dict = extract_trials_spanning_variable(DS.Dat, "clust_sim_max_colname", shapes, 
-                                                   n_examples=nrand, return_as_dict=True, method_if_not_enough_examples="prune_subset")[0]
+                                                   n_examples=nrand, return_as_dict=True, 
+                                                   method_if_not_enough_examples="prune_subset")[0]
 
     for sh in shapes:
         inds = trials_dict[sh]
-        scores = DS.Dat["clust_sim_max"].values.tolist()
+        scores = DS.Dat.iloc[inds]["clust_sim_max"].values.tolist()
         
         # sort
         x = [(i, s) for i,s in zip(inds, scores)]
@@ -543,6 +548,22 @@ def plot_clustering(DS, list_strok_basis, list_shape_basis, savedir):
         fig, axes, list_inds = DS.plot_multiple(inds, titles=scores, ncols=8)
         fig.savefig(f"{sdir}/behstrokes_matching_basis-{sh}-sorted_by_score.pdf")    
 
+    # Also look in entire pool, regardless of shape
+    from pythonlib.tools.listtools import random_inds_uniformly_distributed
+    inds = random_inds_uniformly_distributed(DS.Dat["clust_sim_max"].tolist(), nrand)
+    scores = DS.Dat.iloc[inds]["clust_sim_max"].values.tolist()
+        
+    # sort
+    nrand = 64
+    from pythonlib.tools.listtools import random_inds_uniformly_distributed
+    inds = list(random_inds_uniformly_distributed(DS.Dat["clust_sim_max"].tolist(), nrand))
+    scores = DS.Dat.iloc[inds]["clust_sim_max"].values.tolist()
+    shapes = DS.Dat.iloc[inds]["clust_sim_max_colname"]
+
+    titles = [f"{sh}|{sc:.2f}" for sh, sc in zip(shapes, scores)]
+
+    fig, axes, list_inds = DS.plot_multiple(inds, titles=titles, ncols=8)
+    fig.savefig(f"{sdir}/behstrokes_ALL-sorted_by_score.pdf")    
 
 def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=False):
     """ Extract for each trial a sequence of strokes (shape names), and plot
