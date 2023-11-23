@@ -187,11 +187,11 @@ class strokModel(object):
         """ score that, by default, compares poitn by point
         vs. beahvior, against both spatial and vel distance 
         """
-        from pythonlib.tools.distfunctools import distStrokTimeptsMatched
+        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
         
         assert strok_beh.shape == self.strok.shape
         
-        dist = distStrokTimeptsMatched(strok_beh, self.strok, self.fs,
+        dist = _distStrokTimeptsMatched(strok_beh, self.strok, self.fs,
             vec_over_spatial_ratio =self.vec_over_spatial_ratio, 
             lowpass_freq = self.lowpass_freq_vel, ploton=ploton)
         
@@ -226,10 +226,6 @@ class strokModel(object):
             # print(program)
             strok_mod = self.synthesize(program)
             cost = self.scoreVsBeh(strok_beh, ploton=ploton)
-
-
-            # cost = distStrokTimeptsMatched(strok_beh, strok_mod, fs=self.fs, 
-            #     ploton=ploton, vec_over_spatial_ratio = self.vec_over_spatial_ratio)
 
             return cost
 

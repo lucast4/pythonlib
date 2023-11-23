@@ -533,3 +533,28 @@ def slice_list_relative_to_index_out_of_bounds(mylist, ind, npre=1, npost=1):
     assert len(tokens_next)==npost, f"{len(tokens_next)}, {npost}"     
 
     return tokens_prev, tok_this, tokens_next
+
+
+def sequence_first_error(beh, task):
+    """
+    Compare two list of tokens (ints), usually represnting beh and task 
+    Finds the first item that differs. If they don't; differ (even if they are
+    diff length) returns None.
+    PARAMS:
+    - beh, task, list of objects than can be compared with ==. 
+    Usually ints.
+    RETURNS;
+    - index of first difference.
+    - taskind_chosen, taskind_correct, the objects in beh and task at 
+    that index.
+    - OR-
+    None, None, None (this true even if beh and task are different length)
+    EG:
+    - beh = [2, 5]
+    - task = [2, 3, 5, 1, 4, 0]
+    returns 1, 5, 3
+    """
+    for i, (taskind_chosen, taskind_correct) in enumerate(zip(beh, task)):
+        if not taskind_chosen==taskind_correct:
+            return i, taskind_chosen, taskind_correct
+    return None, None, None

@@ -173,6 +173,7 @@ class DatStrokes(object):
 
                 # Info linking back to dataset
                 DAT_BEHPRIMS[-1]["dataset_trialcode"] = D.Dat.iloc[ind]["trialcode"]
+                DAT_BEHPRIMS[-1]["trialcode"] = D.Dat.iloc[ind]["trialcode"]
                 DAT_BEHPRIMS[-1]["stroke_index"] = i
                 DAT_BEHPRIMS[-1]["stroke_index_fromlast"] = i - len(strokes) # counting back from last stroke: -1, -2, ...
 
@@ -503,7 +504,7 @@ class DatStrokes(object):
 
 
     def extract_strokes_as_velocity(self, inds, PLOT=False, 
-        version="vel"):
+        version="vel", fs_downsample=None):
         """ Returns teh default stroeks (in self.Version) as velocity profiles
         RETURNS:
         - list of strok (np array), each (N,3) where columns are (xvel, yvel, time)
@@ -511,7 +512,7 @@ class DatStrokes(object):
         """
         list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
         list_strokes_vel = self.Dataset._extractStrokeVels(list_strokes, 
-            remove_time_column=False, version=version)
+            remove_time_column=False, version=version, fs_downsample=fs_downsample)
         if PLOT:
             self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
                 align_to="first_touch")
@@ -736,7 +737,7 @@ class DatStrokes(object):
         # sp.DS.grouping_append_and_return_inner_items(["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx")
         if "trialcode_strokeidx" not in df.columns:
             # - first, append a new colum that is the conjunction of trialcode and stroke index
-            df = append_col_with_grp_index(df, ["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
+            df = append_col_with_grp_index(df, ["dataset_trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
                                                  use_strings=False)
 
         # - slice DS.Dat using desired (trialcode, strokeindex)
@@ -2545,7 +2546,8 @@ class DatStrokes(object):
         """ Helper, loads repositiory of basis set of stropkes, and slices to
         a desired set of shapeas.
         PARAMS:
-        - which_basis_set, str, which file to load.
+        - which_basis_set, str, which file to load. if None, then
+        Load the one for this dataset's subject
         - which_shapes, list of str, which shapes to pull out of this vbasis set
         - hand_entered_shapes, bool [optional], if which_shapes=="hand_enter"
         RETURNS:
@@ -2620,7 +2622,7 @@ class DatStrokes(object):
 
         # Plto some examples for sanity check
         if plot_examples:
-            self.plot_multiple_strok(list_strok[:4])
+            # self.plot_multiple_strok(list_strok[:4])
             self.plot_multiple_strok(list_strok_basis)
 
         # print(list_shape_basis)
