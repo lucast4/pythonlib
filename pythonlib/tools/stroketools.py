@@ -460,6 +460,9 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     you get negative values for speed...
     """
 
+    if fs_new is None:
+        fs_new = 30
+
     strokes = [x.copy() for x in strokes]
 
     if clean:

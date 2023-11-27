@@ -161,7 +161,10 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         # Then you inputed the strokes directly
         stroklist1 = idxs1
         stroklist2 = idxs2
-        assert not isinstance(stroklist1[0], int)
+        if isinstance(stroklist1[0], int):
+            print("stroklist1", stroklist1)
+            print("stroklist2", stroklist2)
+            assert False
     else:
         # Then you inputed the indices
         stroklist1 = [stroklist[i] for i in idxs1]

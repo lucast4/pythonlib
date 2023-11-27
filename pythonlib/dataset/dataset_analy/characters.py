@@ -32,7 +32,7 @@ def debug_eyeball_distance_metric_goodness(D):
 def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "character",
     list_distance_ver=None):
     """
-    Full pipeline to generate and plot and save all.
+    Full pipeline to generate and plot and save all, for character analysis.
     """
     
     if list_distance_ver is None:
@@ -40,19 +40,24 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
 
     savedir = D.make_savedir_for_analysis_figures("character_strokiness")
     
-    RES = generate_data(D, filter_taskkind=filter_taskkind, list_distance_ver=list_distance_ver)
+    assert len(D.Dat)>0
 
-    if do_plots: 
+    RES = generate_data(D, filter_taskkind=filter_taskkind, 
+        list_distance_ver=list_distance_ver,
+        which_features="beh_motor_sim")
+
+    if do_plots and RES is not None:
+
         DS = RES["DS"]
+        Dthis = DS.Dataset # Because this is a copy of D that has been modded
         list_strok_basis = RES["list_strok_basis"]
         list_shape_basis = RES["list_shape_basis"]
         plot_clustering(DS, list_strok_basis, list_shape_basis, savedir)
-
-        plot_learning_and_characters(D, savedir)
+        plot_learning_and_characters(Dthis, savedir)
 
         for MIN_SCORE in [0., 0.7]:
             for sorted_unique_shapes in [True, False]:
-                plot_prim_sequences(RES, D, savedir, MIN_SCORE, 
+                plot_prim_sequences(RES, Dthis, savedir, MIN_SCORE, 
                     sorted_unique_shapes)
 
     return RES, savedir
@@ -62,7 +67,8 @@ def generate_data(D, version_trial_or_shapemean="trial",
         list_distance_ver=None, 
         plot_score_hist=False, filter_taskkind = None,
         ds_clean_methods = None, ds_clean_params = None,
-        ds_filterdict = None):
+        ds_filterdict = None,
+        which_features = "beh_motor_sim"):
     """
     Initial data generation: extracts strokes, extracts basis
     set of strokes to compare them to, does similarity matrix
@@ -71,8 +77,11 @@ def generate_data(D, version_trial_or_shapemean="trial",
     strokes (see within)
     - trial_summary_score_ver, str, which statistic to use as the
     summary score (i.e, a strokiness score)
+    - which_features, str, HACKY -- extract just a single feature space, 
+    event hough multiple are computed, e.g, "beh_motor_sim"
     RETURNS:
-    - RES, dict of results.
+    - RES, dict of results. -OR-
+    - (or) None, if no tasks left after filter (e.g.,, filter to just chars)
     """
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
@@ -86,23 +95,34 @@ def generate_data(D, version_trial_or_shapemean="trial",
     if ds_filterdict is not None:
         DS.filter_dataframe(ds_filterdict, True)
 
+    if len(DS.Dat)==0:
+        # usually beuase not "character" taskkinds
+        return None
+
+    ## Score each trial across all features.
     ClustDict, ParamsDict, ParamsGeneral, dfdat = DS.features_wrapper_generate_all_features(version_trial_or_shapemean)
 
+    ## Assign trials to clusters, based on a single feature space.
     DS.clustergood_assign_data_to_cluster(ClustDict, ParamsDict, 
             ParamsGeneral, dfdat,
-            which_features = "beh_motor_sim",
+            which_features = which_features,
             trial_summary_score_ver=trial_summary_score_ver)
 
-    # OUT
+    ## OUT
     RES = {
-        "which_basis_set":which_basis_set,
+        "version_trial_or_shapemean":version_trial_or_shapemean,
+        "ClustDict":ClustDict,
+        "ParamsDict":ParamsDict,
+        "ParamsGeneral":ParamsGeneral,
+        "dfdat":dfdat,
         "trial_summary_score_ver":trial_summary_score_ver,
-        "which_shapes":which_shapes,
         "DS":DS,
-        "Cl":Cl,
-        "list_strok_basis":params["list_strok_basis"],
-        "list_shape_basis":params["list_shape_basis"],
+        "which_features":which_features,
+        "list_strok_basis":ParamsDict[which_features]["list_strok_basis"],
+        "list_shape_basis":ParamsDict[which_features]["list_shape_basis"],
         "list_distance_ver":list_distance_ver
+        # "which_shapes":which_shapes,
+        # "Cl":Cl,
     }
     
     if plot_score_hist:        
@@ -266,13 +286,18 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     vars_to_compare = [var for var in vars_to_compare if var in D.Dat.columns]
     for bk in list_blocks:
         df = D.Dat[D.Dat["block"]==bk]
-        if sum(~df[scorename].isna())>0:
-            fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
-            savefig(fig, f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
-            # fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
-
-        plt.close("all")
-
+        if len(df)>0:
+            try:
+                if sum(~df[scorename].isna())>0:
+                    fig = sns.pairplot(data=df, x_vars=vars_to_compare, y_vars=[scorename])
+                    savefig(fig, f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+                    # fig.savefig(f"{sdir}/corr-rew_vs_strokiness-bk{bk}.pdf")
+                plt.close("all")
+            except Exception as err:
+                print("----", bk)
+                print(len(df))
+                print(df.keys())
+                raise err
 
     ## Score for each trial by block and date
     fig = sns.catplot(data=D.Dat, x="block", y=scorename, aspect=2, row="date")
@@ -392,22 +417,42 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
             strokinessv2 = df["strokinessv2"]
             rew_total = df["rew_total"]
 
-            if len(t)>=4:
-                # convert to to rank
-                t = rankItems(t)
-                slope = lr(t, v)[0]
-                list_slope.append(slope)
 
-                # make sure score and strokiness correlate with offline score
-                slope = lr(strokinessv2, v)[0]
-                list_slope_sk2.append(slope)
+            try:
+                if len(t)>=5:
+                    # convert to to rank
+                    t = rankItems(t)
 
-                slope = lr(rew_total, v)[0]
-                list_slope_rew.append(slope)      
-            else:
-                list_slope.append(np.nan)
-                list_slope_rew.append(np.nan)
-                list_slope_sk2.append(np.nan)
+                    if len(np.unique(v))>1:
+                        slope = lr(t, v)[0]
+                    else:
+                        slope = np.nan
+                    list_slope.append(slope)
+
+                    # make sure score and strokiness correlate with offline score
+                    if len(np.unique(strokinessv2))>1:
+                        slope = lr(strokinessv2, v)[0]
+                    else:
+                        slope = np.nan
+                    list_slope_sk2.append(slope)
+
+                    if len(np.unique(rew_total))>1:
+                        slope = lr(rew_total, v)[0]
+                    else:
+                        slope = np.nan
+                    list_slope_rew.append(slope)      
+
+                else:
+                    list_slope.append(np.nan)
+                    list_slope_rew.append(np.nan)
+                    list_slope_sk2.append(np.nan)
+            except Exception as err:
+                print(t)
+                print(strokinessv2)
+                print(v)
+                print(rew_total)
+                raise err
+
 
         # only keep chars with enough data
         inds = np.where(~np.isnan(list_slope))[0].tolist()

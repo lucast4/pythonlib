@@ -47,6 +47,9 @@ def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever,
         print("TO debug, switch debug ona nd off by hand for each one below...")
         assert False
     
+    assert len(strokes_data)>0
+    assert len(strokes_basis)>0
+
     ############# Extract data
     assert not isinstance(strokes_data, pd.core.frame.DataFrame), "deprecated. use list strokes"
 
@@ -54,7 +57,7 @@ def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever,
     if rescale_strokes_ver=="stretch_to_1":
         assert False, "confirm this doesnt mutate strokes_data, then remove this assert"
         strokes_data = [rescaleStrokes([s])[0] for s in strokes_data]
-        strokes_basis = [rescaleStrokes([s])[0] for s in strokes_basis]
+        strokes_basis = [rescaleStrokes([s])[0] for s in strokes_basis] 
     else:
         assert rescale_strokes_ver is None, "which?"
 

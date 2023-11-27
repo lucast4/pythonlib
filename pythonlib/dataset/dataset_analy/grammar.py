@@ -15,6 +15,7 @@ from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 from matplotlib import rcParams
 from .learning import print_useful_things, plot_performance_all, plot_performance_timecourse, plot_performance_static_summary, plot_counts_heatmap, plot_performance_each_char, plot_performance_trial_by_trial
 from .learning import preprocess_dataset as learn_preprocess
+from pythonlib.tools.exceptions import NotEnoughDataException
 
 
 rcParams.update({'figure.autolayout': True})
