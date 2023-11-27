@@ -1098,7 +1098,7 @@ class TaskClass(object):
             # NOTE: Potential problem, the extracted grid is specific to this TSC, so if multiple TSC
             # in a single dataset, then might have different gridloc-actualloc mapping. This I plan to solved
             # in the wrapper extracting behclass, for it to check that all grids are same across tasks.
-            if tsc is not None and "tsc_params" in tsc.keys() and tsc["tsc_params"] is not None:
+            if tsc is not None and "tsc_params" in tsc.keys() and tsc["tsc_params"] is not None and "relations" in tsc["tsc_params"].keys():
                 rel_xy_values = []
                 rels_list_of_dict = []
                 for relation_struct in tsc["tsc_params"]["relations"]:

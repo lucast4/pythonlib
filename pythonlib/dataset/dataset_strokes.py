@@ -1707,6 +1707,8 @@ class DatStrokes(object):
                 list_strok_basis = dfbasis["strok"].tolist()
                 list_shape_basis = dfbasis["shape"].tolist()
 
+                assert len(dfbasis)>0
+                
             # Which distance score
             if list_distance_ver is None:
                 list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
@@ -1825,6 +1827,10 @@ class DatStrokes(object):
                     score = np.nan
                 list_scores.append(score)
             self.Dataset.Dat["strokes_clust_score"] = list_scores
+        else:
+            for k, v in ParamsGeneral.items():
+                print(k, "---", v)
+            assert False, "i expecvt it to... (not yet coded for other case)"
 
     def clustergood_plot_raw_results(self, ClustDict, ParamsDict, ParamsGeneral, dfdat, 
             SDIR, N_EXAMPLES_BEH=15):
@@ -2171,6 +2177,8 @@ class DatStrokes(object):
         else:
             print(version_trial_or_shapemean)
             assert False
+
+        assert len(dfdat)>0
 
         ClustDict, ParamsDict = self._features_wrapper_generate_all_features(dfdat,
             which_basis_set=which_basis_set)

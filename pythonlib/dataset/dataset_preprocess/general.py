@@ -453,6 +453,8 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
+    elif "char" in expt:
+        pass
     else:
         # pass, just use defaults
         print(expt)
