@@ -6886,6 +6886,24 @@ class Dataset(object):
         out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
         return out
 
+    def grammarparses_ruledict_rulestring_extract(self, ind):
+        """ Return the ruledict and rulestring for this trial, based on
+        its epoch
+        """
+        epoch = self.Dat.iloc[ind]["epoch_orig"]
+        ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]
+        return ruledict["rulestring"], ruledict
+
+    def grammarparses_rulestrings_exist_in_dataset(self):
+        """ return list of rulestrings that exist in this dtaset
+        """
+        list_epoch = self.Dat["epoch_orig"].unique().tolist()
+        list_rulestring = []
+        for epoch in list_epoch:
+            ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]
+            rs = ruledict["rulestring"]
+            list_rulestring.append(rs)
+        return list_rulestring
 
     # def grammar_rules_extract_rul
     def grammarparses_print_plot_summarize(self, ind):
@@ -6959,6 +6977,16 @@ class Dataset(object):
                 assert False, "epty..."
             outdict[rulestring] = parses
         return outdict
+
+    def grammarparses_parses_extract_trial(self, ind):
+        """
+        RETURNS:
+        - parses, list of tuples, eaxh a seq of ints.
+        """
+        rs = self.grammarparses_ruledict_rulestring_extract(ind)[0]
+        g = self.grammarparses_grammardict_return(ind)
+        parses = g.parses_extract_generated(rs)
+        return parses
 
     def grammarparses_extract_beh_taskstroke_inds(self, ind):
         """ Return the beh strokes, in format of taskstroke indices.
@@ -7116,6 +7144,140 @@ class Dataset(object):
         for rs in list_rulestring:
             res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
         return res
+
+    def grammarparses_classify_sequence_error(self, ind, PRINT_PLOT=False):
+        """
+        Errors in rule choice
+
+        Uses opposite rule
+        Uses easier rule
+        Uses default rule (i.e., "jump to closest stroke")
+
+        Errors in sequencing
+        Correct shape, incorrect order
+        Incorrect shape, correct order within [variation: Terminate current chunk, then does next chunk normally]
+        Random errors
+        """
+        from pythonlib.tools.listtools import sequence_first_error
+
+        if False:
+            # using matlab version
+            g = D.grammarmatlab_extract_beh_and_task(ind)
+
+            # beh order
+            beh = g["taskstroke_inds_beh_order"]
+            task = g["taskstroke_inds_correct_order"]
+
+            # map from taskstroke_inds to tokens
+            print(beh, task)
+
+        ## Extract behavior and task parses
+        beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
+        parses = self.grammarparses_parses_extract_trial(ind)
+        assert len(parses)==1, "this only coded for cases with single determinstic sequence otherwise is complex"
+        task = list(parses[0])
+
+        ## Classify features for the first stroke that is an error
+        # Find first error
+        i_error, taskind_chosen, taskind_correct = sequence_first_error(beh, task)
+
+        if PRINT_PLOT:
+            print("... results from sequence_first_error")
+            print(i_error, taskind_chosen, taskind_correct)
+
+        if i_error is None:
+            # then no stroke error...
+            error_same_shape = None
+            error_chose_closer = None
+        else:
+            # Tokens
+            tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
+            map_taskind_tok = {}
+            for i, t in enumerate(tokens):
+                map_taskind_tok[i] = t
+
+            # Individula toks for specific strokes
+            t_chosen = map_taskind_tok[taskind_chosen]
+            t_correct = map_taskind_tok[taskind_correct]
+
+            # Error: same shape wrong location?
+            shape_correct = t_correct["shape"]
+            shape_chosen = t_chosen["shape"]
+            error_same_shape = shape_correct==shape_chosen
+
+            # Error: jumped to closest stroke?
+            if i_error>0:
+                t_before_error = map_taskind_tok[beh[i_error-1]] # token of stroke before the last(failed) stroke
+                loc_chosen = np.array(t_chosen["loc_concrete"])
+                loc_prev = np.array(t_before_error["loc_concrete"])
+                loc_corr = np.array(t_correct["loc_concrete"])
+                dist_chosen = np.linalg.norm(loc_chosen - loc_prev)
+                dist_correct = np.linalg.norm(loc_corr - loc_prev)
+                error_chose_closer = dist_chosen<dist_correct
+            else:
+                error_chose_closer = None
+
+        ## First, is beh consistent with each of the rules ont his day
+        # compare beh against each parse
+        g = self.grammarparses_grammardict_return(ind, False)
+        rulestring, _ = self.grammarparses_ruledict_rulestring_extract(ind)
+        rulestrings_check = self.grammarparses_rulestrings_exist_in_dataset() # get rules that are used int his day
+        rulestrings_correct = []
+        list_initiated_other_rule = []
+        for rule in rulestrings_check:
+            parses_this_rule = g.parses_extract_generated(rule)
+            parses_this_rule = [list(p) for p in parses_this_rule]
+
+            correct = False
+            for p in parses_this_rule:
+                if beh==p[:len(beh)]:
+                    # then beh is correct until beh ends
+                    correct=True
+                    break  
+            if correct:
+                # note this down
+                rulestrings_correct.append(rule)    
+
+            # is the last beh stroke going for the earliest remaining stroke in parse?
+            if i_error is None:
+                # Then checkign this doesnt make sense
+                list_initiated_other_rule = []
+            else:
+                for p in parses_this_rule:
+
+                    # i.e got distrated and started the other rule
+                    remaining_idx_in_p = [idx for idx in p if idx not in beh[:-1]]
+                    initiated_other_rule = beh[-1] == remaining_idx_in_p[0]
+                    if initiated_other_rule:
+                        list_initiated_other_rule.append(rule)
+                        break
+
+        if PRINT_PLOT:
+            print("Beh is correct under these rules:")
+            print(rulestrings_correct)
+
+        # summary this error
+        error_dict = {
+            "correct":i_error is None, # correct up to abort.
+            "rulestrings_correct":rulestrings_correct,
+            "list_initiated_other_rule":list_initiated_other_rule,
+            "error_same_shape":error_same_shape,
+            "error_chose_closer":error_chose_closer,
+            "rule_other_correct":(len(rulestrings_correct)>0 and rulestring not in rulestrings_correct), # Is a different rule correct?
+            "rule_other_reinitiated":len(list_initiated_other_rule)>0
+        }           
+
+        # Sanity
+        if error_dict["correct"]:
+            assert error_dict["list_initiated_other_rule"] == []
+            assert error_dict["error_same_shape"] is None
+            assert error_dict["error_chose_closer"] is None
+            assert error_dict["rule_other_correct"]==False
+
+        if PRINT_PLOT:
+            self.grammarmatlab_extract_beh_and_task(ind, True)
+
+        return error_dict
 
     def grammarparses_successbinary_print_summary(self):
         """
@@ -7954,7 +8116,7 @@ class Dataset(object):
 
 
     def _extractStrokeVels(self, list_strokes, remove_time_column=True,
-            version = "speed"):
+            version = "speed", fs_downsample=None):
         """ extract stroke as instantaneous velocities
         INPUT:
         - list_inds, list of ints, for which strokes to use. If "all", then gets all.
@@ -7966,12 +8128,15 @@ class Dataset(object):
         (None, if strok to oshort to get vel.)
         """
         from pythonlib.tools.stroketools import strokesVelocity
-    
+        
+        # print("here", fs_downsample)
+        # assert False
         assert isinstance(list_strokes[0], list)
         fs = self.get_sample_rate_alltrials()  
         list_strokes_vel = []
         for strokes in list_strokes:
-            strokes_vel, strokes_speed = strokesVelocity(strokes, fs, clean=True)
+            strokes_vel, strokes_speed = strokesVelocity(strokes, fs, 
+                fs_new = fs_downsample, clean=True)
             
             if version=="speed":
                 strokes_out = strokes_speed
