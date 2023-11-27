@@ -2217,7 +2217,7 @@ class Dataset(object):
             dist_to_fix = np.linalg.norm(loc_fix - loc_on)
             list_dist_to_fix.append(dist_to_fix)
         min_dist_allowed = np.percentile(list_dist_to_fix, [12])
-        min_dist_allowed = np.min([min_dist_allowed, 50])
+        min_dist_allowed = np.min(np.append(min_dist_allowed, 50))
 
         # get distribution of strok speeds across all data
         list_strokesspeed = self.extractStrokeVels(list(range(len(self.Dat))))

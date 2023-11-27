@@ -615,10 +615,11 @@ def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1.,
 
 
 
-def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_list=None, strokes_ypos_list = None,
-    ax=None, colorver="default", 
-    cleanver=False, flipxy=False, chunkmodel=None, chunkmodel_idx = 0,
-     waterfallkwargs=None, ylabels=None):
+def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_list=None,
+                            strokes_ypos_list = None,
+                            ax=None, colorver="default",
+                            cleanver=False, flipxy=False, chunkmodel=None, chunkmodel_idx = 0,
+                             waterfallkwargs=None, ylabels=None):
     """ wrapper to plot waterfall, i.e,., raster where y 
     is trial and x is time in trial. Plots multipel trials (strokes_list)
     INPUTS:

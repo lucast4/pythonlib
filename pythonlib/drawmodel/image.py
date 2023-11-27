@@ -73,12 +73,14 @@ def coordsMatchAspectRatio(edgesgood, edgesmod):
         # then pad x
         dx_new = dy/ratiogood
         pad = (dx_new - dx)/2
-        edgesmod[0,:] = [edgesmod[0,0]-pad, edgesmod[0,1]+pad]
+        # edgesmod[0,:] = [edgesmod[0,0]-pad, edgesmod[0,1]+pad]
+        edgesmod[0,:] = np.concatenate([edgesmod[0,0]-pad, edgesmod[0,1]+pad])
     elif ratiomod<ratiogood:
         # then pad y
         dy_new = ratiogood*dx
         pad = (dy_new - dy)/2
-        edgesmod[1,:] = [edgesmod[1,0]-pad, edgesmod[1,1]+pad]
+        # edgesmod[1,:] = [edgesmod[1,0]-pad, edgesmod[1,1]+pad]
+        edgesmod[1,:] = np.concatenate([edgesmod[1,0]-pad, edgesmod[1,1]+pad])
     else:
         if not np.isclose(ratiomod, ratiogood):
             print(ratiogood)

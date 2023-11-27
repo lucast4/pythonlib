@@ -914,6 +914,58 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     return dfthis, fig, ax, rgba_values
             
 
+def expand_categorical_variable_to_binary_variables(df, var_categorical,
+                                                    index_vars=None):
+    """
+    Given a categortical variable, expand it so that each level that
+    exists becomes its own binary variable. (so increases n rows by n_old_rows *
+    n_levels_of_var)
+    E.g., useful if you assign each row a string label (i.e., "multinomial), but you want to
+    represent, for each row, True/False over all the levels (i.e., "contrasts").
+    PARAMS:
+    - var_categorical, column in df. each level that exists will become a new binary
+    variable in output.
+    - index_vars, list of columns in df. will extract these variables for each row
+    of df.
+    RETURNS:
+    - dfout, num rows will be (num levels of var_categorical) x (num rows in df), with
+    columns, <vars in index_vars>, <var_categorical> (the name of the level) and,
+    "value" (bool).
+    EXAMPLE:
+    dflabels = expand_categorical_variable_to_binary_variables(D.Dat, SEQUENCE_VAR, ["trialcode", "epoch"])
+    """
+
+    list_levels = sorted(df[var_categorical].unique().tolist())
+
+    if index_vars is None:
+        # Then get all columns that exist
+        index_vars = [c for c in df.columns if not c==var_categorical]
+
+    # Collet across each row * level
+    dats = []
+    for ind in range(len(df)):
+        for lev in list_levels:
+
+            # Binary variable, get its value
+            match = lev == df.iloc[ind][var_categorical]
+
+            # append a new item
+            d = {
+                var_categorical:lev,
+                "value":match,
+                # "trialcode":df.iloc[ind]["trialcode"],
+                # "epoch":df.iloc[ind]["epoch"]
+            }
+
+            # collect index vars for this line in df
+            for v in index_vars:
+                d[v] = df.iloc[ind][v]
+
+            dats.append(d)
+
+    return pd.DataFrame(dats)
+
+
 def unpivot(df, id_vars, value_vars, var_name, value_name):
     """ Convert from wide-form to long-form.
     PARAMS:
@@ -1546,8 +1598,9 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
     """
     outdict = {}
     out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
+
     # out[grp] = list_indices.
-    for k in sort_mixed_type(out.keys()):
+    for k in sort_mixed_type(list(out.keys())):
         n = len(out[k])
         if n>Nmin:
             # if print_value_not_n:
@@ -2403,3 +2456,4 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
             assert False
     
     return dfthis_shuff
+

@@ -46,6 +46,18 @@ elif MACHINE == "ltbonobo":
 	PATH_ANALYSIS_OUTCOMES_SERVER = "/home/kgg/mnt/Freiwald/kgupta/analyses"
 	# PATH_DATASET_BEH = "/home/kgg/Desktop/analyses/database"
 	PATH_DATASET_BEH = "/home/kgg/mnt/Freiwald/kgupta/analyses/database"
+elif MACHINE=="Lucass-MacBook-Air.local":
+	HOME = "/Users/lucastian"
+	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
+	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
+	PATH_DATA_NEURAL_RAW = "DOESNTEXIST1"
+	PATH_DATA_NEURAL_PREPROCESSED = "/Users/lucastian/DATA/neural_preprocess"
+	PATH_DATA_BEHAVIOR_RAW = "DOESNTEXIST2"
+	PATH_DATA_BEHAVIOR_RAW_SERVER = "DOESNTEXIST3"
+	PATH_ANALYSIS_OUTCOMES = "/Users/lucastian/Dropbox/SCIENCE/FREIWALD_LAB/DATA/DatasetBeh"
+	PATH_ANALYSIS_OUTCOMES_SERVER = "/Users/lucastian/Dropbox/SCIENCE/FREIWALD_LAB/DATA/DatasetBeh"
+	PATH_DATASET_BEH = "/Users/lucastian/Dropbox/SCIENCE/FREIWALD_LAB/DATA/DatasetBeh/database"
+	PATH_MATLAB = ""
 else:
 	print(MACHINE)
 	assert False, "add this machine"
