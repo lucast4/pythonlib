@@ -87,21 +87,22 @@ def sort_mixed_type(mylist, DEBUG=False):
     """
     from numpy import ndarray
 
-    def _convert_to_num(val):
-        """ convert any item to number, so can compare them by sorting"""
-        if isinstance(val, (list, tuple)):
-            return sum([_convert_to_num(valval) for valval in val])
-        elif isinstance(val, str):
-            return hash(val)
-        elif isinstance(val, (float, int, ndarray)):
-            return val
-        else:
-            # NOTE: hash(None) is valid
-            # if x is int, returns that
-            return hash(val)
+    if False:
+        def _convert_to_num(val):
+            """ convert any item to number, so can compare them by sorting"""
+            if isinstance(val, (list, tuple)):
+                return sum([_convert_to_num(valval) for valval in val])
+            elif isinstance(val, str):
+                return hash(val)
+            elif isinstance(val, (float, int, ndarray)):
+                return val
+            else:
+                # NOTE: hash(None) is valid
+                # if x is int, returns that
+                return hash(val)
 
     def _is_list_of_comparable_types(mylist):
-        # Reutnr True if all itesm in _x are in this set of types.
+        # Reutnr True if all itesm in _x are type in <comparable_types>.
         # i./.e, is a one-level
         comparable_types = (str, float, int, ndarray)
         if DEBUG:
@@ -118,7 +119,7 @@ def sort_mixed_type(mylist, DEBUG=False):
                     tmp+=f"{x}"
                 return tmp
             else:
-                return [_convert_to_sortable(valval) for valval in val]
+                return _convert_to_sortable([_convert_to_sortable(valval) for valval in val])
         elif isinstance(val, str):
             return val
         elif isinstance(val, (float, int, ndarray)):
@@ -133,42 +134,42 @@ def sort_mixed_type(mylist, DEBUG=False):
         # ensures corect sorting across types.
         # x, item in list that want to sort. any type.
 
-        try:
-            if DEBUG:
-                print("----", x)
-            # if _is_list_of_comparable_types(x):
-            #     return (2, [_convert_to_sortable(val) for val in x])
-            if isinstance(x, (list, tuple)):
-                # print([_convert_to_sortable(val) for val in x])
-                # adsad
-                if True:
-                    # Need to do this. nested lists...
-                    return (2, sum([_convert_to_sortable(val) for val in x]))
-                else:
-                    return (2, [_convert_to_sortable(val) for val in x])
-            elif isinstance(x, str):
-                return (0, _convert_to_sortable(x))
-            elif isinstance(x, (float, int, ndarray)):
-                return (1, _convert_to_sortable(x))
-            elif isinstance(x, dict):
-                a = sum([_convert_to_sortable(val) for val in x.keys()])          
-                b = sum([_convert_to_sortable(val) for val in x.values()])          
+        # try:
+        if DEBUG:
+            print("----", x)
+        # if _is_list_of_comparable_types(x):
+        #     return (2, [_convert_to_sortable(val) for val in x])
+        if isinstance(x, (list, tuple)):
+            # print([_convert_to_sortable(val) for val in x])
+            # adsad
+            if False:
+                # Need to do this. nested lists...
+                # print("ERE")
+                # print(x, sum([_convert_to_sortable(val) for val in x]))
+                # assert False
+                return (2, sum([_convert_to_sortable(val) for val in x]))
+            else:
+                return (2, [_convert_to_sortable(val) for val in x])
+        elif isinstance(x, str):
+            return (0, _convert_to_sortable(x))
+        elif isinstance(x, (float, int, ndarray)):
+            return (1, _convert_to_sortable(x))
+        elif isinstance(x, dict):
+            if False:
+                a = sum([_convert_to_sortable(val) for val in x.keys()])
+                b = sum([_convert_to_sortable(val) for val in x.values()])
                 return (4, a+b)
             else:
-                # eeverything else, hash
-                return (3, _convert_to_sortable(x))
+                a = [_convert_to_sortable(val) for val in x.keys()]
+                b = [_convert_to_sortable(val) for val in x.values()]
+                return (4, a+b)
+        else:
+            # eeverything else, hash
+            return (5, _convert_to_sortable(x))
 
-        # elif isinstance(x, str):
-        #     return x
-        # elif isinstance(x, (float, int)):
-        #     return x
-        # else:
-        #     # NOTE: hash(None) is valid
-        #     # if x is int, returns that
-        #     return (0, hash(x))
-        except TypeError as err:
-            # Bad, just put at end
-            return (5, '')
+        # except TypeError as err:
+        #     # Bad, just put at end
+        #     return (5, '')
 
     return sorted(mylist, key=lambda x: key(x))
 
