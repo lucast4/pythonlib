@@ -110,7 +110,7 @@ def sort_mixed_type(mylist, DEBUG=False):
         return all([isinstance(this, comparable_types) for this in mylist])
 
     def _convert_to_sortable(val):
-        """ convert any item to sortable object"""
+        """ convert any item to sortable object - int he end it is string or list of strings."""
         if isinstance(val, (list, tuple)):
             if _is_list_of_comparable_types(val):
                 # concatenate into a long string
@@ -123,11 +123,11 @@ def sort_mixed_type(mylist, DEBUG=False):
         elif isinstance(val, str):
             return val
         elif isinstance(val, (float, int, ndarray)):
-            return val
+            return f"{val}"
         else:
             # NOTE: hash(None) is valid
             # if x is int, returns that
-            return hash(val)
+            return f"{hash(val)}"
 
     def key(x):
         # is like _convert_to_sortable, but appends at onset an index that 
@@ -147,25 +147,27 @@ def sort_mixed_type(mylist, DEBUG=False):
                 # print("ERE")
                 # print(x, sum([_convert_to_sortable(val) for val in x]))
                 # assert False
-                return (2, sum([_convert_to_sortable(val) for val in x]))
+                out = (2, sum([_convert_to_sortable(val) for val in x]))
             else:
-                return (2, [_convert_to_sortable(val) for val in x])
+                out = (2, [_convert_to_sortable(val) for val in x])
         elif isinstance(x, str):
-            return (0, _convert_to_sortable(x))
+            out = (0, _convert_to_sortable(x))
         elif isinstance(x, (float, int, ndarray)):
-            return (1, _convert_to_sortable(x))
+            out = (1, _convert_to_sortable(x))
         elif isinstance(x, dict):
             if False:
                 a = sum([_convert_to_sortable(val) for val in x.keys()])
                 b = sum([_convert_to_sortable(val) for val in x.values()])
-                return (4, a+b)
+                out = (4, a+b)
             else:
                 a = [_convert_to_sortable(val) for val in x.keys()]
                 b = [_convert_to_sortable(val) for val in x.values()]
-                return (4, a+b)
+                out = (4, a+b)
         else:
             # eeverything else, hash
-            return (5, _convert_to_sortable(x))
+            out = (5, _convert_to_sortable(x))
+        # print(out)
+        return out
 
         # except TypeError as err:
         #     # Bad, just put at end

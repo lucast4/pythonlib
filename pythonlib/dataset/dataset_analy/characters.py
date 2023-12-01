@@ -52,8 +52,10 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
         Dthis = DS.Dataset # Because this is a copy of D that has been modded
         list_strok_basis = RES["list_strok_basis"]
         list_shape_basis = RES["list_shape_basis"]
+
         plot_clustering(DS, list_strok_basis, list_shape_basis, savedir)
         plot_learning_and_characters(Dthis, savedir)
+
 
         for MIN_SCORE in [0., 0.7]:
             for sorted_unique_shapes in [True, False]:
@@ -86,6 +88,7 @@ def generate_data(D, version_trial_or_shapemean="trial",
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
     ### Generate Strokes data
+    Dthis = D.copy()
     DS = DatStrokes(D)
     if ds_clean_methods is not None:
         DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
@@ -107,6 +110,9 @@ def generate_data(D, version_trial_or_shapemean="trial",
             ParamsGeneral, dfdat,
             which_features = which_features,
             trial_summary_score_ver=trial_summary_score_ver)
+
+    # Prune dataset
+    DS.dataset_prune_to_match_self()
 
     ## OUT
     RES = {
@@ -325,34 +331,40 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
     plt.close("all")
 
     ## For each character
+    # Plot chars, sorted by score, for ALL and for each category.
+    D.taskcharacter_print_score_per_char(scorename, sdir)
+
     # First, sort characters
     # Sort all characters by score, and plot them in a grid
-    list_char, list_score = D.taskcharacter_find_plot_sorted_by_score(scorename)
+    list_char, list_score = D.taskcharacter_find_plot_sorted_by_score(scorename,
+                                                                      plot=True,
+                                                                      sdir=sdir)
 
-    # Plot
-    # -- get one trial for each char
-    from pythonlib.tools.pandastools import extract_trials_spanning_variable
-    n_iter = 3
-    for i in range(n_iter):
-        inds, chars = extract_trials_spanning_variable(D.Dat, "character", list_char)
-        assert chars == list_char
-
-        if len(inds)<60:
-            indsthis = inds
-            charsthis = chars
-            list_score_this = list_score
-        else:
-            indsthis = inds[:30] + inds[-30:]
-            charsthis = chars[:30] + chars[-30:]
-            list_score_this = list_score[:30] + list_score[-30:]
-
-        # -- plot
-        fig, axes, idxs = D.plotMultTrials2(indsthis, titles=charsthis, SIZE=3);
-        fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-        fig, axes, idxs = D.plotMultTrials2(indsthis, "strokes_task", titles=list_score_this);
-        fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
-
-        plt.close("all")
+    # # Plot
+    # # -- get one trial for each char
+    #
+    # from pythonlib.tools.pandastools import extract_trials_spanning_variable
+    # n_iter = 3
+    # for i in range(n_iter):
+    #     inds, chars = extract_trials_spanning_variable(D.Dat, "character", list_char)
+    #     assert chars == list_char
+    #
+    #     if len(inds)<60:
+    #         indsthis = inds
+    #         charsthis = chars
+    #         list_score_this = list_score
+    #     else:
+    #         indsthis = inds[:30] + inds[-30:]
+    #         charsthis = chars[:30] + chars[-30:]
+    #         list_score_this = list_score[:30] + list_score[-30:]
+    #
+    #     # -- plot
+    #     fig, axes, idxs = D.plotMultTrials2(indsthis, titles=charsthis, SIZE=3);
+    #     fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+    #     fig, axes, idxs = D.plotMultTrials2(indsthis, "strokes_task", titles=list_score_this);
+    #     fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+    #
+    #     plt.close("all")
 
     # which carhacters best
     fig = sns.catplot(data=D.Dat, y="character", x=scorename, height=10, hue="block",
@@ -658,9 +670,9 @@ def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=Fa
         if sh_c is None:
             continue
         A.append(sh_c)
-        B.append(sh_d)
+        # B.append(sh_d)
     list_shapes_cluster = A
-    list_shapes_datseg = A
+    # list_shapes_datseg = A
 
     # Colors, for plotting ranks.
     n = max([len(x) for x in list_shapes_cluster])

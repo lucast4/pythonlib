@@ -695,7 +695,18 @@ class DatStrokes(object):
         uses trialcodes 
         """
         self.Dataset = DatNew
-        
+
+    def dataset_prune_to_match_self(self):
+        """ Replaces self.Dataset with slice that
+        only contains trialcodes that exist in self.Dat.
+        Does this usign copy of Dataset.
+        """
+
+        trialcodes = self.Dat["trialcode"].unique().tolist()
+        Dthis = self.Dataset.copy()
+        Dthis.Dat = Dthis.Dat[Dthis.Dat["trialcode"].isin(trialcodes)].reset_index(drop=True)
+        self.Dataset = Dthis
+
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
         for ind indexing into the strokes (DatsetStrokes.Dat)

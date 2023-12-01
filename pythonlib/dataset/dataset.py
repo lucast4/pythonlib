@@ -14,6 +14,7 @@ from pythonlib.tools.expttools import makeTimeStamp, findPath
 from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_ANALYSIS_OUTCOMES_SERVER
 from pythonlib.tools.listtools import sort_mixed_type
+from pythonlib.tools.plottools import savefig
 
 base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
@@ -402,6 +403,10 @@ class Dataset(object):
         Dnew = Dataset([])
 
         Dnew.Dat = self.Dat.copy(deep=dfdeep)
+        if hasattr(self, "GrammarDict"):
+            Dnew.GrammarDict = copy.copy(self.GrammarDict)
+        else:
+            Dnew.GrammarDict = {}
 
         if hasattr(self, "Metadats"):
             Dnew.Metadats = copy.deepcopy(self.Metadats)
@@ -535,6 +540,20 @@ class Dataset(object):
         if assert_only_one_match:
             assert len(indices)==1
         return indices[0]
+
+    def trialcode_tuple_extract_assign(self):
+        """
+        assign new column in self.Dat, trialcode_tuple, which is (date, sess, trial)
+        """
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            d = x["date"]
+            s = x["session"]
+            t = x["trial"]
+
+            assert x["trialcode"] == f"{d}-{s}-{t}"
+            return (d, s, t)
+        self.Dat = applyFunctionToAllRows(self.Dat, F, "trialcode_tuple")
 
     ############### UTILS
     def _strokes_kinds(self):
@@ -960,7 +979,77 @@ class Dataset(object):
 
         return SDIR, idstring
 
-    def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False):
+    def taskcharacter_print_score_per_char(self, scorename, sdir):
+        """ Printa nd save text sorting characters by some score and
+        each line being acharacter...
+        PARAMS:
+        - scorename, str, column in self.Dat, scalar values that will
+         sort chars, e.g, "strokes_clust_score"
+        """
+        from pythonlib.tools.expttools import writeStringsToFile
+
+        def _save_chars_score_to_text(list_char, list_score, suffix):
+            # get sample sizes
+            list_n = [sum(self.Dat["character"]==char) for char in list_char]
+            # strings
+            list_s = []
+            for char, score, n in zip(list_char, list_score, list_n):
+                list_s.append(f"{score:.3f}   (n = {n})   {char}")
+
+            fname = f"{sdir}/char-sorted_by_{scorename}-{suffix}"
+            writeStringsToFile(fname, list_s)
+
+        # Extract chars and scores
+        list_char, list_score, list_n = self.taskcharacter_find_plot_sorted_by_score(scorename)
+
+        # 1) Save all characters
+        _save_chars_score_to_text(list_char, list_score, "ALL")
+
+        # 2) Split into each category
+        for cat in self.Dat["task_stagecategory"].unique():
+            # get all chars that fall in this category
+            chars = self.Dat[self.Dat["task_stagecategory"]==cat]["character"].unique().tolist()
+
+            tmp = [(c,s) for c,s in zip(list_char, list_score) if c in chars]
+            chars_this = [x[0] for x in tmp]
+            scores_this = [x[1] for x in tmp]
+
+            _save_chars_score_to_text(chars_this, scores_this, f"__task_stagecategory_{cat}")
+
+    def taskcharacter_plot_examples(self, list_char, titles=None,
+                                    nmax=60):
+        """ Plot a gridplot, one example for each char, in the
+        order they are passed in.
+        PARAMS:
+        - nmax, if more than this then plots the first nmax/2 and last nmax/2
+        """
+        inds, chars = self.taskcharacter_extract_examples(list_char)
+
+        if len(inds)>nmax:
+            n = int(np.floor(nmax/2))
+            inds = inds[:n] + inds[-n:]
+            chars = chars[:n] + chars[-n:]
+            titles = titles[:n] + titles[-n:]
+
+        figbeh, _, _ = self.plotMultTrials2(inds, which_strokes="strokes_beh",
+                                               titles=chars)
+        figtask, _, _ = self.plotMultTrials2(inds, which_strokes="strokes_task",
+                                               titles=titles)
+        return figbeh, figtask, inds, chars
+
+    def taskcharacter_extract_examples(self, list_char, n=1):
+        """ Extract an example index for each of the chars in list_char
+        RETURNS:
+            - lsit of indices into self.Dat
+            - matching list of char names,
+        """
+        from pythonlib.tools.pandastools import extract_trials_spanning_variable
+        inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char,
+                                                       n_examples=n)
+        return inds, chars
+
+    def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False,
+                                                sdir=None):
         """ Get list of characters sorted by their avreage score across trials.
         PARAMS:
         - scorename, str name of score to use. 
@@ -973,32 +1062,54 @@ class Dataset(object):
 
         list_char = self.Dat["character"].unique().tolist()
         list_score = []
+        list_n = []
         for char in list_char:
             sc = np.mean(self.Dat[self.Dat["character"]==char][scorename])
             list_score.append(sc)
+            list_n.append(sum(self.Dat["character"]==char))
 
         # sort
-        tmp = [(ch, sc) for ch, sc in zip(list_char, list_score)]
+        tmp = [(ch, sc, n) for ch, sc, n in zip(list_char, list_score, list_n)]
         tmp = sorted(tmp, key=lambda x:-x[1])
         list_char = [x[0] for x in tmp]
         list_score = [x[1] for x in tmp]
+        list_n = [x[2] for x in tmp]
 
         if plot:
+            assert sdir is not None
             # Plot
             # -- get one trial for each char
             from pythonlib.tools.pandastools import extract_trials_spanning_variable
             n_iter = 3
             for i in range(n_iter):
-                inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char)
-                assert chars == list_char
+                print("Plotting...", i)
+                figbeh, figtask, _, _ = self.taskcharacter_plot_examples(list_char,
+                                                                                titles=list_score)
+                savefig(figbeh, f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+                savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+                plt.close("all")
+                # inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char)
+                # assert chars == list_char
+                #
+                #
+                # if len(inds)<60:
+                #     indsthis = inds
+                #     charsthis = chars
+                #     list_score_this = list_score
+                # else:
+                #     indsthis = inds[:30] + inds[-30:]
+                #     charsthis = chars[:30] + chars[-30:]
+                #     list_score_this = list_score[:30] + list_score[-30:]
 
                 # -- plot
-                fig, axes, idxs = self.plotMultTrials2(inds, titles=chars, SIZE=3);
+                # fig, axes, idxs = self.plotMultTrials2(indsthis, titles=charsthis, SIZE=3);
                 # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-                fig, axes, idxs = self.plotMultTrials2(inds, "strokes_task", titles=list_score);
+                # fig, axes, idxs = self.plotMultTrials2(indsthis, "strokes_task", titles=list_score_this);
                 # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+                #
+                # plt.close("all")
 
-        return list_char, list_score
+        return list_char, list_score, list_n
 
     def taskgroup_reassign_ignoring_whether_is_probe(self, CLASSIFY_PROBE_DETAILED=True, PRINT=False):
         """ By default taskgroiups only categorize propbe tasks. 
@@ -4118,7 +4229,7 @@ class Dataset(object):
             print([L["index_grp"] for L in libraries_list])
             assert len(LibListThis)==len(libraries_to_apply_inds)
         else:
-            print(LibListThis)
+            print(libraries_list)
             assert False
         return LibListThis
 
@@ -6858,6 +6969,20 @@ class Dataset(object):
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
+    def grammarparses_rules_involving_shapes(self):
+        """ Return list of rulestrings of the rules that exist in dataset which
+        use knowledge of shapes. i.e. those that are categ "ss"
+        RETURNS:
+            - list_rules_using_shapes, list of rulestrings. can be empty.
+        """
+        map_rulestr_ruledict = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"]
+        list_rules_using_shapes = []
+        for rulestr, ruledict in map_rulestr_ruledict.items():
+            if ruledict["categ"]=="ss":
+                # then this is shape sequence
+                list_rules_using_shapes.append(rulestr)
+        return list_rules_using_shapes
+
     def grammarparses_rules_extract_info(self):
         """ Return dict holding infor for all rules (epochs)
         epoch: Dict holding:
@@ -6873,14 +6998,23 @@ class Dataset(object):
 
         # For each existing rule, get ruledicts consistent with it
         dict_ruledicts_consistent_with_each_existing_rule = {}
+        map_rulestr_ruledict = {}
         for rule in list_rules_exist:
             ld = _rules_consistent_rulestrings_extract_auto([rule], return_as_dict=True)[0]
             dict_ruledicts_consistent_with_each_existing_rule[rule] = ld
+            # Collect all ruledicts.
+            for ruledict in ld:
+                rs = ruledict["rulestring"]
+                if rs in map_rulestr_ruledict.keys():
+                    assert ruledict==map_rulestr_ruledict[rs]
+                else:
+                    map_rulestr_ruledict[rs] = ruledict
 
         out = {
             "list_rules_exist":list_rules_exist,
             "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule,
-            "ruledict_for_each_rule":rules_map_rule_to_ruledict_extract_auto(self)
+            "ruledict_for_each_rule":rules_map_rule_to_ruledict_extract_auto(self),
+            "map_rulestr_ruledict":map_rulestr_ruledict
         }
 
         out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
@@ -7884,9 +8018,9 @@ class Dataset(object):
             overlay_single_color="r", underlay_single_color="k"):
 
         if overlay_beh_or_task=="beh":
-            strokes = self.Dat.iloc[idx]["strokes_beh"]
+            strokes = self.Dat.iloc[ind]["strokes_beh"]
         elif overlay_beh_or_task=="task":
-            strokes = self.Dat.iloc[idx]["strokes_task"]
+            strokes = self.Dat.iloc[ind]["strokes_task"]
         else:
             assert False
 
