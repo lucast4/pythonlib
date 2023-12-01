@@ -476,58 +476,62 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
         # Plot (each char)
         fig, axes = plt.subplots(1,3, figsize=(15, len(list_char_alpha)*0.16))
 
-        ax=axes.flatten()[0]
-        ax.plot(list_slope, list_char_alpha, "ok")
-        ax.axvline(0)
-        ax.set_xlabel(f"slope ({scorename}/trials)")
-        ax.grid(True)
+        if len(list_slope)>0:
+            ax=axes.flatten()[0]
+            ax.plot(list_slope, list_char_alpha, "ok")
+            ax.axvline(0)
+            ax.set_xlabel(f"slope ({scorename}/trials)")
+            ax.grid(True)
 
-        ax=axes.flatten()[1]
-        ax.plot(list_slope_sk2, list_char_alpha, "ok")
-        ax.axvline(0)
-        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
-        ax.grid(True)
+            ax=axes.flatten()[1]
+            ax.plot(list_slope_sk2, list_char_alpha, "ok")
+            ax.axvline(0)
+            ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+            ax.grid(True)
 
-        ax=axes.flatten()[2]
-        ax.plot(list_slope_rew, list_char_alpha, "ok")
-        ax.axvline(0)
-        ax.set_xlabel(f"slope ({scorename}/rew_total)")
-        ax.grid(True)
+            ax=axes.flatten()[2]
+            ax.plot(list_slope_rew, list_char_alpha, "ok")
+            ax.axvline(0)
+            ax.set_xlabel(f"slope ({scorename}/rew_total)")
+            ax.grid(True)
 
         fig.savefig(f"{sdir}/slope_score_vs_trial-each_char.pdf")
 
         # Plot, historgram across cahar
         fig, axes = plt.subplots(1,3, figsize=(9,2))
 
-        ax=axes.flatten()[0]
-        ax.hist(list_slope, bins=20)
-        ax.axvline(0, color="k")
-        ax.set_xlabel(f"slope ({scorename}/trials)")
+        if len(list_slope)>0:
+            ax=axes.flatten()[0]
+            ax.hist(list_slope, bins=20)
+            ax.axvline(0, color="k")
+            ax.set_xlabel(f"slope ({scorename}/trials)")
 
-        ax=axes.flatten()[1]
-        ax.hist(list_slope_sk2, bins=20)
-        ax.axvline(0, color="k")
-        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+            ax=axes.flatten()[1]
+            ax.hist(list_slope_sk2, bins=20)
+            ax.axvline(0, color="k")
+            ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
 
-        ax=axes.flatten()[2]
-        ax.hist(list_slope_rew, bins=20)
-        ax.axvline(0, color="k")
-        ax.set_xlabel(f"slope ({scorename}/rew_total)")
+            ax=axes.flatten()[2]
+            ax.hist(list_slope_rew, bins=20)
+            ax.axvline(0, color="k")
+            ax.set_xlabel(f"slope ({scorename}/rew_total)")
 
         fig.savefig(f"{sdir}/slope_score_vs_trial-hist.pdf")
 
         # Does having higher slope for (rew vs. score) predict learning?
         fig, axes = plt.subplots(2,2, figsize=(8,8))
 
-        ax = axes.flatten()[0]
-        ax.plot(list_slope_rew, list_slope, 'ok')
-        ax.set_xlabel(f"slope ({scorename}/rew_total)")
-        ax.set_ylabel(f"slope ({scorename}/trials)")
+        if len(list_slope)>0:
 
-        ax = axes.flatten()[1]
-        ax.plot(list_slope_sk2, list_slope, 'ok')
-        ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
-        ax.set_ylabel(f"slope ({scorename}/trials)")
+            ax = axes.flatten()[0]
+            ax.plot(list_slope_rew, list_slope, 'ok')
+            ax.set_xlabel(f"slope ({scorename}/rew_total)")
+            ax.set_ylabel(f"slope ({scorename}/trials)")
+
+            ax = axes.flatten()[1]
+            ax.plot(list_slope_sk2, list_slope, 'ok')
+            ax.set_xlabel(f"slope ({scorename}/strokinessv2)")
+            ax.set_ylabel(f"slope ({scorename}/trials)")
 
         fig.savefig(f"{sdir}/scatter-slopes_vs_slopes.pdf")
 
