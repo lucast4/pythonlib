@@ -42,6 +42,10 @@ class StrokeClass(object):
 
 
     ############# STROKE FEATURES
+    def extract_center(self):
+        from pythonlib.tools.stroketools import getCenter
+        return getCenter([self.Stroke])
+
     def extract_single_feature(self, featurename):
         """ Extract this single feature, usually a scalar value.
         Wrapper for various methods written over the years to do this.
