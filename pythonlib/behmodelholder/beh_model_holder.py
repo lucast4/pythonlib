@@ -47,14 +47,6 @@ class BehModelHolder(object):
                 print(col)
                 assert False, "missing a required column"
 
-        if "agent" not in data.columns:
-            # Generate agent
-            from pythonlib.tools.pandastools import applyFunctionToAllRows
-            def F(x):
-                # if x["agent_kind"]=="monkey":
-                return f"{x['agent_kind']}-{x['agent_rule']}"
-            data = applyFunctionToAllRows(data, F, "agent")
-            print("Generated column called 'agent', which connects agent_kind-rule")
         if input_ver=="default":
             # self.DatWide = data
             self.DatWide = data
@@ -110,6 +102,19 @@ class BehModelHolder(object):
             ## Get colnames
             self.colnames_extract_alignment()
 
+        self._initialize_agent()
+
+    def _initialize_agent(self):
+        """ agent is conhucntiuon of kind and rule"""
+        # if "agent" not in self.DatLong.columns:
+
+        # Generate agent
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            # if x["agent_kind"]=="monkey":
+            return f"{x['agent_kind']}-{x['agent_rule']}"
+        self.DatLong = applyFunctionToAllRows(self.DatLong, F, "agent")
+        print("Generated column called 'agent', which connects agent_kind-rule")
 
     def datextract_datlong_agg(self, cols_grpby_append=None):
         """

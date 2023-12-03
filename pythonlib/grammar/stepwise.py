@@ -129,7 +129,11 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
 
         plt.close("all")
 
-    return df_actions, df_actions_trial, Dc
+    # Save df_actions
+    pd.to_pickle(df_actions, f"{sdir}/df_actions.pkl")
+    pd.to_pickle(Params, f"{sdir}/Params.pkl")
+
+    return df_actions, df_actions_trial, Dc, Params
 
 def extract_each_stroke_vs_rules(D, DEBUG=False):
     """
@@ -320,23 +324,8 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
             ti_incorrect_list = [map_rulestr_correctti[r] for r in rulestrings_check if not r == rulestring] # ti for other rules.
             state_crct_ti_uniq = ti_correct_rule not in (ti_closest_list + ti_incorrect_list)
 
-            ### Which option did he choose
-            # LABEL THE behavior
-            if taskind_beh in ti_closest_list:
-                # call this matching "closets"
-                label_code = (-1,) # close
-            else:
-                # Call this beh basd on all the rules it matches.
-                label_code = []
-                for i, rule in map_ruleidx_rulestring.items():
-                    ti_rule_this = map_rulestr_correctti[rule]
-                # for i in range(len(rulestrings_check)):
-                #     ti_rule_this = map_rulestr_correctti[map_ruleidx_rulestring[i]]
-                    if taskind_beh == ti_rule_this:
-                        label_code.append(i)
-                label_code = tuple(label_code)
 
-            ### Semantically meaningful labels.
+            ### Label beh labels.
             # Did he pick the correct rule?
             # - even if the correc trule is the closest, still call it correct
             a = [taskind_beh in ti_closest_list]
@@ -355,6 +344,29 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
             # Concat to code
             choice_code = tuple(a + b + c)
+
+            # ### Summarize choice into a single semantically meaningful class
+            # LABEL THE behavior semantically summary. Each
+            # trial gets a single mutually exclusive label.
+            if c==True:
+                # same shape, diff loc
+                label_code = (-2,)
+            elif a==True:
+                # call this matching "closets"
+                label_code = (-1,) # close
+            else:
+                # Call this beh basd on all the rules it matches.
+                label_code = [i for i, _b in enumerate(b) if _b==True]
+
+                # tmp = []
+                # for i, rule in map_ruleidx_rulestring.items():
+                #     ti_rule_this = map_rulestr_correctti[rule]
+                # # for i in range(len(rulestrings_check)):
+                # #     ti_rule_this = map_rulestr_correctti[map_ruleidx_rulestring[i]]
+                #     if taskind_beh == ti_rule_this:
+                #         tmp.append(i)
+                # assert tmp==label_code
+                label_code = tuple(label_code)
 
             ### Save
             resthis = {

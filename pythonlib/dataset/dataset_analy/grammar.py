@@ -23,7 +23,8 @@ rcParams.update({'figure.autolayout': True})
 ## OLD, before changed it to make sure it only works with  matlab rules (not new parses)
 def preprocess_dataset_recomputeparses(D, DEBUG=False,
                                        exclude_because_online_abort=False,
-                                       ONLY_ACTUAL_RULE=True):
+                                       ONLY_ACTUAL_RULE=True,
+                                       replace_agent_with_epoch=True):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
@@ -51,6 +52,13 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False,
             print(bm.DatLong["trialcode"].value_counts())
             print(groupdict)
             assert False, "prob multiple agents per trialcode?"
+
+    if replace_agent_with_epoch:
+        # This so that plots use epoch, not agent (which is rulestring).
+        # This is the standard if do matlab version, but not for parses version
+        bm.DatLong["agent_rule_orig"] = bm.DatLong["agent_rule"]
+        bm.DatLong["agent_rule"] = bm.DatLong["epoch"]
+        bm._initialize_agent()
 
     if exclude_because_online_abort:
         # remove the rows from bm that have good sequence, but online abort.
