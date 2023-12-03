@@ -48,7 +48,8 @@ def _add_binary_rule_tuple_col(df, rule_cols):
 
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False, 
-    how_define_correct_order="epoch", DEBUG=False, return_as_bmh_object=True):
+    how_define_correct_order="epoch", DEBUG=False, return_as_bmh_object=True,
+                                        ONLY_ACTUAL_RULE=False):
     """High-level extraction for each trial its parses under each given rule, including
     rules that are not conssteitnw with a trials' ecpoh (i.e., get all rules, regardless
     of epoch) [column = "score"], and also and evaluate whether this trials' beahvhiro 
@@ -62,6 +63,8 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     - binary_rule, bool, whether to get for eahc trial a binary code for bollean rules
     - how_define_correct_order, str, in {'matlab', 'epoch'}, whether to definde each trials' 
     correct sequence using the saved sequen inematlab or recomputed based on rules
+    - ONLY_ACTUAL_RULE, bool, if True, then only includes agents/rules which match the
+    rulestring of the actual trial.
     RETURNS:
     - df, with important columns score and success_binary_quick
     --- one row for conjunction of trial x rule (in list_rules).
@@ -179,11 +182,16 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
             which_probe_blockset = np.nan
 
         ########## [END] CONSIDER EXCEPTIONs
+        rule_actual, _ = D.grammarparses_ruledict_rulestring_extract(ind)
         for rule in list_rules:
             # parses = parsesdict[rule]
             # parses = GD.parses_extract_generated(rule)
             # dfGramScore.at[i, f"behmodpost_{rule}_default"] = taskstroke_inds_beh_order in parses
             # results[-1][f"behmodpost_{rule}_{modelclass}"] = taskstroke_inds_beh_order in parses
+
+            if ONLY_ACTUAL_RULE:
+                if not rule==rule_actual:
+                    continue
 
             results.append({
                 "agent_kind":"model",

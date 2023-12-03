@@ -21,7 +21,9 @@ from pythonlib.tools.exceptions import NotEnoughDataException
 rcParams.update({'figure.autolayout': True})
 
 ## OLD, before changed it to make sure it only works with  matlab rules (not new parses)
-def preprocess_dataset_recomputeparses(D, DEBUG=False, exclude_because_online_abort=False):
+def preprocess_dataset_recomputeparses(D, DEBUG=False,
+                                       exclude_because_online_abort=False,
+                                       ONLY_ACTUAL_RULE=True):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
@@ -38,7 +40,17 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False, exclude_because_online_ab
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
     list_rules = rules_related_rulestrings_extract_auto(D)
-    bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG)
+    bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG,
+                                             ONLY_ACTUAL_RULE=ONLY_ACTUAL_RULE)
+
+    if ONLY_ACTUAL_RULE:
+        # Then confirm that max one trial per trialcode.
+        from pythonlib.tools.pandastools import grouping_get_inner_items
+        groupdict = grouping_get_inner_items(bm.DatLong, "trialcode")
+        if max([len(x) for x in groupdict.values()])>1:
+            print(bm.DatLong["trialcode"].value_counts())
+            print(groupdict)
+            assert False, "prob multiple agents per trialcode?"
 
     if exclude_because_online_abort:
         # remove the rows from bm that have good sequence, but online abort.
@@ -67,9 +79,11 @@ def preprocess_dataset_matlabrule(D, exclude_because_online_abort=False):
 
     return bm
 
-def pipeline_generate_and_plot_all(D, which_rules="matlab", 
-    reset_grammar_dat=False, doplots=True, remove_repeated_trials=True,
-    save_suffix=None, run_inner_loop_only=False):
+def pipeline_generate_and_plot_all(D,
+                                   # which_rules="matlab", # 11/28/23 - beause parses are required for somet hings, like stepwise.py
+                                   which_rules="recompute_parses",
+                reset_grammar_dat=False, doplots=True, remove_repeated_trials=True,
+                save_suffix=None, run_inner_loop_only=False):
     """ Entire pipeline to extract data and plot, for 
     a single dataset
     PARAMS:
@@ -128,8 +142,9 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             bmh  = preprocess_dataset_matlabrule(D)
         elif which_rules=="recompute_parses":
             print("******** len Dat:", len(D.Dat))
-            bmh  = preprocess_dataset_recomputeparses(D)
-            assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
+            bmh  = preprocess_dataset_recomputeparses(D, ONLY_ACTUAL_RULE=True)
+            # assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
+            # Problem sovled with ONLY_ACTUAL_RULE
         else:
             print(which_rules)
             assert False
@@ -139,6 +154,11 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
             return None, None
 
         if doplots:
+            ## STEPWISE action plots (e..g, classify seuqence errors)
+            plot_stepwise_actions(D)
+            # from pythonlib.grammar.stepwise import preprocess_plot_actions
+            # preprocess_plot_actions(D)
+
             ####### 1) COmpare beh to all hypotheses (rules, discrete)
             # Also make plots for rule-based analysis
             savedir= f"{SDIR}/discrete_rules"
@@ -289,6 +309,27 @@ def pipeline_generate_and_plot_all(D, which_rules="matlab",
 
         return bmh, SDIR
 
+def plot_stepwise_actions(D):
+    """ All plots related to probs of actions at each stroke step.
+    """
+    from pythonlib.grammar.stepwise import preprocess_plot_actions
+
+    # 1) All data
+    preprocess_plot_actions(D, suffix="alldata")
+
+    # 2) Separate for each epochset
+    list_epochset = D.Dat["epochset"].unique().tolist()
+    nmin = 10
+    for es in list_epochset:
+        Dc = D.copy()
+        Dc.Dat = Dc.Dat[Dc.Dat["epochset"]==es].reset_index(drop=True)
+        if len(Dc.Dat)>nmin:
+            preprocess_plot_actions(Dc, suffix=f"epochset-{es}")
+
+    # 3) Split into first and last half of data
+    D1, D2 = D.splitdataset_by_trial()
+    preprocess_plot_actions(D1, suffix=f"splitbytime_half1")
+    preprocess_plot_actions(D2, suffix=f"splitbytime_half2")
 
 def plot_binned_by_time(D, sdir):
     """ bin trials by their times. change over session?"""

@@ -3315,6 +3315,28 @@ class Dataset(object):
         print(len(inds_train), len(inds_val), len(inds_test))
         return inds_train, inds_val, inds_test
 
+    def splitdataset_by_trial(self):
+        """ Split dataset into two halves, and return copies of
+        datasets for first and last half
+        RETURNS:
+            - D1, D2, copies of dataset with first and last halves.
+        """
+
+        self.trialcode_tuple_extract_assign()
+
+        # find the middle trial
+        list_tc = sorted(self.Dat["trialcode_tuple"].tolist())
+        n = len(list_tc)
+        tc_mid = list_tc[int(n/2)]
+
+        D1 = self.copy()
+        D1.Dat = D1.Dat[D1.Dat["trialcode_tuple"]<=tc_mid].reset_index(drop=True)
+
+        # Second half
+        D2 = self.copy()
+        D2.Dat = D2.Dat[D2.Dat["trialcode_tuple"]>tc_mid].reset_index(drop=True)
+
+        return D1, D2
 
 
     def splitTrainTest(self, train_frac = 0.9, val_frac = 0.05, test_frac = 0.05,
