@@ -962,7 +962,7 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
 
     
 def getCenter(strokes, method="extrema"):
-    """ get center of strokes, with methods:
+    """ get center of strokes (all strok at once), with methods:
     --- "extrema", based on x and y max edges, then
     find center.
     --- "com", then center of mass
@@ -971,7 +971,8 @@ def getCenter(strokes, method="extrema"):
     if method=="com":
         assert False, "not coded, see features calc."""
     elif method == "extrema":
-        
+        # for each of x and y, take the mean of the extreme
+        # values.
         tmp = np.concatenate([s[:,0] for s in strokes])
         xminmax = (np.min(tmp), np.max(tmp))
 
@@ -979,7 +980,6 @@ def getCenter(strokes, method="extrema"):
         yminmax = (np.min(tmp), np.max(tmp))
         
         return [np.mean(xminmax), np.mean(yminmax)]
-
 
 def standardizeStrokes(strokes, onlydemean=False, ver="xonly",
     return_tform_func=False):
@@ -1747,8 +1747,8 @@ def strokes_centerize(strokes):
         # c = np.mean(strok[:,:2], axis=0)
         # s = strok.copy()
         # s[:,:2] = s[:,:2] - c
-        s = strok - np.mean(strok, axis=0)
-        s = s[:, :2] # remove time axis
+        s = strok.copy()
+        s[:,:2] = s[:,:2] - np.mean(s[:,:2], axis=0)
         return s
     strokes = [F(strok) for strok in strokes]
     return strokes
