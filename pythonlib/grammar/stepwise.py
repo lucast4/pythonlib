@@ -51,7 +51,7 @@ def preprocess_plot_actions_all(D):
     Dc.Dat = Dc.Dat[Dc.Dat["trialcode_tuple"]>tc_mid].reset_index(drop=True)
     preprocess_plot_actions(Dc, suffix=f"splitbytime_half2")
 
-def preprocess_plot_actions(D, suffix=None):
+def preprocess_plot_actions(D, suffix=None, saveon=True):
 
     from pythonlib.tools.pandastools import expand_categorical_variable_to_binary_variables
     from pythonlib.tools.snstools import rotateLabel
@@ -74,61 +74,62 @@ def preprocess_plot_actions(D, suffix=None):
 
     ### 1) Extract action-level data.
     df_actions, Params = extract_each_stroke_vs_rules(Dc)
+    _, df_actions_trial = dfactions_convert_to_trial_level(df_actions, Params)
 
-    ## PRinta nd plot summary of distribution of task states.
-    grouping_print_n_samples(df_actions, ["epoch", "task_state_code"],
-                             save_convert_keys_to_str=True,
-                             savepath = f"{sdir}/actions_groupings.txt")
+    if saveon:
+        ## PRinta nd plot summary of distribution of task states.
+        grouping_print_n_samples(df_actions, ["epoch", "task_state_code"],
+                                 save_convert_keys_to_str=True,
+                                 savepath = f"{sdir}/actions_groupings.txt")
 
-    _, fig, _, _ = convert_to_2d_dataframe(df_actions, "epoch", "task_state_code", True);
-    savefig(fig, f"{sdir}/actions-counts-task_state_code.pdf")
+        _, fig, _, _ = convert_to_2d_dataframe(df_actions, "epoch", "task_state_code", True);
+        savefig(fig, f"{sdir}/actions-counts-task_state_code.pdf")
 
-    ## 2) Make GOOD PLOTS
-    for var in ["beh_label_code", "choice_code"]:
-        df_actions_expanded = expand_categorical_variable_to_binary_variables(df_actions, var)
+        ## 2) Make GOOD PLOTS
+        for var in ["beh_label_code", "choice_code"]:
+            df_actions_expanded = expand_categorical_variable_to_binary_variables(df_actions, var)
 
-        fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_crct_ti_uniq", row="epoch",
-                    kind="point", ci=68, aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}.pdf")
-
-        fig = sns.catplot(data=df_actions_expanded, x=var, y="value", row="task_state_crct_ti_uniq", hue="epoch",
-                    kind="point", ci=68, aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}-2.pdf")
-
-        fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                    kind="point", ci=68, aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}.pdf")
-
-        fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_code", row="epoch",
-                    kind="point", ci=68, aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{sdir}/actions-task_state_code-{var}.pdf")
-
-        # Plot, restricting to just the strongest cases (separated states)
-        df_actions_this = df_actions[df_actions["task_state_code"]==((), (0,), (1,))].reset_index(drop=True)
-        if len(df_actions_this)>0:
-            df_actions_this_expanded = expand_categorical_variable_to_binary_variables(df_actions_this, var)
-            fig = sns.catplot(data=df_actions_this_expanded, x=var, y="value", hue="epoch", kind="point", aspect=1.5, ci=68,
-                        row="epoch_orig")
+            fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_crct_ti_uniq", row="epoch",
+                        kind="point", ci=68, aspect=1.5)
             rotateLabel(fig)
-            savefig(fig, f"{sdir}/actions-task_state_code-only_taskstatecode_separated-{var}.pdf")
+            savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}.pdf")
+
+            fig = sns.catplot(data=df_actions_expanded, x=var, y="value", row="task_state_crct_ti_uniq", hue="epoch",
+                        kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}-2.pdf")
+
+            fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                        kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}.pdf")
+
+            fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_code", row="epoch",
+                        kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{sdir}/actions-task_state_code-{var}.pdf")
+
+            # Plot, restricting to just the strongest cases (separated states)
+            df_actions_this = df_actions[df_actions["task_state_code"]==((), (0,), (1,))].reset_index(drop=True)
+            if len(df_actions_this)>0:
+                df_actions_this_expanded = expand_categorical_variable_to_binary_variables(df_actions_this, var)
+                fig = sns.catplot(data=df_actions_this_expanded, x=var, y="value", hue="epoch", kind="point", aspect=1.5, ci=68,
+                            row="epoch_orig")
+                rotateLabel(fig)
+                savefig(fig, f"{sdir}/actions-task_state_code-only_taskstatecode_separated-{var}.pdf")
+
+            plt.close("all")
+
+        df_actions_trial_expand = expand_categorical_variable_to_binary_variables(df_actions_trial,
+                                                                                  "trial_sequence_outcome")
+        fig = sns.catplot(data=df_actions_trial_expand, x="trial_sequence_outcome", y="value", kind="point", hue="epoch", ci=68,
+                          row="epoch_orig")
+        rotateLabel(fig)
+        savefig(fig, f"{sdir}/actionstrial-outcome-{var}.pdf")
 
         plt.close("all")
 
-    dfactions, dfactions_trial = dfactions_convert_to_trial_level(df_actions, Params)
-    df_actions_trial_expand = expand_categorical_variable_to_binary_variables(dfactions_trial,
-                                                                              "trial_sequence_outcome")
-    fig = sns.catplot(data=df_actions_trial_expand, x="trial_sequence_outcome", y="value", kind="point", hue="epoch", ci=68,
-                      row="epoch_orig")
-    rotateLabel(fig)
-    savefig(fig, f"{sdir}/actionstrial-outcome-{var}.pdf")
-
-    plt.close("all")
-
-    return df_actions
+    return df_actions, df_actions_trial, Dc
 
 def extract_each_stroke_vs_rules(D, DEBUG=False):
     """
@@ -244,7 +245,13 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                     # print(tok_this["center"], loc_beh_prev)
                     # assert False, "how get pixel coords?"
                 dist = np.linalg.norm(loc_this - loc_beh_prev)
+
+                # get the x an y translations
+                y_trans = loc_this[1] - loc_beh_prev[1]
+                x_trans = loc_this[0] - loc_beh_prev[0]
+
                 features["dist_prev_beh"] = dist
+                features["trans_prev_beh"] = (x_trans, y_trans)
 
                 # 2) is it the correct next stroke, given each rule
                 for rule in taskinds_remain_each_rule.keys():
@@ -364,6 +371,8 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 "correct_ruleidx":map_rulestr_ruleidx[rulestring],
                 "choice_code":choice_code,
                 "choice_correct":taskind_beh == map_rulestr_correctti[rulestring],
+                "taskind_beh":taskind_beh,
+                "taskind_correct":map_rulestr_correctti[rulestring],
                 "taskinds_features":taskinds_features
             }
             list_res.append(resthis)

@@ -999,6 +999,19 @@ class Dataset(object):
             fname = f"{sdir}/char-sorted_by_{scorename}-{suffix}"
             writeStringsToFile(fname, list_s)
 
+            # also write a list that you can easily copy and paste. 
+            los_setnames = [" ".join([self.taskcharacter_fixed_set_los(c)[0] for c in list_char])]
+            fname = f"{sdir}/char-sorted_by_{scorename}-{suffix}-los_setnames"
+            writeStringsToFile(fname, los_setnames)
+
+            los_setnums = [" ".join([self.taskcharacter_fixed_set_los(c)[1] for c in list_char])]
+            fname = f"{sdir}/char-sorted_by_{scorename}-{suffix}-los_setnums"
+            writeStringsToFile(fname, los_setnums)
+
+            los_inds = [" ".join([self.taskcharacter_fixed_set_los(c)[2] for c in list_char])]
+            fname = f"{sdir}/char-sorted_by_{scorename}-{suffix}-los_setinds"
+            writeStringsToFile(fname, los_inds)
+
         # Extract chars and scores
         list_char, list_score, list_n = self.taskcharacter_find_plot_sorted_by_score(scorename)
 
@@ -1158,6 +1171,13 @@ class Dataset(object):
             print("Saved to: ", fname)
 
 
+    def taskcharacter_fixed_set_los(self, char):
+        """
+        e.g., if char="singleprims-34-11-846132", returns
+        ['singleprims', '34', '11', '846132']
+        """
+        from pythonlib.tools.stringtools import decompose_string
+        return decompose_string(char)
 
     def taskcharacter_find(self, setname, setnum, index):
         """ Get all indices that have this fixed task name
@@ -2257,6 +2277,16 @@ class Dataset(object):
                 loc_fix = self.Dat.iloc[idat][location_to_test]
                 trialcode = self.Dat.iloc[idat]["trialcode"]
 
+                if loc_fix is None and location_to_test == "donepos":
+                    # Then this has no done button.. single prims (e.g).
+                    LIST_STROKES_BEH.append(strokes_beh)
+                    continue
+
+                if loc_fix is None:
+                    print(location_to_test)
+                    print(trialcode)
+                    assert False, "probably doesnt have donie button? (single prim?)"
+
                 inds_remove = []
                 for _is, strok in enumerate(strokes_beh):
 
@@ -2290,6 +2320,8 @@ class Dataset(object):
                     print(idat, trialcode, inds_remove, len(strokes_beh), len(tmp))
                     LIST_STROKES_BEH.append(tmp)
                     list_inds_replaced.append(idat)
+
+            assert len(LIST_STROKES_BEH)==len(self.Dat), "Sanity cehck"
 
             if len(list_inds_replaced)>0:
                 if PLOT_EXAMPLE_BAD_TRIALS:
@@ -7065,19 +7097,28 @@ class Dataset(object):
     def grammarparses_print_plot_summarize(self, ind):
         """
         [Good] print and plot all things to summarize things about this trial.
+        Wrapper to help me remmember how to plot summary of
+        this truials beh and parsaes
         """
         print("=========================================")
         print("BEH (taskstroke inds): ", self.grammarparses_extract_beh_taskstroke_inds(ind))
 
-        print("=========================================")
-        print("chunk_rank:", [(t["chunk_rank"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
-        print("chunk_within_rank:", [(t["chunk_within_rank"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
-        print("chunk_within_rank_fromlast:", [(t["chunk_within_rank_fromlast"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
-        print("chunk_n_in_chunk:", [(t["chunk_n_in_chunk"]) for t in self.taskclass_tokens_extract_wrapper(ind, which_order="beh")])
+        tokens = self.taskclass_tokens_extract_wrapper(ind, which_order="beh")
+        if "chunk_rank" in tokens[0].keys():
+            print("=========================================")
+            print("chunk_rank:", [(t["chunk_rank"]) for t in tokens])
+            print("chunk_within_rank:", [(t["chunk_within_rank"]) for t in tokens])
+            print("chunk_within_rank_fromlast:", [(t["chunk_within_rank_fromlast"]) for t in tokens])
+            print("chunk_n_in_chunk:", [(t["chunk_n_in_chunk"]) for t in tokens])
         
         print("=========================================")
         self.grammarparses_grammardict_return(ind, True)
 
+    # def grammarparses_print_plot_summary(self, ind):
+    #     """ Wrapper to help me remmember how to plot summary of
+    #     this truials beh and parsaes
+    #     """
+    #     self.grammarparses_grammardict_return(ind, True)
 
     def grammarparses_grammardict_return(self, ind, doplot=False):
         """
@@ -7085,7 +7126,9 @@ class Dataset(object):
         tc = self.Dat.iloc[ind]["trialcode"]
         gd = self.GrammarDict[tc]
         if doplot:
-            gd.print_plot_summary(doplot=doplot)
+            # only plot parses for the active rule on this trial
+            rs = self.grammarparses_ruledict_rulestring_extract(ind)[0]
+            gd.print_plot_summary(doplot=doplot, only_this_rulestring=rs)
         return gd
 
     def _grammarparses_parses_generate(self, ind, list_rulestring = None):
@@ -8127,7 +8170,7 @@ class Dataset(object):
 
 
     def plotSingleTrial(self, idx=None, things_to_plot = ("beh", "task"),
-        sharex=False, sharey=False, params=None, task_add_num=False,
+        sharex=True, sharey=True, params=None, task_add_num=False,
         number_from_zero=True):
         """ 
         Plot a single trial

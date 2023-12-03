@@ -225,9 +225,13 @@ class GrammarDat(object):
         return fig1, fig2, axes2, indsthis, parses
 
     #################
-    def print_plot_summary(self, doplot=True):
+    def print_plot_summary(self, doplot=True, only_this_rulestring=None):
         """ Print and plot things summarizing this grammardat, including parses"""
+
+
         for rule, CLC in self.ChunksListClassAll.items():
+            if only_this_rulestring is not None and not rule == only_this_rulestring:
+                continue
             print("----- CLC for This rule: ", rule)
             print(CLC.print_summary())
             print("... with these parases:")
@@ -239,13 +243,6 @@ class GrammarDat(object):
 
             if doplot:
                 self.plot_beh_and_parses(rule)
-                self.Beh.alignsim_plot_summary()
 
-
-
-
-
-    
-
-
-
+        if doplot:
+            self.Beh.alignsim_plot_summary()

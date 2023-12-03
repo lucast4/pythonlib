@@ -1576,6 +1576,7 @@ class TaskClass(object):
                 "max_wh":_max_wh(i),
                 "Prim":Prims[i] if Prims is not None else None,
                 "ind_taskstroke_orig":inds_taskstrokes[i],
+                "center": Prims[i].Stroke.extract_center() # in pixels
                 })
             
             # 2) Things that depend on grid

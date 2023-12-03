@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 ### 
 # np.r_ is for quick contaneation.
 
+def bin_values_categorical_factorize(vals):
+    """ like pd.factorize.
+    convert categorical value (strings) to 0,1,2,...
+    """
+    return np.unique(vals, return_inverse=True)[1]
+
 def bin_values(vals, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
     assert_all_vals_within_bins=True):
     """ REturn vals, but binned, unofrmly from min to max

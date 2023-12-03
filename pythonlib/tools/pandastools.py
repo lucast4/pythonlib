@@ -117,19 +117,28 @@ def mergeOnIndex(df1, df2):
 ########################### ^^^^ OBSOLETE - USE aggregGeneral
 
 
-def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
+def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     """
     Aggregate by first grouping (across multiple dimensions) and then applyiong
     arbnitrary method.
     PARAMS;
     - group, list of str, each a column. groups using combos fo these
     - values, list of str, which values to apply aggregation. the returned df will
-    have these as new columns.
+    have these as new columns. if None, then will not add any new columsn other
+    than whats in group
     - nonnumercols, list of str. these columsn will be retained, keeping only the 
     first encountered value.
     - aggmethod, list of str, applies each of these agg methods.
     """
-        
+
+    if values is None:
+        # use dummy
+        df["_dummy"] = 1
+        values = ["_dummy"]
+        DELETE_DUMMY = True
+    else:
+        DELETE_DUMMY = False
+
     if aggmethod is not None:
         assert isinstance(aggmethod, list)
     assert isinstance(values, list)
@@ -155,10 +164,8 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
 
     agg = {c:aggmethod for c in df.columns if c in values}
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
-    
-    # print(agg)
 
-    df = df.groupby(group).agg(agg).reset_index()
+    dfagg = df.groupby(group).agg(agg).reset_index()
     # df.columns = df.columns.to_flat_index()
 
     if len(aggmethod)==1:
@@ -166,11 +173,15 @@ def aggregGeneral(df, group, values, nonnumercols=None, aggmethod=None):
         # e.g., dist instead of dist_mean. can't do if 
         # multiple aggmethods, since will then be ambiguos.
     # df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
-        df.columns = [tup[0] for tup in df.columns.values]
+        dfagg.columns = [tup[0] for tup in dfagg.columns.values]
     else:
-        df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
+        dfagg.columns = ['_'.join(tup).rstrip('_') for tup in dfagg.columns.values]
 
-    return df
+    if DELETE_DUMMY:
+        del df["_dummy"]
+        del dfagg["_dummy"]
+
+    return dfagg
 
 def df2dict(df):
     return df.to_dict("records")
