@@ -474,7 +474,7 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
         
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
-    means=False, labels=None, alpha=0.8):
+    means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -484,7 +484,8 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     precedence over plot_string_ind
     """
 
-    ax.plot(x, y, "x", alpha=alpha)
+    # ax.plot(x, y, marker, alpha=alpha)
+    ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha)
 
     # ax.set_axis("square")
     minimum = np.min([np.min(x), np.min(y)])
@@ -515,16 +516,16 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     if labels is not None:
         assert len(labels)==len(x)
         for l, xx, yy in zip(labels, x,y):
-            ax.text(xx, yy, l)
+            ax.text(xx, yy, l, alpha=0.5)
     else:
 
         if plot_string_ind:
             for i, (xx, yy) in enumerate(zip(x,y)):
                 ax.text(xx, yy, i)
 
-
-    ax.set_xlim(MIN, MAX)
-    ax.set_ylim(MIN, MAX)
+    if MAX>MIN:
+        ax.set_xlim(MIN, MAX)
+        ax.set_ylim(MIN, MAX)
     ax.axis("square")
     # ax.set_aspect('equal', adjustable='datalim')
 

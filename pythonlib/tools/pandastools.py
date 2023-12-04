@@ -941,40 +941,62 @@ def expand_categorical_variable_to_binary_variables(df, var_categorical,
     RETURNS:
     - dfout, num rows will be (num levels of var_categorical) x (num rows in df), with
     columns, <vars in index_vars>, <var_categorical> (the name of the level) and,
-    "value" (bool).
+    "value" (int).
     EXAMPLE:
     dflabels = expand_categorical_variable_to_binary_variables(D.Dat, SEQUENCE_VAR, ["trialcode", "epoch"])
     """
 
-    list_levels = sorted(df[var_categorical].unique().tolist())
+    if False:
+        # Old version, using for-loop so is very slow.
+        list_levels = sorted(df[var_categorical].unique().tolist())
 
-    if index_vars is None:
-        # Then get all columns that exist
-        index_vars = [c for c in df.columns if not c==var_categorical]
+        if index_vars is None:
+            # Then get all columns that exist
+            index_vars = [c for c in df.columns if not c==var_categorical]
 
-    # Collet across each row * level
-    dats = []
-    for ind in range(len(df)):
-        for lev in list_levels:
+        # Collet across each row * level
+        dats = []
+        for ind in range(len(df)):
+            for lev in list_levels:
 
-            # Binary variable, get its value
-            match = lev == df.iloc[ind][var_categorical]
+                # Binary variable, get its value
+                match = lev == df.iloc[ind][var_categorical]
 
-            # append a new item
-            d = {
-                var_categorical:lev,
-                "value":match,
-                # "trialcode":df.iloc[ind]["trialcode"],
-                # "epoch":df.iloc[ind]["epoch"]
-            }
+                # append a new item
+                d = {
+                    var_categorical:lev,
+                    "value":match,
+                    # "trialcode":df.iloc[ind]["trialcode"],
+                    # "epoch":df.iloc[ind]["epoch"]
+                }
 
-            # collect index vars for this line in df
-            for v in index_vars:
-                d[v] = df.iloc[ind][v]
+                # collect index vars for this line in df
+                for v in index_vars:
+                    d[v] = df.iloc[ind][v]
 
-            dats.append(d)
+                dats.append(d)
+        df_binary = pd.DataFrame(dats)
+    else:
+        dftmp = pd.get_dummies(df, prefix="", prefix_sep="", columns=[var_categorical])
+        id_vars = [c for c in df.columns if not c==var_categorical]
+        list_levels = sorted(df[var_categorical].unique().tolist())
+        df_binary = pd.melt(dftmp, id_vars = id_vars, value_vars=list_levels, var_name=var_categorical)
 
-    return pd.DataFrame(dats)
+    # NOTES: couple other approeaches I tried which difnt work well.
+    # var = "choice_code_str"
+    # dftmp = pd.get_dummies(df_actions, prefix_sep="-", columns=[var])
+    # # - convert to long
+    # pd.wide_to_long(dftmp, [var], ["trialcode", "idx_beh"], var)
+    #
+    # # Doesnt work... gived weird values.
+    # list_levels = sorted(df_actions[var].unique().tolist())
+    # groups = {
+    #     f"{var}_new":list_levels
+    # }
+    # dftmp = pd.get_dummies(df_actions, prefix="", prefix_sep="", columns=[var])
+    # pd.lreshape(dftmp, groups)
+
+    return df_binary
 
 
 def unpivot(df, id_vars, value_vars, var_name, value_name):
@@ -1584,6 +1606,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         ax.set_title(dum)
     return fig
 
+# def plot_
 
 def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
         save_convert_keys_to_str = False, save_as="dict", sorted_by_keys=True):
@@ -2468,3 +2491,81 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
     
     return dfthis_shuff
 
+
+def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
+                                           var_subplot, var_value, var_datapt):
+    """ Multiple supblots, each plotting
+    45 deg scatter, comparing means for one lev
+    vs. other lev
+    PARAMS:
+    - var_manip, str, name of col whose values will define x and y coord.
+    - x_lev_manip, str, categorical level of var_manip, values define x values
+    - var_subplot, str, categorical col, levels dedefine subplots.
+    - var_value, str, column, whose values/sdcore to plot.
+    - var_datapt, str, categorical col, each lev is separate datapt. (note: will assert that max 1 datapt per).
+    - ignore_if_sum_values, this useful to exclude any
+
+    """
+    from scipy.stats import sem
+    from pythonlib.tools.plottools import plotScatter45
+
+    assert not x_lev_manip==y_lev_manip
+
+    list_manip = [x_lev_manip, y_lev_manip]
+    nmin = 1
+    list_lev = dfthis[var_subplot].unique().tolist()
+    list_datapt = dfthis[var_datapt].unique().tolist()
+
+    # dict_res = {}
+    dict_res_2 = []
+    for date in list_datapt:
+        for lev in list_lev:
+            # collect all data for each value of stim
+            for manip in list_manip:
+                dfthisthis = dfthis[(dfthis[var_datapt]==date) & (dfthis[var_subplot]==lev) & (dfthis[var_manip]==manip)]
+
+                if len(dfthisthis)>=nmin:
+
+                    # get stats
+                    stats_mean = np.mean(dfthisthis[var_value])
+                    stats_sem = sem(dfthisthis[var_value])
+
+                    # dict_res[(date, lev, manip)] = (stats_mean, stats_sem)
+                    dict_res_2.append({
+                        var_value:stats_mean,
+                        f"{var_value}_sem":stats_sem,
+                        var_datapt:date,
+                        var_subplot:lev,
+                        var_manip:manip,
+                    })
+    dfres = pd.DataFrame(dict_res_2)
+
+    # Make plots
+    ncols = 3
+    nrows = int(np.ceil(len(list_lev)/ncols))
+    SIZE = 3
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
+
+    for ax, lev in zip(axes.flatten(), list_lev):
+
+        # Collect data
+        dftmp_x = dfres[(dfres[var_subplot]==lev) & (dfres[var_manip]==x_lev_manip)]
+        dftmp_y = dfres[(dfres[var_subplot]==lev) & (dfres[var_manip]==y_lev_manip)]
+
+        # get intersection of datapts.
+        list_date = sorted([d for d in dftmp_x[var_datapt].tolist() if d in dftmp_y[var_datapt].tolist()])
+        dftmp_x = slice_by_row_label(dftmp_x, var_datapt, list_date, assert_exactly_one_each=True)
+        dftmp_y = slice_by_row_label(dftmp_y, var_datapt, list_date, assert_exactly_one_each=True)
+
+        # Plot
+        xs = dftmp_x[var_value]
+        x_errors = dftmp_x[f"{var_value}_sem"]
+        ys = dftmp_y[var_value]
+        y_errors = dftmp_y[f"{var_value}_sem"]
+        plotScatter45(xs, ys, ax, labels=list_date, marker="o",
+                      x_errors=x_errors, y_errors=y_errors)
+        ax.set_title(lev)
+        ax.set_xlabel(x_lev_manip)
+        ax.set_ylabel(y_lev_manip)
+
+    return dfres, fig

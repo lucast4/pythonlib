@@ -334,6 +334,16 @@ def plot_stepwise_actions(D):
         if len(Dc.Dat)>nmin:
             preprocess_plot_actions(Dc, suffix=f"epochset-{es}")
 
+    # 3) split by epochset_char
+    D.epochset_extract_common_epoch_sets("character", epochset_col_name="epochsetchar")
+    list_epochset = D.Dat["epochsetchar"].unique().tolist()
+    nmin = 10
+    for es in list_epochset:
+        Dc = D.copy()
+        Dc.Dat = Dc.Dat[Dc.Dat["epochsetchar"]==es].reset_index(drop=True)
+        if len(Dc.Dat)>nmin:
+            preprocess_plot_actions(Dc, suffix=f"epochsetchar-{es}")
+
     # 3) Split into first and last half of data
     D1, D2 = D.splitdataset_by_trial()
     preprocess_plot_actions(D1, suffix=f"splitbytime_half1")
