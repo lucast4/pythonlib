@@ -454,7 +454,8 @@ def dfactions_convert_to_trial_level(dfactions, Params):
 
             choice_code = datrow["choice_code"].item()
             correct_ruleidx = datrow["correct_ruleidx"].item()
-            assert choice_code[correct_ruleidx+1] == False, "sanity check"
+            # assert choice_code[correct_ruleidx+1] == False, "sanity check"
+            assert choice_code[correct_ruleidx+1] == "1", "sanity check"
 
             if False:
                 g[1]["trial_sequence_outcome"] = [choice_code for _ in range(len(g[1]))]
