@@ -344,6 +344,8 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
             # Concat to code
             choice_code = tuple(a + b + c)
+            # convert to string
+            choice_code = "".join([str(int(ch)) for ch in choice_code])
 
             # ### Summarize choice into a single semantically meaningful class
             # LABEL THE behavior semantically summary. Each
