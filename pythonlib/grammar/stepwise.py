@@ -350,14 +350,18 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
             # ### Summarize choice into a single semantically meaningful class
             # LABEL THE behavior semantically summary. Each
             # trial gets a single mutually exclusive label.
-            if c==True:
+            if c==[True]:
                 # same shape, diff loc
                 # label_code = (-2,)
                 label_code = ("s",)
-            elif a==True:
+            elif a==[True]:
                 # call this matching "closets"
                 # label_code = (-1,) # close
                 label_code = ("c",) # close
+            elif all([_b==False for _b in b]):
+                # Then doesnt match any rule...
+                # Call this a random error
+                label_code = ("x",)
             else:
                 # Call this beh basd on all the rules it matches.
                 label_code = [i for i, _b in enumerate(b) if _b==True]
@@ -372,12 +376,14 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 # assert tmp==label_code
                 label_code = tuple(label_code)
             label_code = "".join([str(l) for l in label_code])
+            assert len(label_code)>0, "sanity check, did not capture case above."
 
             ### Save
             resthis = {
                 "ind_dat": ind,
                 "trialcode":D.Dat.iloc[ind]["trialcode"],
                 "epoch":D.Dat.iloc[ind]["epoch"],
+                "character":D.Dat.iloc[ind]["character"],
                 "epoch_orig":D.Dat.iloc[ind]["epoch_orig"],
                 "microstim_epoch_code":D.Dat.iloc[ind]["microstim_epoch_code"],
                 "idx_beh":idx_stroke,
