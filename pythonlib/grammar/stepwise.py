@@ -352,10 +352,12 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
             # trial gets a single mutually exclusive label.
             if c==True:
                 # same shape, diff loc
-                label_code = (-2,)
+                # label_code = (-2,)
+                label_code = ("s",)
             elif a==True:
                 # call this matching "closets"
-                label_code = (-1,) # close
+                # label_code = (-1,) # close
+                label_code = ("c",) # close
             else:
                 # Call this beh basd on all the rules it matches.
                 label_code = [i for i, _b in enumerate(b) if _b==True]
@@ -369,6 +371,7 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 #         tmp.append(i)
                 # assert tmp==label_code
                 label_code = tuple(label_code)
+            label_code = "".join([str(l) for l in label_code])
 
             ### Save
             resthis = {
