@@ -336,7 +336,7 @@ def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
 
     # First, sort characters
     # Sort all characters by score, and plot them in a grid
-    list_char, list_score = D.taskcharacter_find_plot_sorted_by_score(scorename,
+    list_char, list_score, list_n = D.taskcharacter_find_plot_sorted_by_score(scorename,
                                                                       plot=True,
                                                                       sdir=sdir)
 
