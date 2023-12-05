@@ -344,16 +344,20 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
             # Concat to code
             choice_code = tuple(a + b + c)
+            # convert to string
+            choice_code = "".join([str(int(ch)) for ch in choice_code])
 
             # ### Summarize choice into a single semantically meaningful class
             # LABEL THE behavior semantically summary. Each
             # trial gets a single mutually exclusive label.
             if c==True:
                 # same shape, diff loc
-                label_code = (-2,)
+                # label_code = (-2,)
+                label_code = ("s",)
             elif a==True:
                 # call this matching "closets"
-                label_code = (-1,) # close
+                # label_code = (-1,) # close
+                label_code = ("c",) # close
             else:
                 # Call this beh basd on all the rules it matches.
                 label_code = [i for i, _b in enumerate(b) if _b==True]
@@ -367,6 +371,7 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 #         tmp.append(i)
                 # assert tmp==label_code
                 label_code = tuple(label_code)
+            label_code = "".join([str(l) for l in label_code])
 
             ### Save
             resthis = {
@@ -452,7 +457,12 @@ def dfactions_convert_to_trial_level(dfactions, Params):
 
             choice_code = datrow["choice_code"].item()
             correct_ruleidx = datrow["correct_ruleidx"].item()
-            assert choice_code[correct_ruleidx+1] == False, "sanity check"
+            # assert choice_code[correct_ruleidx+1] == False, "sanity check"
+            if not choice_code[correct_ruleidx+1] == "0":
+                print(datrow)
+                print(choice_code)
+                print(correct_ruleidx)
+                assert False, "sanity check"
 
             if False:
                 g[1]["trial_sequence_outcome"] = [choice_code for _ in range(len(g[1]))]
