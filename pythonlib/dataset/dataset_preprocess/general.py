@@ -222,6 +222,17 @@ def _groupingParams(D, expt):
             3:"TTL3",
             4:"TTL4"
         }
+    elif "charstim" in expt:
+        # e.g,, charstimdiego1
+        # Each char has stim and no-stim conditions.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["microstim_code"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+        map_ttl_region = {
+            3:"TTL3",
+            4:"TTL4"
+        }
     elif expt=="coldirgrammardiego1":
         # 10/1/23 - grammar, but also flips cue-stim on random trails.
 
