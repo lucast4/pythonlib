@@ -554,6 +554,25 @@ class TaskClass(object):
             print(self.Params)
             assert False , "not in bounds"
 
+    def check_prims_extra_params_exist(self):
+        """
+        Check if any extra transformations were applied to the prims in matlab code.
+        If so, then the prim label (e.., line-10-1-0) will not be accurate.
+        RETURNS:
+            - bool, whether tforms were applied.
+        EXAMPLES:
+        eg self.PlanDat["PrimsExtraParams"] that eixsts:
+        [{'tforms': [['th', array(4.71238898)]]},
+         {'tforms': [['th', array(0.)]]},
+         {'tforms': [['th', array(0.)]]}]
+
+        eg self.PlanDat["PrimsExtraParams"] thjat doesnt exist:
+            [{}]
+        """
+        # a = len(T.PlanDat["PrimsExtraParams"])>
+        # return a and b
+
+        return any([len(p)>0 for p in self.PlanDat["PrimsExtraParams"]])
 
     ########################
 
@@ -1216,7 +1235,8 @@ class TaskClass(object):
 
     def tokens_generate(self, params = None, inds_taskstrokes=None, 
         track_order=True, hack_is_gridlinecircle=False, assert_computed=True,
-        include_scale=False, input_grid_xy=None, return_as_tokensclass=False):
+        include_scale=False, input_grid_xy=None, return_as_tokensclass=False,
+                        reclassify_shape_using_stroke=False):
         """ Wrapper to eitehr create new or to return cached. see 
         _tokens_generate for more
         PARAMS:
@@ -1224,6 +1244,7 @@ class TaskClass(object):
         when you want to recompute it, useful to make sure correct params are used when 
         you do recompute
         - input_grid_xy, see inner
+        - reclassify_shape_using_stroke, see Dataset()
         """
 
         if params is None:
@@ -1232,7 +1253,7 @@ class TaskClass(object):
         if assert_computed:
             # Then force that you have alreadey computed. this usefeul for 
             # gridline circle, where correct construction requires hack_is_gridlinecircle=True.
-            assert hasattr(self, '_DatSegs') and len(self._DatSegs)>0
+            assert hasattr(self, '_DatSegs') and self._DatSegs is not None and len(self._DatSegs)>0
 
         assert inds_taskstrokes==None, "only use tokens_generate to genereate in default order. To reorder, use tokens_reorder"
         assert len(params)==0, "do not pass in params. this needs to be default. instead, pass into tokens_reorder"
@@ -1244,7 +1265,8 @@ class TaskClass(object):
             # Generate from scratch
             datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
                 hack_is_gridlinecircle=hack_is_gridlinecircle, 
-                include_scale=include_scale, input_grid_xy=input_grid_xy)
+                include_scale=include_scale, input_grid_xy=input_grid_xy,
+                                            reclassify_shape_using_stroke=reclassify_shape_using_stroke)
             self._DatSegs = datsegs
             tokens = self._DatSegs
 
@@ -1305,7 +1327,7 @@ class TaskClass(object):
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
             track_order=True, hack_is_gridlinecircle=False, include_scale=True,
-            input_grid_xy = None):
+            input_grid_xy = None, reclassify_shape_using_stroke=False):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
         generates and caches. To reorder, see tokens_reorder]
@@ -1468,7 +1490,10 @@ class TaskClass(object):
 
         def _shape(i):
             # return string
-            return Prims[i].shape_oriented(include_scale=include_scale)
+            if reclassify_shape_using_stroke:
+                return Prims[i].label_classify_prim_using_stroke(return_as_string=True)
+            else:
+                return Prims[i].shape_oriented(include_scale=include_scale)
             # return objects[i][0]
         
         def _shape_oriented(i):
@@ -1741,7 +1766,7 @@ class TaskClass(object):
         if ordinal:
             # plotDatStrokes(self.Strokes, ax, clean_ordered_ordinal=True, number_from_zero=True)
             plotDatStrokesWrapper(self.Strokes, ax, color="k", mark_stroke_onset=True, 
-                add_stroke_number=True)
+                add_stroke_number=True, mark_stroke_center=True)
         else:
             plotDatStrokes(self.Strokes, ax, clean_task=True)
         return ax

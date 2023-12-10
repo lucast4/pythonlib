@@ -1455,8 +1455,6 @@ class TaskClass(object):
         assert len(dat["ReflectsAfterConcat"])==len(self.Strokes), 'bug above'
         assert len(dat["CentersAfterConcat"])==len(self.Strokes), 'bug above'
 
-
-
         # - nstrokes here should match nstrokes extracted elsewhere
         if False:
             _list_keys_check_nstrokes = ["Prims", "CentersActual", "Rels"]

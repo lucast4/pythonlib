@@ -121,6 +121,59 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
+    def label_classify_prim_using_stroke(self, return_as_string=False):
+        """ To classify this prim, qwhich usualy would be
+        liek line-10-0-1, but this doesnt generaklkly work,
+        becuase somtimes you have extra transfomrs that chagne how this
+        is actually angled, etc. Here solves this problem by replacing the
+        scale and angle with actual measured, based on stroke.'
+        RETURNS:
+            - label, tuple that uniquely ids this prim, (sh, scale, angle to on, angle to off)
+            e.g., ('line', 60.0, 1.57, 4.71)
+        NOTE: reason to have angles to both on and off is to deal with possible cases of
+        same on. and/or reflections.
+        """
+        from pythonlib.tools.vectools import get_angle, bin_angle_by_direction
+
+        shcat = self.extract_as()[1] # e.g, ('line-11-1-0', 'line', 11, 1, 0, 0.0, -0.614)
+
+        # a marker of scale and angle.
+        S = self.Stroke
+        cen = S.extract_center()
+
+        # define the endpoint1 to be that more on the lower-left.
+        loc1 = S.Stroke[0, :2]
+        loc2 = S.Stroke[-1, :2]
+
+        # make sure loc1 is the one towards the bottom left
+        if np.sum(S.Stroke[0, :2]-cen) > np.sum(S.Stroke[-1, :2]-cen): # np.sum() does project onto (1,1).
+            loc1 = S.Stroke[-1, :2]
+            loc2 = S.Stroke[0, :2]
+        else:
+            loc1 = S.Stroke[0, :2]
+            loc2 = S.Stroke[1, :2]
+
+        # - center --> onset
+        vec1 = loc1 - cen # vec from cen to onset.
+        angle1 = np.round(get_angle(vec1), decimals=1)
+        # angle_bin = bin_angle_by_direction([get_angle(vec)], num_angle_bins=16)[0] # bin the angle
+
+        # - center --> offset
+        vec2 = loc2 - cen # vec from cen to onset.
+        angle2 = np.round(get_angle(vec2), decimals=1)
+
+        # scale
+        scale = np.round(np.linalg.norm(vec1), decimals=0)
+
+        # return as tuple
+        label = (shcat, scale, angle1, angle2)
+
+        if return_as_string:
+            label_str = [label[0], f"{label[1]:.0f}", f"{label[2]:.1f}", f"{label[3]:.1f}"]
+            return "-".join([x for x in label_str])
+        else:
+            return label
+
     def shape_oriented(self, include_scale=True):
         """ Returns shape oriented, e.g., line-3-0
         """
@@ -142,7 +195,9 @@ class PrimitiveClass(object):
         - output, string name for how to extract
         """
 
-        if output=="primtuple":
+        if output=="label_unique":
+            return self.label_classify_prim()
+        elif output=="primtuple":
             return self._convert_to_primtuple()
         if output=="primtuple_string":
             return self._convert_to_primtuple(as_string=True)
