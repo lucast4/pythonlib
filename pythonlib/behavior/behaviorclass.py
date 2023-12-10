@@ -477,7 +477,7 @@ class BehaviorClass(object):
 
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
-            include_scale=True, input_grid_xy=None):
+            include_scale=True, input_grid_xy=None, reclassify_shape_using_stroke=False):
         """
         [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
@@ -486,6 +486,7 @@ class BehaviorClass(object):
         PARAMS:
         - expt, str, name of expt which is used for defining params for extracting stroke labels. 
         e..g, things like size of sketchpad grid. None, to use self.Expt
+        - reclassify_shape_using_stroke, see Dataset()
         RETURNS:
         - datsegs, list of dicts, each w same keys, each a single token, length of beh strokes
         MODIFIES:
@@ -498,11 +499,25 @@ class BehaviorClass(object):
         indepednetly matching each beh stroke to its best-matching task stroke.
         """
         import copy
-        
+
+        # THought about having datsegs always dynamically computed, but decided that might be
+        # too expensive.
+        # if not recompute:
+        #     # Then load already-computed from Task
+        #     Task = self.task_extract()
+        #     # datsegs = Task.tokens_generate(assert_computed=True)
+        #     # # Now use the aligned task inds
+        #     inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
+        #     datsegs = Task.tokens_reorder(inds_taskstrokes)
+        #     # # Saved cached datsegs
+        #     # self.Alignsim_Datsegs = datsegs
+
         if not recompute:
             # Load cached datsegs
             if self.Alignsim_Datsegs is not None:
                 return self.Alignsim_Datsegs
+            else:
+                assert False, "you expect it to already be computed"
 
         # If you are computing, then you should pass in input_grid_xy
         if input_grid_xy is None:
@@ -523,7 +538,8 @@ class BehaviorClass(object):
         hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
         Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
             assert_computed=False,
-            include_scale=include_scale, input_grid_xy=input_grid_xy) # generate the defualt order
+            include_scale=include_scale, input_grid_xy=input_grid_xy,
+                             reclassify_shape_using_stroke=reclassify_shape_using_stroke) # generate the defualt order
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
