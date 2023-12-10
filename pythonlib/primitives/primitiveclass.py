@@ -151,7 +151,7 @@ class PrimitiveClass(object):
             loc2 = S.Stroke[0, :2]
         else:
             loc1 = S.Stroke[0, :2]
-            loc2 = S.Stroke[1, :2]
+            loc2 = S.Stroke[-1, :2]
 
         # - center --> onset
         vec1 = loc1 - cen # vec from cen to onset.
