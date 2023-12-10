@@ -1029,6 +1029,13 @@ class Dataset(object):
 
             _save_chars_score_to_text(chars_this, scores_this, f"__task_stagecategory_{cat}")
 
+            figbeh, figtask, _, _ = self.taskcharacter_plot_examples(chars_this,
+                                                                            titles=scores_this)
+            savefig(figbeh, f"{sdir}/task_stagecategory_{cat}-drawings_sorted_byscore-beh.pdf")
+            savefig(figtask, f"{sdir}/task_stagecategory_{cat}-drawings_sorted_byscore-task.pdf")
+            plt.close("all")
+
+
     def taskcharacter_plot_examples(self, list_char, titles=None,
                                     nmax=60):
         """ Plot a gridplot, one example for each char, in the
@@ -1062,7 +1069,7 @@ class Dataset(object):
         return inds, chars
 
     def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False,
-                                                sdir=None):
+                                                sdir=None, n_iter=3, nmax=60):
         """ Get list of characters sorted by their avreage score across trials.
         PARAMS:
         - scorename, str name of score to use. 
@@ -1093,11 +1100,12 @@ class Dataset(object):
             # Plot
             # -- get one trial for each char
             from pythonlib.tools.pandastools import extract_trials_spanning_variable
-            n_iter = 3
             for i in range(n_iter):
                 print("Plotting...", i)
                 figbeh, figtask, _, _ = self.taskcharacter_plot_examples(list_char,
-                                                                                titles=list_score)
+                                                                                titles=list_score,
+                                                                         nmax=nmax)
+                print("saving to:", f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
                 savefig(figbeh, f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
                 savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
                 plt.close("all")
@@ -1631,9 +1639,14 @@ class Dataset(object):
         else:
             return tokens
 
-    def taskclass_shapes_loc_configuration_extract(self, ind):
+    def taskclass_shapes_loc_configuration_extract(self, ind, loc_version="gridloc",
+                                                   use_recomputed_prim_labels=False):
         """ Extract the shapes or location config (global) for this task. 
-        Ignores behavior. 
+        Ignores behavior.
+        PARAMS;:
+        - use_recomputed_prim_labels, bool[False], if True, then recomputes for each prim the
+        (shape, scale, angle). This is important for cases where extra transforms are applied
+        to prims in matlab, (usually only for chars).
         RETURNS:
         - dict, 
         --- "shape":tuple of str, eahc a shape
@@ -1644,9 +1657,18 @@ class Dataset(object):
         """
         tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
 
+        if loc_version=="gridloc":
+            LOC = "gridloc"
+        elif loc_version=="pixel":
+            LOC = "center"
+        else:
+            print(loc_version)
+            assert False
+
         list_shapes = tuple(sort_mixed_type([t["shape"] for t in tokens]))
-        list_loc = tuple(sort_mixed_type([t["gridloc"] for t in tokens]))
-        list_shape_loc = tuple(sort_mixed_type([(t["shape"], t["gridloc"]) for t in tokens]))
+        list_loc = tuple(sort_mixed_type([t[LOC] for t in tokens]))
+        list_shape_loc = tuple(sort_mixed_type([(t["shape"], t[LOC]) for t in tokens]))
+        # list_shape_loc = tuple([(t["shape"], t[LOC]) for t in tokens])
 
         return {
             "shape":list_shapes,
@@ -1688,6 +1710,22 @@ class Dataset(object):
             shapes.extend(self.taskclass_shapes_extract(ind))
 
         return sorted(list(set(shapes)))
+
+    def taskclass_check_prims_extra_params_tforms_exist(self):
+        """ check if, out of all trials, any of them applyh
+        additiaonl tforms to prims in matlab code. if so, then
+        cannot represnt them as line-10-0-1... etc.
+        """
+
+        # Check just once and cacjhe it
+        if not hasattr(self, "_TaskclassCheckPrimsExtraParams"):
+            self._TaskclassCheckPrimsExtraParams=False
+            for ind in range(len(self.Dat)):
+                T = self.Dat.iloc[ind]["Task"]
+                if T.check_prims_extra_params_exist():
+                    self._TaskclassCheckPrimsExtraParams=True
+                    break
+        return self._TaskclassCheckPrimsExtraParams
 
     def taskclass_shapes_extract(self, ind):
         """ Return list of shape strings used in 
@@ -3095,6 +3133,15 @@ class Dataset(object):
         self.Dat["strokes_task"] = strokes_task_list_out
 
 
+    def sketchpad_compute_diagonal_using_all_strokes(self):
+        """ First get the new sketchpad that uses all of task strokes
+        across trials (bounding box) then return the diagonal.
+        Think of this as the largest relevant distance in this dataset...
+        """
+        edges = self.recomputeSketchpadEdgesAll(strokes_ver="strokes_task")
+        corner1 = edges[0,:] # (xmin, ymin)
+        corner2 = edges[1,:]
+        return np.linalg.norm(corner2 - corner1)
 
     def recomputeSketchpadEdgesAll(self, strokes_ver="strokes_beh"):
         """ 
@@ -3102,7 +3149,8 @@ class Dataset(object):
         Will be affected if there are outliers (without "All", isntead
         will exlcude outliers)
         RETURNS:
-        - in format [[-x, -y], [+x, +y]]. does not save in self
+        - in format [[-x, -y], [+x, +y]]. does not save in self, ie edges[:,0] is
+        xlim.
         """
         from pythonlib.drawmodel.image import get_sketchpad_edges_from_strokes
         strokes_list = list(self.Dat[strokes_ver].values)
@@ -6064,12 +6112,14 @@ class Dataset(object):
 
 
 
-    def _behclass_tokens_extract_datsegs(self, use_global_grid=True):
+    def _behclass_tokens_extract_datsegs(self, use_global_grid=True,
+                                         ind=None):
         """ Extract, single time, all task datsegs toekns.
         PARAMS:
         - use_global_grid, bool, if True, then gets gridx and gridx across
         all tasks in this dataset. otherwise uses the grid specific to each
         task.
+        - ind, either None (gets all) or a single trial.
         """
 
         if use_global_grid:
@@ -6077,13 +6127,22 @@ class Dataset(object):
         else:
             input_grid_xy = None
 
-        print("Running D._behclass_tokens_extract_datsegs")
-        # if expt==""
-        for i in range(len(self.Dat)):
-            Beh = self.Dat.iloc[i]["BehClass"]
-            Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy)
-            if i%200==0:
-                print(i, "_behclass_tokens_extract_datsegs")
+        # if extra tforms exist, then shapes need to use the actuals trokes to be redefined.
+        reclassify_shape_using_stroke = self.taskclass_check_prims_extra_params_tforms_exist()
+
+        if ind is None:
+            print("Running D._behclass_tokens_extract_datsegs")
+            # if expt==""
+            for i in range(len(self.Dat)):
+                Beh = self.Dat.iloc[i]["BehClass"]
+                Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
+                                             reclassify_shape_using_stroke=reclassify_shape_using_stroke)
+                if i%200==0:
+                    print(i, "_behclass_tokens_extract_datsegs")
+        else:
+            Beh = self.Dat.iloc[ind]["BehClass"]
+            Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
+                                         reclassify_shape_using_stroke=reclassify_shape_using_stroke)
 
     def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
