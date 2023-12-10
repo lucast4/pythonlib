@@ -542,6 +542,12 @@ def _groupingParams(D, expt):
                 preprocess_assign_stim_code(D, map_ttl_region=map_ttl_region, 
                     code_ignore_within_trial_time=code_ignore_within_trial_time)
 
+                # Hack
+                if D.animals()==["Diego"] and D.Dat["date"].unique().tolist()==['231209']:
+                    # Then stim was accidnetially off between trials 219 and 268
+                    D.Dat["microstim_epoch_code"]
+                    D.Dat.loc[(D.Dat["trial"]>=219) & (D.Dat["trial"]<=268), "microstim_epoch_code"] = "off"
+
                 # 2) get grouping.
                 grouping_vars = ["epoch", "microstim_epoch_code"]
                 D.supervision_reassign_epoch_byvars(grouping_vars)
