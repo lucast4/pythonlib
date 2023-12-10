@@ -196,7 +196,7 @@ class PrimitiveClass(object):
         """
 
         if output=="label_unique":
-            return self.label_classify_prim()
+            return self.label_classify_prim_using_stroke()
         elif output=="primtuple":
             return self._convert_to_primtuple()
         if output=="primtuple_string":
