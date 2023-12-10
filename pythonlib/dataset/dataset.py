@@ -7728,6 +7728,11 @@ class Dataset(object):
                                                              only_keep_epochsets_containing_all_epochs=True,
                                                              exclude_leftover=True) 
 
+        if len(map_epochset_trialcode_0)==0 or len(map_epochset_trialcode_01)==0:
+            # then didnt have even a single char that have multiple epochs...
+            self.Dat["strokes01_sameness"] = "neither"
+            return
+
         try:
             assert len(map_epochset_trialcode_0.keys())==1, "kind of hacky, might need to fix this... PROBAABLY YOU NEED OT REMOVE BASELINE FIRST"
             assert len(map_epochset_trialcode_01.keys())==1

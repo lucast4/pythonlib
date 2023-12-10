@@ -149,6 +149,10 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2" # Pancho, dirgrammarPancho1 (8/2023)
 
     grouping_map_tasksequencer_to_rule[(
+        'prot_prims_chunks_in_order', 
+        ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2'))] = "AnBmCk2NODIR" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2_FIRSTSTROKEONLY', 
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2FstStk" # Pancho, dirgrammarPancho1 (8/2023)
 
@@ -1203,7 +1207,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
     for r in ["LVl1", "lVL1", "VlL1"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
-    for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b"]:
+    for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b", "AnBmCk2NODIR"]:
         # repeat A, repeat B, e... 
         # Can do any order within A...
         DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
@@ -1306,6 +1310,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
+        ("AnBmCk2NODIR",):["ss-rank-AnBmCk2NODIR"], # AnBmCk, no dir rule within shapes.
         ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
         ("AnBmCk1a",):_get_rankdir_variations(["AnBmCk1a"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
         ("AnBmCk1b",):_get_rankdir_variations(["AnBmCk1b"]) + _get_direction_variations(["L"]), #  dirgrammarPancho1
