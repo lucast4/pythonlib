@@ -87,7 +87,7 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
                                  save_convert_keys_to_str=True,
                                  savepath = f"{sdir}/actions_groupings.txt")
 
-        _, fig, _, _ = convert_to_2d_dataframe(df_actions, "epoch", "task_state_code", True);
+        _, fig, _, _ = convert_to_2d_dataframe(df_actions, "epoch", "task_state_code", True)
         savefig(fig, f"{sdir}/actions-counts-task_state_code.pdf")
 
         ## 2) Make GOOD PLOTS
@@ -136,6 +136,7 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
 
     # Save df_actions
     pd.to_pickle(df_actions, f"{sdir}/df_actions.pkl")
+    pd.to_pickle(Dc.Dat, f"{sdir}/df_dat.pkl")
     pd.to_pickle(Params, f"{sdir}/Params.pkl")
 
     return df_actions, df_actions_trial, Dc, Params
