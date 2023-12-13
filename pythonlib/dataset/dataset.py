@@ -7674,12 +7674,14 @@ class Dataset(object):
 
     def sequence_tasksequencer_shapeseq_assign(self):
         """
-        For each trial, extract its correct sequence of shapes
+        For each trial, extract its correct set of shapes
         based on tasksequencer rule, as a tuple of ints, where the ints
-        are codes for shapes. Auto extracts the map based on ruledict
+        are codes for shapes, sorted so that order doesnt matter.
+        Auto extracts the map based on ruledict.
+        If a trial's rule is not shape sequence, then gives it "UNKNOWN"  
         RETURNS:
         - assigns new column to self.Dat["taskconfig_shp_code"], with 
-        sorted tuple of ints (codes to shapes)
+        sorted tuple of ints (codes to shapes).
         """
 
         if "taskconfig_shp" not in self.Dat.columns:
@@ -7693,9 +7695,23 @@ class Dataset(object):
         MAP_SHAPE_CODE_byepoch = {}
         for epoch in list_epoch:
             if ruledict_by_epoch[epoch]["categ"]=="ss":
-                # Then this is sahpe sequence
-                shapes_ordered = ruledict_by_epoch[epoch]["params_good"][0]
                 
+                # Then this rule is about shapse. Force it to extract some sheapse.
+                if ruledict_by_epoch[epoch]["subcat"]=="rankdir":
+                    # Then this is sahpe sequence
+                    shapes_ordered = ruledict_by_epoch[epoch]["params_good"][0]
+                elif ruledict_by_epoch[epoch]["subcat"]=="rank":
+                    # Then this is sahpe sequence
+                    shapes_ordered = ruledict_by_epoch[epoch]["params_good"]
+                else:
+                    print(1, ruledict_by_epoch)
+                    print(2, ruledict_by_epoch[epoch])
+                    print(3, ruledict_by_epoch[epoch]["categ"])
+                    print(4, ruledict_by_epoch[epoch]["subcat"])
+                    assert False, "find the list of shapes."
+                assert isinstance(shapes_ordered, (list, tuple))
+                assert isinstance(shapes_ordered[0], str)            
+
                 # give a code
                 map_code_shape = {}
                 map_shape_code = {}
@@ -7707,16 +7723,26 @@ class Dataset(object):
                 MAP_SHAPE_CODE_byepoch[epoch] = map_shape_code
 
         ## For each trial, get its list of shapes, in codenum
-        list_shcode =[]
-        for ind in range(len(self.Dat)):
-            shapes = self.Dat.iloc[ind]["taskconfig_shp"]
-            epoch_orig = self.Dat.iloc[ind]["epoch_orig"]
-            if epoch_orig in MAP_SHAPE_CODE_byepoch.keys():
-                map_shape_code = MAP_SHAPE_CODE_byepoch[epoch_orig]
-                shapes_code = tuple(sorted([map_shape_code[sh] for sh in shapes]))
-            else:
-                shapes_code = tuple(["UNKNOWN"])
-            list_shcode.append(shapes_code)
+        try:
+            list_shcode =[]
+            for ind in range(len(self.Dat)):
+                shapes = self.Dat.iloc[ind]["taskconfig_shp"]
+                epoch_orig = self.Dat.iloc[ind]["epoch_orig"]
+                if epoch_orig in MAP_SHAPE_CODE_byepoch.keys():
+                    map_shape_code = MAP_SHAPE_CODE_byepoch[epoch_orig]
+                    shapes_code = tuple(sorted([map_shape_code[sh] for sh in shapes]))
+                else:
+                    shapes_code = tuple(["UNKNOWN"])
+                list_shcode.append(shapes_code)
+        except Exception as err:
+            print(1, ind)
+            print(2, shapes)
+            print(3, epoch_orig)
+            print(4, MAP_SHAPE_CODE_byepoch)
+            print(5, MAP_SHAPE_CODE_byepoch[epoch_orig])
+            print(6, map_shape_code)
+            print(7, shapes_code)
+            raise err
             
         print("New column in self.Dat[taskconfig_shploc_code]")
         self.Dat["taskconfig_shp_code"] = list_shcode

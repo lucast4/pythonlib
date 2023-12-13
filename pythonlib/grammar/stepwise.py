@@ -52,7 +52,8 @@ def preprocess_plot_actions_all(D):
     preprocess_plot_actions(Dc, suffix=f"splitbytime_half2")
 
 def preprocess_plot_actions(D, suffix=None, saveon=True):
-
+    """ Returns None, None, None, None if find mult parses exist
+    """
     from pythonlib.tools.pandastools import expand_categorical_variable_to_binary_variables
     from pythonlib.tools.snstools import rotateLabel
     from pythonlib.tools.pandastools import grouping_print_n_samples, convert_to_2d_dataframe
@@ -74,6 +75,10 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
 
     ### 1) Extract action-level data.
     df_actions, Params = extract_each_stroke_vs_rules(Dc)
+    if df_actions is None and Params is None:
+        # Then skip it.
+        return None, None, None, None
+
     _, df_actions_trial = dfactions_convert_to_trial_level(df_actions, Params)
 
     if saveon:
@@ -143,6 +148,7 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
     RETURNS:
         - df_actions, len of num strokes across all trials.
         - Params
+    -or- None, None, if any rule has multiple correct parses for a trial.. then it doesnt kknow what ot do.
     """
     list_res = []
 
@@ -171,7 +177,10 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
         beh = D.grammarparses_extract_beh_taskstroke_inds(ind)
         parses = D.grammarparses_parses_extract_trial(ind)
-        assert len(parses)==1, "this only coded for cases with single determinstic sequence otherwise is complex"
+        if len(parses)>1:
+            print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
+            return None, None
+        # assert len(parses)==1, "this only coded for cases with single determinstic sequence otherwise is complex"
         task = list(parses[0])
 
         # Get Tokens for this trial
@@ -220,7 +229,11 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
                 # for now, assume there is only a single parse per rule
                 parses_this_rule = [list(p) for p in parses_this_rule]
-                assert len(parses_this_rule)==1, "not yet coded for mjultiple parses. conceptualyl unclear."
+                if len(parses_this_rule)>1:
+                    print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
+                    return None, None
+
+                # assert len(parses_this_rule)==1, "not yet coded for mjultiple parses. conceptualyl unclear."
                 parse = parses_this_rule[0]
 
                 # Get remaining inds
