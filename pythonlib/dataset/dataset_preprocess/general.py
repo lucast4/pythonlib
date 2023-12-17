@@ -387,6 +387,7 @@ def _groupingParams(D, expt):
     elif "charstrokeseq" in expt:
         grouping_reassign = False
         color_is_considered_instruction = True
+        color_is_considered_instruction = True
 
     elif "gridlinecircle" in expt:
         grouping_reassign = True
@@ -469,6 +470,7 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
     elif "char" in expt:
+        color_is_considered_instruction = True
         color_is_considered_instruction = True
         pass
     else:
