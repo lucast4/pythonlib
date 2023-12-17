@@ -59,6 +59,8 @@ def _groupingParams(D, expt):
     mapper_taskset_to_category = {}
     mapper_auto_rename_probe_taskgroups = False
 
+    color_is_considered_instruction = False
+
     # # - Merge epochs names into a single new name
     # epoch_merge_dict = {
     #   "LCr2":["LCr1", "LCr2"]
@@ -228,7 +230,8 @@ def _groupingParams(D, expt):
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["microstim_code"]
         traintest_reassign_method = "supervision_except_color"
-        mapper_auto_rename_probe_taskgroups = True
+        mapper_auto_rename_probe_taskgroups = False
+        color_is_considered_instruction = True
         map_ttl_region = {
             3:"TTL3",
             4:"TTL4"
@@ -383,6 +386,7 @@ def _groupingParams(D, expt):
 
     elif "charstrokeseq" in expt:
         grouping_reassign = False
+        color_is_considered_instruction = True
 
     elif "gridlinecircle" in expt:
         grouping_reassign = True
@@ -465,6 +469,7 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
     elif "char" in expt:
+        color_is_considered_instruction = True
         pass
     else:
         # pass, just use defaults
@@ -572,7 +577,8 @@ def _groupingParams(D, expt):
 
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
-        mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip
+        mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip, \
+        color_is_considered_instruction
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
         mapper_character_to_category=None, append_probe_status=True,
@@ -893,7 +899,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
         mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict, \
-        epoch_append_cue_stim_flip \
+        epoch_append_cue_stim_flip, color_is_considered_instruction \
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
@@ -1026,6 +1032,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         probe_val = t_p.info_summarize_task()["probe"]["probe"]
         probe_list.append(probe_val)
     D.Dat["probe"] = probe_list
+
+    ### DEFINE what is "supervision_online" for this expt (i.e., handholding).
+    D.supervision_summarize_whether_is_instruction(color_is_considered_instruction)
 
     ### Rename things as monkey train test depenidng on expt
     if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:

@@ -798,19 +798,22 @@ def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron",
 
     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
-def convert_to_1d_dataframe_hist(df, col1, plot_hist=True):
+def convert_to_1d_dataframe_hist(df, col1, plot_hist=True, ax=None):
     """ Aggregate (usually counts for each level of col1).
     Plots a histogram, ordered by the n counts
     RETURNS:
     - labels, ncounts, list of str and ncounts, matching, sorted from high to low.
     - fig, ax
     """
+    import matplotlib.pyplot as plt
     x = df[col1].value_counts()
     labels = x.index
     ncounts = x.values
     if plot_hist:
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1,1)
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+        else:
+            fig = None
         ax.bar(labels, ncounts)
         # ax.set_xticks(ax.get_xticks(), ax.get_xticklabels(), rotation=45)
         plt.xticks(rotation=90)
@@ -2493,7 +2496,9 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
 
 
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
-                                           var_subplot, var_value, var_datapt):
+                                           var_subplot, var_value, var_datapt,
+                                           plot_text=True,
+                                           alpha=0.8, SIZE=3, shareaxes=False):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -2512,7 +2517,16 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     assert not x_lev_manip==y_lev_manip
 
     list_manip = [x_lev_manip, y_lev_manip]
+    assert x_lev_manip in dfthis[var_manip].tolist()
+    assert y_lev_manip in dfthis[var_manip].tolist()
+
     nmin = 1
+    if var_subplot is None:
+        # dummy
+        dfthis = dfthis.copy()
+        dfthis["dummy45"] = "dummy"
+        var_subplot = "dummy45"
+
     list_lev = dfthis[var_subplot].unique().tolist()
     list_datapt = dfthis[var_datapt].unique().tolist()
 
@@ -2543,9 +2557,11 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     # Make plots
     ncols = 3
     nrows = int(np.ceil(len(list_lev)/ncols))
-    SIZE = 3
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
+ # sharex=sharex, sharey=sharey)
 
+    list_xs = []
+    list_ys = []
     for ax, lev in zip(axes.flatten(), list_lev):
 
         # Collect data
@@ -2562,10 +2578,36 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         x_errors = dftmp_x[f"{var_value}_sem"]
         ys = dftmp_y[var_value]
         y_errors = dftmp_y[f"{var_value}_sem"]
-        plotScatter45(xs, ys, ax, labels=list_date, marker="o",
-                      x_errors=x_errors, y_errors=y_errors)
+        if plot_text:
+            labels = list_date
+        else:
+            labels = None
+
+        try:
+            plotScatter45(xs, ys, ax, labels=labels, marker="o",
+                          x_errors=x_errors, y_errors=y_errors, alpha=alpha)
+        except Exception as err:
+            raise err
         ax.set_title(lev)
         ax.set_xlabel(x_lev_manip)
         ax.set_ylabel(y_lev_manip)
+
+        list_xs.extend(xs)
+        list_ys.extend(ys)
+
+    if shareaxes:
+        MIN = min(list_xs + list_ys)
+        MAX = max(list_xs + list_ys)
+        # print(MIN, MAX)
+        delt = 0.1*(MAX-MIN)
+        if True:
+            # force min to be 0
+            MIN = 0
+        else:
+            MIN = MIN - delt
+        MAX = MAX + delt
+        for ax in axes.flatten():
+            ax.set_xlim(MIN, MAX)
+            ax.set_ylim(MIN, MAX)
 
     return dfres, fig

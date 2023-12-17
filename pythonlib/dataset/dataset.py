@@ -1037,39 +1037,60 @@ class Dataset(object):
 
 
     def taskcharacter_plot_examples(self, list_char, titles=None,
-                                    nmax=60):
+                                    nmax=60, plot_which="best_worst"):
         """ Plot a gridplot, one example for each char, in the
         order they are passed in.
         PARAMS:
         - nmax, if more than this then plots the first nmax/2 and last nmax/2
         """
-        inds, chars = self.taskcharacter_extract_examples(list_char)
+        inds, list_char = self.taskcharacter_extract_examples(list_char)
 
         if len(inds)>nmax:
-            n = int(np.floor(nmax/2))
-            inds = inds[:n] + inds[-n:]
-            chars = chars[:n] + chars[-n:]
-            titles = titles[:n] + titles[-n:]
+            idxs = list(range(len(list_char)))
+            assert len(idxs)==len(inds)
+            if plot_which=="best_worst":
+                # take from both ends
+                n = int(np.floor(nmax/2))
+                idxs = idxs[:n] + idxs[-n:]
+                # inds = inds[:n] + inds[-n:]
+            elif plot_which=="best":
+                # take best
+                idxs = idxs[:nmax]
+            elif plot_which=="worst":
+                idxs = idxs[-nmax:]
+            else:
+                print(plot_which)
+                assert False
+            # print(inds)
+            # print(len(inds), len(list_char))
+            inds = [inds[i] for i in idxs]
+            list_char = [list_char[i] for i in idxs]
+            titles = [titles[i] for i in idxs]
 
         figbeh, _, _ = self.plotMultTrials2(inds, which_strokes="strokes_beh",
-                                               titles=chars)
+                                               titles=list_char)
         figtask, _, _ = self.plotMultTrials2(inds, which_strokes="strokes_task",
                                                titles=titles)
-        return figbeh, figtask, inds, chars
+        return figbeh, figtask, inds, list_char
 
-    def taskcharacter_extract_examples(self, list_char, n=1):
+    def taskcharacter_extract_examples(self, list_char=None, n=1,
+                                       var="character"):
         """ Extract an example index for each of the chars in list_char
         RETURNS:
             - lsit of indices into self.Dat
             - matching list of char names,
         """
         from pythonlib.tools.pandastools import extract_trials_spanning_variable
-        inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char,
+        if list_char is None:
+            list_char = self.Dat[var].unique().tolist()
+
+        inds, chars = extract_trials_spanning_variable(self.Dat, var, list_char,
                                                        n_examples=n)
         return inds, chars
 
     def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False,
-                                                sdir=None, n_iter=3, nmax=60):
+                                                sdir=None, n_iter=3, nmax=60,
+                                                path_prefix=None):
         """ Get list of characters sorted by their avreage score across trials.
         PARAMS:
         - scorename, str name of score to use. 
@@ -1088,6 +1109,55 @@ class Dataset(object):
             list_score.append(sc)
             list_n.append(sum(self.Dat["character"]==char))
 
+        list_char, list_score, list_n = self._taskcharacter_find_plot_sorted_by_score(
+            list_char, list_score, plot, sdir, n_iter, nmax, path_prefix)
+
+        # # sort
+        # tmp = [(ch, sc, n) for ch, sc, n in zip(list_char, list_score, list_n)]
+        # tmp = sorted(tmp, key=lambda x:-x[1])
+        # list_char = [x[0] for x in tmp]
+        # list_score = [x[1] for x in tmp]
+        # list_n = [x[2] for x in tmp]
+        #
+        # if plot:
+        #     assert sdir is not None
+        #     # Plot
+        #     # -- get one trial for each char
+        #     from pythonlib.tools.pandastools import extract_trials_spanning_variable
+        #     for i in range(n_iter):
+        #         print("Plotting...", i)
+        #         figbeh, figtask, _, _ = self.taskcharacter_plot_examples(list_char,
+        #                                                                         titles=list_score,
+        #                                                                  nmax=nmax)
+        #         if path_prefix is not None:
+        #             print("saving to:", f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-beh.pdf")
+        #             savefig(figbeh, f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-beh.pdf")
+        #             savefig(figtask, f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-task.pdf")
+        #         else:
+        #             print("saving to:", f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+        #             savefig(figbeh, f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+        #             savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+        #         plt.close("all")
+        #
+        # return list_char, list_score, list_n
+
+    def _taskcharacter_find_plot_sorted_by_score(self, list_char, list_score, plot=False,
+                                                sdir=None, n_iter=3, nmax=60,
+                                                path_prefix=None, plot_which="best_worst"):
+        """ Get list of characters sorted by their avreage score across trials.
+        PARAMS:
+        - scorename, str name of score to use.
+        - plot, whether to plot drawings, sinlge examples, in a grid, sorted
+        by score.
+        RETURNS"
+        - list_char, list of characters, sorted in decresing order of score.
+        - list_score, list of num, scores matching the char.
+        """
+
+        list_n = []
+        for char in list_char:
+            list_n.append(sum(self.Dat["character"]==char))
+
         # sort
         tmp = [(ch, sc, n) for ch, sc, n in zip(list_char, list_score, list_n)]
         tmp = sorted(tmp, key=lambda x:-x[1])
@@ -1104,31 +1174,16 @@ class Dataset(object):
                 print("Plotting...", i)
                 figbeh, figtask, _, _ = self.taskcharacter_plot_examples(list_char,
                                                                                 titles=list_score,
-                                                                         nmax=nmax)
-                print("saving to:", f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-                savefig(figbeh, f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-                savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
+                                                                         nmax=nmax, plot_which=plot_which)
+                if path_prefix is not None:
+                    print("saving to:", f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-beh.pdf")
+                    savefig(figbeh, f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-beh.pdf")
+                    savefig(figtask, f"{sdir}/{path_prefix}-drawings_sorted_byscore-iter{i}-task.pdf")
+                else:
+                    print("saving to:", f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+                    savefig(figbeh, f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
+                    savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
                 plt.close("all")
-                # inds, chars = extract_trials_spanning_variable(self.Dat, "character", list_char)
-                # assert chars == list_char
-                #
-                #
-                # if len(inds)<60:
-                #     indsthis = inds
-                #     charsthis = chars
-                #     list_score_this = list_score
-                # else:
-                #     indsthis = inds[:30] + inds[-30:]
-                #     charsthis = chars[:30] + chars[-30:]
-                #     list_score_this = list_score[:30] + list_score[-30:]
-
-                # -- plot
-                # fig, axes, idxs = self.plotMultTrials2(indsthis, titles=charsthis, SIZE=3);
-                # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-beh.pdf")
-                # fig, axes, idxs = self.plotMultTrials2(indsthis, "strokes_task", titles=list_score_this);
-                # fig.savefig(f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
-                #
-                # plt.close("all")
 
         return list_char, list_score, list_n
 
@@ -2711,13 +2766,16 @@ class Dataset(object):
                     elif p=="rescale_to_1":
                         self.rescaleStrokes()
                     elif p=="no_supervision":
-                        # Remove trials with online sequence supervision
+                        # Remove trials with online sequence supervision.
+                        # Color can be optionally considered a sequence supervision (e.g.,
+                        # for charstorkeseq) wheras in other expts it is not (e.g., colsup).
                         if False:
                             LIST_NO_SUPERV = ["off|0||0", "off|1|solid|0", "off|1|rank|0"]
                             self.Dat = self.Dat[self.Dat["supervision_stage_concise"].isin(LIST_NO_SUPERV)]
                         else:
                             # Better, since goes directly to what param matters.
-                            self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"]
+                            # self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"] # OLD VERSION, wasnt general enbough
+                            self.Dat = self.Dat[self.Dat["supervision_online"]==False]
                     elif p=="remove_online_abort":
                         # Remove trials with online abort
                         self.Dat = self.Dat[self.Dat["aborted"]==False]
@@ -4790,7 +4848,7 @@ class Dataset(object):
         - saveon, then overwrites file.
         - reload_parser_each_time, then reloads from disk this parser. Useful if doing in parallel multiple
         extractions over datasets, so that can make sure is loading the latest Parser.
-        #TODO: split stuff operating on Tasks vs on Beh trial (top vs. bottom, see comments)
+        # TODO: split stuff operating on Tasks vs on Beh trial (top vs. bottom, see comments)
         """
         ################# MODIFY THESE
         list_rule = ["baseline", "linetocircle", "circletoline", "lolli"] # should not be ony the one for this expt
@@ -6437,7 +6495,7 @@ class Dataset(object):
             print(f"Appended self.Dat[superv_{key}]")
 
 
-    def supervision_check_is_online_instruction(self, ind, color_is_considered_instruction=False):
+    def _supervision_check_is_online_instruction(self, ind, color_is_considered_instruction=False):
         """ Returns True if this trial used any form of online supervision
         PARAMS;
         - color_is_considered_instruction, bool(False), whether to consider color cues as supervision.
@@ -6775,20 +6833,25 @@ class Dataset(object):
             for k, v in tmp.items():
                 print("--", k, ":", v)
 
-    
-
     def supervision_summarize_whether_is_instruction(self, color_is_considered_instruction=False):
-        """ For each trial, determine True/False whether this had online 
+        """ [FINAL WORD} on whether trial is considered having hand-holding
+        online instruction, across equence and color usp methods.
+        (and any others).
+        For each trial, determine True/False whether this had online
         supervision, based on key parameters like color, sequence presentation, etc
+        --> Appends new column "supervision_online"
         """
-
         list_issup = []
         for ind in range(len(self.Dat)):
-            list_issup.append(self.supervision_check_is_online_instruction(ind, 
+            list_issup.append(self._supervision_check_is_online_instruction(ind,
                 color_is_considered_instruction=color_is_considered_instruction))            
         self.Dat["supervision_online"] = list_issup
         print("ADded new column: supervision_online")
 
+        # NOTE: superv_semantic coud be used insetead... Here, just making a note of that.
+        if False:
+            self.supervision_semantic_string_append("superv_semantic")
+            self.grouping_print_n_samples(["superv_semantic", "supervision_online"])
 
     ############## EPOCHSET stuff
     def _epochset_extract_common_stroke_index(self, list_stroke_index, 

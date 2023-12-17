@@ -365,8 +365,10 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                         mapper_taskname_epoch_to_taskclass)
                     tokens = TaskProbe.tokens_generate()
                     n_tok = len(tokens)
-                    more_n_strokes = n_tok > max(list_nstrok_in_train)
-
+                    try:
+                        more_n_strokes = n_tok > max(list_nstrok_in_train)
+                    except Exception as err:
+                        raise err
                     ### GIVE PROBE TASK CATEGORY A NAME
                     c = _classify_probe_task(novel_location_config, equidistant, 
                         novel_location_shape_combo, more_n_strokes, detailed=CLASSIFY_PROBE_DETAILED)

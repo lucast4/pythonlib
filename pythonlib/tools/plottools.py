@@ -484,6 +484,13 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     precedence over plot_string_ind
     """
 
+
+    # Repalce nan errors with 0
+    x_errors = x_errors.copy()
+    x_errors[np.isnan(x_errors)] = 0
+    y_errors = y_errors.copy()
+    y_errors[np.isnan(y_errors)] = 0
+
     # ax.plot(x, y, marker, alpha=alpha)
     ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha)
 
@@ -516,7 +523,7 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     if labels is not None:
         assert len(labels)==len(x)
         for l, xx, yy in zip(labels, x,y):
-            ax.text(xx, yy, l, alpha=0.5)
+            ax.text(xx, yy, l, alpha=0.5, fontsize=6)
     else:
 
         if plot_string_ind:

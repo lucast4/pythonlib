@@ -696,6 +696,24 @@ class DatStrokes(object):
         """
         self.Dataset = DatNew
 
+    def dataset_prune_self_to_match_dataset(self, D=None):
+        """
+        Prune self.Dat to match trialcodes present in D (either pass
+        in, or uses self.Dataset
+        :param
+        D:
+        :return:
+        (Modifies self.Dat)
+        """
+
+        if D is None:
+            D = self.Dataset
+
+        print("Starting len of self.Dat:", len(self.Dat))
+        trialcodes = D.Dat["trialcode"].tolist()
+        dfout = self.dataset_slice_by("trialcode", trialcodes).reset_index(drop=True)
+        self.Dat = dfout
+        print("Ending len of self.Dat:", len(self.Dat))
     def dataset_prune_to_match_self(self):
         """ Replaces self.Dataset with slice that
         only contains trialcodes that exist in self.Dat.
