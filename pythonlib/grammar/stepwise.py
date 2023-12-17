@@ -163,7 +163,10 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
         RULE_FOR_SHAPE = list_rules_using_shapes[0]
     else:
         print(list_rules_using_shapes)
-        assert False, "Multiple rules that care about hsapes... not sure what to do"
+        print("Multiple rules that care about hsapes... not sure what to do.")
+        # assert False, "Multiple rules that care about hsapes... not sure what to do"
+        return None, None
+
     # RULE_FOR_SHAPE = "ss-rankdir-AnBmCk2" # which rule to use to define if got the corect shape.
     # RULE_FOR_SHAPE = "dir-null-L" # which rule to use to define if got the corect shape.
 
