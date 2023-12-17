@@ -49,7 +49,7 @@ def _add_binary_rule_tuple_col(df, rule_cols):
 # return new dataframe object, with trialnum, epoch, character, trialcode, and rule booleans
 def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False, 
     how_define_correct_order="epoch", DEBUG=False, return_as_bmh_object=True,
-                                        ONLY_ACTUAL_RULE=False):
+                                        ONLY_ACTUAL_RULE=False, USE_DATASET_DF=True):
     """High-level extraction for each trial its parses under each given rule, including
     rules that are not conssteitnw with a trials' ecpoh (i.e., get all rules, regardless
     of epoch) [column = "score"], and also and evaluate whether this trials' beahvhiro 
@@ -65,6 +65,7 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     correct sequence using the saved sequen inematlab or recomputed based on rules
     - ONLY_ACTUAL_RULE, bool, if True, then only includes agents/rules which match the
     rulestring of the actual trial.
+    - USE_DATASET_DF, then merges D.Dat into output Dataframe.
     RETURNS:
     - df, with important columns score and success_binary_quick
     --- one row for conjunction of trial x rule (in list_rules).
@@ -229,6 +230,13 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
         LIST_exclude_because_online_abort.append(exclude_because_online_abort)
 
     dfGramScore = pd.DataFrame(results)
+
+    if USE_DATASET_DF:
+        # merge the dataframes
+        assert np.all(dfGramScore["trialcode"]==D.Dat["trialcode"])
+        columns_keep = [x for x in dfGramScore.columns if (x not in D.Dat or x=="trialcode")]
+        dfGramScore = dfGramScore.loc[:, columns_keep]
+        dfGramScore = pd.merge(dfGramScore, D.Dat, on="trialcode", suffixes=(None, None)) # suffixes flag means it will throw error if olverapping columns
 
     # Append things to dfgramscore
     D.Dat["success_binary_quick"] = LIST_success_binary
