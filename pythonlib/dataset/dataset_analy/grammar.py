@@ -283,10 +283,10 @@ def pipeline_generate_and_plot_all(D,
                     bmh.stats_score_permutation_test(df=dfthis, var="microstim_epoch_code", savedir=sdir, split_plots_by=None, suffix=f"code_{code}-flat")
 
             ############# time-dependence
+            sdir = f"{savedir}/by_time"
+            plot_binned_by_time(D, sdir)
             if "microstim_epoch_code" in bmh.DatLong.columns:
-                sdir = f"{savedir}/by_time"
                 os.makedirs(sdir, exist_ok=True)
-                plot_binned_by_time(D, sdir)
                 plot_trial_by_trial(D, sdir)
 
             ######### 2) Plot summary
@@ -356,15 +356,14 @@ def plot_binned_by_time(D, sdir):
 
     Dc = D.copy()
     Dc.preprocessGood(params=["remove_baseline", "no_supervision"])
-    dfthis = Dc.Dat
-    print(len(dfthis))
+    # print(len(Dc.Dat))
 
     ############### SPLIT BY TIME (TIME BINS)
     # bin trials and assing to dataframe
     from pythonlib.tools.nptools import bin_values
-    list_sess = dfthis["session"].unique().tolist()
+    list_sess = Dc.Dat["session"].unique().tolist()
     for sess in list_sess:
-        dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
+        dfthissess = Dc.Dat[Dc.Dat["session"]==sess].reset_index(drop=True)
         # sort by trial
         dfthissess = dfthissess.sort_values(by="trial")
         for nbins in [2,4,8]:
@@ -375,8 +374,9 @@ def plot_binned_by_time(D, sdir):
             y = "success_binary_quick"
             for split_by in LIST_SPLIT_BY:
                 fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", ci=68)
-                savefig(fig, f"{sdir}/binned_time-nbins_{nbins}-sess_{sess}-splitby_{split_by}.pdf")   
-
+                path = f"{sdir}/binned_time-nbins_{nbins}-sess_{sess}-splitby_{split_by}.pdf"
+                savefig(fig, path)
+                print(path)
                 plt.close("all")
 
 

@@ -24,6 +24,9 @@ def preprocess_plot_actions_all(D):
     ## 1) Plot all
     preprocess_plot_actions(D)
 
+    # - separate for first stroke vs. non-first strokes
+
+
     # 2) 1 plot per epojhsettt
     # Separate for each epochset
     list_epochset = D.Dat["epochset"].unique().tolist()
@@ -51,7 +54,7 @@ def preprocess_plot_actions_all(D):
     Dc.Dat = Dc.Dat[Dc.Dat["trialcode_tuple"]>tc_mid].reset_index(drop=True)
     preprocess_plot_actions(Dc, suffix=f"splitbytime_half2")
 
-def preprocess_plot_actions(D, suffix=None, saveon=True):
+def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
     """ Returns None, None, None, None if find mult parses exist
     """
     from pythonlib.tools.pandastools import expand_categorical_variable_to_binary_variables
@@ -79,6 +82,21 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
         # Then skip it.
         return None, None, None, None
 
+    ### Cleanup actions:
+    if cleanup_actions:
+        # 1. Remove cases with only one option left
+        from pythonlib.tools.pandastools import applyFunctionToAllRows
+        def F(x):
+            """ Return n remaining taskinds"""
+            return len(x["taskinds_features"])
+        df_actions = applyFunctionToAllRows(df_actions, F, "n_remain_taskinds")
+        df_actions = df_actions[df_actions["n_remain_taskinds"]>1].reset_index(drop=True)
+
+        # 2. cases where failure has already occured in that trial. i.e, only consider first failures.
+        df_actions["already_failed"].value_counts()
+        df_actions = df_actions[df_actions["already_failed"]==False].reset_index(drop=True)
+
+    ### Get trial-level actions.
     _, df_actions_trial = dfactions_convert_to_trial_level(df_actions, Params)
 
     if saveon:
@@ -125,6 +143,21 @@ def preprocess_plot_actions(D, suffix=None, saveon=True):
 
             plt.close("all")
 
+            # First
+            df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]==0]
+            fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-FIRST_ACTION.pdf")
+
+            df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]>0]
+            fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                kind="point", ci=68, aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-NOT_FIRST_ACTION.pdf")
+
+            plt.close("all")
+
         df_actions_trial_expand = expand_categorical_variable_to_binary_variables(df_actions_trial,
                                                                                   "trial_sequence_outcome")
         fig = sns.catplot(data=df_actions_trial_expand, x="trial_sequence_outcome", y="value", kind="point", hue="epoch", ci=68,
@@ -151,6 +184,14 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
         - Params
     -or- None, None, if any rule has multiple correct parses for a trial.. then it doesnt kknow what ot do.
     """
+
+    HACK_ADD_LEFT_RULE=True # Pancho, when doign RIGHT, he seems to sometimes revert to LEFT. in this case,
+    # want to also evaluate if using LEFT>
+
+    FORCE_SINGLE_PARSE_PER_RULE = False
+    if FORCE_SINGLE_PARSE_PER_RULE==False:
+        print("NOTE: State code will not be accurate. it can say that a rule's ti overlaps closest. But this is just of the many ti for the rule...")
+
     list_res = []
 
     # To ask about choices of "correct shape, wrong location", determine whether any rules care about
@@ -172,6 +213,11 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
     rulestrings_check = sorted(D.grammarparses_rulestrings_exist_in_dataset()) # get rules that are used int his day
     # rulestrings_check = rulestrings_check[:-1]
+
+    if HACK_ADD_LEFT_RULE:
+        if rulestrings_check[0]=="dir-null-R":
+            rulestrings_check = rulestrings_check[:1] + ["dir-null-L"] + rulestrings_check[1:]
+
     map_ruleidx_rulestring = {i:rule for i, rule in enumerate(rulestrings_check)}
     map_rulestr_ruleidx = {rule:i for i, rule in enumerate(rulestrings_check)}
 
@@ -180,12 +226,16 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
         rulestring, _ = D.grammarparses_ruledict_rulestring_extract(ind) # rulesring for this trial
 
         beh = D.grammarparses_extract_beh_taskstroke_inds(ind)
-        parses = D.grammarparses_parses_extract_trial(ind)
-        if len(parses)>1:
-            print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
-            return None, None
-        # assert len(parses)==1, "this only coded for cases with single determinstic sequence otherwise is complex"
-        task = list(parses[0])
+
+        if False: # Dont need this. it was only used for getting unordered "task"
+            parses = D.grammarparses_parses_extract_trial(ind)
+            if len(parses)>1:
+                print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
+                return None, None
+            # assert len(parses)==1, "this only coded for cases with single determinstic sequence otherwise is complex"
+            task = list(parses[0])
+
+        task = list(range(len(D.Dat.iloc[ind]["strokes_task"])))
 
         # Get Tokens for this trial
         tokens = D.taskclass_tokens_extract_wrapper(ind, "task")
@@ -205,6 +255,8 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
 
             return taskinds_already_gotten, taskinds_remain
 
+        # track if you have already failed this trial
+        already_failed = False
         for idx_stroke, taskind_beh in enumerate(beh):
 
             if DEBUG:
@@ -227,26 +279,44 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 return [p for p in parse if p in taskinds_remain]
 
             # 3) for each rule, find the correct taskinds sequencig, according to rule
-            taskinds_remain_each_rule = {}
-            for i, rule in enumerate(rulestrings_check):
-                parses_this_rule = g.parses_extract_generated(rule)
+            if FORCE_SINGLE_PARSE_PER_RULE:
+                taskinds_remain_each_rule = {}
+                for i, rule in enumerate(rulestrings_check):
+                    parses_this_rule = g.parses_extract_generated(rule)
 
-                # for now, assume there is only a single parse per rule
-                parses_this_rule = [list(p) for p in parses_this_rule]
-                if len(parses_this_rule)>1:
-                    print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
-                    return None, None
+                    # for now, assume there is only a single parse per rule
+                    parses_this_rule = [list(p) for p in parses_this_rule]
+                    if len(parses_this_rule)>1:
+                        print("EXITING stepwise, since not yet coded for mjultiple parses. conceptualyl unclear.")
+                        return None, None
 
-                # assert len(parses_this_rule)==1, "not yet coded for mjultiple parses. conceptualyl unclear."
-                parse = parses_this_rule[0]
+                    # assert len(parses_this_rule)==1, "not yet coded for mjultiple parses. conceptualyl unclear."
+                    parse = parses_this_rule[0]
 
-                # Get remaining inds
-                taskinds_parse_remain = _remaining_inds_in_order_of_parse(parse)
-                taskinds_remain_each_rule[rule] = taskinds_parse_remain
+                    # Get remaining inds
+                    taskinds_parse_remain = _remaining_inds_in_order_of_parse(parse)
+                    taskinds_remain_each_rule[rule] = taskinds_parse_remain
+            else:
+                def _remaining_ind_this_rule_all_parses(rule):
+                    """ Fopr each parses for this rule, return
+                    all possible future trajctories.
+                    RETURNS:
+                        - list_parse_remain = list of list, where inner
+                        list is future taskinds for one parse. outer list is len
+                        num parses
+                    """
+                    parses_this_rule = g.parses_extract_generated(rule)
+                    parses_this_rule = [list(p) for p in parses_this_rule]
+                    list_parse_remain = []
+                    for parse in parses_this_rule:
+                        # Get remaining inds
+                        taskinds_parse_remain = _remaining_inds_in_order_of_parse(parse)
+                        list_parse_remain.append(taskinds_parse_remain)
+                    return list_parse_remain
 
             ### Collect features overall the remaining taskinds.
             taskinds_features = []
-            VAR_LOC = "loc_concrete" # problem: doesnt work for fixation. and doesnt break ties.
+            # VAR_LOC = "loc_concrete" # problem: doesnt work for fixation. and doesnt break ties.
             VAR_LOC = "center"
             for ti in taskinds_remain:
                 # give this a dict holding its features
@@ -275,17 +345,28 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 features["trans_prev_beh"] = (x_trans, y_trans)
 
                 # 2) is it the correct next stroke, given each rule
-                for rule in taskinds_remain_each_rule.keys():
-                    features[f"correct_rule_{rule}"] = ti==taskinds_remain_each_rule[rule][0]
-
+                for rule in rulestrings_check:
+                    if FORCE_SINGLE_PARSE_PER_RULE:
+                        features[f"correct_rule_{rule}"] = ti==taskinds_remain_each_rule[rule][0]
+                    else:
+                        # Consider rule correct if _any_ of its parses are aligned with next stroke.
+                        list_parse_remain = _remaining_ind_this_rule_all_parses(rule)
+                        features[f"correct_rule_{rule}"] = False # initialize
+                        for taskinds_remain in list_parse_remain:
+                            if ti==taskinds_remain[0]:
+                                # then found a match
+                                features[f"correct_rule_{rule}"] = True
+                                break
                 taskinds_features.append(features)
 
             # Get correct ti for each rule, in list
             map_rulestr_correctti = {}
+            map_rulestr_correctti_list = {}
             for rule in rulestrings_check:
                 tmp = [features["taskind"] for features in taskinds_features if features[f"correct_rule_{rule}"]==True]
-                assert len(tmp)==1, "can only be one correct parse..."
-                map_rulestr_correctti[rule] = tmp[0]
+                # assert len(tmp)==1, "can only be one correct parse..."
+                # map_rulestr_correctti[rule] = tmp[0]
+                map_rulestr_correctti_list[rule] = tmp
 
             ### Features that require comparing across remaining taskinds
             # 1) which ti is closest in space to prev beh stroke.
@@ -304,10 +385,13 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
             # can have multiple rules if they share same "correct taskind"
             nslots = len(rulestrings_check)+1 # [closest, rule0, rule1, ..]
             state_code = [[] for _ in range(nslots)]
+
             for i, rule in enumerate(rulestrings_check):
-                ti_rule_this = map_rulestr_correctti[rule]
+                # ti_rule_this = map_rulestr_correctti[rule]
                 ADDED = False
-                if ti_rule_this in ti_closest_list:
+
+                if any([x in ti_closest_list for x in map_rulestr_correctti_list[rule]]):
+                # if map_rulestr_correctti[rule] in ti_closest_list:
                     # put in slot 0, all those that are close.
                     state_code[0].append(i)
                     ADDED = True
@@ -320,9 +404,9 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                             break
                         else:
                             rs_other = map_ruleidx_rulestring[slot[0]] # any index would igve same result.
-                            ti_other = map_rulestr_correctti[rs_other]
 
-                            if ti_other==ti_rule_this:
+                            if any([x in map_rulestr_correctti_list[rs_other] for x in map_rulestr_correctti_list[rule]]):
+                            # if map_rulestr_correctti[rs_other]==map_rulestr_correctti[rule]:
                                 # Then they are the same ti. put them in same slot.
                                 slot.append(i)
                                 ADDED = True
@@ -332,21 +416,29 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                                 continue
                 assert ADDED==True, "bug in code."
             state_code = tuple([tuple(sc) for sc in state_code])
+
             if DEBUG:
                 print(ti_closest_list, map_rulestr_correctti, state_code)
 
             ### [Semantic state] is the correct item for the correct rule
             # different from all other rules (including close).
-            ti_correct_rule = map_rulestr_correctti[rulestring]
-            ti_incorrect_list = [map_rulestr_correctti[r] for r in rulestrings_check if not r == rulestring] # ti for other rules.
-            state_crct_ti_uniq = ti_correct_rule not in (ti_closest_list + ti_incorrect_list)
-
+            if FORCE_SINGLE_PARSE_PER_RULE:
+                ti_correct_rule = map_rulestr_correctti[rulestring]
+                ti_incorrect_list = [map_rulestr_correctti[r] for r in rulestrings_check if not r == rulestring] # ti for other rules.
+                state_crct_ti_uniq = ti_correct_rule not in (ti_closest_list + ti_incorrect_list)
+            else:
+                ti_correct_rule_list = map_rulestr_correctti_list[rulestring]
+                ti_incorrect_list = [map_rulestr_correctti_list[r] for r in rulestrings_check if not r == rulestring]
+                ti_incorrect_list = [xx for x in ti_incorrect_list for xx in x] # flatten.
+                state_crct_ti_uniq = all([x not in (ti_closest_list + ti_incorrect_list) for x in ti_correct_rule_list])
 
             ### Label beh labels.
             # Did he pick the correct rule?
             # - even if the correc trule is the closest, still call it correct
             a = [taskind_beh in ti_closest_list]
-            b = [taskind_beh == map_rulestr_correctti[rs] for rs in rulestrings_check]
+            # b = [taskind_beh == map_rulestr_correctti[rs] for rs in rulestrings_check]
+            b = [taskind_beh in map_rulestr_correctti_list[rs] for rs in rulestrings_check]
+
 
             # 1) Did he choose the same shape?
             # same shape, different location
@@ -354,8 +446,15 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 # then no rule cares about shape ...
                 c = []
             else:
-                ti = map_rulestr_correctti[RULE_FOR_SHAPE]
-                shape_correct = map_taskind_tok[ti]["shape"]
+                if FORCE_SINGLE_PARSE_PER_RULE:
+                    ti = map_rulestr_correctti[RULE_FOR_SHAPE]
+                    shape_correct = map_taskind_tok[ti]["shape"]
+                else:
+                    ti_list = map_rulestr_correctti_list[RULE_FOR_SHAPE]
+                    shape_correct = [map_taskind_tok[ti]["shape"] for ti in ti_list]
+                    assert len(set(shape_correct))==1, "bug. next ti should have have same sahpe, if this is a shape rule"
+                    shape_correct = shape_correct[0]
+
                 shape_chosen = map_taskind_tok[taskind_beh]["shape"]
                 c = [shape_chosen == shape_correct]
 
@@ -410,12 +509,18 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 "correct_rulestr":rulestring,
                 "correct_ruleidx":map_rulestr_ruleidx[rulestring],
                 "choice_code":choice_code,
-                "choice_correct":taskind_beh == map_rulestr_correctti[rulestring],
+                # "choice_correct":taskind_beh == map_rulestr_correctti[rulestring],
+                "choice_correct":taskind_beh in map_rulestr_correctti_list[rulestring],
+                "already_failed":already_failed,
                 "taskind_beh":taskind_beh,
-                "taskind_correct":map_rulestr_correctti[rulestring],
+                # "taskind_correct":map_rulestr_correctti[rulestring],
+                "taskind_list_correct":map_rulestr_correctti_list[rulestring],
                 "taskinds_features":taskinds_features
             }
             list_res.append(resthis)
+            if resthis["choice_correct"]==False:
+                # Track failures.
+                already_failed = True
 
     # Convert to df
     dfactions = pd.DataFrame(list_res)
@@ -505,3 +610,5 @@ def dfactions_convert_to_trial_level(dfactions, Params):
                                                  "trial_sequence_outcome"])
 
     return dfactions, dfactions_trial
+
+

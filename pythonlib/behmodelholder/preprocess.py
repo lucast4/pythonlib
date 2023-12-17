@@ -215,10 +215,13 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
                 "character":D.Dat.iloc[ind]["character"],
                 "epochset":D.Dat.iloc[ind]["epochset"] if "epochset" in D.Dat.columns else None,
                 "taskfeat_cat":D.Dat.iloc[ind]["taskfeat_cat"] if "taskfeat_cat" in D.Dat.columns else None,
-                "superv_SEQUENCE_SUP":D.Dat.iloc[ind]["superv_SEQUENCE_SUP"],                
+                "superv_SEQUENCE_SUP":D.Dat.iloc[ind]["superv_SEQUENCE_SUP"],
                 "which_probe_blockset":which_probe_blockset,
                 "parsesdict":GD.parses_extract_generated(rule)
             })
+
+            if "microstim_epoch_code" in D.Dat.columns:
+                results[-1]["microstim_epoch_code"] = D.Dat.iloc[ind]["microstim_epoch_code"]
 
         LIST_success_binary.append(success_binary)
         LIST_beh_sequence_wrong.append(beh_sequence_wrong)
@@ -302,6 +305,8 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
     # if "which_probe_blockset" not in D.Dat.columns:
     #     from pythonlib.dataset.dataset_analy.learning import preprocess_dataset as learn_preprocess
     #     learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
+
+    assert False, "merge this with generate_scored_beh_model_data_long"
 
     D.preprocessGood(params=["remove_baseline"])
 
