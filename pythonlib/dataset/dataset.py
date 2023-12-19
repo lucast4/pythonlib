@@ -1112,6 +1112,7 @@ class Dataset(object):
         list_char, list_score, list_n = self._taskcharacter_find_plot_sorted_by_score(
             list_char, list_score, plot, sdir, n_iter, nmax, path_prefix)
 
+        return list_char, list_score, list_n
         # # sort
         # tmp = [(ch, sc, n) for ch, sc, n in zip(list_char, list_score, list_n)]
         # tmp = sorted(tmp, key=lambda x:-x[1])
@@ -1139,7 +1140,6 @@ class Dataset(object):
         #             savefig(figtask, f"{sdir}/drawings_sorted_byscore-iter{i}-task.pdf")
         #         plt.close("all")
         #
-        # return list_char, list_score, list_n
 
     def _taskcharacter_find_plot_sorted_by_score(self, list_char, list_score, plot=False,
                                                 sdir=None, n_iter=3, nmax=60,
