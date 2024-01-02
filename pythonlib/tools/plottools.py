@@ -117,7 +117,7 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
-def color_make_pallete_categories(df, category_name):
+def color_make_pallete_categories(df, category_name, cmap="turbo"):
     """ 
     Make colors for categorical variables.
     PARAMS;
@@ -129,7 +129,7 @@ def color_make_pallete_categories(df, category_name):
     val is (4,) np array, rgba
     """
     levels = sorted(df[category_name].unique().tolist())
-    cols_arrays = makeColors(len(levels), cmap="turbo")
+    cols_arrays = makeColors(len(levels), cmap=cmap)
     pallete = {}
     for lev, col in zip(levels, cols_arrays):
         pallete[lev] = col

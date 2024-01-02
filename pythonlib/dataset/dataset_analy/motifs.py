@@ -63,11 +63,12 @@ class MotifsClass(object):
         #     assert False
         #     # not sure what this means (shapes_to_ignore = ['squiggle3-2-0', 'V-2-0' ,'Lcentered-4-0'])
         #     shapes_to_ignore = ['squiggle3-2-0', 'V-2-0' ,'Lcentered-4-0']
+        from pythonlib.tools.listtools import sort_mixed_type
         motifs_all_dict = generate_dict_of_all_used_motifs(self.Dataset, nprims, features, 
                                                             WHICH_DATSEGS = which_sequence, 
                                                            shapes_to_ignore=shapes_to_ignore)
         self._MotifsAllDict = motifs_all_dict
-        self.MotifsList = sorted(list(motifs_all_dict.keys()))
+        self.MotifsList = sort_mixed_type(list(motifs_all_dict.keys()))
 
     def motifs_all_dict_extract(self):
         """ The original reprenstiaton, before moved here in to Class
@@ -653,7 +654,7 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
         motifs_all_dict = motifs_all_dict_new
 
     print("Found this many motifs: ", len(motifs_all_dict))
-    sorted(list(motifs_all_dict.keys()))
+    # sorted(list(motifs_all_dict.keys()))
     print("This many instances per motif_features: ", [len(v) for k, v in motifs_all_dict.items()])
     
     return motifs_all_dict
@@ -1185,4 +1186,4 @@ def prune_dataset_unique_shapes_only(D):
             indtrial_keep.append(indtrial)
 
     print(len(indtrial_keep))
-D.subsetDataframe(indtrial_keep)    
+    D.subsetDataframe(indtrial_keep)

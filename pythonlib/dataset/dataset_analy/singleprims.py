@@ -12,6 +12,10 @@ import seaborn as sns
 def preprocess_dataset(D, PLOT=True):
     """
     """
+
+    # D = D.copy()
+    # D.Dat = D.Dat[D.Dat["task_kind"] == "prims_single"].reset_index(drop=True)
+
     SAVEDIR = D.make_savedir_for_analysis_figures("singleprims")
     D.taskclass_gridsize_assign_column()
 

@@ -23,6 +23,9 @@ def preprocess_dataset(D, doplots=False):
     SAVEDIR = D.make_savedir_for_analysis_figures("prims_in_grid")
     # USE tHIS!!!
 
+    D = D.copy()
+    D.Dat = D.Dat[D.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+
     D.preprocessGood(params=["beh_strokes_at_least_one"])
 
     # Determine if aborts were befaucs sequence error...

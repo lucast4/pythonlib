@@ -1,7 +1,6 @@
 """ Methods to find motifs in unordered tokens, e.g., caring only about locations 
 and relations, like all possible lollipops, WITHOUT caring about sequence used by
 monkey. This previously was in discrete (3/5/23)
-
 """
 
 import numpy as np

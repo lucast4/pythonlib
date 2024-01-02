@@ -237,7 +237,8 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
     return dfres, grouping
 
 
-def plot_triallevel_results(DS, contrast, savedir):
+def plot_triallevel_results(DS, contrast, savedir, context=None,
+                            yvars=None):
     """
     """
     from pythonlib.tools.snstools import rotateLabel
@@ -252,14 +253,19 @@ def plot_triallevel_results(DS, contrast, savedir):
         DS.Dat = append_col_with_grp_index(DS.Dat, ["stroke_index", "locshape_pre_this"], "strk_idx_ctxt", use_strings=False)
         CONTEXT_VAR = "strk_idx_ctxt"
     else:
-        CONTEXT_VAR = "locshape_pre_this"
+        if context is None:
+            CONTEXT_VAR = "locshape_pre_this"
+        else:
+            CONTEXT_VAR = context
+    if yvars is None:
+        yvars = ["dist_beh_task_strok", "time_duration", "velocity", "distcum", "gap_from_prev_dur",
+        "gap_from_prev_dist", "gap_from_prev_vel"]
 
     N_MIN_PER_BLOCK = 10
     # LIST_SHAPE = ["locshape_pre_this", "shape", "shapeabstract"]
-    LIST_SHAPE = ["locshape_pre_this"]
-    for y in ["dist_beh_task_strok", "time_duration", "velocity", "distcum", "gap_from_prev_dur", 
-        "gap_from_prev_dist", "gap_from_prev_vel"]:
-        # for sh in ["sh_loc_idx", "shape", "shapeabstract"]:
+    # LIST_SHAPE = ["locshape_pre_this"]
+    LIST_SHAPE = [CONTEXT_VAR]
+    for y in yvars:
         for bk in list_block:
             for sh in LIST_SHAPE:
                 for epoch_orig in list_epoch_orig:
@@ -320,17 +326,17 @@ def plot_triallevel_results(DS, contrast, savedir):
         plt.close("all")
 
         ###############
-        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="locshape_pre_this",
+        fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col=CONTEXT_VAR,
                           col_wrap=4, jitter=True, alpha=0.4)
         rotateLabel(fig)
-        savefig(fig, f"{savedir}/locshape_pre_this-triallevel-{contrast}-{y}-1.pdf")
+        savefig(fig, f"{savedir}/{CONTEXT_VAR}-triallevel-{contrast}-{y}-1.pdf")
 
         # sns.catplot(data=DS.Dat, x="epoch", y=contrast, hue="sh_loc_idx", col="sh_loc_idx", kind="point")
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, col="sh_loc_idx",
         #                   col_wrap=4, kind="point")
-        fig = sns.catplot(data=DS.Dat, x="locshape_pre_this", y=y, hue=contrast, kind="point", ci=68, aspect=2.5)
+        fig = sns.catplot(data=DS.Dat, x=CONTEXT_VAR, y=y, hue=contrast, kind="point", ci=68, aspect=2.5)
         rotateLabel(fig)
-        savefig(fig, f"{savedir}/locshape_pre_this-triallevel-{contrast}-{y}-2.pdf")
+        savefig(fig, f"{savedir}/{CONTEXT_VAR}-triallevel-{contrast}-{y}-2.pdf")
 
         plt.close("all")
 

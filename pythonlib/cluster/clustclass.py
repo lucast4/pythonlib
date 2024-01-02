@@ -291,17 +291,23 @@ class Clusters(object):
         - col_cluster, not necessary, but useful for visualization. 
         """    
         import seaborn as sns
-        
-        if "hier_clust_seaborn" not in self.ClusterResults.keys():
-            cg = sns.clustermap(self.Xinput, row_cluster=True, col_cluster=True)
-            self.ClusterResults["hier_clust_seaborn"] = cg
 
-        # Plot
-        cg = self.ClusterResults["hier_clust_seaborn"]
+        if len(self.Xinput)==0:
+            assert False
 
-        # Label axes both col and row.
-        self._hier_clust_label_axis(cg, "col")
-        self._hier_clust_label_axis(cg, "row")
+        try:
+            if "hier_clust_seaborn" not in self.ClusterResults.keys():
+                cg = sns.clustermap(self.Xinput, row_cluster=True, col_cluster=True)
+                self.ClusterResults["hier_clust_seaborn"] = cg
+
+            # Plot
+            cg = self.ClusterResults["hier_clust_seaborn"]
+
+            # Label axes both col and row.
+            self._hier_clust_label_axis(cg, "col")
+            self._hier_clust_label_axis(cg, "row")
+        except Exception as err:
+            cg = None
 
         return cg
 

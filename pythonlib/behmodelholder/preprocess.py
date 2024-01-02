@@ -314,7 +314,7 @@ def generate_scored_beh_model_data_matlabrule(D, binary_rule=False,
     #     from pythonlib.dataset.dataset_analy.learning import preprocess_dataset as learn_preprocess
     #     learn_preprocess(D, remove_repeated_trials=remove_repeated_trials)
 
-    assert False, "merge this with generate_scored_beh_model_data_long"
+    # assert False, "merge this with generate_scored_beh_model_data_long"
 
     D.preprocessGood(params=["remove_baseline"])
 

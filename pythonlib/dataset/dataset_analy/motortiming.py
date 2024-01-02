@@ -12,12 +12,12 @@ import seaborn as sns
 from pythonlib.tools.snstools import rotateLabel
 
 
-def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None, 
+def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
         microstim_version=False, prune_strokes=False,
         VARS_CONTEXT=None):
     """
     [GOOD}]
-    GAPSTROKES -- analysis of gaps and strokes... 
+    GAPSTROKES -- analysis of gaps and strokes...
     Extract stroke and gaps and their timings, etc.
     Not related to grammar
     RETURNS:
@@ -36,10 +36,84 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
 
     if params_preprocess is not None:
         D.preprocessGood(params=params_preprocess)
-        
+
     # Generate DatStrokes
     from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
+
+    # Condition for gapstrokes analyses.
+    DS = _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=microstim_version,
+                                                              prune_strokes=prune_strokes,
+                                                              VARS_CONTEXT=VARS_CONTEXT)
+
+    return DS, SAVEDIR
+
+    #
+    # # Compute motor timing
+    # DS.timing_extract_basic()
+    # DS.dataset_append_column("block")
+    # DS.dataset_append_column("epoch_orig")
+    # DS.dataset_append_column("probe")
+    # DS.dataset_append_column("epoch")
+    #
+    # # From pig
+    # D.seqcontext_preprocess()
+    # D.taskclass_shapes_loc_configuration_assign_column()
+    #
+    # # Compute image similarity.
+    # DS.distgood_compute_beh_task_strok_distances()
+    #
+    # if prune_strokes:
+    #     # Then, ad-hoc params, for removing the really bad strokes.
+    #     # These determed from Luca primsingridrand data.
+    #
+    #     if False:
+    #         DS.plot_multiple_after_slicing_within_range_values("distcum", 0, 61, True)
+    #         DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 20, 35, True)
+    #         DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 35, 400, True)
+    #
+    #     methods = ["stroke_too_short", "beh_task_dist_too_large"]
+    #     params = {
+    #         "min_stroke_length":60,
+    #         "min_beh_task_dist":35
+    #     }
+    #     DS.clean_preprocess_data(methods=methods, params=params)
+    #
+    #
+    # ############### PREPROCESS
+    # vel = DS.Dat["gap_from_prev_dist"]/DS.Dat["gap_from_prev_dur"]
+    # DS.Dat["gap_from_prev_vel"] = vel
+    #
+    # ############# CONTEXT
+    # from pythonlib.tools.pandastools import append_col_with_grp_index
+    # DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape"], "shape_pre_this", use_strings=False)
+    # DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_loc_prev", "gridloc"], "loc_pre_this", use_strings=False)
+    # DS.Dat = append_col_with_grp_index(DS.Dat, ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"], "locshape_pre_this", use_strings=False)
+    # DS.Dat = append_col_with_grp_index(DS.Dat, ["shape", "gridloc", "stroke_index"], "sh_loc_idx", use_strings=True)
+    # ## Extract sequential context, user-defiined
+    # if VARS_CONTEXT is None:
+    #     DS.Dat["context"] = DS.Dat["locshape_pre_this"] # Default
+    # else:
+    #     DS.Dat = append_col_with_grp_index(DS.Dat, VARS_CONTEXT, new_col_name="context")
+    #
+    # ##
+    # if microstim_version:
+    #     print("KEEPING data so that each locshape_pre_this x epoch_orig has at least one datapt per stim condition")
+    #     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars, grouping_append_and_return_inner_items
+    #     DS.dataset_append_column("microstim_epoch_code")
+    #     # Then enforce that each locshape_pre_this x epoch_orig has at least one datapt per stim condition
+    #     # group to make a new var
+    #     DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"],
+    #                                            n_min=1)
+
+    ########### additional motor stuff
+    # return DS, SAVEDIR
+
+
+def _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=False, prune_strokes=False,
+        VARS_CONTEXT=None):
+
+    D = DS.Dataset
 
     # Compute motor timing
     DS.timing_extract_basic()
@@ -51,7 +125,7 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
     # From pig
     D.seqcontext_preprocess()
     D.taskclass_shapes_loc_configuration_assign_column()
-    
+
     # Compute image similarity.
     DS.distgood_compute_beh_task_strok_distances()
 
@@ -61,8 +135,8 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
 
         if False:
             DS.plot_multiple_after_slicing_within_range_values("distcum", 0, 61, True)
-            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 20, 35, True)        
-            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 35, 400, True)        
+            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 20, 35, True)
+            DS.plot_multiple_after_slicing_within_range_values("dist_beh_task_strok", 35, 400, True)
 
         methods = ["stroke_too_short", "beh_task_dist_too_large"]
         params = {
@@ -95,11 +169,11 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
         DS.dataset_append_column("microstim_epoch_code")
         # Then enforce that each locshape_pre_this x epoch_orig has at least one datapt per stim condition
         # group to make a new var
-        DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"], 
+        DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"],
                                                n_min=1)
 
     ########### additional motor stuff
-    return DS, SAVEDIR
+    return DS
 
 def gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
     DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D)
@@ -156,7 +230,7 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
 
         ### first, prune to keep only context with at least 2 stroke indices
         n_min = 5
-        DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=[VAR_CONTEXT], 
+        DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=[VAR_CONTEXT],
                                                n_min = n_min, lenient_allow_data_if_has_n_levels=2)
         print(len(DS.Dat))
         print(len(DFTHIS))
@@ -173,10 +247,10 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
             valmean = np.mean(tmp)
             x["valmean"] = valmean
             x[f"{Y}_NORMED"] = x[Y] - valmean
-            
+
             # which set of stroke indices (from last) exist
             x["set_stroke_index_fromlast"] = [tuple(sorted(set(x["stroke_index_fromlast"]))) for _ in range(len(x))]
-            
+
             return x
         DFTHIS = DFTHIS.groupby(VAR_CONTEXT).apply(F)
 
@@ -195,11 +269,11 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
             # sns.catplot(data=DFTHIS, x=VAR, y=f"{Y}_NORMED", kind="point", alpha=0.2, row = "set_stroke_index_fromlast", hue="stroke_index")
             # sns.catplot(data=DFTHIS, x=VAR, y=f"{Y}_NORMED", jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", hue="stroke_index")
             fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, col=VAR_CONTEXT, col_wrap=4, jitter=True, hue=VAR_HUE)
-            # fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, col=VAR_CONTEXT, 
+            # fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, col=VAR_CONTEXT,
             #         row = "set_stroke_index_fromlast", jitter=True, hue=VAR_HUE)
             savefig(fig, f"{savedir}/{valthis}-1.pdf")
             plt.close("all")
-            
+
             fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= "set_stroke_index_fromlast", ci=68)
             savefig(fig, f"{savedir}/{valthis}-2.pdf")
             plt.close("all")
@@ -216,24 +290,24 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
             savefig(fig, f"{savedir}/{valthis}-5.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", ci=68)    
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", ci=68)
             savefig(fig, f"{savedir}/{valthis}-6.pdf")
             plt.close("all")
 
 
-def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess, 
+def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess,
     n_min = 3, PLOT=True, microstim_version=False):
-    """ 
+    """
     [NOTE: is identical to gapstrokes_preprocess_extract_strokes_gaps, except prunes byu conjucntion'
     at end]
     Compare timing of gaps and strokes across variables, controlling for sequential context
     PARAMS;
     - VAR, string, the variable whos levels are compared
-    - VARS_CONTEXT, list of str variables, conjucntions determine context, e.g., 
+    - VARS_CONTEXT, list of str variables, conjucntions determine context, e.g.,
     VARS_CONTEXT = ["CTXT_loc_prev", "gridloc", "epoch"]
     VARS_CONTEXT = ["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"]
     e.g., compare timing for probes vs. non-probes.
-    - params_preprocess, 
+    - params_preprocess,
     e.g., params_preprocess = ["no_supervision", "one_to_one_beh_task_strokes", "correct_sequencing_binary_score", "only_blocks_with_probes"]
     RETURNS:
     - Saves figures...
@@ -247,7 +321,7 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     # D.preprocessGood(params=params_preprocess)
 
     # Get data strokes
-    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D, 
+    DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D,
         params_preprocess=params_preprocess,
         microstim_version=microstim_version,
         VARS_CONTEXT=VARS_CONTEXT)
@@ -265,7 +339,7 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     DS.dataset_append_column(VAR)
     #print("**** len DS (1)", len(DS.Dat))
     # NOTE: This prunes too much, like 50% of trials in one test case.
-    DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=["context"], 
+    DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=["context"],
                                            n_min = n_min, lenient_allow_data_if_has_n_levels=2)
     #print("**** len DS (2)", len(DFTHIS))
 
@@ -290,10 +364,10 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
             rotateLabel(fig)
             savefig(fig, f"{SAVEDIR}/gap_vel-2.pdf")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)    
+            fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_vel", hue="context", kind="point", aspect=0.5)
             rotateLabel(fig)
             savefig(fig, f"{SAVEDIR}/gap_vel-3.pdf")
-            
+
             fig = sns.catplot(data=DFTHIS, x="stroke_index", y="gap_from_prev_dur", hue=VAR,
                        col="context", col_wrap=3, alpha=0.5)
             rotateLabel(fig)
@@ -305,7 +379,7 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
                        col="context", col_wrap=3, kind="point")
             rotateLabel(fig)
             savefig(fig, f"{SAVEDIR}/gap_dur-2.pdf")
-            
+
 
             fig = sns.catplot(data=DFTHIS, x=VAR, y="gap_from_prev_dur", hue="context", kind="point", aspect=0.5)
             rotateLabel(fig)
@@ -354,7 +428,7 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
 
 def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
     """
-    Analysis of timing at transitions differentiated by whether are within or 
+    Analysis of timing at transitions differentiated by whether are within or
     across chunks, for grammar expereints. Does extyraction of chunks, and plots
     """
     if SAVEDIR is None:
@@ -389,7 +463,7 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
     # for ind in range(len(DS.Dat)):
     #     chunk_diff, rank_within_diff = DS.context_chunks_diff(ind, first_stroke_diff_to_zero=True)
     #     list_chunk_diff.append(chunk_diff)
-    # DS.Dat["chunk_diff_from_prev"] = list_chunk_diff 
+    # DS.Dat["chunk_diff_from_prev"] = list_chunk_diff
 
     # Epoch
     DS.dataset_append_column("epoch")
@@ -428,11 +502,11 @@ def _plotagg_vel_all(DS, savedir):
         # NOTE needed, just do catplot below.
         from pythonlib.tools.pandastools import aggregGeneral
         # aggregGeneral(DS.Dat, group=["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"])
-        DFAGG = aggregGeneral(DS.Dat, group=["CTXT_shape_prev", "shape", 
-                                             "stroke_index", "epoch", 
+        DFAGG = aggregGeneral(DS.Dat, group=["CTXT_shape_prev", "shape",
+                                             "stroke_index", "epoch",
                                              "epoch_chunkdiff",
                                              "chunk_diff_from_prev",
-                                            "shape_pre_this"], 
+                                            "shape_pre_this"],
                       values=["gap_from_prev_vel"])
 
     fig = sns.catplot(data=DS.Dat, x="stroke_index", y="gap_from_prev_vel", hue="epoch_chunkdiff",
@@ -449,13 +523,13 @@ def _plotagg_vel_all(DS, savedir):
 
 
     fig = sns.catplot(data=DS.Dat, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch_chunkdiff",
-               col="stroke_index", jitter=True, alpha=0.4)    
+               col="stroke_index", jitter=True, alpha=0.4)
     rotateLabel(fig)
     path = f"{savedir}/by_shapes-1.pdf"
     savefig(fig, path)
 
     fig = sns.catplot(data=DS.Dat, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch_chunkdiff",
-               col="stroke_index", kind="point")    
+               col="stroke_index", kind="point")
     rotateLabel(fig)
     path = f"{savedir}/by_shapes-2.pdf"
     savefig(fig, path)
@@ -467,7 +541,7 @@ def _plotscatter_durvsdist_all(DS, savedir):
     ################ Prune DS so that try to match, as much as possible, the shapes, locations, etc, across epochs.
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
     NMIN = 5
-    DFTHISGOOD, dict_df = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch", 
+    DFTHISGOOD, dict_df = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch",
                                           vars_others=["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"],
                                            n_min=NMIN, lenient_allow_data_if_has_n_levels=2)
     if len(DFTHISGOOD)==0:
@@ -646,7 +720,7 @@ def _plot_velocity_all(DS):
         x = "stroke_index"
         fig = sns.catplot(data=dfthis, x=x, y=y, hue=HUE, jitter=True, alpha=0.3, aspect=2)
         rotateLabel(fig)
-        
+
         fig = sns.catplot(data=dfthis, x=x, y=y, hue=HUE, kind="bar", alpha=0.3, aspect=2)
         rotateLabel(fig)
 
@@ -660,16 +734,16 @@ def _plot_velocity_all(DS):
     #     rotateLabel(fig)
 
 
-    fig = sns.catplot(data=DS.Dat, x="epoch", y="gap_from_prev_vel", hue="chunk_diff_from_prev", 
+    fig = sns.catplot(data=DS.Dat, x="epoch", y="gap_from_prev_vel", hue="chunk_diff_from_prev",
                       col="shape_pre_this", col_wrap=3, kind="bar", alpha=0.3, aspect=2)
     rotateLabel(fig)
 
 
-    fig = sns.catplot(data=DFTHISGOOD, x="shape_pre_this", y="gap_from_prev_vel", hue="chunk_diff_from_prev", 
+    fig = sns.catplot(data=DFTHISGOOD, x="shape_pre_this", y="gap_from_prev_vel", hue="chunk_diff_from_prev",
                       row="epoch", col="stroke_index", kind="bar", alpha=0.3, aspect=1)
     rotateLabel(fig)
 
-    # fig = sns.catplot(data=DS.Dat, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch", jitter=True, 
+    # fig = sns.catplot(data=DS.Dat, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch", jitter=True,
     #                   alpha=0.2, col="stroke_index", col_wrap=3)
     # rotateLabel(fig)
 
