@@ -284,9 +284,9 @@ def pipeline_generate_and_plot_all(D,
 
             ############# time-dependence
             sdir = f"{savedir}/by_time"
+            os.makedirs(sdir, exist_ok=True)
             plot_binned_by_time(D, sdir)
             if "microstim_epoch_code" in bmh.DatLong.columns:
-                os.makedirs(sdir, exist_ok=True)
                 plot_trial_by_trial(D, sdir)
 
             ######### 2) Plot summary

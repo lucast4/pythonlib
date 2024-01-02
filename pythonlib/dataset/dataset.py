@@ -1113,7 +1113,6 @@ class Dataset(object):
             list_char, list_score, plot, sdir, n_iter, nmax, path_prefix)
 
         return list_char, list_score, list_n
-
         # # sort
         # tmp = [(ch, sc, n) for ch, sc, n in zip(list_char, list_score, list_n)]
         # tmp = sorted(tmp, key=lambda x:-x[1])
