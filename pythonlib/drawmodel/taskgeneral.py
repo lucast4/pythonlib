@@ -572,6 +572,9 @@ class TaskClass(object):
         # a = len(T.PlanDat["PrimsExtraParams"])>
         # return a and b
 
+        if "PrimsExtraParams" not in self.PlanDat.keys():
+            return False
+
         return any([len(p)>0 for p in self.PlanDat["PrimsExtraParams"]])
 
     ########################

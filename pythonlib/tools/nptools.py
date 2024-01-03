@@ -184,3 +184,26 @@ def find_peaks_troughs(vals, PLOT=False):
             ax.plot(idx, 0, "xb")        
 
     return inds_peaks, inds_troughs
+
+
+def optimize_offset_to_align_tdt_ml2(vals_tdt, vals_ml2):
+    """
+    Find additive offset that minimaize diff (euclidian) between
+    these two vectors.
+    :param vals_tdt:
+    :param vals_ml2:
+    :return:
+    - offset, scalar, to add to vals_tdt, to minimize distance from
+    vals_ml2.
+    """
+    from scipy.optimize import minimize_scalar
+
+    assert vals_tdt.shape==vals_ml2.shape, "must be aligned in time"
+
+    def F(x):
+        # x = -1
+        v2_offset = (vals_tdt +x)
+        return np.mean((vals_ml2 - v2_offset)**2)
+
+    res = minimize_scalar(F)
+    return res.x
