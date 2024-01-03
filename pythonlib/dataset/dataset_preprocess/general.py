@@ -444,6 +444,10 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
 
+    elif "primsingrid3" in expt or "primsingrid4" in expt or "primsingrid5" in expt:
+        # Actually char expts, but didnt do color instructio, so just pass
+        pass
+
     # NO-- this day triggered by hand
     # elif expt=="priminvar5b" and int(D.Dat["date"].unique().tolist()[0])==231004:
     #     grouping_reassign = True
@@ -458,7 +462,7 @@ def _groupingParams(D, expt):
         # Is just single prims
         # Just use defaults.
         pass
-    elif "primsingridrand" in expt or "primsingridfixed" in expt:
+    elif "primsingridrand" in expt or "primsingridfixed" in expt or "primsingrid" in expt:
         # Just regulare prims in grid
         # Just use defaults.
         pass
@@ -470,7 +474,6 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
     elif "char" in expt:
-        color_is_considered_instruction = True
         color_is_considered_instruction = True
         pass
     else:
