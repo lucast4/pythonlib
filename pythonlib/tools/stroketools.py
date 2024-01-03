@@ -203,8 +203,11 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
     return strokes_sm
 
 def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False, 
-    plotprepost=False, dims=(0,1), demean=False):
-    """ filter each dimension of strokes (x,y).
+    plotprepost=False, dims=(0,1), demean=False,
+                  plotprepost_xy=False, DEBUG=False):
+    """
+    1/4/23 -
+    filter each dimension of strokes (x,y).
     strokes is list of strok where a strok is N x 2(or 3, for t)
     array. assumes evenly sampled in time.
     - Wn is critical frequencies. in same units as fs
@@ -212,28 +215,31 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
     [<num> None] hp
     [<num> <num>] bandpass
     - returns copy
+    NOTE: Tested taht this works well, better than smoothing, as long as the fs
+    is not too low. (for lowpass). If too low, then, obviously, becomes close to a single
+    dot.
     """
+
+    # plotprepost_xy = True
+
     from scipy import signal
     assert dims==(0,1), "not yet coded"
-#     # normalize the frequency based rel to nyquist freq
-#     nyq = 
+
     if Wn[0] is None:
         btype = "lowpass"
         Wn = Wn[1]
+        if not DEBUG:
+            assert Wn>=10, "for drawing task, going lower if prob mistake. esp if this strokes is velocity..."
     elif Wn[1] is None:
         btype = "highpass"
         Wn = Wn[0]
     else:
         btype = "bandpass"
-#     else:
-#         print(Wn)
-#         assert False, "not coded"
-        
+
+    # Filtering params
     sos = signal.butter(N, Wn, btype, analog=False, fs=fs, output='sos')
-    # print(sos.shape)
     padlen = 3 * (2 * len(sos) + 1 - min((sos[:, 2] == 0).sum(),
                         (sos[:, 5] == 0).sum()))
-
     if plotresponse:
         w, h = signal.sosfreqz(sos, fs=fs)
         plt.semilogx(w, 20 * np.log10(abs(h)))
@@ -245,24 +251,25 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
         plt.ylabel('Amplitude [dB]')
         plt.grid(which='both', axis='both')
         
-    # == apply filter
+    # Apply filter
     strokesfilt = []
-    for strok in strokes:
+    for _i, strok in enumerate(strokes):
 
         if np.all(np.isnan(strok[:,0])):
             # dont bother trying to smooth
             strokf = np.copy(strok)
         elif btype=="lowpass" and len(strok)<=padlen:
             # instead of filtering, uses smoothingw with adaptive windowsize
-
-            tmp = smoothStrokes([strok], fs, window_time=1/Wn, window_type="hanning",
-                         adapt_win_len="adapt")
+            strokf = smoothStrokes([strok], fs, window_time=1/Wn, window_type="hanning",
+                         adapt_win_len="adapt")[0]
             # print('--')
             # print(strok.shape)
             # print(tmp[0].shape)
             # print(strok[:,2])
             # print(tmp[0][:,2])
-            strokf = tmp[0]
+            # fig, ax = plt.subplots()
+            # ax.plot(strok[:,0], strok[:,1], '-xk')
+            # ax.plot(strokf[:,0], strokf[:,1], '-or')
             if False:
                 print("not enough data to filter - using smoothing instead, and adaptive windowsize")
         else:
@@ -276,16 +283,31 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
                 strokf += strokfmean
             else:
                 strokf[:,dims] = signal.sosfiltfilt(sos, strokf[:,dims], axis = 0)
-        
+
+        if plotprepost_xy:
+            # Overlay strokes on (x,y) plot
+            fig, ax = plt.subplots()
+            ax.plot(strok[:,0], strok[:,1], '-xk', alpha=0.8, label="input")
+            ax.plot(strokf[:,0], strokf[:,1], '-or', alpha=0.2, label="filtered")
+            # Compare to just smoothing
+            stroksm = smoothStrokes([strok], fs, window_time=1/Wn, window_type="hanning",
+                         adapt_win_len="adapt")[0]
+            ax.plot(stroksm[:,0], stroksm[:,1], '-og', alpha=0.2, label="smoothed")
+            plt.legend()
+            ax.set_title(f"Stroke {_i} (Wn={Wn})")
+
+        # Save
         strokesfilt.append(strokf)
         
-    # -- compare strokes pre and post
+    # -- compare strokes pre and post (timecourses)
     if plotprepost:
-        plt.figure(figsize=(10,10))
-        ax = plt.subplot(211)
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+        fig, axes = plt.subplots(2,1, sharex=True, sharey=True)
+        ax = axes.flatten()[0]
         plotDatStrokesTimecourse(strokes, ax=ax)
-        ax = plt.subplot(212)
+        ax = axes.flatten()[1]
         plotDatStrokesTimecourse(strokesfilt, ax=ax)
+        ax.set_title("strokesFilter() --> Filtered")
 
     return strokesfilt
         
@@ -303,7 +325,8 @@ def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filte
     
     """
     from pythonlib.tools.stroketools import strokesVelocity
-    
+
+    assert LP>10, "this leads to problesm see strokeVel"
     # 1) Get velocity and accel
     strokes_vel = strokesVelocity(strokes, fs, fs_new = fs_new, lowpass_freq=LP, do_pre_filter=do_pre_filter, ploton=ploton)[0]
     strokes_accel = strokesVelocity(strokes_vel, fs, fs_new=fs_new, lowpass_freq=LP, do_pre_filter=False, ploton=ploton)[0]
@@ -421,16 +444,45 @@ def strokes_bin_velocity_wrapper(strokes, fs, binsize=0.01, return_as_dataframe=
 #     fs_new = 30, do_pre_filter=False, clean=False):
 #NOTE: 2/8/23 - changed lowpass_freq to 5, this is what is used for plots generally, which
 # call this function..
-def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
-    fs_new = 30, do_pre_filter=False, clean=False):
-    """ gets velocity and speeds. 
+def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
+    fs_new = None, do_pre_filter=True, clean=True,
+    DEBUG = False, SKIP_POST_FILTERING_LOWPASS = False,
+                    ADAPTIVE_FS_NEW = True):
+    """
+    UPDATE 1/3/23 - Lots of testing.
+    Tested vairation in parasm here. And cleaned up code in strokeFilter().
+    Result:
+    - Most important is that (SKIP_POST_FILTERING_LOWPASS, lowpass_freq) should not have
+    lowpass_freq too low (<10hz), as this leads to weird behavior for short storkes, and is too
+    much smoothing (and edge effects). Note that for longer strokes this actually looks good.
+    Above 10hz is doing better, but 12hz is about as low as makes sense, if lower than edge is
+    filtered out. Note that is ok to NOT do tjhis (i.e., SKIP_POST_FILTERING_LOWPASS=False), but
+    this leads to noisy velocity traces.
+    - Decided that fs_new=25 and do_pre_filter=True is useful, as this helps reduced jitteriness
+    in the input x/y position data.
+    - Tested for Diego and Pancho, PIG and char, and Luca (in colony)
+    - Overall am satisfied that its working well, and generally across all stroke types.
+    Limitations:
+    - still too squiggly sometimes, but leave as is and can update in downstream code.
+    Did:
+    - Turned clean=True to default. This is becuase now clean actually means still quite swiggly, whears
+    previously clean was super smoothed, but not good.
+    To test:
+    - Run DS.extract_strokes_as_velocity_debug(), which makes plots showing each step of this computaiton.
+    - Looked closely at the velocioty traces (clear peaks) and speed (clear num peaks that matches
+    what expect based on the xy image).
+
+    OLDER DOC:
+    gets velocity and speeds.
     should first have filtered strokes to ~15-20hz. if not, then 
     activate flag to run filter here. 
     INPUTS:
     - fs, original sample rate (use this even if already filtered, as is always
     done if use the getTrialsStrokes code in uitls, which Dataset does use). e..g
     fs = filedata["params"]["sample_rate"]
-    - lowpass_freq, applies this to smooth at end.
+    - lowpass_freq, applies this to smooth at end (i.e., on vel traces, NOT on xy traces).
+    Therefore make this high. Keep it None, since it doesnt do much. Or
+    make it 15+ (ideally 20).
     - fs_new, how much to downsample before doing 5pt differnetiation. 
     assumes that have already filtered with lowpass below fs_new/2 [yes, filters
     at 15hz if use getTrialsStrokes. if have not, then set do_pre_filter=True,
@@ -438,7 +490,9 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     empriically, 30hz for fs_new wiorks well. the ;opwer ot is thje smoother
     the velocy (e.g, 10-15 woudl be good). 
     - clean, then this is what I consider good for plotting, smooth bumps, etc. used
-    in the wrapper code for plotting. 
+    in the wrapper code for plotting. Dont go lower than 15hz, can leads to very weid thigns.
+    - SKIP_POST_FILTERING_LOWPASS, bool, keep True to skip  lowpass_freq, sicne its not
+    doing much.
     - NOTES:
     Processing steps:
     - downsamples (linear)
@@ -458,40 +512,100 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
     
     UPDATE 10/15/23 - to cmpute speed after ALL steps for computing velocity (interpoalte, filter) otherwise
     you get negative values for speed...
-    """
+    """ 
 
-    if fs_new is None:
-        fs_new = 30
+    # if fs_new is None or fs_new ==30:
+    #     print("here", fs_new)
+    #     assert False
+    import matplotlib.pyplot as plt
 
+    # Prep variables.
     strokes = [x.copy() for x in strokes]
-
-    if clean:
-        lowpass_freq = 5
-        
     sample_rate = fs
+    if DEBUG:
+        ploton=True
+
+    # Defaults
+    if fs_new is None:
+        fs_new = 25
+    if lowpass_freq is None:
+        lowpass_freq = 12
+    if False:
+        if lowpass_freq<15:
+            print(lowpass_freq)
+            assert False, "too low leads to weird thigns, as this filter applies on VELOCITY, not on XY"
+
+    # Overwrite with good set of params. (See docs).
+    if clean:
+    #     # used to be 5, but
+    #     # assert False, "dont use <15hz,, leads to weird things"
+        # Why these params? See above.
+        # Turn on filtering of input xy
+        do_pre_filter = True
+        fs_new = 25
+        # Turn on final filtering of vels
+        SKIP_POST_FILTERING_LOWPASS = False
+        lowpass_freq = 12
+    #     lowpass_freq = 15
+
+        # Filtering is adaptive
+        ADAPTIVE_FS_NEW = True
 
     if ploton:
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(10, 25))
-    
+        fig, axes = plt.subplots(6,1, figsize=(10, 25))
+
     if do_pre_filter:
+        # Filter, lowpass < half of fs_new.
+        if ploton:
+            ax = axes.flatten()[0]
+            ax.set_title(f'stroke (xy) before and after fitlter ({fs_new/2}hz) (fsorig={sample_rate})')
+            for strok in strokes:
+                for i in [0,1]:
+                    ax.plot(strok[:,2], strok[:,i], label=f"dim{i}")
         strokes = strokesFilter(strokes, Wn = [None, fs_new/2], 
-        fs = sample_rate)
+            fs = sample_rate)
+        if ploton:
+            for strok in strokes:
+                for i in [0,1]:
+                    ax.plot(strok[:,2], strok[:,i], label=f"dim{i}")
 
     # ----- 1) downsample, this leads to better estimate for velocity.
     # before downsasmple, save vec length for later upsample
-    n_each_stroke = [s.shape[0] for s in strokes]
-    strokes_down = strokesInterpolate2(strokes, N=["fsnew", fs_new, sample_rate])
+    # OBSOLETE - do filtering of each strok one by one instead.
+    # n_each_stroke = [s.shape[0] for s in strokes]
+    # strokes_down = strokesInterpolate2(strokes, N=["fsnew", fs_new, sample_rate])
 
     # containers for velocities and speeds
     strokes_vels = []
     strokes_speeds = []
-    for j, (strok, n_orig) in enumerate(zip(strokes_down, n_each_stroke)):
-        
+
+    # for j, (strok, n_orig) in enumerate(zip(strokes_down, n_each_stroke)):
+    for strok_orig in strokes:
+
+        ## Interpolate.
+        n_orig = strok_orig.shape[0]
+        n_new_predicted = int(np.floor(n_orig * (fs_new/sample_rate)))
+        if n_new_predicted<6 and ADAPTIVE_FS_NEW:
+            # Then adaptively change fs to stil be able to compute
+
+            fs_new_this = int(np.ceil((6 * sample_rate)/n_orig))
+            n_new_predicted = int(np.floor(n_orig * (fs_new_this/sample_rate)))
+            if DEBUG:
+                print("ADAPTIVE (fsnew, npts)", fs_new_this, n_new_predicted)
+        else:
+            fs_new_this = fs_new
+        strok = strokesInterpolate2([strok_orig], N=["fsnew", fs_new_this, sample_rate])[0]    
         time = strok[:,2].reshape(-1,1)
 
-        # minimum length or else will not return velocity
         if len(time)<6:
+            if ADAPTIVE_FS_NEW:
+                # THen too short. shouldnt get here if adaptve
+                print("orig fs: ", sample_rate)
+                print("new fs: ", fs_new_this)
+                print("len strok_orig old: ", len(strok_orig))
+                print("len strok new: ", len(strok))
+                assert False
+
             # then don't bother getting belocity
             print("skipping differnetiation, stroke too short. giving NAN")
             strok_vels_t = np.empty((n_orig, 3))
@@ -505,17 +619,16 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
             strokes_vels.append(strok_vels_t)
             strokes_speeds.append(strok_speeds_t)
         else:
-
             if ploton:
-                ax = plt.subplot(5, 1, 1)
-                plt.title('after downsample')
+                ax = axes.flatten()[1]
+                ax.set_title('stroke (xy) after downsample (interp)')
                 for col in [0,1]:
-                    plt.plot(strok[:,2], strok[:,col],  "-o", label=f"orig pos, dim{col}")
-                    plt.legend()
-            
+                    ax.plot(strok[:,2], strok[:,col],  "-o", alpha=0.5, label=f"orig pos, dim{col}")
+                    ax.plot(strok_orig[:,2], strok_orig[:,col],  "-x", alpha=0.5, label=f"orig pos, dim{col}")
+
             # ------------ 2) differntiate
             # what is sample peridocity? (actually compute exact value, since might
-                #be slightly different from expected due to rounding erroes in interpoalte.
+            # be slightly different from expected due to rounding erroes in interpoalte.
             a = np.diff(strok[:,2]).round(decimals=4)
             per = np.unique(a)
             if len(per)>1:
@@ -525,7 +638,6 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
                 else:
                     print(per)
                     assert False, "why multiple periods?"
-
             strok_vels = np.empty((strok.shape[0],2))
             for i in [0,1]:
                 strok_vels[:,i] = diff5pt(strok[:,i], h=per)
@@ -537,71 +649,66 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
 
             # ------------- 4) interpolate and upsample velocity back to original timesteps.
             # 1) velocities
-            # print(strok_vels.shape)
-            # print(time.shape)
             strok_vels_t = np.concatenate([strok_vels, time], axis=1)
             kind_upsample = "cubic" # doesnt matter too much, cubix vs. linear
             # seems like cubic better.
-
             if ploton:
+                ax = axes.flatten()[2]
                 for col in [0,1]:
-                    axv= plt.subplot(5, 1,2 )
-                    plt.title("overlaying before and after upsample (and x and y)")
-                    axv.plot(strok_vels_t[:,2], strok_vels_t[:,col],  "-o",label=f"vel, dim{col}")
-            
+                    ax.set_title("vel, before and after upsample (and x and y)")
+                    ax.plot(strok_vels_t[:,2], strok_vels_t[:,col],  "-o",alpha=0.5, label=f"vel, dim{col}")
             strok_vels_t = strokesInterpolate2([strok_vels_t], N=["npts", n_orig], kind=kind_upsample)[0]
-            strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate)[0]
             if ploton:
-                ax = plt.subplot(5, 1, 4)
-                plt.title("after filter (verlay x and y)")
-
                 for col in [0,1]:
-                    ax.plot(strok_vels_t[:,2], strok_vels_t[:,col], "-o", label="vel, after filter")
-                plt.legend()
+                    ax.plot(strok_vels_t[:,2], strok_vels_t[:,col],  "-o",alpha=0.5, label=f"vel, dim{col}")
 
+            if not SKIP_POST_FILTERING_LOWPASS:
+                # FIlter again.
+                # Skip, since tHis doesnt do much! Tested.
+                # assert False, "this doesnt help.. comment out if you really want to do it."
+                import matplotlib.pyplot as plt
+                if DEBUG:
+                    strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate,
+                                                 plotprepost_xy=ploton, plotprepost=ploton)[0]
+                else:
+                    strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate)[0]
+
+                if ploton:
+                    ax = axes.flatten()[2]
+                    for col in [0,1]:
+                        ax.plot(strok_vels_t[:,2], strok_vels_t[:,col], "-x", alpha=0.5, label="vel, after filter")
+                    plt.legend()
+
+            # Collect.
             strokes_vels.append(strok_vels_t)
 
             ################## SPEED
-                
             # 2) speed
             strok_speeds = np.linalg.norm(strok_vels_t[:,[0,1]], axis=1).reshape(-1,1) # (N,1)
-            # print(strok_speeds.shape)
-            # print(strok_vels_t.shape)
-            # print(strok_vels_t[:,2][:,None].shape)
             strok_speeds_t = np.concatenate([strok_speeds, strok_speeds, strok_vels_t[:,2][:,None]], axis=1)
             # assert False
-            if ploton:
-                axs= plt.subplot(5, 1, 3)
-                plt.title("overlaying before and after upsample")
-                for col in [0]:
-                    axs.plot(strok_speeds_t[:,2], strok_speeds_t[:,col], "-o", label=f"speed")
-            
+
             if False:
                 # vels have already been interpoalted...
                 strok_speeds_t = strokesInterpolate2([strok_speeds_t],  N=["npts", n_orig], kind=kind_upsample)[0]
-            
-            assert np.all(strok_speeds_t[:,0]>=0)
-            
+
+            assert np.all(strok_speeds_t[:,0]>=0), "sanity check, this used to happen sometimes if filter"
+            assert not np.any(np.isnan(strok_speeds_t[:,0])), "sanity check, this used to happen sometimes if filter"
+
             if ploton:
+                ax = axes.flatten()[4]
+                ax.set_title("speed")
                 for col in [0]:
-                    axs.plot(strok_speeds_t[:,2], strok_speeds_t[:,col], "-o",label=f"speed")
-                plt.legend()
+                    ax.plot(strok_speeds_t[:,2], strok_speeds_t[:,col], "-og",label=f"speed")
 
             strokes_speeds.append(strok_speeds_t[:,[0, 2]])
+    #
+    # if DEBUG:
+    #     # Debugging, show what filtering wopuld look like
+    #     strokesFilter(strokes_vels, Wn = [None, lowpass_freq], fs = sample_rate,
+    #           plotprepost_xy=ploton, plotprepost=ploton)
+    #     assert False, "just plotting what would look like if you filtered... i.e,.,m filtering is not necesary."
 
-    # -- filter velocity to smooth
-    if False:
-        # Do this above now, before convert to speed
-        strokes_vels = strokesFilter(strokes_vels, Wn = [None, lowpass_freq], fs = sample_rate)
-        if ploton:
-            ax = plt.subplot(5, 1, 4)
-            plt.title("after filter (verlay x and y)")
-
-            for S in strokes_vels:
-                for col in [0,1]:
-                    ax.plot(S[:,2], S[:,col], "-o", label="vel, after filter")
-            plt.legend()
-            
     if False:
         # dont filter, you've already filter vels avbove.
         # -------- filter speed
@@ -609,27 +716,28 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 5,
         strokes_speeds = strokesFilter(tmp, Wn = [None, lowpass_freq], fs = sample_rate)
         strokes_speeds = [np.concatenate([S[:,0, None], S[:,2, None]], axis=1) for S in strokes_speeds]
 
-    for s in strokes_speeds:
-        if not np.all((s[:,0]>=0) | (np.isnan(s[:,0]))):
-            print(s)
-            print(s[:,0]<0)
-            print(np.isnan(s[:,0]))
-            print(np.all(np.isnan(s[:,0])))
-            print((s[:,0]>=0) | (np.isnan(s[:,0])))
-            assert False
+    ## SANITY CHECKS
+    # for s in strokes_speeds:
+    #     if not np.all((s[:,0]>=0) | (np.isnan(s[:,0]))):
+    #         print(s)
+    #         print(s[:,0]<0)
+    #         print(np.isnan(s[:,0]))
+    #         print(np.all(np.isnan(s[:,0])))
+    #         print((s[:,0]>=0) | (np.isnan(s[:,0])))
+    #         assert False
 
     if ploton:
-        ax = plt.subplot(5, 1, 5)
-        plt.title("after filter")
+        ax = axes.flatten()[5]
+        ax.set_title("FINAL")
         for S in strokes_speeds:
-            for col in [0]:
-                ax.plot(S[:,1], S[:,col], "-o", label="speed, after filter")    
-    
+            ax.plot(S[:,1], S[:,0], "-o", alpha=0.5, label="speed")
+        for i, S in enumerate(strokes_vels):
+            for col in [0, 1]:
+                ax.plot(S[:,2], S[:,col], "-o", alpha=0.5, label=f"vel {col}")
+        for ax in axes.flatten():
+            ax.legend()
+
     return strokes_vels, strokes_speeds
-
-
-
-
 
 def diff5pt(x, h=1):
     """ given timeseries x get devirative,

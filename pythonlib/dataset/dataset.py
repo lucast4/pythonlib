@@ -8468,11 +8468,14 @@ class Dataset(object):
 
 
     def _extractStrokeVels(self, list_strokes, remove_time_column=True,
-            version = "speed", fs_downsample=None):
+            version = "speed", fs_downsample=None, DEBUG=False,
+                           lowpass_freq_force=None, PLOT=False):
         """ extract stroke as instantaneous velocities
         INPUT:
         - list_inds, list of ints, for which strokes to use. If "all", then gets all.
         - version, str, in {'vel', 'speed'}, determines which to reutrn
+        - lowpass_freq_force, if not NOne, then freq for lowpass filtering the
+        output vels trace.
         RETURN:
         - list of strokes_vels, which are each list of Nx1, so is
         actually speed, not vel. if 'vel', then they are (N,3), if 'speed'
@@ -8480,16 +8483,29 @@ class Dataset(object):
         (None, if strok to oshort to get vel.)
         """
         from pythonlib.tools.stroketools import strokesVelocity
-        
+
+        assert fs_downsample is None, "obsolete"
+
+        if lowpass_freq_force is not None:
+            clean = False
+        else:
+            clean = True
+
         # print("here", fs_downsample)
         # assert False
         assert isinstance(list_strokes[0], list)
-        fs = self.get_sample_rate_alltrials()  
+        fs = self.get_sample_rate_alltrials()
         list_strokes_vel = []
         for strokes in list_strokes:
-            strokes_vel, strokes_speed = strokesVelocity(strokes, fs, 
-                fs_new = fs_downsample, clean=True)
-            
+            # strokes_vel, strokes_speed = strokesVelocity(strokes, fs,
+            #     fs_new = fs_downsample,  DEBUG=DEBUG,
+            #     SKIP_POST_FILTERING_LOWPASS=SKIP_POST_FILTERING_LOWPASS,
+            #      lowpass_freq=lowpass_freq_force)
+            strokes_vel, strokes_speed = strokesVelocity(strokes, fs, ploton=PLOT,
+                                                         DEBUG=DEBUG,
+                                                         clean=clean,
+                                                         lowpass_freq=lowpass_freq_force)
+
             if version=="speed":
                 strokes_out = strokes_speed
                 dims = [0]
@@ -8499,9 +8515,11 @@ class Dataset(object):
 
             if remove_time_column:
                 strokes_out = [s[:,dims] for s in strokes_out] # remove time
-            
+
+            # Any cases that are empyt vels...
             for i in range(len(strokes_out)):
                 if any([np.any(np.isnan(sv)) for sv in strokes_out[i]]):
+                    assert False, "this shouldnt happen anymore (1/4/24) after cleaning up vels comptuation"
                     list_strokes_vel.append(None)   
                 else:
                     list_strokes_vel.append(strokes_out)
@@ -8734,7 +8752,7 @@ class Dataset(object):
         offs = [s[-1, 2] for s in strokes_beh]
         return ons, offs
 
-    def strokes_to_velocity_speed(self, strokes, ver="vel"):
+    def strokes_to_velocity_speed(self, strokes):
         """ Helper to convert strokes to velocities
         PARAMS;
         - ver, either "vel" or "speed"
@@ -8747,9 +8765,9 @@ class Dataset(object):
         from pythonlib.tools.stroketools import strokesVelocity
 
         # get sampling rate
-        assert False, "figure out what to use for lowpass_freq"
+        assert False, "not ready"
         fs = self.get_sample_rate_alltrials()
-        return strokesVelocity(strokes, fs, lowpass_freq=lowpass_freq)[i]
+        return strokesVelocity(strokes, fs)[i]
 
 
     def plot_strokes_timecourse_speed_vel(self, strokes, ax, plotver="speed", 

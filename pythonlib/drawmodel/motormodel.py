@@ -172,7 +172,7 @@ class strokModel(object):
             from ..drawmodel.strokePlots import plotDatStrokes
             fig, axes = plt.subplots(1,1)
             plotDatStrokes([strok], axes)
-            strokesVelocity([strok], fs=125, ploton=True);
+            strokesVelocity([strok], fs=125, ploton=True)
             # plotDatStrokes([strok_beh], axes[0])
             # plotDatStrokes([strok_mod], axes[0])
             # plotDatStrokesTimecourse([strok_beh_vel], axes[1])

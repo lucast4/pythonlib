@@ -927,21 +927,22 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
             D.Dat = applyFunctionToAllRows(D.Dat, lambda x: F(x, "gap"), "gdur_std")
 
     # sanity check
-    if "motorevents" in D.Dat.columns:
-        for ind in range(len(D.Dat)):
-            me = D.Dat.iloc[ind]["motorevents"]
-            mt = D.Dat.iloc[ind]["motortiming"]
+    if True: # can turn off to do quick extraction of old data.
+        if "motorevents" in D.Dat.columns:
+            for ind in range(len(D.Dat)):
+                me = D.Dat.iloc[ind]["motorevents"]
+                mt = D.Dat.iloc[ind]["motortiming"]
 
-            # if hve strokes, then must have raise
-            if len(D.Dat.iloc[ind]["strokes_beh"])>0:
-            # if len(me["ons"])>0:
-                if np.isnan(me["raise"]):
-                    print(me)
-                    assert False, "Fix this AND RECOMPUTE MOTORTIMING. Easiest: reextract dataset from drawmonkey."
-                assert not np.isnan(me["go_cue"]), "Fix this AND RECOMPUTE MOTORTIMING"
-                # assert len(me["ons"]) == len(me["offs"]), "Fix this AND RECOMPUTE MOTORTIMING"
+                # if hve strokes, then must have raise
+                if len(D.Dat.iloc[ind]["strokes_beh"])>0:
+                # if len(me["ons"])>0:
+                    if np.isnan(me["raise"]):
+                        print(me)
+                        assert False, "Fix this AND RECOMPUTE MOTORTIMING. Easiest: reextract dataset from drawmonkey."
+                    assert not np.isnan(me["go_cue"]), "Fix this AND RECOMPUTE MOTORTIMING"
+                    # assert len(me["ons"]) == len(me["offs"]), "Fix this AND RECOMPUTE MOTORTIMING"
 
-                # mt["time_go2raise"]
+                    # mt["time_go2raise"]
 
     ### EXTRACT FEATURES
     # - hausdorff, offline score

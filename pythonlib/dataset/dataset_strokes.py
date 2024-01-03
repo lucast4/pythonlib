@@ -502,9 +502,16 @@ class DatStrokes(object):
         assert len(inds)==1
         return self.extract_strokes(inds=inds, ver_behtask=ver_behtask)[0]
 
+    def extract_strokes_as_velocity_debug(self, ind, lowpass_freq_force=None):
+        """ To debug params for velocioty extraction given strokes, including plots
+        of all steps. see Docs for strokesVelocity() for details.
+        """
+        self.plot_multiple([ind], titles=[ind])
+        list_vels = self.extract_strokes_as_velocity([ind], PLOT=True, DEBUG=True,
+                                                     lowpass_freq_force=lowpass_freq_force)
 
     def extract_strokes_as_velocity(self, inds, PLOT=False, 
-        version="vel", fs_downsample=None):
+        version="vel", fs_downsample=None, DEBUG=False, lowpass_freq_force=None):
         """ Returns teh default stroeks (in self.Version) as velocity profiles
         RETURNS:
         - list of strok (np array), each (N,3) where columns are (xvel, yvel, time)
@@ -512,9 +519,22 @@ class DatStrokes(object):
         """
         list_strokes = self.extract_strokes(version="list_list_arrays", inds=inds)
         list_strokes_vel = self.Dataset._extractStrokeVels(list_strokes, 
-            remove_time_column=False, version=version, fs_downsample=fs_downsample)
-        if PLOT:
-            self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version, 
+            remove_time_column=False, version=version, fs_downsample=fs_downsample,
+                                                           DEBUG=DEBUG,
+                                                           lowpass_freq_force=lowpass_freq_force,
+                                                           PLOT=PLOT)
+        if PLOT and False:
+            # STop plotting, as this isnt same data that get from above.
+            # and PLOT above now does this.
+
+            # from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse, plotDatStrokesVelSpeed
+            # fig, ax = plt.subplots()
+            # for i, s in enumerate(list_strokes_vel):
+            #     ax.plot(s[:,1], s[:,0], label=f"dim{i}")
+            # plt.legend()
+            # plotDatStrokesVelSpeed(list_strokes_vel, ax, fs, plotver,
+            #     overlay_stroke_periods=overlay_stroke_periods)
+            self.Dataset.plotMultStrokesTimecourse(list_strokes, plotver=version,
                 align_to="first_touch")
         for strokes in list_strokes_vel:
             assert len(strokes)==1
@@ -741,7 +761,6 @@ class DatStrokes(object):
         self.Dat[colname] = valsthis
         print(f"Appended {colname} to self.Dat")
 
-
     def dataset_slice_by_trialcode_strokeindex(self, list_trialcode, list_stroke_index,
             df=None, assert_exactly_one_each=True):
         """ Returns self.Dat, sliced to subset of rows, matching exactly the inputed
@@ -776,8 +795,6 @@ class DatStrokes(object):
         dfslice = slice_by_row_label(df, "trialcode_strokeidx", list_keys, assert_exactly_one_each=assert_exactly_one_each)
 
         return dfslice
-
-
 
     def dataset_slice_by(self, key, list_vals, return_index=False):
         """ Extract slice of dataset using key-val pairs that may not yet 
@@ -1404,6 +1421,7 @@ class DatStrokes(object):
 
         groupdict, df = grouping_append_and_return_inner_items(self.Dat, list_grouping_vars,
             "index", new_col_name=new_col_name, return_df=True)
+
         self.Dat = df
 
         return groupdict
@@ -1836,6 +1854,9 @@ class DatStrokes(object):
 
             print("Adding columns to self.Dat")
             ### Slide back into DS
+            if not len(dat["sims_max"])==len(self.Dat):
+                print(len(dat["sims_max"]), len(self.Dat))
+                assert False
             self.Dat["clust_sim_max"] = dat["sims_max"]
             self.Dat["clust_sim_concentration"] = dat["sims_concentration"]
             self.Dat["clust_sim_max_ind"] = dat["colinds_maxsim"]
@@ -1845,18 +1866,22 @@ class DatStrokes(object):
             ### Slide back in to D: Collect scores (avg over strokes for a trial) and put back into D
             print("Adding columns to self.Dataset.Dat")
             list_scores = []
+            list_scores_min = []
             for i in range(len(self.Dataset.Dat)):
                 # get all rows in DS
                 tc = self.Dataset.Dat.iloc[i]["trialcode"]
                 inds = self._dataset_index_here_given_trialcode(tc)
-                # inds = DS._dataset_index_here_given_dataset(i)
                 if len(inds)>0:
                     score = np.mean(self.Dat.iloc[inds][trial_summary_score_ver])
+                    score_min = np.min(self.Dat.iloc[inds][trial_summary_score_ver])
                 else:
                     # assert False, "not sure why this D trial has no strokes..."
                     score = np.nan
+                    score_min = np.nan
                 list_scores.append(score)
+                list_scores_min.append(score_min)
             self.Dataset.Dat["strokes_clust_score"] = list_scores
+            self.Dataset.Dat["strokes_clust_score_min"] = list_scores_min
         else:
             for k, v in ParamsGeneral.items():
                 print(k, "---", v)

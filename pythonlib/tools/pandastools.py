@@ -1549,13 +1549,13 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     assert not isinstance(groupinner, list)
 
     # 1) Append new grouping variable to each row
-    while new_col_name in df.columns:
-        new_col_name+="_"
+    # while new_col_name in df.columns:
+    #     new_col_name+="_"
     df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)
 
     # 2) Get dict of eaceh group
     groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
-        
+
     if return_df:
         return groupdict, df
     else:

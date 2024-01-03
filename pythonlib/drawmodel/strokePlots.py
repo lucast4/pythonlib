@@ -467,7 +467,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
 
 
 
-def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=5,
+def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=None,
                           overlay_stroke_periods=False, pcol=None, alpha=0.8,
                           nolegend=False, readjust_x_tolims=False):
     """  wrapper, which both processes storkes and plots.
@@ -692,7 +692,7 @@ def plotDatWaterfallWrapper(strokes_list, strokes_task_list= None, onset_time_li
             if colorver=="vel":
                 assert False, "need to pass in fs..."
                 fs = filedata["params"]["sample_rate"]
-                _, strokes_speed = strokesVelocity(strokes, fs, lowpass_freq=5)
+                _, strokes_speed = strokesVelocity(strokes, fs)
                 strokes_colors = [s[:,0] for s in strokes_speed]
             elif colorver =="default":
                 strokes_colors = [pcols[ii] for ii in range(len(strokes))]
