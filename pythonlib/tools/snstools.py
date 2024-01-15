@@ -1,4 +1,5 @@
 """ for seaborn plotting"""
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
@@ -312,81 +313,19 @@ def get_xticklabels(fig):
             
 
 def heatmap_mat(datamat, ax=None, annotate_heatmap=True, zlims=(None, None),
-        robust=False, diverge=False):
-    """ 
-    Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
-    in df
-    PARAMS:
-    - df, wideform dataframe to plot, should be in 2d shape, with rows and columns, the sahpe of 
-    the resulting plot. df.Index are rows (from top to bottom), and df.columns are columns
-    (left to right). See pandastools.convert_to_2d_dataframe to convert from long-form
-    to this wideform.
-    - annotate_heatmap, bool, whether puyt text in cell indicating the values
-    - diverge, if True, then centers the heat
-    RETURNS:
-    - fig, 
-    - ax, 
-    - rgba_values, (nrows, ncols, 4), where rgba_values[0,1], means rgba value for row 0 col 1.
+        robust=False, diverge=False, labels_row=None, labels_col=None,
+                rotation=90, rotation_y=0):
     """
+    Plot heatmap, given datamat shape (nrow, ncols).
+    """
+    df = pd.DataFrame(datamat)
 
-    # NOTE, from neural plot heatmap..
-    # sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
-    #    robust=robust, vmin=zlims[0], vmax=zlims[1])
-
-    # make a copy, with these columns
-#     list_cat_1 = df.index.tolist()
-#     list_cat_2 = df.columns.tolist()
-
-    if datamat.shape[1]>10:
-        w = datamat.shape[1]/15*5
-    else:
-        w = 5
-
-    if ax is None:
-        fig, ax = plt.subplots(1,1, figsize=(w, 5))
-    else:
-        fig = None
-
-    # compute zlims here, just so you can extract colors accruately below.
-    z1, z2 = zlims
-    if z1 is None:
-        z1 = datamat.min()
-    if z2 is None:
-        z2 = datamat.max()
-    if diverge:
-        # then center at 0
-        z = np.max(np.abs([z1, z2]))
-        z1 = -z
-        z2 = z
-
-    if diverge:
-        # center at 0, and use diverging palletee
-        # 
-        # center = 0
-        # cmap = sns.color_palette("vlag")
-        cmap = sns.diverging_palette(220, 20, as_cmap=True)
-
-    else:
-        # center = None
-        cmap = sns.color_palette("rocket", as_cmap=True)
-        # cmap = sns.color_palette
-
-    sns.heatmap(datamat, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
-        robust=robust, cmap=cmap)
-
-    # Return the colors
-    from matplotlib.colors import Normalize
-    # Normalize data
-    norm = Normalize(vmin=z1, vmax=z2)
-    
-#     print(norm(datamat))
-    rgba_values = cmap(norm(datamat))
-
-    return fig, ax, rgba_values
-
+    return heatmap(df, ax, annotate_heatmap, zlims,
+                   robust, diverge, labels_row, labels_col, rotation, rotation_y)
 
 def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
-        robust=False, diverge=False):
+        robust=False, diverge=False, labels_row=None, labels_col=None,
+            rotation=90, rotation_y=0, SHAPE="square", norm_method=None):
     """ 
     Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
     in df
@@ -408,18 +347,75 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     #    robust=robust, vmin=zlims[0], vmax=zlims[1])
 
     # make a copy, with these columns
-    list_cat_1 = df.index.tolist()
-    list_cat_2 = df.columns.tolist()
-
-    if len(list_cat_2)>10:
-        w = len(list_cat_2)/15*5
+    if labels_row is None:
+        list_cat_1 = df.index.tolist()
     else:
-        w = 5
+        list_cat_1 = labels_row
+
+    if labels_col is None:
+        list_cat_2 = df.columns.tolist()
+    else:
+        list_cat_2 = labels_col
+
+    if SHAPE == "rect":
+        if len(list_cat_2)>10:
+            w = len(list_cat_2)/10*3.5
+        else:
+            w = 5
+        h = 5
+    elif SHAPE == "square":
+        if len(list_cat_2)>10:
+            w = len(list_cat_2)/10*3.5
+        else:
+            w = 5
+        h = w
+    else:
+        assert False
 
     if ax is None:
-        fig, ax = plt.subplots(1,1, figsize=(w, 5))
+        fig, ax = plt.subplots(1,1, figsize=(w, h))
     else:
         fig = None
+
+    dfthis = df
+    if norm_method=="all_sub":
+        # minus mean over all cells
+        dfthis = dfthis - dfthis.mean().mean()
+        diverge = True
+    elif norm_method=="col_div":
+        # normalize so that for each col, the sum across rows is 1
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
+    elif norm_method=="row_div":
+        # same, but for rows
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+    elif norm_method=="all_div":
+        # divide by sum of all counts
+        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+        dfthis = dfthis/dfthis.sum().sum()
+    elif norm_method=="col_sub":
+        # normalize so by subtracting from each column its mean across rows
+        dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
+        diverge = True
+    elif norm_method=="col_sub_notdiverge":
+        # normalize so by subtracting from each column its mean across rows
+        dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
+        diverge = False
+    elif norm_method=="row_sub":
+        # normalize so by subtracting from each column its mean across rows
+        dfthis = dfthis.subtract(dfthis.mean(axis=1), axis=0)
+        diverge = True
+    elif norm_method=="row_sub_firstcol":
+        # for each item in a given row, subtract the value of the first colum in that row.
+        dfthis = dfthis.subtract(dfthis.iloc[:,0], axis=0)
+    elif norm_method is None:
+        pass
+    else:
+        print(dfthis)
+        print(norm_method)
+        assert False
+    df = dfthis
 
     # compute zlims here, just so you can extract colors accruately below.
     z1, z2 = zlims
@@ -439,11 +435,12 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         # center = 0
         # cmap = sns.color_palette("vlag")
         cmap = sns.diverging_palette(220, 20, as_cmap=True)
-
+        lab_add = 0.5
     else:
         # center = None
         cmap = sns.color_palette("rocket", as_cmap=True)
         # cmap = sns.color_palette
+        lab_add = 0.5
 
     sns.heatmap(df, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
         robust=robust, cmap=cmap)
@@ -453,5 +450,10 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     # Normalize data
     norm = Normalize(vmin=z1, vmax=z2)
     rgba_values = cmap(norm(df))
+
+    if list_cat_1:
+        ax.set_yticks([i+lab_add for i in range(len(list_cat_1))], list_cat_1, rotation=rotation_y)
+    if list_cat_2:
+        ax.set_xticks([i+lab_add for i in range(len(list_cat_2))], list_cat_2, rotation=rotation)
 
     return fig, ax, rgba_values

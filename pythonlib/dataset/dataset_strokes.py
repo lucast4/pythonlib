@@ -21,6 +21,43 @@ from pythonlib.tools.plottools import savefig
 import seaborn as sns
 from pythonlib.tools.pandastools import append_col_with_grp_index
 
+def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
+    """ helper to apply correct prprocessing, given
+    different objectives. This I usually place within
+    pythonlib.dataset.dataset_analy for each specific analyssi,
+    but here is useful as general purpose.
+    Does not modify D.
+    RETURNS:
+        - DS.
+    """
+
+    D = D.copy()
+
+    if version=="clean_one_to_one":
+        # One to one beh to task strokes, good for everything except chars.
+        # Clean means remove outlier strokes, too short, or visual distance.
+        D.preprocessGood(params=["beh_strokes_at_least_one",
+                                 "one_to_one_beh_task_strokes_allow_unfinished",
+                                 "no_supervision"])
+
+        DS = DatStrokes(D)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "beh_task_dist_too_large"]
+        params = {
+            "min_stroke_length":60,
+            "min_beh_task_dist":35
+        }
+        DS.distgood_compute_beh_task_strok_distances()
+        DS.clean_preprocess_data(methods=methods, params=params)
+        DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
+    else:
+        print(version)
+        assert False, "code it"
+
+    return DS
+
+
 class DatStrokes(object):
     """docstring for DatStrokes"""
     def __init__(self, Dataset=None, version="beh"):
@@ -68,6 +105,8 @@ class DatStrokes(object):
             return f"{x['shape_oriented']}|{idx_char}"
         self.Dat = applyFunctionToAllRows(self.Dat, F, "shape_char")
 
+        # Extract motor timing. I use thie enought to make this general.
+        self.motor_velocity_timing_extract()
 
     def _prepare_dataset(self):
         """ Prepare dataset before doing strokes extraction
@@ -87,6 +126,9 @@ class DatStrokes(object):
         # Sanity check that all gridloc are relative the same grid (across trials).
         D.taskclass_tokens_sanitycheck_gridloc_identical()
         assert len(D.Dat)>0
+
+        # to get seq context, need to know if reached for done button
+        D.sketchpad_done_button_did_reach_append_col()
 
     def _extract_strokes_from_dataset(self, version="beh", tokens_extract_keys=None, tokens_get_relations=True):
         """ Flatten all trials into bag of strokes, and for each stroke
@@ -121,7 +163,8 @@ class DatStrokes(object):
             
             # 1) get each beh stroke, both continuous and discrete represntations.
             primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
-                
+            strokes_task = D.Dat.iloc[ind]["strokes_task"]
+
             if version=="beh":
                 strokes = primlist
                 datsegs = datsegs_behlength
@@ -176,6 +219,7 @@ class DatStrokes(object):
                 DAT_BEHPRIMS[-1]["trialcode"] = D.Dat.iloc[ind]["trialcode"]
                 DAT_BEHPRIMS[-1]["stroke_index"] = i
                 DAT_BEHPRIMS[-1]["stroke_index_fromlast"] = i - len(strokes) # counting back from last stroke: -1, -2, ...
+                DAT_BEHPRIMS[-1]["stroke_index_fromlast_tskstks"] = i - len(strokes_task) # counting back from last stroke: -1, -2, ...
 
                 # Specific things for Task
                 if version=="task":
@@ -215,7 +259,8 @@ class DatStrokes(object):
         self.Version = version
 
         # Other preprocessing
-        self.strokerank_extract_semantic()
+        self.strokerank_extract_semantic("beh")
+        self.strokerank_extract_semantic("task")
 
         # seq context
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
@@ -403,12 +448,10 @@ class DatStrokes(object):
 
 
     ######################### MOTOR TIMING
-    def motor_velocity_timing_extract_basic(self):
-        """ Just a wrapper for easy searching of name"""
-        return self.timing_extract_basic()
-
-    def timing_extract_basic(self):
-        """Extract basis stats for timing, such as time of onset and offset,
+    def motor_velocity_timing_extract(self, rerun=False, do_binning=True,
+                                      plot_dist_angle_distributions=False):
+        """Extract basis stats for motor, such as gap duration and timing,
+        and also for strokes. such as time of onset and offset,
         - Looks into Dataset to find there. 
         Also gets gap duration and distance information. i.e. for each stroke collects
         its preceding gap.
@@ -416,18 +459,27 @@ class DatStrokes(object):
         - Appends columns to self.Dat, including "time_onset", "time_offset" 
         (of strokes, relative to start of trial.)
         """
+        from pythonlib.tools.vectools import get_angle
+
+        if "time_onset" in self.Dat.columns and rerun==False:
+            # Then dont rerun.
+            return
 
         # 1) Collect onset and offset of each stroke by refereing back to original dataset.
         list_ons = []
         list_offs = []
         list_gap_dur = []
         list_gap_dist = []
-
+        list_gap_angle = []
+        list_nextgap_dist = []
+        list_nextgap_angle = []
         for ind in range(len(self.Dat)): 
             me = self.dataset_extract("motorevents", ind)
             mt = self.dataset_extract("motortiming", ind)
             indstrok = self.Dat.iloc[ind]["stroke_index"]
             strokthis = self.Dat.iloc[ind]["strok"]
+            strokes_beh = self.dataset_extract("strokes_beh", ind)
+            did_reach_for_done_button = self.dataset_extract("doneb_did_reach", ind)
 
             ################## STROKE INFORMATION
             # onset and offset
@@ -459,31 +511,91 @@ class DatStrokes(object):
             def _eucl_dist(pt1, pt2):
                 return np.sum((pt1 - pt2)**2)**0.5
 
+            if False:
+                assert np.all(strokes_beh[indstrok] == strokthis), "just sanity"
+            on_pt_this_stroke = strokthis[0, :2]
             if indstrok==0:
-                # distance from fixation to first touch
+                # First strok. Therefore use distance from fixation to first touch
                 off_pt_prev_stroke = self.dataset_extract("origin", ind)
-                on_pt_next_stroke = strokthis[0, :2]
-                gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_next_stroke)
+                # gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_this_stroke)
                 # print("----")
                 # print(gap_from_prev_dist)
                 # print(mt["dist_raise2firsttouch"])
                 if False:
                     assert np.isclose(gap_from_prev_dist, mt["dist_raise2firsttouch"]), "just sanity"
             else:
-                strokes_beh = self.dataset_extract("strokes_beh", ind)
-                if False:
-                    assert np.all(strokes_beh[indstrok] == strokthis), "just sanity"
+                # Use previous stroke to this stroke.
                 off_pt_prev_stroke = strokes_beh[indstrok-1][-1, :2]
-                on_pt_next_stroke = strokes_beh[indstrok][0, :2]
-                gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_next_stroke)
+            gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_this_stroke)
             list_gap_dist.append(gap_from_prev_dist)
-            
+
+            # angle
+            list_gap_angle.append(get_angle(on_pt_this_stroke - off_pt_prev_stroke))
+
+            ############### Current stroke relative to next stroke.
+            # if indstrok==0:
+            #     # First strok. Therefore use distance from fixation to first touch
+            #     off_pt_prev_stroke = self.dataset_extract("origin", ind)
+            #     on_pt_next_stroke = strokthis[0, :2]
+            #     # gap_from_prev_dist = _eucl_dist(off_pt_prev_stroke, on_pt_next_stroke)
+            #     # print("----")
+            #     # print(gap_from_prev_dist)
+            #     # print(mt["dist_raise2firsttouch"])
+            #     if False:
+            #         assert np.isclose(gap_from_prev_dist, mt["dist_raise2firsttouch"]), "just sanity"
+            # else:
+
+            off_pt_this_stroke = strokthis[-1, :2]
+            if indstrok+1 > len(strokes_beh)-1:
+                assert indstrok==len(strokes_beh)-1, "sanity check"
+
+                if did_reach_for_done_button:
+                    # Then can call done button as the "next stroke"
+                    # If next action was reach for done button, then use its location
+                    # Next strok = "done button" location
+                    on_pt_next_stroke = self.dataset_extract("donepos", ind)
+                    assert ~np.any(np.isnan(on_pt_next_stroke))
+                else:
+                    # this is last stroke, and no done button... dont know what it is.
+                    on_pt_next_stroke = None
+            else:
+                on_pt_next_stroke = strokes_beh[indstrok+1][0, :2]
+
+            if not on_pt_next_stroke is None:
+                list_nextgap_dist.append(_eucl_dist(off_pt_this_stroke, on_pt_next_stroke))
+                list_nextgap_angle.append(get_angle(on_pt_next_stroke - off_pt_this_stroke))
+            else:
+                list_nextgap_dist.append(np.nan)
+                list_nextgap_angle.append(np.nan)
+
         self.Dat["time_onset"] = list_ons
         self.Dat["time_offset"] = list_offs
         self.Dat["time_duration"] = self.Dat["time_offset"] - self.Dat["time_onset"]
         self.Dat["velocity"] = self.Dat["distcum"]/self.Dat["time_duration"]
         self.Dat["gap_from_prev_dur"] = list_gap_dur
         self.Dat["gap_from_prev_dist"] = list_gap_dist
+        self.Dat["gap_from_prev_angle"] = list_gap_angle
+        self.Dat["gap_to_next_dist"] = list_nextgap_dist
+        self.Dat["gap_to_next_angle"] = list_nextgap_angle
+
+        # Bin them
+        if do_binning:
+            from pythonlib.tools.vectools import bin_angle_by_direction
+            from pythonlib.tools.nptools import bin_values
+            nbins = 4
+            for var in ["gap_from_prev_dist", "gap_to_next_dist"]:
+                self.Dat[f"{var}_binned"] = bin_values(self.Dat[var].values, nbins=nbins)
+            for var in ["gap_from_prev_angle", "gap_to_next_angle"]:
+                self.Dat[f"{var}_binned"] = bin_angle_by_direction(self.Dat[var].values,
+                                                                   num_angle_bins=nbins)
+
+        if plot_dist_angle_distributions:
+            for si in ["stroke_index", "stroke_index_fromlast"]:
+                # sns.displot(data=self.Dat, x="gap_to_next_angle", y="gap_to_next_dist", col=si, hue="gap_from_prev_angle_binned")
+                # sns.displot(data=self.Dat, x="gap_from_prev_angle", y="gap_from_prev_dist", col=si, hue="gap_from_prev_angle_binned")
+                sns.displot(data=self.Dat, x="gap_to_next_angle", y="gap_to_next_dist", col=si)
+                sns.displot(data=self.Dat, x="gap_from_prev_angle", y="gap_from_prev_dist", col=si)
+                sns.displot(data=DS.Dat, x=xvar, col=si, hue=f"{xvar}_binned")
 
         print("DONE!")
             
@@ -673,7 +785,8 @@ class DatStrokes(object):
         return self.dataset_extract_strokeslength_list(trialcode, column)
 
 
-    def dataset_extract_strokeslength_list(self, trialcode, column):
+    def dataset_extract_strokeslength_list(self, trialcode, column,
+                                           if_fail="error"):
         """ Extract a list of items matching the beh strokes in this dataset(trial level)
         in the order of the beh strokes and not missing any items.
         Does sanity checks to confirm correct extraction. 
@@ -682,10 +795,13 @@ class DatStrokes(object):
         PARAMS;
         - ind_dataset, index into Dataset (trial level)
         - column, str, name of column to extract
+        - if_fail, str, behavior if fails beucase self doesnt' have all the data that matches
+        exactly what expected from D. [NOT WORKING]
         RETURNS:
         - list_vals, list of values, or None, if this dataset has no strokes in self
         """
-        
+
+        assert if_fail=="error", "not coded yet!"
 
         inds = self._dataset_index_here_given_trialcode(trialcode)
         ind_dataset = self.Dataset.index_by_trialcode(trialcode)
@@ -698,9 +814,16 @@ class DatStrokes(object):
             df = self.Dat.iloc[inds].sort_values("stroke_index")
             
             # sanity check that got all beh strokes, in order from 0.
-            assert np.all(np.diff(df["stroke_index"])==1)
-            assert df.iloc[0]["stroke_index"]==0
-            assert len(df)==len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"])
+            try:
+                assert np.all(np.diff(df["stroke_index"])==1)
+                assert df.iloc[0]["stroke_index"]==0
+                assert len(df)==len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"])
+            except Exception as err:
+                print(inds)
+                print(ind_dataset)
+                print(df["stroke_index"])
+                print(len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"]))
+                raise err
             
             # confirm trialcode
             tc = self.Dat.iloc[inds]["dataset_trialcode"].unique().tolist()
@@ -760,6 +883,7 @@ class DatStrokes(object):
         valsthis = [self.dataset_extract(colname, i) for i in range(len(self.Dat))]
         self.Dat[colname] = valsthis
         print(f"Appended {colname} to self.Dat")
+
 
     def dataset_slice_by_trialcode_strokeindex(self, list_trialcode, list_stroke_index,
             df=None, assert_exactly_one_each=True):
@@ -2444,24 +2568,44 @@ class DatStrokes(object):
         """
         self.Dat["shape_oriented"] = self.Dat[shape_kind]
 
-    def strokerank_extract_semantic(self):
+    def strokerank_extract_semantic(self, version="beh"):
         """ using stroke indices, decide if is first, last, both_fl, or middle
-        stroke
+        stroke.
+        Before 1/13/24 - Looks only at behavior, not at actually how many strokes
+        are in the task, so can be misleading if online abort.
+        After 1/13/24 - Option to get relative to beh or task strokes.
+        PARAMS:
+        - version, str, either "beh" or "task", whether to define index using
+        beh or task strokes.
         RETURNS:
-        - appends/modifies self.Dat["stroke_index_semantic"
+        - appends/modifies self.Dat["stroke_index_semantic"] or "stroke_index_semantic_tskstks"
         """
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
+        if version=="beh":
+            newcolname = "stroke_index_semantic"
+        elif version=="task":
+            newcolname = "stroke_index_semantic_tskstks"
+        else:
+            assert False
+
         def F(x):
-            if x["stroke_index"]==0 and x["stroke_index_fromlast"]==-1:
+            if version=="beh":
+                si_from_last = x["stroke_index_fromlast"]
+            elif version=="task":
+                si_from_last = x["stroke_index_fromlast_tskstks"]
+            else:
+                assert False
+
+            if x["stroke_index"]==0 and si_from_last==-1:
                 return "both_fl"
             elif x["stroke_index"]==0:
                 return "first"
-            elif x["stroke_index_fromlast"]==-1:
+            elif si_from_last==-1:
                 return "last"
             else:
                 return "middle"
-        self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="stroke_index_semantic")
+        self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname=newcolname)
 
     # ################################# FIRST TOUCH
     # def firsttouch_extract_plot(self):

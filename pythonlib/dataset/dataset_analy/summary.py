@@ -36,7 +36,7 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     #     expt = "linecircle"
     #     rule = ["null"]
 
-    from pythonlib.dataset.dataset import load_dataset
+    from pythonlib.dataset.dataset import load_dataset_notdaily_helper
     # from pythonlib.dataset.dataset import Dataset, load_dataset
     from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
 
@@ -104,7 +104,7 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     # D = Dataset([])
     # D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
 
-    D, rulelist = load_dataset(animal, expt, rulelist, return_rulelist=True)
+    D, rulelist = load_dataset_notdaily_helper(animal, expt, rulelist, return_rulelist=True)
     GROUPING = D.MetadatPreprocess["GROUPING"]
     GROUPING_LEVELS = D.MetadatPreprocess["GROUPING_LEVELS"]
     FEATURE_NAMES = D.MetadatPreprocess["FEATURE_NAMES"]

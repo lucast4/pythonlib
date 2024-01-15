@@ -17,13 +17,16 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
 def rotate_x_labels(ax, rotation=45):
-    
     # draw the figure (update)
     ax.figure.canvas.draw_idle()
     # plt.draw() # equivalent to above.
     
     ax.set_xticks(ax.get_xticks(), ax.get_xticklabels(), rotation=rotation)
-    
+
+def rotate_y_labels(ax, rotation=45):
+    ax.figure.canvas.draw_idle()
+    ax.set_yticks(ax.get_yticks(), ax.get_yticklabels(), rotation=rotation)
+
 def rose_plot(ax, angles, bins=16, density="frequency_radius", offset=0, lab_unit="degrees",
               start_zero=True, fill=False, skip_plot=False, **param_dict):
     """

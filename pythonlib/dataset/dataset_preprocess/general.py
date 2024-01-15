@@ -45,7 +45,7 @@ def _groupingParams(D, expt):
     features_to_remove_nan =  []
     features_to_remove_outliers = []
     grouping_levels = None
-    feature_names = ["hdoffline", "num_strokes", "circ", "dist"]    
+    feature_names = ["hdoffline", "num_strokes_beh", "num_strokes_task", "circ", "dist"]
 
     # -- whether reassign "epoch"
     grouping_reassign = False
@@ -146,7 +146,6 @@ def _groupingParams(D, expt):
         features_to_remove_nan =  []
         features_to_remove_outliers = []
         grouping_levels = ["straight", "bent"]
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]
     elif expt=="linecircle":
         F = {}
         grouping = "epoch"
@@ -162,7 +161,6 @@ def _groupingParams(D, expt):
         features_to_remove_nan =  []
         features_to_remove_outliers = []
         grouping_levels = ["straight", "bent"]
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]        
     elif expt == "gridlinecircle":
         grouping_reassign = False
         # grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -183,7 +181,6 @@ def _groupingParams(D, expt):
             grouping_levels = ["baseline", "Ltoline"]
         else:
             assert False
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]                
         traintest_reassign_method = "fixed"
     elif expt in ["chunkbyshape1", "chunkbyshape1b", "chunkbyshape2", "chunkbyshape2b"]:
         F = {}
@@ -192,7 +189,6 @@ def _groupingParams(D, expt):
         features_to_remove_nan =  []
         features_to_remove_outliers = []
         grouping_levels = ["horiz", "vert"]
-        feature_names = ["hdoffline", "num_strokes", "circ", "dist"]     
         traintest_reassign_method = "fixed"
     elif expt=="character34":
         assert False, "fix this, see here"
@@ -1138,7 +1134,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # D.behclass_preprocess_wrapper(skip_if_exists=False)
     
     ############## OLD THINGS, delete if not using (to avoid confusion)
-    del D.Dat["supervision_params"] # from drawmonkey.
+    if "supervision_params" in D.Dat.columns:
+        del D.Dat["supervision_params"] # from drawmonkey.
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
