@@ -59,10 +59,10 @@ def load_dataset_daily_helper(animal, date):
         # Load
         expt = list_metadat[0][0]
         print("Loading this dataset", animal, expt, date)
-        D = load_dataset(animal, expt, rulelist=[date])
+        D = load_dataset_notdaily_helper(animal, expt, rulelist=[date])
         return D
 
-def load_dataset(animal, expt, rulelist=None, return_rulelist=False):
+def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=False):
     """
     Helper to load a dataset, using most common methods. Works for both
     daily and main analysis (see PARAMS).
@@ -204,7 +204,6 @@ class Dataset(object):
         if ver=="single":
             pathlist = self.find_dataset(animal, expt, assert_only_one=True, rule=rule)
             self._main_loader(pathlist, None, animal_expt_rule=[(animal, expt, rule)])
-
         elif ver=="mult":
             pathlist = []
             aer_list =[]
@@ -220,12 +219,19 @@ class Dataset(object):
                         pathlist.extend(self.find_dataset(a, e, True, rule=r))
                         aer_list.append((a,e,r))
             self._main_loader(pathlist, None, animal_expt_rule=aer_list)
+        else:
+            assert False
 
         # By default, try to load tasks
         self.load_tasks_helper()
 
-        # By default, do preprocess
-        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt_orig)
+        if False:
+            # By default, do preprocess (these run when load first time, but not if reload cached dataset in neuralmonkey)
+            self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt_orig)
+        else:
+            # 2/4/23 - Now run preprocess whenever load.
+            GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = self._cleanup_preprocess_each_time_load_dataset()
+
         # self._analy_preprocess_done = False
         # self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
         # print(GROUPING_LEVELS)
@@ -239,7 +245,9 @@ class Dataset(object):
 
 
     def _main_loader(self, inputs, append_list, animal_expt_rule=None):
-        """ MAIN loading function, use this for all loading purposes
+        """ MAIN loading function, use this for all loading purpose.
+        Minimal functoins, so that athis can be used for loading data direclty (given inputed)_
+        paths, or, with subsequence processing, auto loading datasets semanticalyl.
         - animal_exp MAINt_rule = [aer1, aer2, ..] length of inputs, where aer1 is like (a, e, r)
         -- only applies if input is paths
         """
@@ -254,15 +262,16 @@ class Dataset(object):
         else:
             # then you passed in pandas dataframes directly.
             self._store_dataframes(inputs, append_list)
+
         if not self._reloading_saved_state:
             self._cleanup(
                 remove_dot_strokes = self.ParamsCleanup["remove_dot_strokes"],
                 remove_online_abort = self.ParamsCleanup["remove_online_abort"]
                 )
             self._check_consistency()
-        else:
-            self._cleanup_reloading_saved_state()
-
+        # Ignore this, since its not doing anything important, and will run later.
+        # else:
+        #     self._cleanup_preprocess_each_time_load_dataset()
 
     def _store_dataframes(self, inputs, append_list):
         assert append_list is None, "not coded yet!"
@@ -2064,12 +2073,20 @@ class Dataset(object):
 
 
     ############# CLEANUP
-    def _cleanup_reloading_saved_state(self):
-        # e..g, if loading saved datase4t using neuralmonkey
+    def _cleanup_preprocess_each_time_load_dataset(self):
+        # e..g, if loading saved dataset using neuralmonkey
         print("=== CLEANING UP self.Dat (_cleanup_reloading_saved_state) ===== ")
         if not hasattr(self, "_BehClassExtracted"):
             self._BehClassExtracted = None
 
+        # 2/4/24 - Decided to just rerun entire preprocessDat, since that is actualyl very quick,
+        # except the step of behclass_preprocess_wrapper, but that would be done here anyway (the
+        # purpose of the line self._BehClassExtracted = None
+        from pythonlib.dataset.dataset_preprocess.general import preprocessDat
+        expt = self.expts(force_single=True)[0]
+        self._analy_preprocess_done=False
+        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
+        return GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
     def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True): 
         """ automaitcalyl clean up using default params
@@ -5919,7 +5936,7 @@ class Dataset(object):
 
 
     def extract_beh_features(self, 
-        feature_list = ("angle_overall", "num_strokes", "circ", "dist")):
+        feature_list = ("angle_overall", "num_strokes_beh", "num_strokes_task", "circ", "dist")):
         """ extract features, one val per row, 
         INPUT:
         - feature_list, list of strings. instead of string, if pass in function, then will use that.
@@ -5941,8 +5958,11 @@ class Dataset(object):
             else:
                 if f=="angle_overall":
                     x = [strokesAngleOverall(strokes) for strokes in self.Dat["strokes_beh"].values]
-                elif f=="num_strokes":
+                elif f=="num_strokes_beh":
                     x = [len(strokes) for strokes in self.Dat["strokes_beh"].values]
+                elif f=="num_strokes_task":
+                    # number of strokes in ground truth task
+                    x = [len(strokes) for strokes in self.Dat["strokes_task"].values]
                 elif f=="circ":
                     x= [np.mean(strokeCircularity(strokes)) for strokes in self.Dat["strokes_beh"].values]
                 elif f=="dist":
@@ -9094,6 +9114,64 @@ class Dataset(object):
         - (2,) array, x,y, pixel locations
         """
         return self.Dat.iloc[ind]["origin"]
+
+    def sketchpad_done_button_did_reach_append_col(self,
+                                                   max_frac_failures=0.02):
+        """ append column "done_did_reach" in self.Dat.
+        Also does sanityc check that not too mnahy casees of failed
+        extraction (see note in _sketchpad_done_button_did_reach DEBUG).
+        """
+
+        list_reach = []
+        failures = []
+        for ind in range(len(self.Dat)):
+            did_reach, done, t_done_touch, _ = self._sketchpad_done_button_did_reach(ind)
+
+            # count how mnay cases have nan but shouldnt
+            if done and np.isnan(t_done_touch):
+                # This is a but in drawmonkey. its fixed but need to re-extract dset
+                failures.append(ind)
+
+            # Save result
+            list_reach.append(did_reach)
+
+        self.Dat["doneb_did_reach"] = list_reach
+
+        if len(failures)/len(list_reach) > max_frac_failures:
+            print(failures, len(failures)/len(list_reach))
+            assert False, "Too many faiglulres (nans). reextract this dataset from drawmonkye"
+
+    def _sketchpad_done_button_did_reach(self, ind,
+                                        max_delay=1.,
+                                         DEBUG=False):
+        """ Return True if he did reach from end of
+        last stroke towards done button, in reasonable time.
+        and no abort.
+        PARAMS:
+        - max_delay, time in sec, from end of last stroke to touch of done,
+        below which this would qualify as a "reaach" trial. 1 sec picked empriocally
+        as easlity capturing all data for Diego, 230630.
+        """
+
+        done = self.Dat.iloc[ind]["trial_end_method"]=="pressed_done_button"
+        t_done_touch = self.Dat.iloc[ind]["motorevents"]["done_touch"]
+        t_last_stroke_off =  self.Dat.iloc[ind]["strokes_beh"][-1][-1, 2]
+        delay = t_done_touch-t_last_stroke_off
+
+        if DEBUG:
+            if np.isnan(delay):
+                # THis means is old dataset.. 1/13/24, This I fixed in
+                # extraction of done timing in drawmonkey (see utils.py:
+                # TIME OF DONE BUTTON TOUCH
+                print("----")
+                print(done)
+                print(self.Dat.iloc[ind]["motorevents"])
+                print(t_done_touch)
+                print(t_last_stroke_off)
+
+        did_reach_for_done = done and delay<max_delay
+
+        return did_reach_for_done, done, t_done_touch, t_last_stroke_off
 
     def sketchpad_done_button_position(self, ind):
         """
