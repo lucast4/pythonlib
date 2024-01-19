@@ -372,10 +372,22 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     else:
         assert False
 
+    # Clip to maximum size.
+    SIZEMAX = 15
+    aspect = h/w
+    if h>SIZEMAX:
+        h = SIZEMAX
+        w = h/aspect
+    if w>SIZEMAX:
+        w = SIZEMAX
+        h = aspect*w
+
     if ax is None:
         fig, ax = plt.subplots(1,1, figsize=(w, h))
     else:
         fig = None
+
+    # print("SIZE:", w,h)
 
     dfthis = df
     if norm_method=="all_sub":
@@ -451,9 +463,11 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     norm = Normalize(vmin=z1, vmax=z2)
     rgba_values = cmap(norm(df))
 
-    if list_cat_1:
+
+    if len(list_cat_1)<200:
+        # otherwise is too slow, too much text.
         ax.set_yticks([i+lab_add for i in range(len(list_cat_1))], list_cat_1, rotation=rotation_y)
-    if list_cat_2:
+    if len(list_cat_2)<200:
         ax.set_xticks([i+lab_add for i in range(len(list_cat_2))], list_cat_2, rotation=rotation)
 
     return fig, ax, rgba_values

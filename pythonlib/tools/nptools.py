@@ -29,6 +29,8 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
         plt.figure()
         plt.plot(x, xbinned, "ok")
     """
+    if isinstance(vals_input, list):
+        vals_input = np.asarray(vals_input)
 
     def _bin_values(vals, valmin, valmax):
         """ Operates on de-naned data
@@ -52,6 +54,8 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
 
     # bin only the non-nan values.
     inds = ~np.isnan(vals_input)
+    # print(inds)
+    # print(vals_input)
     vals_to_bin = vals_input[inds]
     vals_to_bin_binned = _bin_values(vals_to_bin, valmin, valmax)
     vals_out = vals_input.copy()
@@ -170,9 +174,9 @@ def sort_by_labels(X, labels, axis=0):
     inds = np.argsort(labels)
 
     if axis==0:
-        X = X[inds,:]
+        X = X[inds,:].copy()
     elif axis==1:
-        X = X[:, inds]
+        X = X[:, inds].copy()
     else:
         print(X.shape)
         print(axis)

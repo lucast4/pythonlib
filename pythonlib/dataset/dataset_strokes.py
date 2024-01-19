@@ -33,7 +33,14 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
 
     D = D.copy()
 
-    if version=="clean_one_to_one":
+    if version=="single_prim":
+        # Super clean
+        assert False
+        # params = ["remove_online_abort", "frac_touched_ok"]
+        # frac_touched_min = 0.6
+        # D.preprocessGood(params=params, frac_touched_min=frac_touched_min)
+
+    elif version=="clean_one_to_one":
         # One to one beh to task strokes, good for everything except chars.
         # Clean means remove outlier strokes, too short, or visual distance.
         D.preprocessGood(params=["beh_strokes_at_least_one",
@@ -43,14 +50,59 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         DS = DatStrokes(D)
 
         # These values empriically chosen (see primitivenessv2 preprocessing).
-        methods = ["stroke_too_short", "beh_task_dist_too_large"]
+        methods = ["stroke_too_short", "beh_task_dist_too_large", "stroke_too_quick"]
         params = {
             "min_stroke_length":60,
-            "min_beh_task_dist":35
+            "min_beh_task_dist":35,
+            "min_stroke_dur":0.1
         }
         DS.distgood_compute_beh_task_strok_distances()
+        n1 = len(DS.Dat)
         DS.clean_preprocess_data(methods=methods, params=params)
         DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
+        n2 = len(DS.Dat)
+        assert n2/n1>0.75, "why removed so much data?"
+    elif version=="clean_chars":
+        # Ignore whether stroke is aligne dto taskl. Just want clean strokes, not
+        # too short
+        D.preprocessGood(params=["no_supervision", "remove_online_abort"])
+
+        ##### Exclude the bottom nth percentile of trials based on ft_decim
+        # ACTUALLY: just ignore, since doesnt seem like strokiness is worse for worse trials
+        if False:
+            D.score_visual_distance()
+            D.Dat["hdoffline"]
+
+            sns.pairplot(data=D.Dat, vars=["strokinessv2", "beh_multiplier", "hausdorff", "ft_decim", "hdoffline"], plot_kws={"alpha":0.3},
+                        kind="kde")
+
+            sns.pairplot(data=D.Dat, vars=["strokinessv2", "beh_multiplier", "hausdorff", "ft_decim", "hdoffline"], plot_kws={"alpha":0.3})
+
+            D.plot_trials_after_slicing_within_range_values("hdoffline", 15, 30)
+
+            D.plot_trials_after_slicing_within_range_values("hdoffline", 0, 10)
+
+            D.plot_trials_after_slicing_within_range_values("beh_multiplier", 0.75, 1)
+
+
+            D.plot_trials_after_slicing_within_range_values("ft_decim", 0.8, 1)
+            # D.plot_trials_after_slicing_within_range_values("hausdorff", -1, -0.4)
+
+            D.plot_trials_after_slicing_within_range_values("ft_decim", 0, 0.5)
+            # D.plot_trials_after_slicing_within_range_values("hausdorff", -1, -0.4)
+
+        DS = DatStrokes(D)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "stroke_too_quick"]
+        params = {
+            "min_stroke_length":50,
+            "min_stroke_dur":0.1,
+        }
+        n1 = len(DS.Dat)
+        DS.clean_preprocess_data(methods=methods, params=params)
+        n2 = len(DS.Dat)
+        assert n2/n1>0.75, "why removed so much data?"
     else:
         print(version)
         assert False, "code it"
@@ -74,9 +126,9 @@ class DatStrokes(object):
         self.Dat = None
         self.Params = {}
         self.Version = None
-
+        self._SampleRate = None
         if self.Dataset is not None:
-            self._prepare_dataset() 
+            self._prepare_dataset()
             self._extract_strokes_from_dataset(version=version)
             self._clean_preprocess()
 
@@ -412,6 +464,10 @@ class DatStrokes(object):
                 print("Doing...:", meth)
                 assert "min_stroke_length" in params.keys()
                 self.Dat = self.Dat[self.Dat["distcum"]>=params["min_stroke_length"]].reset_index(drop=True)
+            elif meth=="stroke_too_quick":
+                print("Doing...:", meth)
+                assert "min_stroke_dur" in params.keys()
+                self.Dat = self.Dat[self.Dat["time_duration"]>=params["min_stroke_dur"]].reset_index(drop=True)
             elif meth=="beh_task_dist_too_large":
                 # prune strokes that are outliers.
                 # inds = DS.Dat[DS.Dat["dist_beh_task_strok"]>37].index.tolist()
@@ -884,6 +940,13 @@ class DatStrokes(object):
         self.Dat[colname] = valsthis
         print(f"Appended {colname} to self.Dat")
 
+    def dataset_get_sample_rate(self):
+        """ Return scalar sample rate of entier dataset, fails if
+        multiple across tirlas, in hz
+        """
+        if self._SampleRate is None:
+            self._SampleRate = self.Dataset.get_sample_rate_alltrials()
+        return self._SampleRate
 
     def dataset_slice_by_trialcode_strokeindex(self, list_trialcode, list_stroke_index,
             df=None, assert_exactly_one_each=True):
@@ -920,7 +983,7 @@ class DatStrokes(object):
 
         return dfslice
 
-    def dataset_slice_by(self, key, list_vals, return_index=False):
+    def dataset_slice_by(self, key, list_vals, return_index=False, df=None):
         """ Extract slice of dataset using key-val pairs that may not yet 
         exist in self.Dat, but may be extracted by mapping back from orignal
         Dataset. First checks if this key exitss, if not then appends it as a
@@ -932,12 +995,17 @@ class DatStrokes(object):
         RETURNS:
         - df, sliced dataset or index/
         """
+        from pythonlib.tools.pandastools import slice_by_row_label
+
+        if df is None:
+            df = self.Dat
 
         if key not in self.Dat.columns:
             # Then pull it from dstaset
             self.dataset_append_column(key)
 
-        dfthis = self.Dat[self.Dat[key].isin(list_vals)]
+        dfthis = slice_by_row_label(df, key, list_vals, assert_exactly_one_each=True)
+        # dfthis = df[df[key].isin(list_vals)]
 
         if return_index:
             return dfthis.index.tolist()
@@ -1031,6 +1099,7 @@ class DatStrokes(object):
             self.plot_single_strok(strok, ver=ver, ax=ax)
 
         if titles is not None:
+            assert len(titles)==len(list_strok)
             for ax, tit in zip(axes, titles):
                 ax.set_title(tit)
 
@@ -1759,30 +1828,34 @@ class DatStrokes(object):
         return self.cluster_compute_mean_stroke(inds, center_at_onset=True)
 
 
-    def _cluster_compute_sim_matrix(self, strokes_data, strokes_basis, 
-        rescale_strokes_ver=None, distancever="euclidian_diffs", 
-        return_as_Clusters=False, labels_for_Clusters=None, labels_for_basis=None):
+    def _cluster_compute_sim_matrix(self, strokes_data, strokes_basis, distancever="euclidian_diffs",
+                                    return_as_Clusters=False, labels_rows_dat=None, labels_cols_feats=None,
+                                    DEBUG=False):
         """ Low-level code to compute the similarity matrix between list of strokes
         and basis set. Autoatmically recenters strokes to onset.
         PARAMS:
         - strokes_data, list of strok
         - strokes_basis, list of strok, (columns)
+        RETURNS:
+            - sim_mat, (len strokes_data, len strokes_basis)
         """
-        from ..drawmodel.sf import computeSimMatrixGivenBasis
         from ..cluster.clustclass import Clusters
 
-        if labels_for_basis is not None:
-            assert len(labels_for_basis)==len(strokes_basis)
+        if labels_cols_feats is not None:
+            assert len(labels_cols_feats) == len(strokes_basis)
 
-        simmat = computeSimMatrixGivenBasis(strokes_data, strokes_basis, 
-            rescale_strokes_ver=rescale_strokes_ver, distancever=distancever) 
+        # simmat = computeSimMatrixGivenBasis(strokes_data, strokes_basis,
+        #     rescale_strokes_ver=rescale_strokes_ver, distancever=distancever)
+        simmat = self._cluster_compute_sim_matrix_with_good_params(
+            strokes_data, strokes_basis, distancever=distancever,
+            DEBUG=DEBUG)
 
         if return_as_Clusters:
-            if labels_for_Clusters is None:
-                labels_for_Clusters = [i for i in range(len(strokes_data))]
+            if labels_rows_dat is None:
+                labels_rows_dat = [i for i in range(len(strokes_data))]
 
-            Cl = Clusters(X = simmat, labels_rows=labels_for_Clusters, 
-                labels_cols=labels_for_basis)
+            Cl = Clusters(X = simmat, labels_rows=labels_rows_dat,
+                          labels_cols=labels_cols_feats)
 
             # Plot
             if False:
@@ -1793,46 +1866,156 @@ class DatStrokes(object):
         else:
             return simmat
 
-    def _cluster_compute_sim_matrix_multiplever(self, strokes_data, strokes_basis, 
-        list_ver, labels_for_Clusters=None, labels_for_basis=None,
-        return_as_Clusters=True):
-        """Low-level code to iterate over multiple distancever's, each time computing 
-        a similatiy matrix
-        PARAMS:
-        - list_ver, list of string, distance metrics.
-        RETUNRS:
-        - list_simmat, list of np array (ndat, nbas) similarity matrices
+    def _cluster_compute_sim_matrix_with_good_params(self, strokes_data, strokes_basis,
+                                                     distancever, rescale_strokes_ver=None,
+                                                     DEBUG=False):
+        """ Help store good params for different kinds of distance metrics,
+        including best stroke transfomrations and output tforms.
+        NOTE: used to be sf.computeSimMatrixGivenBasis
+        :param strokes_data:
+        :param strokes_basis:
+        :param distancever:
+        :param rescale_strokes_ver:
+        :param npts_space:
+        :param DEBUG:
+        :return:
         """
-        list_simmat = []
-        for ver in list_ver:
-            simmat = self._cluster_compute_sim_matrix(strokes_data, strokes_basis, 
-                distancever=ver, return_as_Clusters=return_as_Clusters, 
-                labels_for_Clusters=labels_for_Clusters, labels_for_basis=labels_for_basis) 
-            list_simmat.append(simmat)
+        from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2, strokes_alignonset, strokes_centerize
+        from pythonlib.drawmodel.strokedists import distStrokWrapperMult
 
-        return list_simmat
 
-    def _cluster_compute_sim_matrix_aggver(self, strokes_data, strokes_basis, 
-            list_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered"], 
-            labels_for_Clusters=None, labels_for_basis=None):
+        ### Cmpute sim matrix
+        if distancever == "dtw_vels_1d":
+            assert False, "use dtw_vels_2d insetad, its been tested..."
+        elif distancever == "dtw_vels_2d":
+            # DTW, using velocity in 2d, invariant to scale and
+            # temporal structure.
+
+            # fs = self.dataset_get_sample_rate()
+            fs = None # not needed, since now is using "fake time"
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
+                                                convert_to_similarity=True, similarity_method="inverse",
+                                                 align_to_onset=True, fs=fs, DEBUG=DEBUG,
+                                                          rescale_ver="stretch_to_1_diag")
+
+        elif distancever == "euclidian":
+            # Pt by pt euclidian, after aligning by onsets.
+
+            # align to onset
+            # strokes_data = strokes_alignonset(strokes_data)
+            # strokes_basis = strokes_alignonset(strokes_basis)
+
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
+                                                     convert_to_similarity=True, similarity_method="squared_one_minus",
+                                                     normalize_by_range=True, range_norm=[0, 220], DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver,
+                                                     align_to_onset=True)
+
+        elif distancever == "euclidian_diffs":
+            # PT by pt euclidian of the differences between pts at adajcent timepoints
+
+            # align to onset
+            # strokes_data = strokes_alignonset(strokes_data)
+            # strokes_basis = strokes_alignonset(strokes_basis)
+
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
+                                                     convert_to_similarity=True, similarity_method="squared_one_minus",
+                                                     normalize_by_range=True, range_norm=[0, 16], DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver,
+                                                     align_to_onset=True)
+
+        elif distancever == "hausdorff_alignedonset":
+            # Hausdorff (spatial), after aligning strokes by their onsets
+
+            # align to onset
+            # strokes_data = strokes_alignonset(strokes_data)
+            # strokes_basis = strokes_alignonset(strokes_basis)
+
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff",
+                                                     convert_to_similarity=True, similarity_method="squared_one_minus",
+                                                     normalize_by_range=True, range_norm=[2, 145], DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver,
+                                                     align_to_onset=True)
+
+        elif distancever == "hausdorff_centered":
+            # Hausdorff (spatial), after centering strokes in space
+
+            # center
+            # strokes_data = strokes_centerize(strokes_data)
+            # strokes_basis = strokes_centerize(strokes_basis)
+
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff",
+                                                     convert_to_similarity=True, similarity_method="squared_one_minus",
+                                                     normalize_by_range=True, range_norm=[2, 145], DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver,
+                                                     align_to_center=True)
+
+        elif distancever == "hausdorff_max":
+            # Hausdorff (spatial), after centering strokes in space
+
+            # center
+            strokes_data = strokes_centerize(strokes_data)
+            strokes_basis = strokes_centerize(strokes_basis)
+
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff_max",
+                                                     convert_to_similarity=True, similarity_method="squared_one_minus",
+                                                     normalize_by_range=True, range_norm=[2, 145], DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver,
+                                                     align_to_center=True)
+
+        else:
+            print(distancever)
+            assert False
+
+        return similarity_matrix
+
+    # def _cluster_compute_sim_matrix_multiplever(self, strokes_data, strokes_basis,
+    #     list_ver, labels_for_Clusters=None, labels_for_basis=None,
+    #     return_as_Clusters=True):
+    #     """Low-level code to iterate over multiple distancever's, each time computing
+    #     a similatiy matrix
+    #     PARAMS:
+    #     - list_ver, list of string, distance metrics.
+    #     RETUNRS:
+    #     - list_simmat, list of np array (ndat, nbas) similarity matrices
+    #     """
+    #     list_simmat = []
+    #     for ver in list_ver:
+    #         simmat = self._cluster_compute_sim_matrix(strokes_data, strokes_basis, distancever=ver,
+    #                                                   return_as_Clusters=return_as_Clusters,
+    #                                                   labels_rows_dat=labels_for_Clusters,
+    #                                                   labels_cols_feats=labels_for_basis)
+    #         list_simmat.append(simmat)
+    #
+    #     return list_simmat
+
+    def _cluster_compute_sim_matrix_aggver(self, strokes_data, strokes_basis,
+                                           list_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered"],
+                                           labels_rows_dat=None, labels_cols_feats=None):
         from ..cluster.clustclass import Clusters
         """ Low-level code to compute multiple similarity matrices (diff distance vers)
         and average them, to return a single sim mat
         """
 
         # collect
-        list_simmat = self._cluster_compute_sim_matrix_multiplever(strokes_data, 
-            strokes_basis, list_ver, return_as_Clusters=False)
+        list_simmat = []
+        for ver in list_ver:
+            simmat = self._cluster_compute_sim_matrix(strokes_data, strokes_basis, distancever=ver,
+                                                      return_as_Clusters=False)
+            list_simmat.append(simmat)
+        #
+        # list_simmat = self._cluster_compute_sim_matrix_multiplever(strokes_data,
+        #     strokes_basis, list_ver, return_as_Clusters=False) # (nstrokes, nbasis)
 
         # Average
         x = np.stack(list_simmat)
         simmat = np.mean(x, axis=0)
 
-        if labels_for_Clusters is None:
-            labels_for_Clusters = [i for i in range(len(strokes_data))]
+        if labels_rows_dat is None:
+            labels_rows_dat = [i for i in range(len(strokes_data))]
 
-        Cl = Clusters(X = simmat, labels_rows=labels_for_Clusters, 
-            labels_cols=labels_for_basis)
+        Cl = Clusters(X = simmat, labels_rows=labels_rows_dat,
+                      labels_cols=labels_cols_feats)
 
         return Cl
 
@@ -1842,30 +2025,17 @@ class DatStrokes(object):
             which_shapes = None,
             list_distance_ver=None):
         """
-        Given dataset, projects data to a variety of possible feature spaces
-        
+        Given dataset, projects data to a chosen feature space (out of a variety
+         of possible feature spaces), where data is usualyl self.Dat with added
+         columns if needed. Returns A Cluster() object with (ndat, nfeatures).
         """
 
-        # def _load_basis_strokes():
-        #     """ Helper to load pre-saved basis set, when needed"""
-        #     if which_basis_set is None:
-        #         if self.Dataset.animals()==["Pancho"]:
-        #             which_basis_set = "standard_17"
-        #         elif self.Dataset.animals()==["Diego"]:
-        #             which_basis_set = "diego_all_minus_open_to_left"
-        #         else:
-        #             print(D.animals())
-        #             assert False
-
-        #     dfbasis, _, _ = self.stroke_shape_cluster_database_load_helper(
-        #         which_basis_set=which_basis_set, which_shapes=which_shapes)
-
-        #     return dfbasis
-
-
         params = {}
+
         if which_space=="strok_sim_motor":
-            """ Similarity between strokes, at motor level"""
+            """ Similarity between strokes, at motor level to 
+            a basis set of strokes pre-saved.
+            """
 
             # Extract dataset
             list_strok = df["strok"].tolist()
@@ -1883,19 +2053,24 @@ class DatStrokes(object):
                 
             # Which distance score
             if list_distance_ver is None:
+                # if False:
+                # Before 1/15/24
                 list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+                # 1/15/24 - This is much better
+                list_distance_ver  = ["dtw_vels_2d"]
 
             # Compute similarity
             Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, list_distance_ver,
-                                                                labels_for_Clusters = list_shape, 
-                                                                labels_for_basis = list_shape_basis)
+                                                         labels_rows_dat= list_shape,
+                                                         labels_cols_feats= list_shape_basis)
 
             params["list_strok_basis"] = list_strok_basis
             params["list_shape_basis"] = list_shape_basis
             params["list_distance_ver"] = list_distance_ver
 
         elif which_space=="strok_sim_task":
-            """ Each datapt's task image"""
+            """ Features are distance in task-image to 
+            each basis sets task image"""
             
             # 2) Visual similarity to basis set
             # - for each shape, return a single example task image
@@ -1910,12 +2085,12 @@ class DatStrokes(object):
                 list_shape_basis = dfbasis["shape"].tolist()
 
             # Cluster
-            Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-                                                rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
-                                               labels_for_Clusters=list_shape)
+            Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis, distancever="hausdorff_max",
+                                                  return_as_Clusters=True, labels_rows_dat=list_shape,
+                                                  labels_cols_feats= list_shape_basis)
 
             params["list_strok_basis"] = list_strok_basis
-            params["list_shape_basis"] = list_shape
+            params["list_shape_basis"] = list_shape_basis
 
         elif which_space=="shape_cat_abstract":
             """One-hot enocding of the shape category"""
@@ -1931,7 +2106,6 @@ class DatStrokes(object):
             labels_rows = list_shape
             labels_cols = encoder.categories_[0].tolist()
             Cl = Clusters(X, labels_rows=labels_rows, labels_cols=labels_cols)
-            # ClustDict["task_shape_cat_abstract"] = 
 
         else:
             print(which_space)
@@ -1944,9 +2118,17 @@ class DatStrokes(object):
             ParamsGeneral, dfdat,
             which_features = "beh_motor_sim",
             trial_summary_score_ver="clust_sim_max"):
-
-        # Given a Cl, use it to assign each beh to a cluster.
-        
+        """
+        Given set of Clust objects, use them to decide how to label each data trial.
+        (i.e., assign each beh to a cluster, given a Cl).
+        :param ClustDict:
+        :param ParamsDict:
+        :param ParamsGeneral:
+        :param dfdat:
+        :param which_features:
+        :param trial_summary_score_ver:
+        :return:
+        """
 
         ##########################################
         ### [FOR MOTOR] Extract scalar values summarizing the simialrity scores (e.g,, clustering)
@@ -2111,7 +2293,14 @@ class DatStrokes(object):
 
     def clustergood_plot_single_dat(self, ind, WHICH_FEATURE="beh_motor_sim",
         savedir=None, prefix=None):
-        ##### [Good] Plot exmaple trial, with score compared across all basis sets
+        """
+        Good] Plot exmaple trial, with score compared across all basis sets.
+        :param ind:
+        :param WHICH_FEATURE:
+        :param savedir:
+        :param prefix:
+        :return:
+        """
 
         from pythonlib.tools.plottools import rotate_x_labels, saveMultToPDF
 
@@ -2121,22 +2310,77 @@ class DatStrokes(object):
         list_shape_basis = Params["list_shape_basis"]
         list_strok_basis = Params["list_strok_basis"]
 
+        list_scores = Y[ind, :]
+
+        fig1, fig2, fig3 = self._clustergood_plot_single_dat(ind, list_scores,
+                                                             list_strok_basis, list_shape_basis,
+                                                             savedir, prefix, YLIM=(0,1))
+
+        # SIZE = 2
+        # fig1, ax = plt.subplots(figsize=(len(list_shape_basis*SIZE), 5))
+        # y = Y[ind, :]
+        # labels_col = Cl.LabelsCols
+        # ax.plot(labels_col, y, "-k")
+        # ax.set_ylim(0, 1)
+        # rotate_x_labels(ax, 45)
+        #
+        # # Plot basis set
+        # assert list_shape_basis == labels_col
+        # strokes = list_strok_basis
+        # fig2, axes = self.plot_multiple_strok(strokes, overlay=False, titles = list_shape_basis, ncols = len(list_shape_basis))
+        #
+        # # Plot drawing
+        # inddat, fig3, ax = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="task")
+        # _, fig4, _ = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="beh")
+        #
+        # if savedir:
+        #     if prefix:
+        #         path = f"{savedir}/{prefix}-ind_DS_{ind}"
+        #     else:
+        #         path = f"{savedir}/ind_DS_{ind}"
+        #     print("Saving to: ", path)
+        #     saveMultToPDF(path, [fig1, fig2, fig3, fig4])
+            
+        return fig1, fig2, fig3
+
+    # def clustergood_devo_debug_plot_distance_metrics(self):
+    #     """ Methods to test distance metrics, development of them, and make """
+
+    def _clustergood_plot_single_dat(self, ind, list_scores, list_strok_basis, list_shape_basis,
+        savedir=None, prefix=None, YLIM=(0,1)):
+        """
+        [Good] Plot exmaple trial, with score compared across all basis sets
+
+        :param ind:
+        :param list_scores:
+        :param list_strok_basis:
+        :param list_shape_basis:
+        :param savedir:
+        :param prefix:
+        :param YLIM:
+        :return:
+        """
+
+        from pythonlib.tools.plottools import rotate_x_labels, saveMultToPDF
+
         SIZE = 2
         fig1, ax = plt.subplots(figsize=(len(list_shape_basis*SIZE), 5))
-        y = Y[ind, :]
-        labels_col = Cl.LabelsCols
-        ax.plot(labels_col, y, "-k")
-        ax.set_ylim(0, 1)
+        ax.plot(list_shape_basis, list_scores, "-k")
+        if YLIM is not None:
+            ax.set_ylim(YLIM[0], YLIM[1])
+        else:
+            ax.set_ylim(0.)
         rotate_x_labels(ax, 45)
 
         # Plot basis set
-        assert list_shape_basis == labels_col
         strokes = list_strok_basis
-        fig2, axes = self.plot_multiple_strok(strokes, overlay=False, titles = list_shape_basis, ncols = len(list_shape_basis))
+        titles = [f"{i}|{sh}" for i, sh in enumerate(list_shape_basis)]
+        fig2, axes = self.plot_multiple_strok(strokes, overlay=False, titles = titles,
+                                              ncols = len(list_shape_basis))
 
         # Plot drawing
-        inddat, fig3, ax = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="task")  
-        _, fig4, _ = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="beh")  
+        inddat, fig3, ax = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="task")
+        _, fig4, _ = self.plot_single_overlay_entire_trial(ind, overlay_beh_or_task="beh")
 
         if savedir:
             if prefix:
@@ -2145,10 +2389,8 @@ class DatStrokes(object):
                 path = f"{savedir}/ind_DS_{ind}"
             print("Saving to: ", path)
             saveMultToPDF(path, [fig1, fig2, fig3, fig4])
-            
+
         return fig1, fig2, fig3
-
-
 
 
                 # 3) Plot the original plot
@@ -2245,8 +2487,6 @@ class DatStrokes(object):
         self.Dat["velmean_norm"] = list_magn
         self.Dat["velmean_normbin"] = bin_values(list_magn, nbins=4)
 
-
-
         if plot_vel_timecourses:
             self.plotwrap_timecourse_vels_grouped_by_shape(5, also_plot_example_strokes=True)
         if plot_histogram:
@@ -2341,7 +2581,10 @@ class DatStrokes(object):
     # def features_generate_clusters_from_dataset(self, dfdat, 
     def features_wrapper_generate_all_features(self, version_trial_or_shapemean="trial",
         which_basis_set=None):
-        """ 
+        """
+        [Wrapper] Generate represnetation of data, across different possible representational
+        spaces, such as motor-distance (from basis set), and so on, and return each of them
+        as a Cluster() object. Along with plots.
         """
 
         ## GET DATA 
@@ -2506,12 +2749,11 @@ class DatStrokes(object):
         """ compute doistance between strok1 and 2
         uses by defaiult hausdorff mean
         """
-
         if recenter_to_onset:
             strok1 = strok1 - strok1[0,:]
             strok2 = strok2 - strok2[0,:]
-        from pythonlib.drawmodel.strokedists import distMatrixStrok
-        return distMatrixStrok([strok1], [strok2], convert_to_similarity=False).squeeze().item()
+        from pythonlib.drawmodel.strokedists import distStrokWrapperMult
+        return distStrokWrapperMult([strok1], [strok2], convert_to_similarity=False).squeeze().item()
 
 
     def _dist_alignedtask_to_beh(self, list_inds):
@@ -2863,6 +3105,17 @@ class DatStrokes(object):
 
         return inds, dists
 
+    def datamod_append_unique_indexdatapt_copy(self, df=None):
+        """ Assign to each row a unique index correspoding to a "datapoint",
+        "stroke" (trialcode x stroke index)
+        RETURNS:
+            - returns copy, doesnt' mod self.Dat
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+        if df is None:
+            df = self.Dat
+        grp = ["trialcode", "stroke_index"]
+        return append_col_with_grp_index(df, grp, "index_datapt", use_strings=False)
 
     def find_indices_this_shape(self, shape, return_first_index=False,
             nrand = None):
@@ -2932,3 +3185,43 @@ class DatStrokes(object):
 
         return ds
 
+    def export_dat(self, pathdir, params_dict=None):
+        """ saves self.Dat as <pathdir>/DS_data.pkl
+        """
+        import os
+        path = f"{pathdir}/DS_data.pkl"
+        os.makedirs(pathdir, exist_ok=True)
+        self.Dat.to_pickle(path)
+        print("saved self.Dat to :", path)
+
+        if params_dict is not None:
+            from pythonlib.tools.expttools import writeDictToYaml
+            writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
+
+
+def concat_dataset_strokes(list_DS):
+    """ Returns a copy, concatenated, of multiple DS instances.
+
+    """
+    from pythonlib.dataset.analy_dlist import concatDatasets
+    DS = DatStrokes()
+
+    # concat params
+    list_params = []
+    list_version = []
+    list_df = []
+    list_Datasets = []
+    for ds in list_DS:
+        if ds is not None:
+            list_df.append(ds.Dat)
+            list_Datasets.append(ds.Dataset)
+            list_params.append(ds.Params)
+    if len(list_df)>0:
+        DS.Dat = pd.concat(list_df).reset_index(drop=True)
+        DS.Dataset = concatDatasets(list_Datasets)
+        DS.ParamsMult = list_params
+        assert len(set(list_version))==1, "cant concat diff versions.."
+    else:
+        # list_DS was [None, ...] all
+        return None
+    return DS

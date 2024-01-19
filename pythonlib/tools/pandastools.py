@@ -1774,8 +1774,8 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     tmp = df[colname].tolist()
     for v in rowvalues:
         if v not in tmp:
-            # print(v)
-            # print("this item in rowvalues does not exist in df[colname]")
+            print(v)
+            print("this item in rowvalues does not exist in df[colname]")
             raise NotEnoughDataException
 
     dfout = df.set_index(colname).loc[rowvalues]
