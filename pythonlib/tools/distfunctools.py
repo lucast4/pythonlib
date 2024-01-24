@@ -2,6 +2,100 @@
 represetning strokes, behavior, etc. """
 
 import numpy as np
+import matplotlib.pyplot as plt
+
+def distmat_construct_wrapper(vals1, vals2, dist_func,
+                              cap_dist = None,
+                              normalize_rows = False,
+                              normalize_cols_range01 = False,
+                              normalize_by_range = False, range_norm= None,
+                              convert_to_similarity = False, similarity_method=None,
+                              DEBUG=False):
+    """ Wrapper to generate distance matrix, where
+    PARAMS:
+    - dist_func, function mapping from (vals1[i], vals2[j]) --> scalar
+    RETURNS:
+        - D, np array shape (len(vals1), len(vals2))
+    """
+
+    # certain params are incompatible
+    if normalize_cols_range01:
+        # then each column convert to range 0,1 (min, max distance)
+        assert normalize_by_range==False
+        assert similarity_method not in ["divide_by_maxcap", "divide_by_inputed_range"], "tehse fail becuase they change units beofre norm."
+    if normalize_by_range:
+        # clip into range 0,1.
+        assert range_norm is not None
+        assert normalize_cols_range01 ==False
+
+    n1 = len(vals1)
+    n2 = len(vals2)
+    D = np.empty((n1, n2))
+    for i, v1 in enumerate(vals1):
+        for j, v2 in enumerate(vals2):
+            d = dist_func(v1, v2)
+            D[i, j] = d
+
+    # Cap the distance?
+    if cap_dist is not None:
+        # plt.figure()
+        # plt.hist(D)
+        # print(cap_dist)
+        # assert False
+        D[D>cap_dist] = cap_dist
+    # print(D)
+    # print(n1, n2)
+    # assert False
+
+    if normalize_rows:
+        dnorm = np.sum(D, axis=1, keepdims=True)
+        D = D/dnorm
+
+    if normalize_cols_range01:
+        # then each column convert to range 0,1 (min, max distance)
+        dmin = np.min(D, axis=0, keepdims=True)
+        D = D-dmin
+        dmax = np.max(D, axis=0, keepdims=True)
+        D = D/dmax
+
+    if normalize_by_range:
+        # clip into range 0,1 (all values)
+        if DEBUG:
+            plt.figure()
+            plt.hist(D)
+            plt.title("Before norm by range")
+            print(range_norm)
+        assert range_norm[1]>range_norm[0]
+        D[D>range_norm[1]] = range_norm[1] # first clip
+        D = (D-range_norm[0])/(range_norm[1] - range_norm[0])
+        if DEBUG:
+            plt.figure()
+            plt.hist(D)
+            plt.title("After norm by range")
+
+    # Convert from distance to similarity
+    if convert_to_similarity:
+        # plt.figure()
+        # plt.hist(D[:])
+        # assert False
+        if similarity_method=="squared_one_minus":
+            # take differenc,e then take square
+            # emprically: makes it more normal, becuase of skew.
+            D = (1-D)**2
+        elif similarity_method=="one_minus":
+            D = (1-D)
+        elif similarity_method=="divide_by_max":
+            D = 1-D/np.max(D)
+        elif similarity_method=="divide_by_median":
+            tmp = D/np.median(D)
+            D = 1-tmp/np.max(tmp)
+        elif similarity_method=="divide_by_maxcap":
+            assert cap_dist is not None
+            D = 1-D/cap_dist
+        else:
+            assert False
+
+    return D
 
 def closest_pt_twotrajs(traj1, traj2):
     """ returns closest pt between these
@@ -9,12 +103,12 @@ def closest_pt_twotrajs(traj1, traj2):
     - traj1, traj2, N/M x 2
     OUTPUT:
     - dist, scalar
-    - ind1, 
+    - ind1,
     - ind2, indexing into traj1 and 2 for those pts
     """
     from scipy.spatial.distance import cdist
     D = cdist(traj1, traj2)
-    
+
     ind1, ind2 = np.unravel_index(np.argmin(D), D.shape)
     dist = D[ind1, ind2]
 
@@ -23,7 +117,7 @@ def closest_pt_twotrajs(traj1, traj2):
 
 def furthest_pt_twotrajs(traj1, traj2, assymetry=None):
     """
-    see  
+    see
     closest_pt_twotrajs
     INPUT:
     - assymetry,
@@ -52,119 +146,176 @@ def furthest_pt_twotrajs(traj1, traj2, assymetry=None):
 
     return dist, ind1, ind2
 
-
-
-def distStrok(strok1, strok2, ver="euclidian", align_to_onset=False, rescale_ver=None,
-             debug=False, auto_interpolate_if_needed=False, n_interp = 50, 
-             asymmetric_ver=None):
-    """ general purpose, distance between two strok
-    - strok1, strok2, np arrays, N/M x 2, where N and 
+def distStrokWrapper(strok1, strok2, ver="euclidian",
+            align_to_onset=False, align_to_center=False,
+            rescale_ver=None,
+            interp_to_ignore_time=False,
+            auto_interpolate_if_needed=True, n_interp = 50,
+            debug=False,
+            asymmetric_ver=None,
+            fs=None):
+    """ [GOOD] Holds all methods and preprocesing for comparing two stroks.
+    General purpose, distance between two strok
+    - strok1, strok2, np arrays, N/M x 2, where N and
     M could be different. This is wrapper for all other things.
     - auto_interpolate_if_needed, then if strok1 and strok2 are different lengths, and if
     ver requires same length, then will interpolate both to length n_interp
     """
-    from pythonlib.tools.stroketools import strokesInterpolate2
+    from pythonlib.tools.stroketools import strokesInterpolate2, rescaleStrokes, strokes_alignonset, strokes_centerize
 
+    # Make sure no mutation
+    strok1 = strok1.copy()
+    strok2 = strok2.copy()
+
+    ## Rescale: apply first
+    if rescale_ver is not None:
+        strok1 = rescaleStrokes([strok1], rescale_ver)[0]
+        strok2 = rescaleStrokes([strok2], rescale_ver)[0]
+
+    ## Align, apply second
     if align_to_onset:
-        assert False, "not coded"
-    if rescale_ver:
-        assert False, "not coded"
+        assert align_to_center==False
+        strok1 = strokes_alignonset([strok1])[0]
+        strok2 = strokes_alignonset([strok2])[0]
 
+    if align_to_center:
+        assert align_to_onset==False
+        strok1 = strokes_centerize([strok1])[0]
+        strok2 = strokes_centerize([strok2])[0]
+
+    ## If want to interpolate to same length (ignore time)
     def _interp(strok1, strok2):
         # npts_space = 50
         # npts_diff = 25
         # interpolate based on spatial coordinate.
-        strok1 = strokesInterpolate2([strok1], 
+        strok1 = strokesInterpolate2([strok1],
             N=["npts", n_interp], base="space")[0]
-        strok2 = strokesInterpolate2([strok2], 
+        strok2 = strokesInterpolate2([strok2],
             N=["npts", n_interp], base="space")[0]
         return strok1, strok2
+    if interp_to_ignore_time:
+        strok1, strok2 = _interp(strok1, strok2)
+        auto_interpolate_if_needed = False # no need to redo
 
-        
     if ver=="hausdorff":
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver) 
+        dist = modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver)
     elif ver =="hausdorff_max":
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2, ver1="max", ver2="max", asymmetric_ver=asymmetric_ver) 
+        dist =  modHausdorffDistance(strok1, strok2, ver1="max", ver2="max", asymmetric_ver=asymmetric_ver)
     elif ver=="hausdorff_means":
         # hausdorff, using means, to allow for more smooth distances
-            #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then 
-    #     # slices (columns) will not be smooth gaussian-like things. This should 
+            #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then
+    #     # slices (columns) will not be smooth gaussian-like things. This should
     #     # be clear if I tink about it.
 
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean", asymmetric_ver=asymmetric_ver) 
+        dist =  modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean", asymmetric_ver=asymmetric_ver)
     elif ver=="hausdorff_mins":
         # This says: either good match from beh perspective, or from task perspective. Useful if
         # expect sometimes multiple beh stroke over one task stroke, or vice versa.
         from pythonlib.tools.distfunctools import modHausdorffDistance
-        return modHausdorffDistance(strok1, strok2, ver1="mean", ver2="min", asymmetric_ver=asymmetric_ver) 
+        dist =  modHausdorffDistance(strok1, strok2, ver1="mean", ver2="min", asymmetric_ver=asymmetric_ver)
 
     elif ver=="euclidian":
         # pt-by-pt euclidian distance, lengths must be matched.
-        from pythonlib.tools.distfunctools import distStrokTimeptsMatched
+        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
         if auto_interpolate_if_needed:
             strok1, strok2 = _interp(strok1, strok2)
-        return distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
+        dist =  _distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
                                        vec_over_spatial_ratio=(1,0))
     elif ver=="euclidian_bidir":
-        # same as euclidian, but takes min over flipping one stroke. 
-        from pythonlib.tools.distfunctools import distStrokTimeptsMatched
+        # same as euclidian, but takes min over flipping one stroke.
+        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
         if auto_interpolate_if_needed:
             strok1, strok2 = _interp(strok1, strok2)
-        d1 = distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
+        d1 = _distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
                                        vec_over_spatial_ratio=(1,0))
-        d2 = distStrokTimeptsMatched(strok1, strok2[::-1], min_strok_dur=None,
+        d2 = _distStrokTimeptsMatched(strok1, strok2[::-1], min_strok_dur=None,
                                        vec_over_spatial_ratio=(1,0))
-        return np.min([d1, d2])
-
+        dist =  np.min([d1, d2])
 
     elif ver=="euclidian_diffs":
-        # pt by pt, comparing diffs between pts, using euclidian. is like velocity, but 
-        # not taking into account time. 
-        # By default, 
-        from pythonlib.tools.distfunctools import distStrokTimeptsMatched
+        # pt by pt, comparing diffs between pts, using euclidian. is like velocity, but
+        # not taking into account time.
+        # By default,
+        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
         from pythonlib.tools.stroketools import diff5pt, strokesVelocity, strokesDiffsBtwPts
         if auto_interpolate_if_needed:
             strok1, strok2 = _interp(strok1, strok2)
-        
+
 #         strok1diff = np.concatenate([diff5pt(strok1[:,0])[-1,None], diff5pt(strok1[:,1])], axis=1)
 #         strok2diff = np.concatenate([diff5pt(strok2[:,0]), diff5pt(strok2[:,1])], axis=1)
-    
+
         # downsample stroks by interpolation
         # want about equivalent to fs = [NO, ignore]
 
         a = strokesDiffsBtwPts([strok1])[0]
         b = strokesDiffsBtwPts([strok2])[0]
-        
+
         # chop of last and first few pts...
         nremove = 3
         a = a[nremove:-nremove-2]
         b = b[nremove:-nremove-2]
-        
-        d = distStrokTimeptsMatched(a, b, min_strok_dur=None, vec_over_spatial_ratio=(1,0))
-#         d = distStrokTimeptsMatched(
-#             strokesVelocity([strok1], 125)[0][0],
-#             strokesVelocity([strok2], 125)[0][0], 
-#             min_strok_dur=None, vec_over_spatial_ratio=(1,0))
+
+        dist = _distStrokTimeptsMatched(a, b, min_strok_dur=None, vec_over_spatial_ratio=(1,0))
 
         if debug:
             plt.figure()
             plt.plot(a[:,0], label="1x")
-            plt.plot(a[:,1], label="1y")        
+            plt.plot(a[:,1], label="1y")
             plt.plot(b[:,0], label="2x")
-            plt.plot(b[:,1], label="2y")        
+            plt.plot(b[:,1], label="2y")
             plt.legend()
             plt.title(d)
     #         plt.plot(np.diff(strok1), label="x")
-        return d
+    elif ver=="dtw_vels":
+        from pythonlib.tools.timeseriestools import DTW
+        from pythonlib.tools.stroketools import strokesVelocity
+
+        assert False, "not tested fully yet!"
+        assert fs is not None, "to do vels, need to know sample rate"
+
+
+        # print(strok1)
+
+        # Convert strok to vels
+        vel1, vel2 = strokesVelocity([strok1, strok2], fs)[0]
+
+        # print("DFADAS")
+        # print(np.mean(np.abs(vel1)))
+        # print(np.mean(np.abs(vel2)))
+
+        additive_penalty = 0.0025 * (np.mean(np.abs(vel1)) +  np.mean(np.abs(vel2)))
+        # additive_penalty = 0
+        print("DTW: using this additive_penalty: ", additive_penalty)
+        distfun = lambda x,y: np.linalg.norm(x-y)
+        list_dist = []
+        for dim in [0,1]:
+            print("--- DIM:", dim)
+            dist, alignment = DTW(vel1[:,dim], vel2[:,dim], distfun,
+                asymmetric=False, additive_penalty=additive_penalty,
+                plot_alignment=False, plot_table=True)
+
+            # Noramlize distance by longer n
+            # dist_norm = dist/min([len(vel1), len(vel2)])
+            dist_norm = dist/max([len(vel1), len(vel2)])
+            print("dist:", dist)
+            print("dist, normed:", dist_norm)
+            list_dist.append(dist_norm)
+        dist = np.mean(list_dist)
+
     else:
         print(ver)
         assert False
 
+    # # Sanity check
+    # assert strok1 == strok1_input
+    # assert strok2 == strok2_input
 
-def distPtsTimePtsMatched(pts1, pts2):
+    return dist
+
+def _distPtsTimePtsMatched(pts1, pts2):
     """
     Get cumulative pt by pt distance between pts1 and pts2.
     Gets euclidian distance.
@@ -181,18 +332,21 @@ def distPtsTimePtsMatched(pts1, pts2):
     return dist
 
 
-def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False, 
-                           min_strok_dur=0.175, return_separate_scores=False, 
-                           vec_over_spatial_ratio=1, lowpass_freq=5):
-    """ if strok1 and 2 have matched timepoitns (at least 
-    same num timepoint) then can compare pt by pt to 
-    compute distance. 
-    - distance function in both spatial (xy pos) and velocity 
-    (x and y) domains. final score is the sum of these. use 
+def _distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
+                           min_strok_dur=0.175, return_separate_scores=False,
+                           vec_over_spatial_ratio=1,
+                             # lowpass_freq=5,
+                             lowpass_freq=None, # changed 1/3/24, so now uses "clean" vesrion
+                             ):
+    """ if strok1 and 2 have matched timepoitns (at least
+    same num timepoint) then can compare pt by pt to
+    compute distance.
+    - distance function in both spatial (xy pos) and velocity
+    (x and y) domains. final score is the sum of these. use
     vec_over_spatial_ratio to match theri scales (since spatial is
     usually lower magnitudes)
     - min_strok_dur, if strok shorter than this, then throws error
-    - return_separate_scores, then returns tuple separating spatial and 
+    - return_separate_scores, then returns tuple separating spatial and
     vel scores, (spatial, vel). make it None to ignore.
     - vec_over_spatial_ratio, multiples sptial score by this, useful if want
     them match, or to more strongly weigh one over other.
@@ -200,7 +354,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
     if tuple of scalars, then should be length 2 and will multiply (spatial, vec)
     - returns cost normalzied by num timesteps. """
     from pythonlib.tools.stroketools import strokesVelocity
-    
+
     if min_strok_dur is not None:
         if strok_beh[-1, 2]-strok_beh[0,2]<min_strok_dur:
             assert False, "stroke duration too short"
@@ -218,7 +372,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
     if skip_spatial:
         dist_spatial = 0.
     else:
-        dist_spatial = distPtsTimePtsMatched(strok_beh, strok_mod)
+        dist_spatial = _distPtsTimePtsMatched(strok_beh, strok_mod)
         # Old version, incorrect
         # dist_spatial2 = np.linalg.norm(strok_beh[:,[0,1]] - strok_mod[:,[0,1]])
 
@@ -230,11 +384,11 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
             assert False, "to get vel distance, you must pass in fs"
         strok_beh_vel = strokesVelocity([strok_beh], fs=fs, lowpass_freq=lowpass_freq)[0][0]
         strok_mod_vel = strokesVelocity([strok_mod], fs=fs, lowpass_freq=lowpass_freq)[0][0]
-        dist_vel = distPtsTimePtsMatched(strok_beh_vel, strok_mod_vel)
-    
+        dist_vel = _distPtsTimePtsMatched(strok_beh_vel, strok_mod_vel)
+
     # normalize by timesteps
     dist_spatial/=strok_beh.shape[0]
-    dist_vel/=strok_beh.shape[0]    
+    dist_vel/=strok_beh.shape[0]
 
     # reweight the scores if desired
     if isinstance(vec_over_spatial_ratio, (list, tuple)):
@@ -243,7 +397,7 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
         dist_vel*=vec_over_spatial_ratio[1]
     else:
         dist_spatial*=vec_over_spatial_ratio
-    
+
     if ploton:
         import matplotlib.pyplot as plt
         from ..drawmodel.strokePlots import plotDatStrokes, plotDatStrokesTimecourse
@@ -254,9 +408,9 @@ def distStrokTimeptsMatched(strok_beh, strok_mod, fs=None, ploton=False,
         plt.ylabel("beh vel")
         plotDatStrokesTimecourse([strok_mod_vel], axes[2])
         plt.ylabel("mod vel")
-    
+
         print(dist_spatial, dist_vel)
-    
+
     if return_separate_scores:
         return (dist_spatial, dist_vel)
     else:
@@ -287,7 +441,7 @@ def modHausdorffDistance(itemA, itemB, dims=(0,1), ver1="mean", ver2="max", D=No
     """
 
     if D is None:
-        from scipy.spatial.distance import cdist 
+        from scipy.spatial.distance import cdist
         if dims:
             D = cdist(itemA[:,dims], itemB[:,dims])
         else:

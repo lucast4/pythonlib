@@ -115,8 +115,7 @@ def concatDatasets(Dlist, do_cleanup=False):
             BlockParamsDefaults[i] = D.BlockParamsDefaults[0] # shift them up
 
             ct = ct+len(D.Metadats)
-        Dnew.Dat = pd.concat(dflist)
-        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+        Dnew.Dat = pd.concat(dflist).reset_index(drop=True)
         Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
         Dnew.BlockParamsDefaults = BlockParamsDefaults
         print("Done!, new len of dataset", len(Dnew.Dat))
@@ -149,7 +148,7 @@ def concatDatasets(Dlist, do_cleanup=False):
     else:
         # Sort so is in increasing by date. THis is done in cleanup, the one thing
         # that is global in a way that would wnat to run even if you have already cleaned up.
-        Dnew.Dat = Dnew.Dat.sort_values("tvalfake", axis=0).reset_index(drop=True)
+        Dnew.Dat = Dnew.Dat.sort_values("trialcode", axis=0).reset_index(drop=True)
 
     return Dnew
 

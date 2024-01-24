@@ -122,7 +122,8 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     Aggregate by first grouping (across multiple dimensions) and then applyiong
     arbnitrary method.
     PARAMS;
-    - group, list of str, each a column. groups using combos fo these
+    - group, list of str, each a column. groups using combos fo these --> each is a new
+    row.
     - values, list of str, which values to apply aggregation. the returned df will
     have these as new columns. if None, then will not add any new columsn other
     than whats in group
@@ -472,6 +473,8 @@ def filterPandas(df, filtdict, return_indices=False, auto_convert_tolist=True,
     (as a list of ints) instead of the modified df
     NOTE - if return dataframe, automaticlaly resets indices.
     """
+    # assert False, "dont use this, just use pandas .isin()"
+
     for k, v in filtdict.items():
         if not isinstance(v, list):
             if auto_convert_tolist:
@@ -829,7 +832,7 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         agg_method = "counts", val_name = "val", ax=None, 
         norm_method=None,
         annotate_heatmap=True, zlims=(None, None),
-        diverge=False, dosort_colnames=True,
+        diverge=False, dosort_colnames=False,
         list_cat_1 = None, list_cat_2 = None):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
@@ -882,41 +885,50 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
                 print(agg_method)
                 assert False
             arr[i, j] = valthis
-    
+
     dfthis = pd.DataFrame(arr, index=list_cat_1, columns=list_cat_2)
 
-    if norm_method=="col_div":
-        # normalize so that for each col, the sum across rows is 1
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
-    elif norm_method=="row_div":
-        # same, but for rows
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
-    elif norm_method=="all_div":
-        # divide by sum of all counts
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis/dfthis.sum().sum()
-    elif norm_method=="col_sub":
-        # normalize so by subtracting from each column its mean across rows
-        dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
-        diverge = True
-    elif norm_method=="row_sub":
-        # normalize so by subtracting from each column its mean across rows
-        dfthis = dfthis.subtract(dfthis.mean(axis=1), axis=0)
-        diverge = True
-    elif norm_method=="row_sub_firstcol":
-        # for each item in a given row, subtract the value of the first colum in that row.
-        dfthis = dfthis.subtract(dfthis.iloc[:,0], axis=0)
-    elif norm_method is None:
-        pass
-    else:
-        print(dfthis)
-        print(norm_method)
-        assert False
+    # if norm_method=="all_sub":
+    #     # minus mean over all cells
+    #     dfthis = dfthis - dfthis.mean(axis=None)
+    #     diverge = True
+    # elif norm_method=="col_div":
+    #     # normalize so that for each col, the sum across rows is 1
+    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+    #     dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
+    # elif norm_method=="row_div":
+    #     # same, but for rows
+    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+    #     dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+    # elif norm_method=="all_div":
+    #     # divide by sum of all counts
+    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+    #     dfthis = dfthis/dfthis.sum().sum()
+    # elif norm_method=="col_sub":
+    #     # normalize so by subtracting from each column its mean across rows
+    #     dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
+    #     diverge = True
+    # elif norm_method=="col_sub_notdiverge":
+    #     # normalize so by subtracting from each column its mean across rows
+    #     dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
+    #     diverge = False
+    # elif norm_method=="row_sub":
+    #     # normalize so by subtracting from each column its mean across rows
+    #     dfthis = dfthis.subtract(dfthis.mean(axis=1), axis=0)
+    #     diverge = True
+    # elif norm_method=="row_sub_firstcol":
+    #     # for each item in a given row, subtract the value of the first colum in that row.
+    #     dfthis = dfthis.subtract(dfthis.iloc[:,0], axis=0)
+    # elif norm_method is None:
+    #     pass
+    # else:
+    #     print(dfthis)
+    #     print(norm_method)
+    #     assert False
 
     if plot_heatmap:
-        fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims, diverge=diverge)
+        fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims,
+                                       diverge=diverge, norm_method=norm_method)
         ax.set_xlabel(col2)
         ax.set_ylabel(col1)
         ax.set_title(agg_method)
@@ -1008,8 +1020,9 @@ def unpivot(df, id_vars, value_vars, var_name, value_name):
     - id_vars, list of str, grouping variable defining new rows.
     - value_vars, list of str, values for these columns will be stacked vertically.
     Thus nrows = len(value_vars)*len(df)
-    - var_name, str, what to call the new column for which the values are value_vars
-    - value_name, str, what to call the new column holding the values
+    - var_name, str, what to call the new column for which the values are value_vars.
+    Cannot use "variable"
+    - value_name, str, what to call the new column holding the values. Cannot use "value"
         chan    var     var_others  event   val_kind    val_method  bregion     val     val_interaction     val_others
         0   2   epoch   (taskgroup,)    00_fixcue_50_to_600     modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    0.000854    0.014409    0.010222
         1   2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    0.002288    0.005289    0.004021
@@ -1030,16 +1043,26 @@ def unpivot(df, id_vars, value_vars, var_name, value_name):
         10  2   epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   M1_m    val_interaction     0.005289383533117516
         11  277     epoch   (taskgroup,)    02_samp_50_to_600   modulation_subgroups    r2smfr_running_maxtime_twoway   vlPFC_p     val_interaction     0.018665206122281126
     """
-    df_melt = pd.melt(df, id_vars=id_vars, 
-            value_vars=value_vars)
+
+    assert not var_name == "variable"
+    assert not value_name == "value"
+    assert not "variable" in list(df.columns)
+    assert not "value" in list(df.columns)
+
+    _value_name = "value"
+    tmp = [value_name] + list(df.columns)
+    while _value_name in tmp:
+        _value_name+="X"
+    df_melt = pd.melt(df, id_vars=id_vars,
+            value_vars=value_vars, value_name=_value_name)
     
     # NOTE: the reason do this insead of passing var_name into pd.melt is if do that then sometimes end with bug if
     # var_name already exists as a column name.
     df_melt[var_name] = df_melt["variable"]
     df_melt = df_melt.drop("variable", axis=1)
 
-    df_melt[value_name] = df_melt["value"]
-    df_melt = df_melt.drop("value", axis=1)
+    df_melt[value_name] = df_melt[_value_name]
+    df_melt = df_melt.drop(_value_name, axis=1)
 
     return df_melt
 
@@ -1163,7 +1186,8 @@ def summarize_feature(df, GROUPING, FEATURE_NAMES,
 def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
                           INDEX= ("character", "animal", "expt"), 
                           func = None, return_dfpivot=False, 
-                          do_normalize=False, normalize_grouping = ("animal", "expt")
+                          do_normalize=False, normalize_grouping = ("animal", "expt"),
+                          get_absolute_val = False
                          ):
     """ High level summary, for each task (or grouping), get its difference 
     across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
@@ -1249,7 +1273,8 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
         out[colname] = colvals
 
         # get the abs balue
-        out[f"{colname}-ABS"] = np.abs(colvals)
+        if get_absolute_val:
+            out[f"{colname}-ABS"] = np.abs(colvals)
 
         COLNAMES_NOABS.append(colname)
         COLNAMES_ABS.append(f"{colname}-ABS")
@@ -1311,6 +1336,8 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
         lev_default_contrast = "baseline"
     PARAMS:
     - df, long-form dataframe.
+    - grplist_index, lsit of str. each mean will be taken within each conjunctive
+    level
     - PLOT, bool, summaries. Scatterplot of distribution vs. each level of var_contrast, along wiht
     sign-rank p values.
     - datamod_normalize_row_after_grouping, bool, 
@@ -1561,6 +1588,10 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     else:
         return groupdict
 
+def grouping_count_n_samples(df, groupvars):
+    """ REturn list of ints, the n across all conjucntiosn of groupvars"""
+    return df.groupby(groupvars).size().tolist()
+
 def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     """ Returns the min and max n across conjjunctiosn of list_groupouter_grouping_vars
     """
@@ -1743,8 +1774,8 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     tmp = df[colname].tolist()
     for v in rowvalues:
         if v not in tmp:
-            # print(v)
-            # print("this item in rowvalues does not exist in df[colname]")
+            print(v)
+            print("this item in rowvalues does not exist in df[colname]")
             raise NotEnoughDataException
 
     dfout = df.set_index(colname).loc[rowvalues]
@@ -1873,6 +1904,7 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
     import numpy as np
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
     DIVISOR = 4
+    nstart = len(dfthis)
 
     def _evaluate_data_size(dfcounts):
         """ Helper for summarizing size of this 2d dataframe"""
@@ -1917,6 +1949,15 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
     dfcounts, _, _, _ = convert_to_2d_dataframe(dfthis, var2, var1, PLOT);
     nlev_var1 = len(dfcounts.columns)
     nlev_var2 = len(dfcounts)
+
+    if isinstance(prefer_to_drop_which, str):
+        if prefer_to_drop_which==var1:
+            prefer_to_drop_which = 1
+        elif prefer_to_drop_which==var2:
+            prefer_to_drop_which = 2
+        else:
+            print("prefer_to_drop_which", prefer_to_drop_which)
+            assert False
 
     if prefer_to_drop_which==1:
         # (nlev_var2/nlev_var1) is to make the scale same across the two vars.
@@ -1972,7 +2013,8 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
     # plot heatmap
     if PLOT:
         from pythonlib.tools.snstools import heatmap
-        heatmap(dfcounts);
+        heatmap(dfcounts)
+
 
     # Prune dfthis
     vars_keep = dfcounts.columns.tolist()
@@ -1986,7 +2028,9 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
     # evaluate
     if PLOT:
         print("evaluation (ndat, nvar, nothervar):", _evaluate_data_size(dfcounts))
-        assert len(dfthisout)==_evaluate_data_size(dfcounts)[0]    
+        assert len(dfthisout)==_evaluate_data_size(dfcounts)[0]
+        print("Starting len: ", nstart)
+        print("Ending len: ", len(dfthisout))
 
     return dfthisout, dfcounts
 
@@ -2494,6 +2538,82 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
     
     return dfthis_shuff
 
+def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
+                          diverge=False, share_zlim=False, norm_method=None,
+                          annotate_heatmap=False, return_dfs=False):
+    """
+    Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
+    given by those vars. Does aggregation to generate one scalar per
+    cell, if needed.
+    :param df:
+    :param varcol:
+    :param varrow:
+    :param var_subplot:
+    :return:
+    """
+
+    # list_row = df[varrow].unique().tolist()
+    list_subplot = df[var_subplot].unique().tolist()
+    ncols = 3
+    W = 4
+    H = 4
+    nrows = int(np.ceil(len(list_subplot) / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*W, nrows*H))
+
+    if share_zlim:
+        # Compute the min and max
+        df_agg = aggregGeneral(df, [varrow, varcol, var_subplot], [val_name])
+        zmin = np.min(df_agg[val_name])
+        zmax = np.max(df_agg[val_name])
+        zlims = (zmin, zmax)
+    else:
+        zlims = (None, None)
+
+    DictSubplotsDf ={}
+    for lev_subplot, ax in zip(list_subplot, axes.flatten()):
+        a = df[var_subplot]==lev_subplot
+        dfthis = df[(a)]
+        df2d, _, _, rgba_values = convert_to_2d_dataframe(dfthis, varrow, varcol,
+                                True,
+                                "mean",
+                                val_name,
+                                ax=ax, annotate_heatmap=annotate_heatmap,
+                                diverge=diverge, zlims=zlims, norm_method=norm_method)
+        ax.set_title(lev_subplot)
+        DictSubplotsDf[lev_subplot] = df2d
+
+    if return_dfs:
+        return fig, axes, DictSubplotsDf
+    else:
+        return fig, axes
+
+
+def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
+    """ Given precomputed errorbars, plot them on a line or bar plot.
+    This beucase seaborn doesnt support pre-computed errbars.
+    """
+
+    if hue is None:
+        df = df.copy()
+        df["_dummy"] = 0
+        hue = "_dummy"
+
+    list_hue = sort_mixed_type(df[hue].unique().tolist())
+    for hue_lev in list_hue:
+        dfthis = df[df[hue]==hue_lev]
+        x=dfthis[xvar]
+        y=dfthis[yvar]
+        if yvar_err is not None:
+            yerr = dfthis[yvar_err]
+        else:
+            yerr = None
+        lab = f"{hue_lev}"
+
+        ax.errorbar(x=x, y=y, yerr=yerr, label=lab)
+        # ax.bar(x, y, yerr=yerr, label=lab, alpha=0.4)
+        # sns.barplot(data=dfthisthis, x="bregion", y="same_mean", yerr=dfthisthis["same_sem"])
+    return list_hue
 
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
@@ -2505,7 +2625,8 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     PARAMS:
     - var_manip, str, name of col whose values will define x and y coord.
     - x_lev_manip, str, categorical level of var_manip, values define x values
-    - var_subplot, str, categorical col, levels dedefine subplots.
+    - var_subplot, str, categorical col, levels dedefine subplots. if List, then groups
+    first so that each subploit is conjucntion of these vars
     - var_value, str, column, whose values/sdcore to plot.
     - var_datapt, str, categorical col, each lev is separate datapt. (note: will assert that max 1 datapt per).
     - ignore_if_sum_values, this useful to exclude any
@@ -2521,7 +2642,10 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     assert y_lev_manip in dfthis[var_manip].tolist()
 
     nmin = 1
-    if var_subplot is None:
+    if isinstance(var_subplot, list):
+        dfthis = append_col_with_grp_index(dfthis, var_subplot, "_var_subplot", strings_compact=True)
+        var_subplot = "_var_subplot"
+    elif var_subplot is None:
         # dummy
         dfthis = dfthis.copy()
         dfthis["dummy45"] = "dummy"
@@ -2588,7 +2712,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                           x_errors=x_errors, y_errors=y_errors, alpha=alpha)
         except Exception as err:
             raise err
-        ax.set_title(lev)
+        ax.set_title(lev, fontsize=8)
         ax.set_xlabel(x_lev_manip)
         ax.set_ylabel(y_lev_manip)
 

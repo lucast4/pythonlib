@@ -1,6 +1,6 @@
 """ Represents (N, D) data, where N is num datpts, and D is dimensionality,
-and does things related to clustering, dimesionality reduction, etc
-
+and does things related to clustering, dimesionality reduction, etc.
+Supposed to be generic across different kinds of analyses that work with high-d data.
 Related to :
 - neural.population
 - tools.clustertools
@@ -12,10 +12,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..tools.nptools import sort_by_labels as sbl
 from pythonlib.tools.plottools import savefig
+from pythonlib.tools.listtools import sort_mixed_type
+import seaborn as sns
 
 class Clusters(object):
     """docstring for Clusters"""
-    def __init__(self, X, labels_rows=None, labels_cols=None, params=None):
+    def __init__(self, X, labels_rows=None, labels_cols=None, ver=None, params=None):
         """ 
         PARAMS;
         - X, (N, D) data, where N is num datpts, and D is dimensionality, 
@@ -24,8 +26,9 @@ class Clusters(object):
         - labels_cols, list of labels. if pass in None, then:
         --- if ncols == nrows, uses row labels
         --- otherwise uses (0, 1, 2, 3...)
-        - params, dict of params
-
+        - ver, optional string, which is useful for defining applicable methods
+        downstream. e..g, "rsa". This triggers checks of the input data.
+        - params, dict of params, here just in case future proofings.
         """ 
 
         if params is None:
@@ -64,6 +67,24 @@ class Clusters(object):
         self.ClusterResults = {}
         self.DistanceMatrices = {}
         self.ClusterComputeAllResults = {}
+
+        if ver=="rsa":
+            # This means each row is a tuple of levels across multiple grouping
+            # vars. I.E., labels is list of tuples, each of len num vars.
+            label_vars = params["label_vars"] # list of str
+            # check that labels are correct format
+            for lab in self.Labels:
+                assert isinstance(lab, tuple)
+                assert len(lab)==len(label_vars)
+        elif ver=="dist":
+            # Symmetrical distance matrix. Usually LabelsRows
+            self.Xinput.shape[0] == self.Xinput.shape[1]
+            assert self.LabelsCols == self.Labels, "some code might assume this..."
+            for f in ["version_distance"]:
+                assert f in self.Params.keys()
+        else:
+            assert ver is None
+        self.Version = ver
 
     @property
     def Xinput(self):
@@ -131,19 +152,28 @@ class Clusters(object):
     #     return self.Xsorted, self.LabelsSorted
 
     ######################## EXTRACT THINGS
-    def find_dat_by_label(self, label_row, label_col):
-        """ extract the similairty between these two labels
+    def index_find_dat_by_label(self, label_row, label_col):
+        """ find the single cell with these labels.
+        REturn the value.
         """
 
-        ind1 = self.find_ind_by_label(label_row, axis=0)
-        ind2 = self.find_ind_by_label(label_col, axis=1)
+        ind1 = self.index_find_ind_by_label(label_row, axis=0)
+        ind2 = self.index_find_ind_by_label(label_col, axis=1)
         X = self.extract_dat()
         return X[ind1, ind2]
 
-    def find_ind_by_label(self, label, axis=0):
+    def index_find_ind_by_label(self, label, axis=0, assert_only_one=True):
         """
+        Find the single index in row(axis=0) or column(axis=1)
+        with this value of label.
         """
         labs = self.extract_labels(axis=axis)
+        n = sum([l==label for l in labs])
+        if assert_only_one and n!=1:
+            print(labs)
+            print(label)
+            print(n)
+            assert False, "why multiple identical lables?"
         return labs.index(label)
 
     def extract_dat(self, datkind="raw"):
@@ -163,6 +193,35 @@ class Clusters(object):
             assert False
         assert isinstance(labs, list)
         return labs
+
+    ################### data extract
+    def dataextract_upper_triangular_flattened(self,
+                                               exclude_diag=True,
+                                               inds_rows_cols=None,
+                                               dat = None):
+        """ Return elemetns in upper diagnoal, not including
+        diagnoal, flatteened into 1-array
+        PARAMS:
+        - inds_rows_cols, either None (Ignore) or array-like of indices into
+        self.X[inds, inds], to slice a subset (will still be square).
+        - exclude_diag, bool (True), then ignore the diangoanl
+        """
+
+        if dat is None:
+            dat = self.Xinput
+
+        assert dat.shape[1]==dat.shape[0]
+
+        if inds_rows_cols is not None:
+            dat = dat[inds_rows_cols, :][:, inds_rows_cols] # (len inds, len inds)
+
+        n = dat.shape[0]
+        if exclude_diag:
+            inds = np.triu_indices(n, 1)
+        else:
+            inds = np.triu_indices(n, 0)
+        vec = dat[inds].flatten()
+        return vec
 
     ######################### PLOTS
 #     def plot_heatmap_data(self, datkind="raw", labelkind="raw", sortver_bylabel=None, 
@@ -227,9 +286,12 @@ class Clusters(object):
 #         return fig, X, labels_col, labels_row
 
     def _plot_heatmap_data(self, X, labels_row=None, labels_col=None,
-        SIZE=12, zlims=(None, None), nrand=None, rotation=45):
-        """ Low-=level plotting of heatmap
+        SIZE=12, zlims=(None, None), nrand=None, rotation=90, rotation_y=0,
+                           diverge=False, annotate_heatmap=False,
+                           ax=None, robust=False):
+        """ Low-=level plotting of heatmap of X.
         """
+        from pythonlib.tools.snstools import heatmap_mat
 
         if nrand is not None:
             import random
@@ -238,25 +300,15 @@ class Clusters(object):
             if labels_row:
                 labels_row = [labels_row[i] for i in inds]
 
-        # --- before sorting
-        ndim = X.shape[0]
-        ndat = X.shape[1]
-        ASPECT = ndim/ndat
-        fig, ax = plt.subplots(figsize=(SIZE, ASPECT*SIZE))
-        
-        h = ax.imshow(X, vmin=zlims[0], vmax=zlims[1], cmap='viridis')
-        fig.colorbar(h, ax=ax)
-            
-        if labels_row:
-            ax.set_yticks(range(len(labels_row)), labels_row)
-        if labels_col:
-            ax.set_xticks(range(len(labels_col)), labels_col, rotation=rotation);
+        fig, ax, rgba_values = heatmap_mat(X, ax, annotate_heatmap, zlims,
+                   robust, diverge, labels_row, labels_col, rotation, rotation_y)
 
-        return fig, X, labels_col, labels_row
+        return fig, X, labels_col, labels_row, ax
 
     def plot_heatmap_data(self, datkind="raw", labelkind="raw", 
         nrand = None, SIZE=12, zlims=(None, None)):
-        """ Plot heatmap of raw data, usually sorted (rows) by labelkind.
+        """ Plot heatmap of raw data in self.Xinput, optionally taking
+        subset of rows.
         PARAMS:
         - datkind, string name of data to plot. e..g, pca
         - labelkind, string name to get label
@@ -642,3 +694,442 @@ class Clusters(object):
     #     fig.savefig(f"{SDIRFIGS}/tsne-behgrid-ll.pdf")
     # #################### PLOTS
     # self.plot_basis_strokes
+
+    ################ DISTANCE MATRICES
+    def distsimmat_convert(self, version_distance="pearson"):
+        """ Convert data (ndat, ndim) to distnace matreix (ndat, ndat)
+        - Distance --> more positive is always more distance, by convention. This
+        means pearson corr will range between 0 and 1, for example. By convention 0 is close.
+        RETURNS:
+            - Cl, ClustClass object.
+        """
+
+        X = self.Xinput
+        ndat = X.shape[0]
+        if version_distance=="euclidian":
+            # 0=idnetical, more positive more distance.
+            from scipy.spatial import distance_matrix
+            D = distance_matrix(X, X)
+        elif version_distance=="pearson":
+            # correlation matrix, but scaled between 0 (close) and 1 (far) as follows:
+            # -1 --> 1
+            # +1 --> 0
+            D = 1-(np.corrcoef(X) + 1)/2
+        else:
+            assert False
+        assert ndat==D.shape[0]
+        params = {
+            "version_distance":version_distance,
+            "Clraw":self,
+        }
+        return Clusters(D, self.Labels, self.Labels, ver="dist", params=params)
+
+    ################# RSA
+    def _rsa_check_compatible(self):
+        """ returns True if self is either rsa, or distance matrix from rsa
+        """
+
+        if self.Version=="rsa":
+            return True
+        # if "Clraw" not in self.Params.keys():
+        #     print(self.Version)
+        #     print(self.Params)
+        #     assert False
+        if self.Version=="dist" and isinstance(self.Labels[0], tuple):
+            return True
+        return False
+
+    def rsa_plot_heatmap(self, sort_order=None, diverge=False):
+        """ Plot the input data, which can be raw data or sim mat, anything that
+        is 2d heatmapt, and has each row being a conjunction of levels of
+        grouping vars, plots in useful way for inspecting relationships between levels,
+        i.e., with options for sorting labels
+        to allow visualziation of interesting patterns
+        PARAMS:
+        - sort_order, tuple of ints, defining order that labels will be
+        sorted. e.g., (1,0,2) means first sort by var 1, then break ties
+        using var 0, then 2.. Can pass (1,0) to ignore 2, for example.
+        If raw dataA: Applies to rows
+        If dist mat: Appkuies to row and columns.
+        """
+        from pythonlib.tools.listtools import argsort_list_of_tuples
+
+        assert self._rsa_check_compatible()
+
+        # Pull out data in correct format, and return as clusters.
+        X = self.Xinput
+
+        # Sort labels if needed
+        labels_rows = self.Labels
+        labels_cols = self.LabelsCols
+
+        if sort_order is not None:
+            key =lambda x:tuple([x[i] for i in sort_order])
+            inds_sort = argsort_list_of_tuples(labels_rows, key)
+            labels_rows = [labels_rows[i] for i in inds_sort]
+            X = X[inds_sort, :]
+
+            # try sorting the x labels too, if they are tuples
+            if isinstance(self.LabelsCols[0], tuple):
+                inds_sort = argsort_list_of_tuples(labels_cols, key)
+                labels_cols = [labels_cols[i] for i in inds_sort]
+                X = X[:, inds_sort]
+
+        # Plot
+        fig, X, labels_col, labels_row, ax = self._plot_heatmap_data(X, labels_rows,
+                                                                   labels_cols, diverge=diverge)
+        return fig, ax
+
+
+    def _rsa_distmat_return_distfunc(self, var):
+        """
+        Helper to return a funtion that computes distnace between
+        two items to help populate distnace matrix.
+        Distance --> larger number means further apart
+        :param var: string
+        :return:
+        - dist_func: (x,y) --> scalar.
+        """
+        # Construct dist funcs for each variable
+        # Categorical
+        def dist_func_cat(x,y):
+            # Categorical
+            if x==y:
+                # same
+                return 0.
+            else:
+                return 1.
+
+        def dist_angle_hack(x,y, DEBUG=False):
+            """ hacky, for binned angles between 1 and 4, returns
+            the positive distnace between them, allwoing for rotation, so that
+            1 vs 4 gives 1.
+            - Range 0(same) to 2 (oppsite angles)
+            """
+
+            if np.isnan(x) or np.isnan(y):
+                # can happen if there is no next stroke (e.g,, next reach..)
+                return np.nan
+
+            # print(x)
+            # print(type(x))
+            # assert isinstance(x, int)
+            assert x>0 and x<5
+            assert y>0 and y<5
+
+            if DEBUG:
+                for j in range(1,5):
+                    for i in range(1,5):
+                        print(i, j, ' -- ' , dist_angle_hack(i, j))
+            y2 = y-4
+            x2 = x-4
+
+            d = np.min([np.abs(x-y), np.abs(x-y2), np.abs(y-x2)])
+
+            return d
+
+        # ordinal
+        def dist_func_ord(x,y):
+            # 0==same
+            # 1,2,3. ... further apart.
+            return np.abs(x-y)
+
+        ########## FIRST, USE HAND-ENTERED
+        # Construct all string names
+        vars_angle_binned = []
+        for a in ["gap_to_next", "gap_from_prev"]:
+            for b in ["_angle"]:
+                for c in ["_binned"]:
+                    vars_angle_binned.append(f"{a}{b}{c}")
+
+        tmp = []
+        for a in ["gap_to_next", "gap_from_prev"]:
+            for b in ["_dist"]:
+                for c in ["", "_binned"]:
+                    tmp.append(f"{a}{b}{c}")
+        vars_categorical = ["shape_oriented", "gridloc", "stroke_index_semantic",
+                   "CTXT_loc_next", "CTXT_shape_next"] + tmp
+
+        if var in vars_categorical:
+            # Categorical
+            return dist_func_cat
+        elif var in vars_angle_binned:
+            # Hacky, angles binned
+            return dist_angle_hack
+        elif var in ["stroke_index", "stroke_index_fromlast", "stroke_index_fromlast_tskstks",
+                     "gridloc_x", "FEAT_num_strokes_task", "FEAT_num_strokes_beh", "FEAT_num_strokes_task"]:
+            # ordinal
+            return dist_func_ord
+        else:
+            pass # Try to get it auto below.
+
+        ########## SECOND, TRY AUTOMATICALLY, based on type.
+        vals = self.rsa_index_values_this_var(var)
+        list_types = list(set([type(v) for v in vals]))
+        at_least_one_type_is_tuple = any([isinstance(t, tuple) for t in list_types])
+
+        if len(list_types)>1 and at_least_one_type_is_tuple:
+            # Mxing these types, usually is categorical
+            return dist_func_cat
+        elif len(list_types)>1:
+            # Then not sure.
+            print(var)
+            print(vals)
+            assert False, "dont know what distance functin to use"
+        else:
+            # Only one type
+            t = list_types[0]
+            if t in (str, bool):
+                return dist_func_cat
+            elif t in (int):
+                # Not sure, just use categorical
+                return dist_func_cat
+            else:
+                # Then not sure.
+                print(var)
+                print(vals)
+                print(list_types)
+                print(t)
+                print(t==str)
+                assert False, "dont know what distance functin to use"
+
+    def _rsa_map_varstr_to_varind(self, var):
+        """ Get the index into labels, which matches this var
+        e.g., self.Labels[0][ind] is the value of this var for row 0.
+        """
+
+        self._rsa_check_compatible()
+        label_vars = self.rsa_labels_extract_label_vars()
+        assert var in label_vars
+        return label_vars.index(var)
+
+    def rsa_distmat_construct_theoretical(self, var, PLOT = False):
+        """Construct theoretical dsitances matrices based on the varaibles
+        for each row. Does not use the data in self.Xinput, just the labels
+        cols and rows.
+        RETURNS:
+            - Cltheor.Labels will be identical to self.Labels. This way can sort
+            labels as you would if this where the data matrix, to allow comparison
+            with data matrix.
+        """
+        from pythonlib.tools.distfunctools import distmat_construct_wrapper
+
+        # 1) pick out the feature dimension, and update labels
+        # Recompute distance
+        ind_var = self._rsa_map_varstr_to_varind(var) # convert from var to ind_var
+        labels_row = [lab[ind_var] for lab in self.Labels]
+        labels_col = [lab[ind_var] for lab in self.LabelsCols]
+        _dist_func = self._rsa_distmat_return_distfunc(var)
+        D = distmat_construct_wrapper(labels_row, labels_col, _dist_func)
+
+        # Make the labels into tuples, so that they match other rsa stuff
+        # labels_row = [tuple([lab]) for lab in labels_row]
+        # labels_col = [tuple([lab]) for lab in labels_col]
+        # No: instead keep the labels as in self, to allow plotting self and
+        # Cltheor using similar sort indices.
+        Cltheor = Clusters(D, self.Labels, self.LabelsCols, ver="dist",
+                           params={"var":var, "version_distance":None})
+        # plot
+        if PLOT:
+            fig = Cltheor.plot_heatmap_data()[0]
+        else:
+            fig = None
+
+        return Cltheor, fig
+
+    def rsa_labels_extract_var_levels(self):
+        """ Extract the levels that exist across all vars.
+        Reutrns dict, var:<list of levels>
+        """
+        dflab = self.rsa_labels_return_as_df()
+        map_var_levels = {}
+        for var in self.rsa_labels_extract_label_vars():
+            map_var_levels[var] = sort_mixed_type(dflab[var].unique().tolist())
+        return map_var_levels
+
+    def rsa_labels_extract_label_vars(self):
+        """ Return tuple of label vars (strings) in order they
+        are used in self.Labels (i.e., self.Labels[0] is a tuple,
+        ordered this way).
+        """
+        if self.Version == "rsa":
+            label_vars = self.Params["label_vars"]
+        elif self.Version == "dist":
+            label_vars = self.Params["Clraw"].Params["label_vars"]
+        else:
+            assert False
+        return label_vars
+
+    def _rsa_matindex_plot_bool_mask(self, ma, ax):
+        """ Plot this boolean mask
+        """
+        ax.imshow(ma)
+
+    def _rsa_matindex_convert_to_mask_specific(self, inds1, inds2):
+        """ Given indices defined by paired values in
+        lists rows and cols, return boolean array with
+        these indices True, and the rest False
+        """
+        ma = np.zeros_like(self.Xinput, dtype=bool)
+        ma[inds1, inds2] = True
+        return ma
+
+    def _rsa_matindex_generate_upper_triangular(self):
+        """ boolean mask with True in upper triangular, ecluding
+        diagona, and elsewhere False.
+        """
+        return np.triu(np.ones_like(self.Xinput, dtype=bool), k=1)
+
+    def _rsa_matindex_convert_to_mask_rect(self, rows, cols):
+        """ Given row and column indices to slice (into rectangle), return
+        boolean array with these indices True, and the rest False
+        """
+        # convert rows and cols to speicif inidices, since if you just
+        # do sequential slices, it takes copy, and you wont change ma
+        inds1 = []
+        inds2 = []
+        for r in rows:
+            for c in cols:
+                inds1.append(r)
+                inds2.append(c)
+        return self._rsa_matindex_convert_to_mask_specific(inds1, inds2)
+
+    def _rsa_matindex_slice_specific_view(self, rows, cols):
+        """ Helper to pull out values from self.Xinput which
+        are indexed by conucntions of rows and cols. i.e,,
+        (rows[0], cols[0]), (rows[1], cols[1]) etc.
+        RETURNS:
+            - np array, (len(rows),) shape. This is a view, which
+            means modifications will affect oriingal array
+        """
+        assert len(rows)==len(cols)
+        # return self.Xinput[rows, cols] # equivalent
+        return self.Xinput[(rows, cols)]
+
+    def _rsa_matindex_slice_rect_copy(self, rows, cols):
+        """ Helper to pull out rectangle slice of self.Xinput,
+            - np array, (len(rows), len(cols)) shape.  This is a copy, which
+            means modifications will NOT affect oriingal array
+        """
+        assert False, "avoid using this, it is a copy..."
+        return self.Xinput[rows,:][:,cols]
+
+    # def rsa_index_indvar_for_this_var(self, varstr):
+    #     """ map var string to its index in self.Labels[0]"""
+    #     return self._rsa_map_varstr_to_varind(varstr)
+
+    def rsa_index_values_this_var(self, var, inds_row=None):
+        """
+        Rturn list of values for var at these indices (rows),
+        as a list of items
+        :param var:
+        :param inds_row: list of ints, if None, gets all rows.
+        :return:
+        - list of values, same len as inds_row.
+        """
+        if inds_row is None:
+            inds_row = list(range(len(self.Labels)))
+        levs = self.rsa_labels_return_as_df().iloc[inds_row][var].tolist()
+        return levs
+
+    def rsa_index_cols_with_this_level(self, var, level):
+        """ Return columsn with this level of this var
+        """
+        assert self.LabelsCols==self.Labels
+        inds = self.rsa_index_rows_with_this_level(var, level)
+        return inds
+
+    def rsa_index_rows_with_this_level(self, var, level):
+        """ return list of ints in to self.Labels (rows) whcih
+        have this level for this var
+        e.g, self.Labels[inds[0]]==level will be True
+        """
+        dflab = self.rsa_labels_return_as_df()
+        return dflab[dflab[var]==level]["row_index"].tolist()
+
+    def rsa_matindex_same_diff_this_level(self, var, level):
+        """ Return indices in distnace matrix corresponding
+        to cases that are same and cases different level, compared to
+        input level
+        RETURNS:
+            - ma_same, ma_diff, boolean matrices (nrows, ncols).
+        """
+
+        # same
+        rows = self.rsa_index_rows_with_this_level(var, level)
+        cols = self.rsa_index_cols_with_this_level(var, level)
+
+        # diff
+        ncols = len(self.LabelsCols)
+        cols_diff = [i for i in range(ncols) if i not in cols]
+        # print(rows)
+        # print(cols)
+        # print(cols_diff)
+
+        # Return bool masks
+        ma_same = self._rsa_matindex_convert_to_mask_rect(rows, cols)
+        ma_diff = self._rsa_matindex_convert_to_mask_rect(rows, cols_diff)
+
+        return ma_same, ma_diff
+
+    def rsa_labels_return_as_df(self, include_row_index=True):
+        """ Return df where rows are labels (rows in X) and
+        columns are names of label vars, in order they are
+        used in labels
+        """
+        import pandas as pd
+        label_vars = self.rsa_labels_extract_label_vars()
+        dflab =  pd.DataFrame(self.Labels, columns=label_vars)
+        if include_row_index:
+            dflab["row_index"] = list(range(len(dflab)))
+        return dflab
+
+    def rsa_distmat_quantify_same_diff_variables(self, ind_var, ignore_diagonal=True):
+        """
+        For this variable, get distance across same and diff parirs, across
+        all lewvels.
+        E.g., can compute distance between same shape (across other var), vs. diff shape (across all var).
+        PARAMS:
+        - ind_var = 0 # e..g, if each row is labeled with a tuple like (shape, loc), then if
+        ind_var==0, then this means "same" is defined as having same shape
+        """
+
+        assert self._rsa_check_compatible()
+        assert self.Version=="dist"
+
+        # Collect mapping
+        map_pair_labels_to_indices = {} # (lab1, lab2) --> (col, row)
+        for i, lr in enumerate(self.Labels):
+            for j, lc in enumerate(self.LabelsCols):
+                # only take off diagonal
+                if ignore_diagonal:
+                    if i>=j:
+                        continue
+                else:
+                    if i>j:
+                        continue
+                map_pair_labels_to_indices[(lr, lc)] = (i, j)
+
+        # Find the coordinates of "same" and "diff" pairs.
+        # given a var dimension, get all indices that are "same" along that dimension
+        list_inds_same = []
+        list_inds_diff = []
+        for lab_pair, inds in map_pair_labels_to_indices.items():
+            a = lab_pair[0][ind_var]
+            b = lab_pair[1][ind_var]
+            if a==b:
+                # then is "same"
+                list_inds_same.append(inds)
+            else:
+                list_inds_diff.append(inds)
+
+        # Collect data
+        list_i = [x[0] for x in list_inds_same]
+        list_j = [x[1] for x in list_inds_same]
+        vals_same = self.Xinput[(list_i, list_j)]
+
+        list_i = [x[0] for x in list_inds_diff]
+        list_j = [x[1] for x in list_inds_diff]
+        vals_diff = self.Xinput[(list_i, list_j)]
+
+        return vals_same, vals_diff

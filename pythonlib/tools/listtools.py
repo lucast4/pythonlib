@@ -7,16 +7,20 @@ def stringify_list(li, return_as_str=False, separator="--"):
     """ 
     list --> list of str
     """
-        
-    out = []
-    for x in li:
-        if isinstance(x, list):
-            out.extend(stringify_list(x))
-#         elif isinstance(x, np.ndarray):
-#             from pythonlib.tools.nptools import stringify
-#             out.extend(stringify(x))
-        else:
-            out.append(str(x))
+
+    if isinstance(li, (tuple, list)):
+        out = []
+        for x in li:
+            if isinstance(x, list):
+                out.extend(stringify_list(x))
+    #         elif isinstance(x, np.ndarray):
+    #             from pythonlib.tools.nptools import stringify
+    #             out.extend(stringify(x))
+            else:
+                out.append(str(x))
+    else:
+        # is not list...
+        out = [str(li)]
     if return_as_str:
         return f"{separator}".join(out)
     else:
@@ -77,13 +81,67 @@ def stringify_list(li, return_as_str=False, separator="--"):
 
 #     return sorted(mylist, key=lambda x: key(x))
 
-def sort_mixed_type(mylist, DEBUG=False):
+def argsort_list_of_tuples(list_of_tuples, key):
+    """ Given list of tuples, sort hierarchically (e.g, first item in tuple, then second..)
+    and also return the inds for sorting. The latter cannot use np.argsort; it doesnt work for
+    list of tuples
+    PARAMS:
+    - key, e.g, lambda x:(x[1], x[2], x[3], x[4]) to sort by 2nd item, then 3rd, etc
+    RETURNS:
+        -
+    e.g.,
+    list_of_tuples =
+        [('line-8-4-0', (-1, 1), 1, 0),
+         ('line-8-4-0', (1, 1), 1, 0),
+         ('Lcentered-4-3-0', (1, 0), 4, 0),
+         ('line-8-4-0', (1, 1), 4, 1),
+         ('arcdeep-4-1-0', (-1, 0), 4, 2),
+         ('V-2-2-0', (-1, 1), 4, 3),
+         ('Lcentered-4-3-0', (1, 1), 1, 0),
+         ('Lcentered-4-3-0', (1, 0), 1, 0),
+        )
+    """
+
+    assert isinstance(list_of_tuples[0], tuple)
+
+    # find len of tuples
+    tmp = list(set([len(x) for x in list_of_tuples]))
+    if not len(tmp)==1:
+        print(tmp)
+        assert False, "otherwise doesnt work"
+    n = tmp[0]
+
+    # append index to beginign of each tuple
+    labels = [list(x) + [i] for i, x in enumerate(list_of_tuples)]
+
+    try:
+        # labels_sorted = sorted(labels, key=key)
+        labels_sorted = sort_mixed_type(labels, key_user=key)
+    except Exception as err:
+        print(labels)
+        for i in range(len(labels[0])-1): # -1 since last index is just ints
+            print(f"Unique items in column {i} of labels: ", set([l[i] for l in labels]))
+            # print(sorted(set([l[i] for l in labels])))
+        raise Exception
+
+    # extract indices
+    inds_sort = [x[n] for x in labels_sorted]
+
+    # sanity check
+    assert len(inds_sort)==len(labels)
+    assert len(set(inds_sort))==len(inds_sort)
+
+    return inds_sort
+
+def sort_mixed_type(mylist, DEBUG=False, key_user=None):
     """ Sort, works even if elements in mylist are mixed type.
     Uses convention for how to rank things of different type:
     str > num > list > other things > dict > cant hash
     IMPROVED over the above commented out version. here works
     to try to maintain rank (within type) as much as possible, wheras
     there would convert to hash and lose it (e.g., strings wouldnt properly compare).
+    PARAMS;
+    - key_user, callable: <item in mylist> --> <item>
     """
     from numpy import ndarray
 
@@ -134,6 +192,13 @@ def sort_mixed_type(mylist, DEBUG=False):
         # ensures corect sorting across types.
         # x, item in list that want to sort. any type.
 
+        # First, transform x using user input
+        if key_user is not None:
+            # print("input:", x)
+            x = key_user(x)
+            # print("Output:", x)
+            # assert False
+
         # try:
         if DEBUG:
             print("----", x)
@@ -174,6 +239,7 @@ def sort_mixed_type(mylist, DEBUG=False):
         #     return (5, '')
 
     return sorted(mylist, key=lambda x: key(x))
+
 
 def permuteRand(mylist, N, includeOrig=True, not_enough_ok=False):
     """gets N random permutations from muylist, no

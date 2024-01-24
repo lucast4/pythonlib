@@ -10,27 +10,58 @@ def bin_values_categorical_factorize(vals):
     """
     return np.unique(vals, return_inverse=True)[1]
 
-def bin_values(vals, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
+def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
     assert_all_vals_within_bins=True):
     """ REturn vals, but binned, unofrmly from min to max
-    Values binned between 1 and nbins.
+    Values binned to new categories called 1...nbins.
+    Any nan inputs will be nan outoput (ignored).
     PARAMS;
     - nbins, num bbins.
     - epsilon, scalar, small number to pad, to make sure get all values.
     RETIURNS:
-    - array, (n,)
+    - array, (n,), will be same type as input, not int, becuase is theres nan then it must be float arary.
+
+    # DBUG CODE:
+        x = np.array([1,2,3,4, np.nan, 2, 0, -2, 5])
+        x = np.random.rand(100)
+        x[10:20] = np.nan
+        xbinned = bin_values(x, 4)
+        plt.figure()
+        plt.plot(x, xbinned, "ok")
     """
-    if valmin is None:
-        valmin = np.min(vals)
-    if valmax is None:
-        valmax = np.max(vals)
+    if isinstance(vals_input, list):
+        vals_input = np.asarray(vals_input)
 
-    bins = np.linspace(valmin-epsilon, valmax+epsilon, nbins+1)
-    vals_binned = np.array([np.digitize(v, bins) for v in vals], dtype=np.int_)
+    def _bin_values(vals, valmin, valmax):
+        """ Operates on de-naned data
+        """
+        assert ~np.any(np.isnan(vals))
+        if valmin is None:
+            valmin = np.min(vals)
+        if valmax is None:
+            valmax = np.max(vals)
 
-    if assert_all_vals_within_bins:
-        assert np.all((vals_binned>=1) | (vals_binned<=nbins))
-    return vals_binned
+        bins = np.linspace(valmin-epsilon, valmax+epsilon, nbins+1)
+        vals_binned = np.array([np.digitize(v, bins) for v in vals], dtype=np.int_)
+
+        # print(vals_binned)
+        if assert_all_vals_within_bins:
+            assert np.all((vals_binned>=1) & (vals_binned<=nbins))
+
+        # for v in vals_binned:
+        #     assert i
+        return vals_binned
+
+    # bin only the non-nan values.
+    inds = ~np.isnan(vals_input)
+    # print(inds)
+    # print(vals_input)
+    vals_to_bin = vals_input[inds]
+    vals_to_bin_binned = _bin_values(vals_to_bin, valmin, valmax)
+    vals_out = vals_input.copy()
+    vals_out[inds] = vals_to_bin_binned
+
+    return vals_out
 
 def rankItems(arr):
     """ for each item, returns its
@@ -129,7 +160,9 @@ def unique_tol(arr, decimels=4):
 
 
 def sort_by_labels(X, labels, axis=0):
-    """ Sort X by labels, in incresaing order.
+    """ Sort X by first soring labels, in incresaing order,.
+    then sorting X yoked to labels. i.e, assumes you want to yoke
+    each item in X to its label.
     PARAMS:
     - X, ndat x ndim np array, rows will be osrted.
     - labels, list of ints, length ndat, to suport sorting in incresaing order
@@ -141,9 +174,9 @@ def sort_by_labels(X, labels, axis=0):
     inds = np.argsort(labels)
 
     if axis==0:
-        X = X[inds,:]
+        X = X[inds,:].copy()
     elif axis==1:
-        X = X[:, inds]
+        X = X[:, inds].copy()
     else:
         print(X.shape)
         print(axis)
@@ -207,3 +240,34 @@ def optimize_offset_to_align_tdt_ml2(vals_tdt, vals_ml2):
 
     res = minimize_scalar(F)
     return res.x
+
+
+
+################ PLAYING AROUND WITH INDEXING
+# # pull out square slice
+# rows = [0,2]
+# cols = [0,1]
+# x[rows,:][:, cols]
+# # x[[0,1] [0]]
+#
+#
+# # pull out speciifc indices
+#
+# rows = [0, 2]
+# cols = [0, 1]
+#
+# print(x[rows, cols])
+# print(x[(rows, cols)])
+#
+# print("Expected:")
+# for r, c in zip(rows, cols):
+#     print(f"coord {r,c}:", x[r,c])
+#
+#
+# rows = [0, 0, 0, 0]
+# cols = [0, 1, 0, 1]
+#
+# inds = tuple([(r,c) for r, c in zip(rows, cols)])
+# print("Indices: ", inds)
+# x[inds]
+#

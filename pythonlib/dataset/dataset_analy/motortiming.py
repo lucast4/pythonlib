@@ -116,7 +116,7 @@ def _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=False, pru
     D = DS.Dataset
 
     # Compute motor timing
-    DS.timing_extract_basic()
+    DS.motor_velocity_timing_extract()
     DS.dataset_append_column("block")
     DS.dataset_append_column("epoch_orig")
     DS.dataset_append_column("probe")
@@ -453,7 +453,7 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
     DS = DatStrokes(D)
 
     ############### PREPROCESS
-    DS.timing_extract_basic()
+    DS.motor_velocity_timing_extract()
     vel = DS.Dat["gap_from_prev_dist"]/DS.Dat["gap_from_prev_dur"]
     DS.Dat["gap_from_prev_vel"] = vel
 

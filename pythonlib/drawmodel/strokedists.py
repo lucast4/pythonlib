@@ -131,18 +131,18 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
     idxs index into stroklist
     """
     
-    from pythonlib.tools.distfunctools import modHausdorffDistance, distStrok
+    from pythonlib.tools.distfunctools import modHausdorffDistance, distStrokWrapper, distmat_construct_wrapper
     assert centerize_strokes==False, "not coded"
 
-    # certain params are incompatible
-    if normalize_cols_range01:
-        # then each column convert to range 0,1 (min, max distance)
-        assert normalize_by_range==False
-        assert similarity_method not in ["divide_by_maxcap", "divide_by_inputed_range"], "tehse fail becuase they change units beofre norm."
-    if normalize_by_range:
-        # clip into range 0,1.
-        assert range_norm is not None
-        assert normalize_cols_range01 ==False
+    # # certain params are incompatible
+    # if normalize_cols_range01:
+    #     # then each column convert to range 0,1 (min, max distance)
+    #     assert normalize_by_range==False
+    #     assert similarity_method not in ["divide_by_maxcap", "divide_by_inputed_range"], "tehse fail becuase they change units beofre norm."
+    # if normalize_by_range:
+    #     # clip into range 0,1.
+    #     assert range_norm is not None
+    #     assert normalize_cols_range01 ==False
 
     if distStrok_kwargs is None:
         distStrok_kwargs = {}
@@ -177,75 +177,81 @@ def distMatrixStrok(idxs1, idxs2, stroklist=None, distancever="hausdorff_means",
         stroklist2 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist2]
 
     ### Generate distance matrix
-    n1 = len(stroklist1)
-    n2 = len(stroklist2)
-    D = np.empty((n1, n2))
-    for i_dat, strokdat in enumerate(stroklist1):
-        if doprint:
-            if i_dat%250==0:
-                print(i_dat)
-        for i_bas, strokbas in enumerate(stroklist2):
-            d = distStrok(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
-            D[i_dat, i_bas] = d
+    def dist_func(strokdat, strokbas):
+        return distStrokWrapper(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
+    D = distmat_construct_wrapper(stroklist1, stroklist2, dist_func, cap_dist,
+                              normalize_rows, normalize_cols_range01,
+                                  normalize_by_range, range_norm,
+                                  convert_to_similarity, similarity_method, DEBUG)
+    # n1 = len(stroklist1)
+    # n2 = len(stroklist2)
+    # D = np.empty((n1, n2))
+    # for i_dat, strokdat in enumerate(stroklist1):
+    #     if doprint:
+    #         if i_dat%250==0:
+    #             print(i_dat)
+    #     for i_bas, strokbas in enumerate(stroklist2):
+    #         d = distStrokWrapper(strokdat, strokbas, ver=distancever, **distStrok_kwargs)
+    #         D[i_dat, i_bas] = d
 
-    # Cap the distance?
-    if cap_dist is not None:
-        # plt.figure()
-        # plt.hist(D)
-        # print(cap_dist)
-        # assert False
-        D[D>cap_dist] = cap_dist
-    # print(D)
-    # print(n1, n2)
-    # assert False
-        
-    if normalize_rows:
-        dnorm = np.sum(D, axis=1, keepdims=True)
-        D = D/dnorm
+    # # Cap the distance?
+    # if cap_dist is not None:
+    #     # plt.figure()
+    #     # plt.hist(D)
+    #     # print(cap_dist)
+    #     # assert False
+    #     D[D>cap_dist] = cap_dist
+    # # print(D)
+    # # print(n1, n2)
+    # # assert False
+    #
+    # if normalize_rows:
+    #     dnorm = np.sum(D, axis=1, keepdims=True)
+    #     D = D/dnorm
+    #
+    # if normalize_cols_range01:
+    #     # then each column convert to range 0,1 (min, max distance)
+    #     dmin = np.min(D, axis=0, keepdims=True)
+    #     D = D-dmin
+    #     dmax = np.max(D, axis=0, keepdims=True)
+    #     D = D/dmax
+    #
+    # if normalize_by_range:
+    #     # clip into range 0,1 (all values)
+    #     if DEBUG:
+    #         plt.figure()
+    #         plt.hist(D)
+    #         plt.title("Before norm by range")
+    #         print(range_norm)
+    #     assert range_norm[1]>range_norm[0]
+    #     D[D>range_norm[1]] = range_norm[1] # first clip
+    #     D = (D-range_norm[0])/(range_norm[1] - range_norm[0])
+    #     if DEBUG:
+    #         plt.figure()
+    #         plt.hist(D)
+    #         plt.title("After norm by range")
 
-    if normalize_cols_range01:
-        # then each column convert to range 0,1 (min, max distance)
-        dmin = np.min(D, axis=0, keepdims=True)
-        D = D-dmin
-        dmax = np.max(D, axis=0, keepdims=True)
-        D = D/dmax
-
-    if normalize_by_range:
-        # clip into range 0,1 (all values)
-        if DEBUG:
-            plt.figure()
-            plt.hist(D)
-            plt.title("Before norm by range")
-            print(range_norm)
-        assert range_norm[1]>range_norm[0]
-        D[D>range_norm[1]] = range_norm[1] # first clip
-        D = (D-range_norm[0])/(range_norm[1] - range_norm[0])
-        if DEBUG:
-            plt.figure()
-            plt.hist(D)        
-            plt.title("After norm by range")
-
-    # Convert from distance to similarity
-    if convert_to_similarity:
-        # plt.figure()
-        # plt.hist(D[:])
-        # assert False
-        if similarity_method=="squared_one_minus":
-            # take differenc,e then take square
-            # emprically: makes it more normal, becuase of skew.
-            D = (1-D)**2
-        elif similarity_method=="one_minus":
-            D = (1-D)
-        elif similarity_method=="divide_by_max":
-            D = 1-D/np.max(D)
-        elif similarity_method=="divide_by_median":
-            tmp = D/np.median(D)
-            D = 1-tmp/np.max(tmp)
-        elif similarity_method=="divide_by_maxcap":
-            assert cap_dist is not None
-            D = 1-D/cap_dist
-        else:
-            assert False
+    # # Convert from distance to similarity
+    # if convert_to_similarity:
+    #     # plt.figure()
+    #     # plt.hist(D[:])
+    #     # assert False
+    #     if similarity_method=="squared_one_minus":
+    #         # take differenc,e then take square
+    #         # emprically: makes it more normal, becuase of skew.
+    #         D = (1-D)**2
+    #     elif similarity_method=="one_minus":
+    #         D = (1-D)
+    #     elif similarity_method=="divide_by_max":
+    #         D = 1-D/np.max(D)
+    #     elif similarity_method=="divide_by_median":
+    #         tmp = D/np.median(D)
+    #         D = 1-tmp/np.max(tmp)
+    #     elif similarity_method=="divide_by_maxcap":
+    #         assert cap_dist is not None
+    #         D = 1-D/cap_dist
+    #     else:
+    #         assert False
 
     if DEBUG:
         plt.figure()
@@ -351,7 +357,7 @@ def distanceStroksMustBePaired(strokes_beh, strokes_model, ver,
     NOTE: if len not same, returns nan
 
     """
-    from pythonlib.tools.distfunctools import distStrok
+    from pythonlib.tools.distfunctools import distStrokWrapper
 
     if len(strokes_beh)!=len(strokes_model):
         return np.nan
@@ -359,7 +365,7 @@ def distanceStroksMustBePaired(strokes_beh, strokes_model, ver,
     if isinstance(ver, str):
         dist = 0
         for s1, s2 in zip(strokes_beh, strokes_model):
-            dist+=distStrok(s1, s2, ver=ver, auto_interpolate_if_needed=True)
+            dist+=distStrokWrapper(s1, s2, ver=ver, auto_interpolate_if_needed=True)
     else:
         assert False
 
