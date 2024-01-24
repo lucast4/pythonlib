@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 def radar_plot(ax, thetas, values, color="k", fill=True):
     """ polar radar plot 
     assumes that theta[-1] immedaitely precedes theta[0]. will connect them
@@ -290,6 +291,7 @@ def savefig(fig, path):
     """ helper to save without clipping axis labels
     """
     fig.savefig(path, bbox_inches="tight")
+    #plt.show(fig, block=False) # can uncomment if bugs with memory leak
 
 def saveMultToPDF(path, figs):
     """ saved multiple figs (list of fig obejcts)
