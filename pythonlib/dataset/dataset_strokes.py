@@ -33,20 +33,55 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
 
     D = D.copy()
 
-    if version=="single_prim":
+    if version=="all_no_clean":
+        DS = DatStrokes(D)
+
+    elif version=="singleprim":
         # Super clean
-        assert False
-        # params = ["remove_online_abort", "frac_touched_ok"]
-        # frac_touched_min = 0.6
-        # D.preprocessGood(params=params, frac_touched_min=frac_touched_min)
+
+        frac_touched_min = 0.6
+        ft_decim_min = 0.3
+        shortness_min = 0.2
+        D.preprocessGood(params=["beh_strokes_at_least_one",
+                                 "one_to_one_beh_task_strokes_allow_unfinished",
+                                 "no_supervision",
+                                 "remove_online_abort"],
+                         frac_touched_min=frac_touched_min,
+                         ft_decim_min=ft_decim_min,
+                         shortness_min = shortness_min
+                         )
+        DS = DatStrokes(D)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "beh_task_dist_too_large", "stroke_too_quick"]
+        params = {
+            "min_stroke_length":60,
+            "min_beh_task_dist":25,
+            "min_stroke_dur":0.1
+        }
+        DS.distgood_compute_beh_task_strok_distances()
+        n1 = len(DS.Dat)
+        DS.clean_preprocess_data(methods=methods, params=params)
+        DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
+        n2 = len(DS.Dat)
+        assert n2/n1>0.75, "why removed so much data?"
+
 
     elif version=="clean_one_to_one":
         # One to one beh to task strokes, good for everything except chars.
         # Clean means remove outlier strokes, too short, or visual distance.
+
+        # TODO: check these ...
+        # frac_touched_min = 0.5
+        # ft_decim_min = 0.2
+        # shortness_min = 0.15
         D.preprocessGood(params=["beh_strokes_at_least_one",
                                  "one_to_one_beh_task_strokes_allow_unfinished",
-                                 "no_supervision"])
-
+                                 "no_supervision"],
+                                # frac_touched_min=frac_touched_min,
+                                # ft_decim_min=ft_decim_min,
+                                # shortness_min = shortness_min
+                         )
         DS = DatStrokes(D)
 
         # These values empriically chosen (see primitivenessv2 preprocessing).
@@ -62,6 +97,7 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
         n2 = len(DS.Dat)
         assert n2/n1>0.75, "why removed so much data?"
+
     elif version=="clean_chars":
         # Ignore whether stroke is aligne dto taskl. Just want clean strokes, not
         # too short
@@ -96,13 +132,29 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # These values empriically chosen (see primitivenessv2 preprocessing).
         methods = ["stroke_too_short", "stroke_too_quick"]
         params = {
-            "min_stroke_length":50,
+            # "min_stroke_length":50,
+            "min_stroke_length":75, # Still pretty conservative at 75
             "min_stroke_dur":0.1,
         }
         n1 = len(DS.Dat)
         DS.clean_preprocess_data(methods=methods, params=params)
         n2 = len(DS.Dat)
         assert n2/n1>0.75, "why removed so much data?"
+
+    elif version=="clean_chars_load_clusters":
+        # load pre-saved clustres (shape labels) --> column in DS called "shape_label"
+        # And other columns: clust_sim_max, shape_label, velmean_th, velmean_thbin
+
+        # First, get DS
+        DS = preprocess_dataset_to_datstrokes(D, version="clean_one_to_one")
+
+        # Second, load presaved
+        # "shape_label" holds the label.
+        DS = DS.clustergood_load_saved_cluster_shape_classes()
+
+        if False:
+            # Optaiolly, plot examples for each shape
+            DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_subplots="shape_label", n_examples=5)
     else:
         print(version)
         assert False, "code it"
@@ -788,6 +840,40 @@ class DatStrokes(object):
         return strokes
 
     ###################### RELATED to original dataset
+    def _dataset_find_trialcodes_incomplete_data(self, D=None):
+        """ Return list of trialcodes which have less data
+        in self.Dat compared to original dataset (can't have more)...
+        RETURNS:
+            - missing_tc, list of trialcodes
+        """
+
+        if D is None:
+            D = self.Dataset
+
+        missing_tc_si = []
+        missing_tc = []
+        for i, row in D.Dat.iterrows():
+            tc = row["trialcode"]
+            n_beh_str = len(row["strokes_beh"])
+
+            inds = self._dataset_index_here_given_trialcode(tc)
+            if len(inds)<n_beh_str:
+                # Not enough strokes in self
+                missing_tc.append(tc)
+            elif len(inds)>n_beh_str:
+                assert False, "why?"
+
+        # THIS NOT GUARANTEED, since stroke index may change if remove strokes..
+        #     for ind_stroke in range(n_beh_str):
+        #         a = DS.Dat["trialcode"] == tc
+        #         b = DS.Dat["stroke_index"] == ind_stroke
+        #         if not any(a & b):
+        #             # Then this (tc, stroke index) doesnt exist in DS...
+        #             missing_tc_si.append((tc, ind_stroke))
+        # print(missing_tc_si)
+
+        return missing_tc
+
     def _dataset_index_here_given_trialcode(self, trialcode, return_rows=False):
         """ Find data with this trialcode
         PARAMS:
@@ -972,7 +1058,7 @@ class DatStrokes(object):
         # sp.DS.grouping_append_and_return_inner_items(["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx")
         if "trialcode_strokeidx" not in df.columns:
             # - first, append a new colum that is the conjunction of trialcode and stroke index
-            df = append_col_with_grp_index(df, ["dataset_trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
+            df = append_col_with_grp_index(df, ["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
                                                  use_strings=False)
 
         # - slice DS.Dat using desired (trialcode, strokeindex)
@@ -1435,6 +1521,9 @@ class DatStrokes(object):
         if task_kind=="character":
             key_to_extract_stroke_variations_in_single_subplot = None
 
+        if any([x is None for x in self.Dat[key_to_extract_stroke_variations_in_single_subplot]]):
+            key_to_extract_stroke_variations_in_single_subplot = None
+
         # 0) Static params:
         # filtdict = {}
         if filtdict is None:
@@ -1467,6 +1556,7 @@ class DatStrokes(object):
                 # 1) get all unique values for a given key
                 def bad(x):
                     # Return True is this value is a nan
+                    print(x)
                     if isinstance(x, (tuple, list, str)):
                         return False
                     else:
@@ -2281,6 +2371,39 @@ class DatStrokes(object):
                 
                 plt.close("all")
 
+    def clustergood_load_saved_cluster_shape_classes(self):
+        """ Laod cluster labels, make copy of self, and append labels
+        to this copy.
+        """
+        self.Dat = self.datamod_append_unique_indexdatapt_copy()
+        DS = self.copy()
+
+        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/{DS.animal()}/{DS.date()}"
+        path = f"{PATHDIR}/DS_data.pkl"
+        df = pd.read_pickle(path)
+        df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+
+        # Only keep indices that exist in both self and loaded DS_data
+        indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
+        print("Len DS: ", len(DS.Dat))
+        print("Len loaded DS: ", len(df))
+        print("Len DS: ", len(indices))
+        assert len(indices)>0
+
+        # slice both so they match
+        DS.Dat = DS.dataset_slice_by("index_datapt", indices)
+        df = DS.dataset_slice_by("index_datapt", indices, df=df)
+
+        assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
+
+        # Combine them
+        cols_take = ["clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
+        for col in cols_take:
+            assert col not in DS.Dat.columns
+            DS.Dat[col] = df[col]
+            print("Merged this column: ", col)
+
+        return DS
 
     def clustergood_extract_saved_clusterobject(self, WHICH_FEATURE="beh_motor_sim"):
         # WHICH_FEATURE = "beh_motor_sim" 
@@ -3198,6 +3321,12 @@ class DatStrokes(object):
             from pythonlib.tools.expttools import writeDictToYaml
             writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
 
+    #############################
+    def animal(self):
+        return self.Dataset.animals(force_single=True)[0]
+
+    def date(self):
+        return self.Dataset.dates(force_single=True)[0]
 
 def concat_dataset_strokes(list_DS):
     """ Returns a copy, concatenated, of multiple DS instances.
@@ -3216,6 +3345,7 @@ def concat_dataset_strokes(list_DS):
             list_df.append(ds.Dat)
             list_Datasets.append(ds.Dataset)
             list_params.append(ds.Params)
+            list_version.append(ds.Version)
     if len(list_df)>0:
         DS.Dat = pd.concat(list_df).reset_index(drop=True)
         DS.Dataset = concatDatasets(list_Datasets)
