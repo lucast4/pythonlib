@@ -38,6 +38,10 @@ class Clusters(object):
         self.Ndat = X.shape[0]
         self.Ndim = X.shape[1]
 
+        # if np.any(np.isnan(X)):
+        #     print(X)
+        #     assert False
+
         if labels_rows is None:
             labels_rows = list(range(self.Ndat))
         else:
@@ -72,6 +76,7 @@ class Clusters(object):
             # This means each row is a tuple of levels across multiple grouping
             # vars. I.E., labels is list of tuples, each of len num vars.
             label_vars = params["label_vars"] # list of str
+            assert len(label_vars)==len(set(label_vars))
             # check that labels are correct format
             for lab in self.Labels:
                 assert isinstance(lab, tuple)
@@ -81,6 +86,12 @@ class Clusters(object):
             self.Xinput.shape[0] == self.Xinput.shape[1]
             assert self.LabelsCols == self.Labels, "some code might assume this..."
             for f in ["version_distance"]:
+                assert f in self.Params.keys()
+        elif ver=="pca":
+            # Holes results of PCA. (NOT data tformed to PC space).
+            # Square matrix of PCs (pcs, original dims)
+            # pcs_explained_var: (npcs,) variance
+            for f in ["pcs_explained_var"]:
                 assert f in self.Params.keys()
         else:
             assert ver is None
@@ -195,33 +206,88 @@ class Clusters(object):
         return labs
 
     ################### data extract
-    def dataextract_upper_triangular_flattened(self,
-                                               exclude_diag=True,
-                                               inds_rows_cols=None,
-                                               dat = None):
+    def dataextract_masked_upper_triangular_flattened(self,
+                                                      exclude_diag=True,
+                                                      inds_rows_cols=None,
+                                                      dat = None,
+                                                      list_masks=None,
+                                                      plot_mask=False):
         """ Return elemetns in upper diagnoal, not including
         diagnoal, flatteened into 1-array
         PARAMS:
         - inds_rows_cols, either None (Ignore) or array-like of indices into
         self.X[inds, inds], to slice a subset (will still be square).
         - exclude_diag, bool (True), then ignore the diangoanl
+        - mask, boolean mask (nrow, ncol)
         """
+
+        if len(list_masks)==0:
+            list_masks = None
 
         if dat is None:
             dat = self.Xinput
-
         assert dat.shape[1]==dat.shape[0]
 
-        if inds_rows_cols is not None:
-            dat = dat[inds_rows_cols, :][:, inds_rows_cols] # (len inds, len inds)
+        # Start with all data
+        MA = self._rsa_matindex_generate_all_true()
 
-        n = dat.shape[0]
-        if exclude_diag:
-            inds = np.triu_indices(n, 1)
+        # Input masks, apply
+        if list_masks is not None:
+            for ma in list_masks:
+                MA = MA & ma
+
+        # Input rows, cols (rectangle).
+        if inds_rows_cols is not None:
+            ma = self._rsa_matindex_convert_to_mask_rect(inds_rows_cols, inds_rows_cols)
+            MA = MA & ma
+
+        # Take upper triangular
+        ma = self._rsa_matindex_generate_upper_triangular(exclude_diag=exclude_diag)
+        MA = MA & ma
+
+
+        # Flatten
+        vec = dat[MA].flatten()
+
+        # Plot mask
+        if plot_mask:
+            fig, ax = plt.subplots()
+            self.rsa_matindex_plot_bool_mask(MA, ax)
+            ax.set_title("Final mask")
+
+            return vec, fig, ax
         else:
-            inds = np.triu_indices(n, 0)
-        vec = dat[inds].flatten()
-        return vec
+            return vec
+
+    # def dataextract_upper_triangular_flattened_OLD(self,
+    #                                            exclude_diag=True,
+    #                                            inds_rows_cols=None,
+    #                                            dat = None):
+    #     """ Return elemetns in upper diagnoal, not including
+    #     diagnoal, flatteened into 1-array
+    #     PARAMS:
+    #     - inds_rows_cols, either None (Ignore) or array-like of indices into
+    #     self.X[inds, inds], to slice a subset (will still be square).
+    #     - exclude_diag, bool (True), then ignore the diangoanl
+    #     - mask, boolean mask (nrow, ncol)
+    #     """
+    #
+    #
+    #     if dat is None:
+    #         dat = self.Xinput
+    #
+    #     assert dat.shape[1]==dat.shape[0]
+    #
+    #     if inds_rows_cols is not None:
+    #         dat = dat[inds_rows_cols, :][:, inds_rows_cols] # (len inds, len inds)
+    #
+    #     n = dat.shape[0]
+    #     if exclude_diag:
+    #         inds = np.triu_indices(n, 1)
+    #     else:
+    #         inds = np.triu_indices(n, 0)
+    #     vec = dat[inds].flatten()
+    #     return vec
 
     ######################### PLOTS
 #     def plot_heatmap_data(self, datkind="raw", labelkind="raw", sortver_bylabel=None, 
@@ -288,7 +354,7 @@ class Clusters(object):
     def _plot_heatmap_data(self, X, labels_row=None, labels_col=None,
         SIZE=12, zlims=(None, None), nrand=None, rotation=90, rotation_y=0,
                            diverge=False, annotate_heatmap=False,
-                           ax=None, robust=False):
+                           ax=None, robust=False, ylabel=None):
         """ Low-=level plotting of heatmap of X.
         """
         from pythonlib.tools.snstools import heatmap_mat
@@ -303,10 +369,14 @@ class Clusters(object):
         fig, ax, rgba_values = heatmap_mat(X, ax, annotate_heatmap, zlims,
                    robust, diverge, labels_row, labels_col, rotation, rotation_y)
 
+        if ylabel is not None:
+            ax.set_ylabel(ylabel)
         return fig, X, labels_col, labels_row, ax
 
     def plot_heatmap_data(self, datkind="raw", labelkind="raw", 
-        nrand = None, SIZE=12, zlims=(None, None)):
+        nrand = None, SIZE=12, zlims=(None, None),
+                          sort_rows_by=None, diverge=False,
+                          ylabel=None, X=None):
         """ Plot heatmap of raw data in self.Xinput, optionally taking
         subset of rows.
         PARAMS:
@@ -317,14 +387,27 @@ class Clusters(object):
         --- {0,1}, sorts on thsoie axis
         --- 2, sorts both axes
         - nrand, int for taking random subset of rows. None to skip
+        - sort_rows_by, list-like, len nrows. will use sort indices from sorting
+        this to then sort the rows before plotting.
         RETURNS:
         - fig, X, labels
         """
         
-        # Extract data
-        X = self.extract_dat(datkind)
         labels_row = self.extract_labels(labelkind, axis=0)
         labels_col = self.extract_labels(labelkind, axis=1)
+
+        # Extract data
+        if X is None:
+            X = self.extract_dat(datkind)
+        else:
+            assert X.shape[0]==len(labels_row)
+            assert X.shape[1]==len(labels_col)
+
+        if sort_rows_by is not None:
+            inds = np.argsort(sort_rows_by)
+            X = X[inds,:]
+            labels_row = [labels_row[i] for i in inds]
+            # X, labels_row = self.sort_by_labels(labels=sort_rows_by)
 
         # Take subset of rows?
         if nrand is not None:
@@ -334,7 +417,7 @@ class Clusters(object):
             labels_row = [labels_row[i] for i in inds]
             # labels_col = [labels_col[i] for i in inds]
         
-        return self._plot_heatmap_data(X, labels_row, labels_col, SIZE, zlims)
+        return self._plot_heatmap_data(X, labels_row, labels_col, SIZE, zlims, diverge=diverge, ylabel=ylabel)
 
     def plot_save_hier_clust(self, col_cluster=True):
         """ Perform hier clustering (agglomerative) and plot and 
@@ -459,8 +542,11 @@ class Clusters(object):
         if savedir:
             savefig(fig, f"{savedir}/pca_explained_variance.pdf")
 
-        fig, X, labels_col, labels_row = self._plot_heatmap_data(pcamodel.components_, range(len(pcamodel.components_)), 
+        fig, X, labels_col, labels_row, ax = self._plot_heatmap_data(
+            pcamodel.components_, range(len(pcamodel.components_)),
             self.LabelsCols, SIZE=5, rotation=90)
+        ax.set_ylabel("PCs")
+        ax.set_xlabel("original dims")
         if savedir:
             savefig(fig, f"{savedir}/pca_heatmap_loadings.pdf")
 
@@ -610,8 +696,9 @@ class Clusters(object):
         else:
             assert False, "code it"
 
-    def cluster_gmm_extract_best_n(self, ver="gmm_using_tsne"):
-        """ Get the N that has the best cross-validated score
+    def cluster_gmm_extract_best_n(self, ver="gmm"):
+        """ Get the N that has the best score, using
+        BIC (or cross-validated score, optional)
         PARAMS;
         - var, either "gmm_using_tsne" or "gmm"[default]
         """
@@ -626,7 +713,8 @@ class Clusters(object):
             list_bic.append(mod["bic"])
 
         # list_n
-        gmm_n_best = list_n[np.argmax(list_crossval)]
+        # gmm_n_best = list_n[np.argmax(list_crossval)]
+        gmm_n_best = list_n[np.argmin(list_bic)]
 
         return gmm_n_best, list_n, list_crossval, list_bic
 
@@ -696,13 +784,67 @@ class Clusters(object):
     # self.plot_basis_strokes
 
     ################ DISTANCE MATRICES
-    def distsimmat_convert(self, version_distance="pearson"):
+    def distsimmat_convert_distr(self, agg_vars, version_distance, min_n_dat = 4):
+        """ Generate distance matrix, where distance is computed between
+        matrices, e.g., multivariate distributions, as opposted to firsrt
+        averaging into a single vector for each row, and then distance
+        (as in distmat_convert)
+        PARAMS:
+        - min_n_at,          # at least this many datapts per conj.
+
+        """
+        # Convert from Clraw (holding all trials) to distance matrix that compares _distributions_ of data
+        # - ie instead of first taking mean over label groupings (agg) keep separated before computing distance.
+
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+        from pythonlib.tools.distfunctools import euclidian_unbiased, distmat_construct_wrapper, euclidian
+
+        # Get data
+        dflab = self.rsa_labels_return_as_df(True)
+        X = self.Xinput
+
+        # Get grouping of labels
+        groupdict = grouping_append_and_return_inner_items(dflab, agg_vars)
+
+        # Convert to list, which can then pass into distmat constructor
+        list_X = []
+        list_lab = []
+        list_exclude = []
+        for i, (grp, inds) in enumerate(groupdict.items()):
+            list_X.append(X[inds,:])
+            list_lab.append(grp)
+            # print(len(inds))
+            if len(inds) < min_n_dat:
+                list_exclude.append(i)
+
+        if version_distance=="euclidian_unbiased":
+            # Unbiased estimate of eucl distance, based on resampling
+            # Also, for diagonal, gets estimate by splitting data in half, multiple
+            # folds
+
+            # Skip all cases that have
+            # coords_skip = [(i,i) for i in list_exclude]
+            D = distmat_construct_wrapper(list_X, list_X, euclidian_unbiased,
+                                          accurately_estimate_diagonal=True,
+                                          inds_skip_rows_or_cols=list_exclude)
+        else:
+            print(version_distance)
+            assert False
+
+        params = {
+            "version_distance":version_distance,
+            "Clraw":self,
+        }
+        return Clusters(D, list_lab, list_lab, ver="dist", params=params)
+
+    def distsimmat_convert(self, version_distance):
         """ Convert data (ndat, ndim) to distnace matreix (ndat, ndat)
         - Distance --> more positive is always more distance, by convention. This
         means pearson corr will range between 0 and 1, for example. By convention 0 is close.
         RETURNS:
             - Cl, ClustClass object.
         """
+        from pythonlib.tools.distfunctools import distmat_construct_wrapper
 
         X = self.Xinput
         ndat = X.shape[0]
@@ -715,7 +857,33 @@ class Clusters(object):
             # -1 --> 1
             # +1 --> 0
             D = 1-(np.corrcoef(X) + 1)/2
+        elif version_distance=="angle":
+            # angle betwen vectors, ie., cos(angle) = dot(a,b)/(norm(a) * norm(b))
+            # recaled so that 0 means parallel (angle 0) and 1 means ortho (angle 90).
+            def angle_dot(a, b):
+                """ Return angle between a and b, in degrees [0, 90]"""
+                if np.all(a==b):
+                    # otherwise get nan
+                    return 0.
+                dot_product = np.dot(a, b)
+                prod_of_norms = np.linalg.norm(a) * np.linalg.norm(b)
+                # print(dot_product)
+                # print(prod_of_norms)
+                angle = round(np.degrees(np.arccos(dot_product / prod_of_norms)), 2) # between 0 and 90
+                return angle
+
+            def func(vals1, vals2):
+                """ return angle, betwen 0 and 1"""
+                ang = angle_dot(vals1, vals2)
+                dist = ang/90.
+                return dist
+
+            vals = [X[i,:] for i in range(X.shape[0])]
+            D = distmat_construct_wrapper(vals, vals, func)
+            assert ~np.any(np.isnan(D))
+
         else:
+            print(version_distance)
             assert False
         assert ndat==D.shape[0]
         params = {
@@ -739,7 +907,8 @@ class Clusters(object):
             return True
         return False
 
-    def rsa_plot_heatmap(self, sort_order=None, diverge=False):
+    def rsa_plot_heatmap(self, sort_order=None, diverge=False,
+                         X=None, ax=None, mask=None, zlims=None):
         """ Plot the input data, which can be raw data or sim mat, anything that
         is 2d heatmapt, and has each row being a conjunction of levels of
         grouping vars, plots in useful way for inspecting relationships between levels,
@@ -754,6 +923,9 @@ class Clusters(object):
         """
         from pythonlib.tools.listtools import argsort_list_of_tuples
 
+        if zlims is None:
+            zlims = (None, None)
+
         assert self._rsa_check_compatible()
 
         # Pull out data in correct format, and return as clusters.
@@ -763,6 +935,12 @@ class Clusters(object):
         labels_rows = self.Labels
         labels_cols = self.LabelsCols
 
+        # Mask (always do BEFORE sorting)
+        if mask is not None:
+            X = X.copy()
+            X[~mask] = -1.
+
+        # Sort
         if sort_order is not None:
             key =lambda x:tuple([x[i] for i in sort_order])
             inds_sort = argsort_list_of_tuples(labels_rows, key)
@@ -777,7 +955,8 @@ class Clusters(object):
 
         # Plot
         fig, X, labels_col, labels_row, ax = self._plot_heatmap_data(X, labels_rows,
-                                                                   labels_cols, diverge=diverge)
+                                                                   labels_cols, diverge=diverge,
+                                                                     ax=ax, zlims=zlims)
         return fig, ax
 
 
@@ -791,6 +970,19 @@ class Clusters(object):
         - dist_func: (x,y) --> scalar.
         """
         # Construct dist funcs for each variable
+
+        def dist_func_strokes(StrokeClass1, StrokeClass2):
+            # Distance function between StrokeClass instances.
+            # NOTE: calling StrokeClass1() returns np array.
+            # 0 is perfect same
+            # ~0.1 is great
+            # ~0.3 is not bad.
+            # higher is bad... (into 1's..)
+
+            from pythonlib.drawmodel.strokedists import distStrokWrapper
+            distStrokWrapper(StrokeClass1(), StrokeClass2(), ver="dtw_vels_2d", align_to_onset=True,
+                             fs=None, rescale_ver="stretch_to_1_diag")
+
         # Categorical
         def dist_func_cat(x,y):
             # Categorical
@@ -828,6 +1020,31 @@ class Clusters(object):
 
             return d
 
+        def dist_angle_hack_8(x,y, DEBUG=False):
+            """
+            anlge hack, for 8 bins...
+            """
+            if np.isnan(x) or np.isnan(y):
+                # can happen if there is no next stroke (e.g,, next reach..)
+                return np.nan
+
+            # print(x)
+            # print(type(x))
+            # assert isinstance(x, int)
+            assert x>0 and x<9
+            assert y>0 and y<9
+
+            if DEBUG:
+                for j in range(1,9):
+                    for i in range(1,9):
+                        print(i, j, ' -- ' , dist_angle_hack(i, j))
+            y2 = y-8
+            x2 = x-8
+
+            d = np.min([np.abs(x-y), np.abs(x-y2), np.abs(y-x2)])
+
+            return d
+
         # ordinal
         def dist_func_ord(x,y):
             # 0==same
@@ -847,29 +1064,38 @@ class Clusters(object):
             for b in ["_dist"]:
                 for c in ["", "_binned"]:
                     tmp.append(f"{a}{b}{c}")
-        vars_categorical = ["shape_oriented", "gridloc", "stroke_index_semantic",
-                   "CTXT_loc_next", "CTXT_shape_next"] + tmp
+        vars_categorical = ["shape_oriented",
+                            "gridloc", "seqc_0_loc",
+                            "stroke_index_semantic",
+                            "CTXT_loc_next", "CTXT_shape_next"] + tmp
 
+        if var=="velmean_thbin":
+            print("... using distfunc: dist_angle_hack_8")
+            return dist_angle_hack_8
         if var in vars_categorical:
             # Categorical
+            print("... using distfunc: dist_func_cat")
             return dist_func_cat
         elif var in vars_angle_binned:
             # Hacky, angles binned
+            print("... using distfunc: vars_angle_binned")
             return dist_angle_hack
         elif var in ["stroke_index", "stroke_index_fromlast", "stroke_index_fromlast_tskstks",
                      "gridloc_x", "FEAT_num_strokes_task", "FEAT_num_strokes_beh", "FEAT_num_strokes_task"]:
             # ordinal
+            print("... using distfunc: dist_func_ord")
             return dist_func_ord
         else:
             pass # Try to get it auto below.
-
         ########## SECOND, TRY AUTOMATICALLY, based on type.
         vals = self.rsa_index_values_this_var(var)
         list_types = list(set([type(v) for v in vals]))
         at_least_one_type_is_tuple = any([isinstance(t, tuple) for t in list_types])
+        from pythonlib.behavior.strokeclass import StrokeClass
 
         if len(list_types)>1 and at_least_one_type_is_tuple:
             # Mxing these types, usually is categorical
+            print("... using distfunc: dist_func_cat")
             return dist_func_cat
         elif len(list_types)>1:
             # Then not sure.
@@ -879,11 +1105,17 @@ class Clusters(object):
         else:
             # Only one type
             t = list_types[0]
+            v = vals[0]
             if t in (str, bool):
+                print("... using distfunc: dist_func_cat")
                 return dist_func_cat
-            elif t in (int):
+            elif t in (int,):
                 # Not sure, just use categorical
+                print("... using distfunc: dist_func_cat")
                 return dist_func_cat
+            elif isinstance(v, StrokeClass):
+                print("... using distfunc: dist_func_strokes")
+                return dist_func_strokes
             else:
                 # Then not sure.
                 print(var)
@@ -903,10 +1135,323 @@ class Clusters(object):
         assert var in label_vars
         return label_vars.index(var)
 
-    def rsa_distmat_construct_theoretical(self, var, PLOT = False):
+
+    def rsa_mask_context_helper(self, var_effect, vars_context, diff_context_ver,
+                                diffctxt_vars_same=None, diffctxt_vars_diff=None,
+                                PLOT=False, mask_out_nans=True):
+        """
+        Generate boolean mask to focus on "context" defined by relations for given variables.
+        You can use this mask to then slice out data for analyses (restricting data).
+        PARAMS:
+        - var_effect,
+        - diff_context_ver, str, how to define diff context
+        For diff context, multiple ways.
+        --- "diff_complete", for all vars in vars_context, they must be different.
+        --- "diff_at_least_one", at least one var in vars_context must be diff.
+        --- "diff_specific", hand-inputed, must satisfy constraint for
+        vars that must be same, and vars that must be diff. This requires
+        diffctxt_vars_same and diffctxt_vars_diff, both list of str.
+        - mask_out_nans, bool, usualyl True, since nan is used to signal not neough data..
+        NOTE: to define "same context", for all vars in vars_context, they must be same level. There is only
+        one way to define a same context.
+        :return:
+        - MASKS, dict holding masks.
+        NOTE: context masks are FINAL (even upper triangle, etc).
+        NOTE: effect masks are NOT final. THey need to be AND-ed with context masks..
+        """
+
+        if mask_out_nans:
+            ma_not_nan = ~np.isnan(self.Xinput)
+        else:
+            ma_not_nan = self._rsa_matindex_generate_all_true()
+
+        # Same context
+        ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=False)
+        ma_context_same = self.rsa_matindex_same_diff_mult_var_flex(vars_same=vars_context)
+        ma_context_same = ma_context_same & ma_ut & ma_not_nan
+
+        # Diff context
+        if diff_context_ver=="diff_complete":
+            # Then every var must be diff
+            ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(vars_diff=vars_context)
+        elif diff_context_ver=="diff_at_least_one":
+            # Then at least one of var is diff
+            ma_context_diff = self.rsa_matindex_mask_if_any_var_is_diff(vars_context)
+        elif diff_context_ver=="diff_specific":
+            # Specific combination of vars being same and diff
+            # ALL vars must be same or diff individually.
+            assert isinstance(diffctxt_vars_diff, (tuple, list))
+            assert isinstance(diffctxt_vars_same, (tuple, list))
+            assert len(diffctxt_vars_diff)>0
+            ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
+                vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff)
+        else:
+            print(diff_context_ver)
+            assert False
+        ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=True)
+        ma_context_diff = ma_context_diff & ma_ut & ma_not_nan
+
+        # Effect var only
+        ma_effect_same = self.rsa_matindex_same_diff_mult_var_flex(vars_same=[var_effect])
+        ma_effect_diff = self.rsa_matindex_same_diff_mult_var_flex(vars_diff=[var_effect])
+
+        MASKS = {
+            "context_same":ma_context_same,
+            "context_diff":ma_context_diff,
+            "effect_same":ma_effect_same,
+            "effect_diff":ma_effect_diff
+        }
+
+        if PLOT:
+            titles = ["ma_context_same", "ma_context_diff", "ma_effect_same", "ma_effect_diff"]
+            fig, axes = plt.subplots(2,2, figsize=(15, 18))
+            for ax, ma, tit in zip(axes.flatten(),
+                                   [ma_context_same, ma_context_diff, ma_effect_same, ma_effect_diff],
+                                   titles):
+                # Plot the actual mask
+                self.rsa_matindex_plot_bool_mask(ma, ax)
+                ax.set_title(tit, color="r")
+
+            return MASKS, fig, axes
+        else:
+            return MASKS
+
+    def rsa_distmat_score_same_diff(self, var_effect, vars_all,
+                                    vars_test_invariance_over_dict,
+                                    PLOT=False):
+        """
+        [GOOD] Score mean distances for a given effect var, both within- and
+        across- contexts.
+        PARAMS:
+        - var_effect, str, the var you want to test the pairwise distances for.
+        - vars_all, list of all vars, used to help define context, where "same" means
+        all vars same, and diff defined in contingent manner.
+        - vars_test_invariance_over_dict, either None (ingore) or dict with "same" and
+        "diff" keys, each list of str (vars) for manualyl defining contxt.
+            # vars_test_invariance_over_dict = {
+            #     "same":["seqc_0_loc"],
+            #     "diff":["event"]
+            # }
+        :return:
+        - rest, dict of 4 scores. Eg:
+            {'EffS_CtxS': -0.029363783953610462,
+             'EffD_CtxS': 1.3263261555005426,
+             'EffS_CtxD': 1.184288421326354,
+             'EffD_CtxD': 1.4957573090747027}
+        """
+
+        # Decide how to define "diff context"
+        if vars_test_invariance_over_dict is not None:
+            # then you want to hand-code diff context with specific combo of vars
+            diff_context_ver="diff_specific"
+            diffctxt_vars_same=vars_test_invariance_over_dict["same"]
+            diffctxt_vars_diff=vars_test_invariance_over_dict["diff"]
+        else:
+            # Diff context means at least one of the other vars is diff
+            diff_context_ver="diff_at_least_one"
+            diffctxt_vars_same=None
+            diffctxt_vars_diff=None
+
+        # Generate masks.
+        vars_context = [var for var in vars_all if not var==var_effect]
+        MASKS = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
+                                      diffctxt_vars_same, diffctxt_vars_diff, PLOT=PLOT)
+
+
+        ######### Score
+        res = {}
+
+        ma = MASKS["context_same"] & MASKS["effect_same"]
+        res["EffS_CtxS"] = self.Xinput[ma].mean()
+
+        ma = MASKS["context_same"] & MASKS["effect_diff"]
+        res["EffD_CtxS"] = self.Xinput[ma].mean()
+
+        ma = MASKS["context_diff"] & MASKS["effect_same"]
+        res["EffS_CtxD"] = self.Xinput[ma].mean()
+
+        ma = MASKS["context_diff"] & MASKS["effect_diff"]
+        res["EffD_CtxD"] = self.Xinput[ma].mean()
+
+        return res
+
+
+    def rsa_distmat_score_vs_theor(self, Cltheor, vars_test_invariance_over_dict,
+                                   corr_ver="pearson", plot_and_save_mask_path=None):
+        """
+        Helper to score self.Xinput, assumed to be distance matrix,
+        against theorietical matrix held in Cltheor. ALways takees upper triangular.
+        Optioanlly mask data first
+        PARAMS
+        - Cltheor, holds Xinput with same shape as self.Xinput
+        - mask_vars_same, mask_vars_diff, eitehr None (skips) or list of str, to generate mask.
+        - exclude_diag, usually True, unles you are doing positive control (dist vs self).
+        - help_context, str, methods to help constrain (mask) to either to
+        --- same context: cases where all otehrvars are same ("othervars_all_same"), or
+        --- diff conbtext: at lesat one var is diff.
+        RETURNS:
+        - c, scalar, pearson corr coeff.
+        :param var:
+        :param Cltheor:
+        :return:
+        """
+
+        # Inital extraction and sanity checks
+        var_effect = Cltheor.Params["var"]
+        assert isinstance(var_effect, str)
+        assert self.Labels == Cltheor.Labels
+        assert self.LabelsCols == Cltheor.LabelsCols
+
+        # Decide how to define "diff context"
+        if vars_test_invariance_over_dict is not None:
+            # then you want to hand-code diff context with specific combo of vars
+            diff_context_ver="diff_specific"
+            diffctxt_vars_same=vars_test_invariance_over_dict["same"]
+            diffctxt_vars_diff=vars_test_invariance_over_dict["diff"]
+        else:
+            # Diff context means at least one of the other vars is diff
+            diff_context_ver="diff_at_least_one"
+            diffctxt_vars_same=None
+            diffctxt_vars_diff=None
+
+        # Generate masks.
+        vars_all = self.rsa_labels_extract_label_vars()
+        vars_context = [var for var in vars_all if not var==var_effect]
+        if plot_and_save_mask_path is not None:
+            MASKS, fig, axes = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
+                                          diffctxt_vars_same, diffctxt_vars_diff, PLOT=True)
+            savefig(fig, plot_and_save_mask_path)
+            plt.close("all")
+        else:
+            MASKS = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
+                              diffctxt_vars_same, diffctxt_vars_diff, PLOT=False)
+
+        ######## COMPUTE correaltions
+        def _corr(vec1, vec2):
+            if corr_ver=="pearson":
+                c = np.corrcoef(vec1, vec2)[0,1]
+            elif corr_ver=="kendall":
+                import scipy.stats as stats
+                tau, p_value = stats.kendalltau(vec1, vec2)
+                c = tau
+            else:
+                print(corr_ver)
+                assert False
+
+            if np.isnan(c):
+                print(Cltheor.Params["var"])
+                print(vec1, vec2)
+                print(c)
+                print(var_effect, vars_context, diff_context_ver, diffctxt_vars_same, diffctxt_vars_diff)
+                print("Locations of nans:")
+                print(np.argwhere(np.isnan(self.Xinput)))
+                # Cltheor.rsa_plot_heatmap()
+                # self.rsa_matindex_plot_masks_overlay_on_distmat(var_effect, mask_vars_same, mask_vars_diff,
+                #                                                 exclude_diag=exclude_diag)
+                assert False, "proibably becuase only one datapt for each level of var..."
+            return c
+
+        # Diff context
+        ma = MASKS["context_diff"]
+        vec_data = self.Xinput[ma].flatten()
+        vec_theor = Cltheor.Xinput[ma].flatten()
+        c_diff_context = _corr(vec_data, vec_theor)
+
+        # same context
+        ma = MASKS["context_same"]
+        vec_data = self.Xinput[ma].flatten()
+        vec_theor = Cltheor.Xinput[ma].flatten()
+        c_same_context = _corr(vec_data, vec_theor)
+
+        return c_diff_context, c_same_context
+
+
+        # # Generate (context) masks if needed
+        # if mask_vars_same is not None or mask_vars_diff is not None:
+        #     # generate mask
+        #     ma_invar = self.rsa_matindex_same_diff_mult_var_flex(mask_vars_same, mask_vars_diff)
+        #     list_masks = [ma_invar]
+        # else:
+        #     list_masks = []
+
+        # Helper to mask, for context, based on the other vars not being tested
+        # var_this = Cltheor.Params["var"]
+        # assert isinstance(var_this, str)
+        # vars_all = self.rsa_labels_extract_label_vars()
+        # vars_others = [v for v in vars_all if not v == var_this]
+        # if len(vars_others)>0:
+        #     if help_context=="othervars_at_least_one_diff":
+        #         # Mask so that at least one of the othervar is different
+        #         ma = self.rsa_matindex_mask_if_any_var_is_diff(vars_others)
+        #         list_masks.append(ma)
+        #     elif help_context=="othervars_all_same":
+        #         # "Positive control", every var in vars_others must be same
+        #         ma = self.rsa_matindex_same_diff_mult_var_flex(vars_same=vars_others)
+        #         list_masks.append(ma)
+        #     else:
+        #         print(help_context)
+        #         assert False
+
+        # # Mask to avoid nans (these are, by design, cases with not neough data)
+        # ma_not_nan = ~np.isnan(self.Xinput)
+        # list_masks.append(ma_not_nan)
+
+        # # plot the conj of all masks.
+        # if PLOT:
+        #     # Plot the actual mask
+        #     ma_plot = list_masks[0]
+        #     for i in range(1, len(list_masks)):
+        #         ma_plot = ma_plot & list_masks[i]
+        #         print(i)
+        #     self.rsa_matindex_plot_bool_mask(ma_plot)
+
+        # Score
+        # assert self.Labels == Cltheor.Labels
+        # assert self.LabelsCols == Cltheor.LabelsCols
+        # if plot_and_save_mask_path is not None:
+        #     vec_data, fig, ax = self.dataextract_masked_upper_triangular_flattened(list_masks=list_masks, plot_mask=True,
+        #                                                                   exclude_diag=exclude_diag)
+        #     savefig(fig, plot_and_save_mask_path)
+        #     plt.close("all")
+        # else:
+        #     vec_data = self.dataextract_masked_upper_triangular_flattened(list_masks=list_masks, plot_mask=False,
+        #                                                                   exclude_diag=exclude_diag)
+        # vec_theor = Cltheor.dataextract_masked_upper_triangular_flattened(list_masks=list_masks, plot_mask=False,
+        #                                                                   exclude_diag=exclude_diag)
+
+
+        # if corr_ver=="pearson":
+        #     c = np.corrcoef(vec_data, vec_theor)[0,1]
+        # elif corr_ver=="kendall":
+        #     import scipy.stats as stats
+        #     tau, p_value = stats.kendalltau(vec_data, vec_theor)
+        #     c = tau
+        #     print(vec_data)
+        #     print(vec_theor)
+        #
+        # else:
+        #     print(corr_ver)
+        #     assert False
+
+        # if np.isnan(c):
+        #     print(Cltheor.Params["var"])
+        #     print(vec_data, vec_theor)
+        #     print(c)
+        #     Cltheor.rsa_plot_heatmap()
+        #     self.rsa_matindex_plot_masks_overlay_on_distmat(var_effect, mask_vars_same, mask_vars_diff,
+        #                                                     exclude_diag=exclude_diag)
+        #     assert False, "proibably becuase only one datapt for each level of var..."
+        #
+        # return c
+
+    def rsa_distmat_construct_theoretical(self, var, PLOT = False,
+                                          dist_mat_manual=None):
         """Construct theoretical dsitances matrices based on the varaibles
         for each row. Does not use the data in self.Xinput, just the labels
         cols and rows.
+        PARAMS:
+        - dist_mat_manual, to manually overwrite enter, overwriting need for
+        computation here.
         RETURNS:
             - Cltheor.Labels will be identical to self.Labels. This way can sort
             labels as you would if this where the data matrix, to allow comparison
@@ -916,11 +1461,16 @@ class Clusters(object):
 
         # 1) pick out the feature dimension, and update labels
         # Recompute distance
-        ind_var = self._rsa_map_varstr_to_varind(var) # convert from var to ind_var
-        labels_row = [lab[ind_var] for lab in self.Labels]
-        labels_col = [lab[ind_var] for lab in self.LabelsCols]
-        _dist_func = self._rsa_distmat_return_distfunc(var)
-        D = distmat_construct_wrapper(labels_row, labels_col, _dist_func)
+        if dist_mat_manual is None:
+            ind_var = self._rsa_map_varstr_to_varind(var) # convert from var to ind_var
+            labels_row = [lab[ind_var] for lab in self.Labels]
+            labels_col = [lab[ind_var] for lab in self.LabelsCols]
+            _dist_func = self._rsa_distmat_return_distfunc(var)
+            D = distmat_construct_wrapper(labels_row, labels_col, _dist_func)
+        else:
+            D = dist_mat_manual
+            # sanity check
+            assert D.shape[0]==D.shape[1]==len(self.Labels)
 
         # Make the labels into tuples, so that they match other rsa stuff
         # labels_row = [tuple([lab]) for lab in labels_row]
@@ -960,10 +1510,17 @@ class Clusters(object):
             assert False
         return label_vars
 
-    def _rsa_matindex_plot_bool_mask(self, ma, ax):
+    def rsa_matindex_plot_bool_mask(self, ma, ax=None):
         """ Plot this boolean mask
         """
-        ax.imshow(ma)
+
+        labels_row = self.Labels
+        labels_col = self.LabelsCols
+        self._plot_heatmap_data(ma, labels_row, labels_col, ax=ax)
+
+        # if ax is None:
+        #     fig, ax = plt.subplots()
+        # ax.imshow(ma)
 
     def _rsa_matindex_convert_to_mask_specific(self, inds1, inds2):
         """ Given indices defined by paired values in
@@ -974,11 +1531,22 @@ class Clusters(object):
         ma[inds1, inds2] = True
         return ma
 
-    def _rsa_matindex_generate_upper_triangular(self):
+    def _rsa_matindex_generate_all_true(self, all_false=False):
+        """ Return bool mask with all values True (or false,
+        if all_false==True)
+        """
+        ma = np.ones_like(self.Xinput, dtype=bool)
+        return ma
+
+    def _rsa_matindex_generate_upper_triangular(self, exclude_diag=True):
         """ boolean mask with True in upper triangular, ecluding
         diagona, and elsewhere False.
         """
-        return np.triu(np.ones_like(self.Xinput, dtype=bool), k=1)
+        if exclude_diag:
+            k=1
+        else:
+            k=0
+        return np.triu(np.ones_like(self.Xinput, dtype=bool), k=k)
 
     def _rsa_matindex_convert_to_mask_rect(self, rows, cols):
         """ Given row and column indices to slice (into rectangle), return
@@ -994,7 +1562,8 @@ class Clusters(object):
                 inds2.append(c)
         return self._rsa_matindex_convert_to_mask_specific(inds1, inds2)
 
-    def _rsa_matindex_slice_specific_view(self, rows, cols):
+    # _rsa_matindex_slice_specific_view
+    def rsa_index_sliceX_specific_view(self, rows, cols):
         """ Helper to pull out values from self.Xinput which
         are indexed by conucntions of rows and cols. i.e,,
         (rows[0], cols[0]), (rows[1], cols[1]) etc.
@@ -1006,7 +1575,8 @@ class Clusters(object):
         # return self.Xinput[rows, cols] # equivalent
         return self.Xinput[(rows, cols)]
 
-    def _rsa_matindex_slice_rect_copy(self, rows, cols):
+    # _rsa_matindex_slice_rect_copy
+    def rsa_index_sliceX_rect_copy(self, rows, cols):
         """ Helper to pull out rectangle slice of self.Xinput,
             - np array, (len(rows), len(cols)) shape.  This is a copy, which
             means modifications will NOT affect oriingal array
@@ -1047,9 +1617,126 @@ class Clusters(object):
         dflab = self.rsa_labels_return_as_df()
         return dflab[dflab[var]==level]["row_index"].tolist()
 
+    def rsa_matindex_plot_masks_overlay_on_distmat(self, var_effect, context_vars_same,
+                                                   context_vars_diff, exclude_diag=True):
+        """
+        These are the masks that would be used to compute things about sim mat.
+
+        Plot mask
+        :param var_effect: str, var that will color diff depending on if is "same" or "diff"
+        :param context_vars_same: list of str, along with context_vars_diff, defines the context,
+        ie the cells that will not black out.
+        :param context_vars_diff:
+        :return:
+        """
+
+        # Generate context mask.
+        ma_context = self.rsa_matindex_same_diff_mult_var_flex(context_vars_same, context_vars_diff, PLOT=False)
+        ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=exclude_diag)
+        ma_context = ma_context & ma_ut
+
+        # Effect mask (same, diff)
+        ma_effect_same, ma_effect_diff = self.rsa_matindex_same_diff_this_var([var_effect])
+
+        # Final conj masks.
+        ma_same = ma_context & ma_effect_same
+        ma_diff = ma_context & ma_effect_diff
+
+        fig, axes = plt.subplots(1,3, figsize=(20,6))
+
+        # make all have same axis
+        zlims = [np.min(self.Xinput), np.max(self.Xinput)]
+
+        ax = axes.flatten()[0]
+        self.rsa_plot_heatmap(ax=ax, mask=ma_same, zlims=zlims)
+        # self._rsa_matindex_plot_bool_mask(ma_same, ax)
+        ax.set_title(f"Same, for effect var {var_effect}, context same {context_vars_same}, context diff {context_vars_diff}")
+
+        ax = axes.flatten()[1]
+        self.rsa_plot_heatmap(ax=ax, mask=ma_diff, zlims=zlims)
+        ax.set_title("Effect var: Diff")
+
+        ax = axes.flatten()[2]
+        self.rsa_plot_heatmap(ax=ax, mask=ma_context, zlims=zlims)
+        ax.set_title("Context ")
+
+        return fig
+
+    def rsa_matindex_same_diff_mult_var_flex(self, vars_same=None, vars_diff=None, PLOT=False):
+        """
+        Flexibly generate bool mask that satistifes the criteria for
+        each var in vars_same being same level, and each var in vars_diff
+        being different level. All vars are checked independently (ie not conjunction).
+        Any var thats not included, ignores whether its
+        same or different
+
+        :param vars_same:
+        :param vars_diff:
+        :return:
+        """
+
+        if vars_same is None:
+            vars_same = []
+        if vars_diff is None:
+            vars_diff = []
+
+        assert isinstance(vars_same, (tuple, list))
+        assert isinstance(vars_diff, (tuple, list))
+        assert len([v for v in vars_same if v in vars_diff])==0
+
+        # Can check "same" all at once - just get mask so that is
+        # same across all vars
+        if len(vars_same)==0:
+            MA = self._rsa_matindex_generate_all_true()
+        else:
+            MA, _ = self.rsa_matindex_same_diff_this_var(vars_same)
+
+        # For diff, must check each var one by one, and take negation
+        for var in vars_diff:
+            _, ma = self.rsa_matindex_same_diff_this_var([var])
+            MA = MA & ma
+
+        if PLOT:
+            self.rsa_matindex_plot_bool_mask(MA)
+
+        return MA
+
+    def rsa_matindex_mask_if_any_var_is_diff(self, vars_at_least_one_must_be_diff):
+        """ Returns mask such that at elast one of the var in vars_at_least_one_must_be_diff
+        will be different (i,j).
+        PPARAMS:
+        - vars_at_least_one_must_be_diff, list of str.
+        """
+        _, ma_at_least_one_diff = self.rsa_matindex_same_diff_this_var(vars_at_least_one_must_be_diff)
+        return ma_at_least_one_diff
+
+    def rsa_matindex_same_diff_this_var(self, list_var):
+        """ For similarity matrices,
+        Return masks that are same (one output) or different (other
+        output) for this variable. COnsiders list_var as a conjunctive
+        variable. i.e,. A cell (i,j) is considered
+        same only if the tuple (var1, var2, ...) [from list_var] is
+        completely identical for the row and column (i and j).
+        """
+        from pythonlib.tools.distfunctools import distmat_construct_wrapper
+
+        assert self.LabelsCols==self.Labels, "assumes this"
+        assert isinstance(list_var, (list, tuple))
+        assert not isinstance(list_var[0], (list, tuple))
+
+        df_lab = self.rsa_labels_return_as_df(include_row_index=False)
+
+        levs = df_lab.loc[:, list_var].values.tolist() # list of list, each inner list being levels for [var1, var2, ...]
+
+        ma_same = distmat_construct_wrapper(levs, levs, lambda x,y:x==y).astype(bool)
+        ma_diff = ma_same==False
+
+        return ma_same, ma_diff
+
     def rsa_matindex_same_diff_this_level(self, var, level):
         """ Return indices in distnace matrix corresponding
-        to cases that are same and cases different level, compared to
+        to cases that are same (one output) and cases
+        that are different level (another output), compared to
         input level
         RETURNS:
             - ma_same, ma_diff, boolean matrices (nrows, ncols).
@@ -1073,13 +1760,13 @@ class Clusters(object):
         return ma_same, ma_diff
 
     def rsa_labels_return_as_df(self, include_row_index=True):
-        """ Return df where rows are labels (rows in X) and
-        columns are names of label vars, in order they are
-        used in labels
+        """ Return df where rows are labels (rows in order as in
+        self.Xinput) and columns are names of label vars, in order
+        they are used in labels
         """
         import pandas as pd
         label_vars = self.rsa_labels_extract_label_vars()
-        dflab =  pd.DataFrame(self.Labels, columns=label_vars)
+        dflab = pd.DataFrame(self.Labels, columns=label_vars)
         if include_row_index:
             dflab["row_index"] = list(range(len(dflab)))
         return dflab

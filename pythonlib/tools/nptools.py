@@ -29,6 +29,10 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
         plt.figure()
         plt.plot(x, xbinned, "ok")
     """
+
+    if np.all(np.isnan(vals_input)):
+        return vals_input
+
     if isinstance(vals_input, list):
         vals_input = np.asarray(vals_input)
 
@@ -57,7 +61,13 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
     # print(inds)
     # print(vals_input)
     vals_to_bin = vals_input[inds]
-    vals_to_bin_binned = _bin_values(vals_to_bin, valmin, valmax)
+    try:
+        vals_to_bin_binned = _bin_values(vals_to_bin, valmin, valmax)
+    except Exception as err:
+        print(vals_to_bin)
+        print(vals_input)
+        print(inds)
+        raise err
     vals_out = vals_input.copy()
     vals_out[inds] = vals_to_bin_binned
 

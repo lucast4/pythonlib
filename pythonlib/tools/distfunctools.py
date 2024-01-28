@@ -4,19 +4,41 @@ represetning strokes, behavior, etc. """
 import numpy as np
 import matplotlib.pyplot as plt
 
-def distmat_construct_wrapper(vals1, vals2, dist_func,
-                              cap_dist = None,
-                              normalize_rows = False,
-                              normalize_cols_range01 = False,
-                              normalize_by_range = False, range_norm= None,
-                              convert_to_similarity = False, similarity_method=None,
-                              DEBUG=False):
-    """ Wrapper to generate distance matrix, where
+def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_rows=False,
+                              normalize_cols_range01=False, normalize_by_range=False, range_norm=None,
+                              convert_to_similarity=False, similarity_method=None, DEBUG=False,
+                              accurately_estimate_diagonal=False,
+                              inds_skip_rows_or_cols=None):
+    """ Wrapper to generate distance matrix.
+    Assumes this is symetric. Only computes upper triangle copies to lower.
     PARAMS:
     - dist_func, function mapping from (vals1[i], vals2[j]) --> scalar
+    - accurately_estimate_diagonal, bool, if True, then deals with prpoblem where
+    diagonal values are all comopare to self  here solves by
+    resamplig method. This only makes sense if (if val1==vals2)
     RETURNS:
         - D, np array shape (len(vals1), len(vals2))
     """
+
+    from pythonlib.tools.checktools import check_objects_identical
+    symmetric = check_objects_identical(vals1, vals2)
+
+    # if isinstance(vals1, np.ndarray):
+    #     symmetric = np.all(vals1==vals2) # This speeds things up
+    # else:
+    #     try:
+    #         symmetric = vals1==vals2 # This speeds things up
+    #     except ValueError as err:
+    #         try:
+    #             symmetric = np.all(vals1==vals2) # This speeds things up
+    #         except Exception as err:
+    #             print(vals1)
+    #             print(vals2)
+    #             print(type(vals1), type(vals2))
+    #             raise err
+
+    if inds_skip_rows_or_cols is None:
+        inds_skip_rows_or_cols = []
 
     # certain params are incompatible
     if normalize_cols_range01:
@@ -31,10 +53,58 @@ def distmat_construct_wrapper(vals1, vals2, dist_func,
     n1 = len(vals1)
     n2 = len(vals2)
     D = np.empty((n1, n2))
-    for i, v1 in enumerate(vals1):
-        for j, v2 in enumerate(vals2):
-            d = dist_func(v1, v2)
-            D[i, j] = d
+
+    if accurately_estimate_diagonal:
+        assert symmetric==True
+        def dist_func_i_equals_j(v1, dummy):
+            return dist_vs_self_split_compute_agg(v1, dist_func, nfold=10)
+    else:
+        dist_func_i_equals_j = None
+
+    if symmetric:
+        # Do only one half
+        for i, v1 in enumerate(vals1):
+            for j, v2 in enumerate(vals2):
+                if j>=i:
+                    if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):
+                        d = np.nan
+                    else:
+                        if accurately_estimate_diagonal and i==j:
+                            d = dist_func_i_equals_j(v1, v2)
+                        else:
+                            d = dist_func(v1, v2)
+                        # print(i,j)
+                        # print(v1, v2)
+                        # print(v1.shape)
+                        # print(v2.shape)
+                        # print(np.mean(v1, 0))
+                        # print(np.mean(v2, 0))
+                        # print(d)
+                        # print(dist_func(v1, v2))
+                        # print(np.isnan(d))
+                        # print(np.any(np.isnan(v1)))
+                        # print(np.any(np.isnan(v2)))
+                        # print(DID)
+                        # print(v1.shape, v2.shape)
+                        # print(dist_func(v1, v2))
+                        assert not np.isnan(d)
+                    D[i, j] = d
+
+        # populate the other half of matrix.
+        for i, v1 in enumerate(vals1):
+            for j, v2 in enumerate(vals2):
+                if j<i:
+                    D[i, j] = D[j, i]
+    else:
+        # Not symmetric..
+        for i, v1 in enumerate(vals1):
+            for j, v2 in enumerate(vals2):
+                if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):
+                    d = np.nan
+                else:
+                    d = dist_func(v1, v2)
+                    assert not np.isnan(d)
+                    D[i, j] = d
 
     # Cap the distance?
     if cap_dist is not None:
@@ -92,8 +162,12 @@ def distmat_construct_wrapper(vals1, vals2, dist_func,
         elif similarity_method=="divide_by_maxcap":
             assert cap_dist is not None
             D = 1-D/cap_dist
+        elif similarity_method=="inverse":
+            D = 1./D
         else:
             assert False
+
+    # assert ~np.any(np.isnan(D))
 
     return D
 
@@ -146,174 +220,6 @@ def furthest_pt_twotrajs(traj1, traj2, assymetry=None):
 
     return dist, ind1, ind2
 
-def distStrokWrapper(strok1, strok2, ver="euclidian",
-            align_to_onset=False, align_to_center=False,
-            rescale_ver=None,
-            interp_to_ignore_time=False,
-            auto_interpolate_if_needed=True, n_interp = 50,
-            debug=False,
-            asymmetric_ver=None,
-            fs=None):
-    """ [GOOD] Holds all methods and preprocesing for comparing two stroks.
-    General purpose, distance between two strok
-    - strok1, strok2, np arrays, N/M x 2, where N and
-    M could be different. This is wrapper for all other things.
-    - auto_interpolate_if_needed, then if strok1 and strok2 are different lengths, and if
-    ver requires same length, then will interpolate both to length n_interp
-    """
-    from pythonlib.tools.stroketools import strokesInterpolate2, rescaleStrokes, strokes_alignonset, strokes_centerize
-
-    # Make sure no mutation
-    strok1 = strok1.copy()
-    strok2 = strok2.copy()
-
-    ## Rescale: apply first
-    if rescale_ver is not None:
-        strok1 = rescaleStrokes([strok1], rescale_ver)[0]
-        strok2 = rescaleStrokes([strok2], rescale_ver)[0]
-
-    ## Align, apply second
-    if align_to_onset:
-        assert align_to_center==False
-        strok1 = strokes_alignonset([strok1])[0]
-        strok2 = strokes_alignonset([strok2])[0]
-
-    if align_to_center:
-        assert align_to_onset==False
-        strok1 = strokes_centerize([strok1])[0]
-        strok2 = strokes_centerize([strok2])[0]
-
-    ## If want to interpolate to same length (ignore time)
-    def _interp(strok1, strok2):
-        # npts_space = 50
-        # npts_diff = 25
-        # interpolate based on spatial coordinate.
-        strok1 = strokesInterpolate2([strok1],
-            N=["npts", n_interp], base="space")[0]
-        strok2 = strokesInterpolate2([strok2],
-            N=["npts", n_interp], base="space")[0]
-        return strok1, strok2
-    if interp_to_ignore_time:
-        strok1, strok2 = _interp(strok1, strok2)
-        auto_interpolate_if_needed = False # no need to redo
-
-    if ver=="hausdorff":
-        from pythonlib.tools.distfunctools import modHausdorffDistance
-        dist = modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver)
-    elif ver =="hausdorff_max":
-        from pythonlib.tools.distfunctools import modHausdorffDistance
-        dist =  modHausdorffDistance(strok1, strok2, ver1="max", ver2="max", asymmetric_ver=asymmetric_ver)
-    elif ver=="hausdorff_means":
-        # hausdorff, using means, to allow for more smooth distances
-            #     # This helps to avoid jumps in the scores, i.e., if use "hausdorff" then
-    #     # slices (columns) will not be smooth gaussian-like things. This should
-    #     # be clear if I tink about it.
-
-        from pythonlib.tools.distfunctools import modHausdorffDistance
-        dist =  modHausdorffDistance(strok1, strok2, ver1="mean", ver2="mean", asymmetric_ver=asymmetric_ver)
-    elif ver=="hausdorff_mins":
-        # This says: either good match from beh perspective, or from task perspective. Useful if
-        # expect sometimes multiple beh stroke over one task stroke, or vice versa.
-        from pythonlib.tools.distfunctools import modHausdorffDistance
-        dist =  modHausdorffDistance(strok1, strok2, ver1="mean", ver2="min", asymmetric_ver=asymmetric_ver)
-
-    elif ver=="euclidian":
-        # pt-by-pt euclidian distance, lengths must be matched.
-        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
-        if auto_interpolate_if_needed:
-            strok1, strok2 = _interp(strok1, strok2)
-        dist =  _distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
-                                       vec_over_spatial_ratio=(1,0))
-    elif ver=="euclidian_bidir":
-        # same as euclidian, but takes min over flipping one stroke.
-        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
-        if auto_interpolate_if_needed:
-            strok1, strok2 = _interp(strok1, strok2)
-        d1 = _distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
-                                       vec_over_spatial_ratio=(1,0))
-        d2 = _distStrokTimeptsMatched(strok1, strok2[::-1], min_strok_dur=None,
-                                       vec_over_spatial_ratio=(1,0))
-        dist =  np.min([d1, d2])
-
-    elif ver=="euclidian_diffs":
-        # pt by pt, comparing diffs between pts, using euclidian. is like velocity, but
-        # not taking into account time.
-        # By default,
-        from pythonlib.tools.distfunctools import _distStrokTimeptsMatched
-        from pythonlib.tools.stroketools import diff5pt, strokesVelocity, strokesDiffsBtwPts
-        if auto_interpolate_if_needed:
-            strok1, strok2 = _interp(strok1, strok2)
-
-#         strok1diff = np.concatenate([diff5pt(strok1[:,0])[-1,None], diff5pt(strok1[:,1])], axis=1)
-#         strok2diff = np.concatenate([diff5pt(strok2[:,0]), diff5pt(strok2[:,1])], axis=1)
-
-        # downsample stroks by interpolation
-        # want about equivalent to fs = [NO, ignore]
-
-        a = strokesDiffsBtwPts([strok1])[0]
-        b = strokesDiffsBtwPts([strok2])[0]
-
-        # chop of last and first few pts...
-        nremove = 3
-        a = a[nremove:-nremove-2]
-        b = b[nremove:-nremove-2]
-
-        dist = _distStrokTimeptsMatched(a, b, min_strok_dur=None, vec_over_spatial_ratio=(1,0))
-
-        if debug:
-            plt.figure()
-            plt.plot(a[:,0], label="1x")
-            plt.plot(a[:,1], label="1y")
-            plt.plot(b[:,0], label="2x")
-            plt.plot(b[:,1], label="2y")
-            plt.legend()
-            plt.title(d)
-    #         plt.plot(np.diff(strok1), label="x")
-    elif ver=="dtw_vels":
-        from pythonlib.tools.timeseriestools import DTW
-        from pythonlib.tools.stroketools import strokesVelocity
-
-        assert False, "not tested fully yet!"
-        assert fs is not None, "to do vels, need to know sample rate"
-
-
-        # print(strok1)
-
-        # Convert strok to vels
-        vel1, vel2 = strokesVelocity([strok1, strok2], fs)[0]
-
-        # print("DFADAS")
-        # print(np.mean(np.abs(vel1)))
-        # print(np.mean(np.abs(vel2)))
-
-        additive_penalty = 0.0025 * (np.mean(np.abs(vel1)) +  np.mean(np.abs(vel2)))
-        # additive_penalty = 0
-        print("DTW: using this additive_penalty: ", additive_penalty)
-        distfun = lambda x,y: np.linalg.norm(x-y)
-        list_dist = []
-        for dim in [0,1]:
-            print("--- DIM:", dim)
-            dist, alignment = DTW(vel1[:,dim], vel2[:,dim], distfun,
-                asymmetric=False, additive_penalty=additive_penalty,
-                plot_alignment=False, plot_table=True)
-
-            # Noramlize distance by longer n
-            # dist_norm = dist/min([len(vel1), len(vel2)])
-            dist_norm = dist/max([len(vel1), len(vel2)])
-            print("dist:", dist)
-            print("dist, normed:", dist_norm)
-            list_dist.append(dist_norm)
-        dist = np.mean(list_dist)
-
-    else:
-        print(ver)
-        assert False
-
-    # # Sanity check
-    # assert strok1 == strok1_input
-    # assert strok2 == strok2_input
-
-    return dist
 
 def _distPtsTimePtsMatched(pts1, pts2):
     """
@@ -491,5 +397,142 @@ def modHausdorffDistance(itemA, itemB, dims=(0,1), ver1="mean", ver2="max", D=No
     else:
         return dist
 
+def euclidian(dat1, dat2):
+    """
+
+    :param dat1: (n,d)
+    :param dat2: (m,d)
+    :return:
+    """
+
+    return np.linalg.norm(np.mean(dat1, axis=0) - np.mean(dat2, axis=0))
 
 
+def euclidian_unbiased_debug(n1=10, n2=10, dim=10):
+    """
+    Quick test and plots of euclidian, comparing unbioased vs, biased.
+
+    :return:
+    """
+
+    # Test unbiased estimator.
+    fig, ax = plt.subplots()
+
+    # ADDS = list(range(10))
+    ADDS = np.linspace(0, 0.4, 100)
+    ds = []
+    ds_unb = []
+    for ADD in ADDS:
+        dat1 = np.random.rand(n1, dim) - 0.5
+        dat2 = np.random.rand(n2, dim) - 0.5 + ADD
+        # dat2[:,0] = dat2[:,0] + ADD
+
+        d_unbias = euclidian_unbiased(dat1, dat2)
+        d = np.linalg.norm(np.mean(dat1,0)-np.mean(dat2, 0))
+
+        ds.append(d)
+        ds_unb.append(d_unbias)
+
+    ax.plot(ADDS, ds, "ok", label="biased")
+    ax.plot(ADDS, ds_unb, "xr", label="unbiased")
+    # ax.axis("square")
+    ax.axhline(0)
+    ax.legend()
+
+def euclidian_unbiased(dat1, dat2):
+    """ Get euclidian distance betweeen centroides of
+    two multivar datasets. Unbiased, port of:
+    https://github.com/fwillett/cvVectorStats/blob/master/cvDistance.m
+    Here, does a few times, shuffling in between, to get better estimate.
+    Checked that this helsp a bit, but not much.
+    PARAMS:
+    - dat1, dat2, (N,d) where N is num datapts and d is dim, they can
+    have different N.
+    NOTE: ioncreasing n_iter doesnt help much (even 20)
+    """
+
+    if dat1.shape[0]<2 or dat2.shape[0]<2:
+        print(dat1.shape)
+        print(dat2.shape)
+        assert False
+
+    d = _euclidian_unbiased(dat1, dat2)
+    list_d = [d]
+    dat1_copy = dat1.copy()
+    dat2_copy = dat2.copy()
+    n_iter = min([dat1.shape[0], dat2.shape[0], 3])
+    # n_iter = 40
+    for _ in range(n_iter):
+        # Shuffle
+        np.random.shuffle(dat1_copy)
+        np.random.shuffle(dat2_copy)
+        # dat2_rolled = np.roll(dat2, 5, axis=0)
+
+        d = _euclidian_unbiased(dat1_copy, dat2_copy)
+        list_d.append(d)
+
+    return np.mean(list_d)
+
+def _euclidian_unbiased(dat1, dat2):
+    """ Get euclidian distance betweeen centroides of
+    two multivar datasets. Unbiased, port of:
+    https://github.com/fwillett/cvVectorStats/blob/master/cvDistance.m
+    PARAMS:
+    - dat1, dat2, (N,d) where N is num datapts and d is dim, they can
+    have different N
+    """
+    from pythonlib.tools.statstools import crossval_folds_indices
+
+    # Get cross-validation splits.
+    n1 = dat1.shape[0]
+    n2 = dat2.shape[0]
+    nfold = min([n1, n2, 5])
+    # nfold = None
+    list_inds_1, list_inds_2 = crossval_folds_indices(n1, n2, nfold=nfold)
+
+    # Compute squared dist (norm of vector difference) for each split.
+    inds1_all = np.arange(n1, dtype=int)
+    inds2_all = np.arange(n2, dtype=int)
+    squared_dist_estimates = []
+    for inds1, inds2 in zip(list_inds_1, list_inds_2):
+
+        # Vector between centroids of "small set"
+        d_small = np.mean(dat1[inds1, :], axis=0) - np.mean(dat2[inds2, :], axis=0)
+
+        # Vector between centroids of remaining data (big set)
+        inds1_big = np.setdiff1d(inds1_all, inds1)
+        inds2_big = np.setdiff1d(inds2_all, inds2)
+        d_big = np.mean(dat1[inds1_big, :], axis=0) - np.mean(dat2[inds2_big, :], axis=0)
+
+        # get squared eucl dist.
+        squared_dist_estimates.append(np.dot(d_small, d_big))
+
+    # Convert to eucl distance
+    squared_dist = np.mean(squared_dist_estimates)
+    euclidian_dist = np.sign(squared_dist) * (np.abs(squared_dist)**0.5)
+
+    return euclidian_dist
+
+def dist_vs_self_split_compute_agg(X, dist_func, nfold=10):
+    """ Given a data dsitribiton X (ndat, ndim), compute
+    its distance to itself after splitting in half, doing multiple
+    times and averaging. As a "positive control" for the noisiness
+    of the data, when used in distnace matrix calucaitons.
+    PARAMS:
+    - nfold, int, n times to rnadomly split data and average over resultgs.
+    - dist_func, func(X,X), ie takes in X-like data and returns scalar.
+    RETURNS:
+        - d, scalar distance between splits of X. Expectation
+        0 given large dataset.
+    """
+    from sklearn.model_selection import train_test_split, ShuffleSplit
+
+    # Iterate. split compute, avg (5 fold?)
+    rs = ShuffleSplit(n_splits=nfold, train_size=0.5)
+    ds = []
+    for i, (train_index, test_index) in enumerate(rs.split(X)):
+        X1 = X[train_index, :]
+        X2 = X[test_index, :]
+        d = dist_func(X1, X2)
+        ds.append(d)
+    return np.mean(ds)

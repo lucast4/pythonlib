@@ -202,6 +202,15 @@ def applyFunctionToAllRows(df, F, newcolname="newcol", replace=True, just_return
     # applyFunctionToAllRows(Ppsorted, F, newcolname="test")
 
 
+    # NOTE: should actually jsut do this:
+    # def F(x):
+    #     sh = x["seqc_0_shape"]
+    #     if sh in map_shape_to_shapelump.keys():
+    #         return map_shape_to_shapelump[sh]
+    #     else:
+    #         return sh
+    # SP.DfScalar["test"] = SP.DfScalar.apply(F, axis=1)
+
     # # OLD VERSION FAILS IF INDICES PASSED IN ARE NOT IN ORDER, 
     # # becuase of the reset_index()
     # dfnewcol = df.apply(lambda x: F(x), axis=1).reset_index()
@@ -1559,7 +1568,7 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
     groupinner="index", groupouter_levels=None, new_col_name="grp",
-    return_df=False):
+    return_df=False, sort_keys=True):
     """ Does in sequence (i) append_col_with_grp_index (ii) grouping_get_inner_items.
     Useful if e./g., you want to get all indices for each of the levels in a combo group,
     where the group is defined by conjunction of two columns.
@@ -1568,6 +1577,7 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     will append this to df. this acts as the groupouter.
     - groupinner, see grouping_get_inner_items
     - groupouter_levels, see grouping_get_inner_items
+    - sort_keys, sorts keys of groupdict before returning.
     RETURNS:
     - groupdict, see grouping_get_inner_items
     NOTE: does NOT modify df.
@@ -1582,6 +1592,11 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
 
     # 2) Get dict of eaceh group
     groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
+
+    if sort_keys:
+        keys = list(groupdict.keys())
+        keys = sort_mixed_type(keys)
+        groupdict = {k:groupdict[k] for k in keys}
 
     if return_df:
         return groupdict, df
@@ -1747,19 +1762,26 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     to match the list of labels (rowvalues) for a column
     PARAMS:
     - colname, str, the column in which to compare lables
-    - rowvalues, list of items (labels) to comapre. the 
+    - rowvalues, list of items (labels) to comapre. the
     returned df will have rows exactly matching these values.
     - prune_to_value_exist_in_df, if true, then keeps only rowvalues that exist in df.
     otherwise: error if rowvalues contains value not in df
     NOTE: if a value occurs in multipel rows, it extracts all rows.
     - assert_exactly_one_each, if True, then each val in rowvalues
     matches exactly one and only one. Can be confident that the OUTPUT
-    matches input rowvalues exactly
+    matches input rowvalues exactly.
+    NOTES:
+        - enforces that even item in rowvalues must exist in df[col]
+        - returns in order of rowvalues.
+        - assert_exactly_one_each==False, then gets all rows in
+        df which match an item in rowbales.
     EG:
     df = pd.DataFrame({'A': [5,6,3,4, 5], 'B': [1,2,3,5, 6]})
     list_of_values = [3, 6, 5]
     df.set_index('A').loc[list_of_values].reset_index()
-    """ 
+    NOTE: Tested that this is optimal speed... ie time is taken almost all by the line
+        dfout = df.set_index(colname).loc[rowvalues] # sets index to values of colname,
+    """
 
     # print(rowvalues)
     # print(len(rowvalues))
@@ -1771,25 +1793,51 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     assert isinstance(rowvalues, list)
 
     # the dataframe must have each value in rowvalues.
-    tmp = df[colname].tolist()
-    for v in rowvalues:
-        if v not in tmp:
-            print(v)
-            print("this item in rowvalues does not exist in df[colname]")
-            raise NotEnoughDataException
+    if False:
+        # This is now checked below. quicer
+        tmp = df[colname].tolist()
+        for v in rowvalues:
+            if v not in tmp:
+                print(v)
+                print("this item in rowvalues does not exist in df[colname]")
+                raise NotEnoughDataException
 
-    dfout = df.set_index(colname).loc[rowvalues]
+    try:
+        dfout = df.set_index(colname).loc[rowvalues] # sets index to values of colname,
+        # and then pulls out rows that have indices in rowvalues, in order they appear in
+        # rowvalues (first sort) and then by order they are in df (second sort).
+    except KeyError as err:
+        # Then a row value doesnt exist in df
+        tmp = df.index.tolist()
+        for v in rowvalues:
+            if v not in tmp:
+                print(v)
+                print("this item in rowvalues does not exist in df[colname]")
+        raise NotEnoughDataException
+
     if reset_index:
         dfout = dfout.reset_index()
 
     if assert_exactly_one_each:
         if not dfout[colname].tolist() == rowvalues:
+            print("---")
+            print(len(dfout))
+            print(len(rowvalues))
+            print("---")
+
+            print("values in dfout that are not in rowvalues:")
+            print(dfout[~dfout[colname].isin(rowvalues)][colname])
+
+            print("values in rowvalues that are not in dfout:")
+            print([v for v in rowvalues if v not in dfout[colname].tolist()])
+
             # figure out whihc one is incorrect
+            print("Values that are misalined.")
             for i, val in enumerate(rowvalues):
                 if dfout.iloc[i][colname] != val:
                     print(i, val)
                     print(dfout.iloc[i][colname])
-                    assert False
+            assert False
         # # Check that each row of the outcome has rowval mathing the input.
         # for i, val in enumerate(rowvalues):
         #     if not dfout.iloc[i][colname] == val:
@@ -2624,12 +2672,21 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     vs. other lev
     PARAMS:
     - var_manip, str, name of col whose values will define x and y coord.
-    - x_lev_manip, str, categorical level of var_manip, values define x values
+    - x_lev_manip, str, categorical level of var_manip, each value defines the x-values
+    that will be averaged for each datapt.
     - var_subplot, str, categorical col, levels dedefine subplots. if List, then groups
     first so that each subploit is conjucntion of these vars
     - var_value, str, column, whose values/sdcore to plot.
     - var_datapt, str, categorical col, each lev is separate datapt. (note: will assert that max 1 datapt per).
     - ignore_if_sum_values, this useful to exclude any
+    EXAMPLE:
+    - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
+    separate subplot for each epoch_orig...
+    dfres, fig = plot_45scatter_means_flexible_grouping(dfthis, "microstim_epoch_code",
+                                                "off", y_lev_manip=stim_epoch,
+                                                var_value="strokes_clust_score", var_subplot="epoch_orig,
+                                                var_datapt="character",
+                                   plot_text=plot_label, alpha=0.2, SIZE=4)
 
     """
     from scipy.stats import sem
@@ -2706,7 +2763,6 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
             labels = list_date
         else:
             labels = None
-
         try:
             plotScatter45(xs, ys, ax, labels=labels, marker="o",
                           x_errors=x_errors, y_errors=y_errors, alpha=alpha)
@@ -2719,17 +2775,26 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         list_xs.extend(xs)
         list_ys.extend(ys)
 
+        ax.axhline(0, color="k", alpha=0.25)
+        ax.axvline(0, color="k", alpha=0.25)
+
     if shareaxes:
         MIN = min(list_xs + list_ys)
         MAX = max(list_xs + list_ys)
         # print(MIN, MAX)
+        # assert False
         delt = 0.1*(MAX-MIN)
-        if True:
+
+        # if False:
+        #     MIN = 0
+        # else:
+        MIN = MIN - delt
+        MAX = MAX + delt
+
+        if MIN>0:
             # force min to be 0
             MIN = 0
-        else:
-            MIN = MIN - delt
-        MAX = MAX + delt
+
         for ax in axes.flatten():
             ax.set_xlim(MIN, MAX)
             ax.set_ylim(MIN, MAX)

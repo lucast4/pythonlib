@@ -494,6 +494,8 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     y_errors = y_errors.copy()
     y_errors[np.isnan(y_errors)] = 0
 
+    # if np.all(x==0.)
+    # print(x, y, y_errors, x_errors)
     # ax.plot(x, y, marker, alpha=alpha)
     ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha)
 

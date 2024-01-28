@@ -2697,7 +2697,7 @@ class Dataset(object):
             # ver="modeling", 
             ver = None,
             params=None, apply_to_recenter="all",
-            frac_touched_min = None,
+            frac_touched_min = None, ft_decim_min=None, shortness_min=None,
             nmin_trials = None,
             DRY_RUN=False):
         """ save common preprocess pipelines by name
@@ -2761,6 +2761,14 @@ class Dataset(object):
 
             ######## MODE 2 - LIST OF PARAMS
             else:
+
+                if frac_touched_min is not None and "frac_touched_min" not in params:
+                    params.append("frac_touched_min")
+                if ft_decim_min is not None and "ft_decim_min" not in params:
+                    params.append("ft_decim_min")
+                if shortness_min is not None and "shortness_min" not in params:
+                    params.append("shortness_min")
+
                 # log what preprocesses done.
                 self.Log_preprocessGood.extend(params)
 
@@ -2842,12 +2850,23 @@ class Dataset(object):
                         assert False, "this old version uses the matlab rule. change this to use success_binary_parses"
                         bm = self.grammarmatlab_wrapper_extract()
                         self.Dat = self.Dat[(bm.Dat["success_binary_quick"]==True)].reset_index(drop=True)
-                    elif p=="frac_touched_ok":
+                    elif p in ["frac_touched_ok", "frac_touched_min"]:
                         assert frac_touched_min is not None
                         # To see what is good value, try:
                         # plot_trials_after_slicing_within_range_values(self, colname, minval, 
                         # maxval, plot_hist=True):
-                        self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
+                        if "frac_touched" in self.Dat.columns:
+                            self.Dat = self.Dat[self.Dat["frac_touched"]>=frac_touched_min]
+                        else:
+                            print("SKIPPING, frac_touched doesnt exist in self.Dat")
+                    elif p == "ft_decim_min":
+                        assert ft_decim_min is not None
+                        self.Dat = self.Dat[self.Dat["ft_decim"]>=ft_decim_min]
+
+                    elif p == "shortness_min":
+                        assert shortness_min is not None
+                        self.Dat = self.Dat[self.Dat["shortness"]>=shortness_min]
+
                     elif p=="fixed_tasks_only":
                         self.Dat = self.Dat[self.Dat["random_task"]==False]
                     elif p=="remove_repeated_trials":
@@ -8112,16 +8131,18 @@ class Dataset(object):
         """ Extract new columns into self.Dat, for each trial noting sequence 
         context inforamtion ,such as n strokes, shape of first stroke, etc
         """
-        from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
-        preprocess_dataset(self)
 
-        # also extract gridsize
-        list_gridsize = []
-        for i in range(len(self.Dat)):
-            T = self.Dat.iloc[i]["Task"]
-            list_gridsize.append(T.PlanDat["TaskGridClass"]["Gridname"])
-        self.Dat["gridsize"] = list_gridsize
-        print("Appended columns gridsize!")
+        if "seqc_0_shape" not in self.Dat.columns:
+            from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
+            preprocess_dataset(self)
+
+            # also extract gridsize
+            list_gridsize = []
+            for i in range(len(self.Dat)):
+                T = self.Dat.iloc[i]["Task"]
+                list_gridsize.append(T.PlanDat["TaskGridClass"]["Gridname"])
+            self.Dat["gridsize"] = list_gridsize
+            print("Appended columns gridsize!")
 
     ################ SAVE
     def make_path_savedir_directory_notebook_for_figures(self, analysis_name):

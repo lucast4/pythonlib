@@ -12,7 +12,7 @@ def check_objects_identical(obj1, obj2, PRINT=False):
             print('obj1',obj1)
             print('obj2',obj2)
         return False
-    elif isinstance(obj1, list):
+    elif isinstance(obj1, (tuple, list)):
         if not len(obj1)==len(obj2):
             if PRINT:
                 print('obj1',obj1)
@@ -41,6 +41,8 @@ def check_objects_identical(obj1, obj2, PRINT=False):
     elif isinstance(obj1, np.ndarray):
         if np.all(np.isnan(obj1)) and np.all(np.isnan(obj2)):
             pass
+        elif not obj1.shape == obj2.shape:
+            return False
         elif not np.all(np.isclose(obj1, obj2)):
             if PRINT:
                 print('obj1',obj1)

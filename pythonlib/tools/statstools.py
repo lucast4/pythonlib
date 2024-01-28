@@ -180,4 +180,85 @@ def plotmod_pvalues(ax, xvals, pvals, pthresh=0.05):
             col = "k"
         ax.text(x, y, f"{p:.2E}", color=col, rotation=45, alpha=0.5)
 
+def crossval_folds_indices(n1, n2, nfold=None):
+    """ Return the indices for partitioning
+    two datasets with size n1 and n2, to obtain
+    crossvalkidated data of nfolds.
+    Written for unbiased euclidian distnace.
+    PARAMS:
+    - n1, n2, int, size of two dataset
+    - nfold, int, how many folds. None to use min of n1 n2
+    RETURNS;
+    - list_inds_1,  list of np ararys of ints, each indices into dataset 1
+    - list_inds_2, same thing, for dataset 2.
+    (Both lists will be len nfold).
+    """
+    inds_on_1, inds_on_2 = _crossval_folds_indices_onsets(n1, n2, nfold)
+
+    def _convert_indson_to_inds(inds_on, n):
+        list_inds = []
+        for i, on in enumerate(inds_on):
+            if i+1==len(inds_on):
+                # last onset, it ends at the end of the data
+                list_inds.append(np.arange(on, n))
+            else:
+                list_inds.append(np.arange(on, inds_on[i+1]))
+        return list_inds
+
+    list_inds_1 = _convert_indson_to_inds(inds_on_1, n1)
+    list_inds_2 = _convert_indson_to_inds(inds_on_2, n2)
+
+    assert len(list_inds_1)==len(list_inds_2)
+
+    return list_inds_1, list_inds_2
+
+
+
+def _crossval_folds_indices_onsets(n1, n2, nfold=None):
+    """ Return the indices for subsampling
+    two datasets with size n1 and n2, to obtain
+    crossvalkidated data of nfolds.
+    Written for unbiased euclidian distnace.
+    PARAMS:
+    - n1, n2, int, size of two dataset
+    - nfold, int, how many folds. None to use min of n1 n2
+    RETURNS;
+    - inds_on_1, np arary ints, indices into dataset
+    1 which are the onset boundaries of partitions.
+    - inds_on_2, same thing, for dataset 2.
+    """
+
+    if nfold is None:
+        nfold = min([n1, n2])
+
+    if True:
+        assert (nfold<=n1) and (nfold<=n2)
+    else:
+        if nfold>n1:
+            nfold = n1
+        if nfold>n2:
+            nfold = n2
+
+    if n1==n2==nfold:
+        # sample each pt one by one.
+        return np.arange(n1), np.arange(n2)
+    elif n1==n2:
+        # partition both datasets the same way
+        inds_on = np.floor(np.linspace(0, n1+1, nfold+1)).astype(int)[:-1]
+        return inds_on, inds_on
+    else:
+        # split into subsets
+        n_larger = max([n1, n2])
+        n_smaller = min([n1, n2])
+
+        inds_on_larger = np.floor(np.linspace(0, n_larger+1, nfold+1)).astype(int)[:-1]
+        inds_on_smaller = np.floor(np.linspace(0, n_smaller+1, nfold+1)).astype(int)[:-1]
+
+        if n1>n2:
+            return inds_on_larger, inds_on_smaller
+        elif n1<n2:
+            return inds_on_smaller, inds_on_larger
+        else:
+            assert False
+
 
