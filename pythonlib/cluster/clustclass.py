@@ -857,6 +857,9 @@ class Clusters(object):
             # -1 --> 1
             # +1 --> 0
             D = 1-(np.corrcoef(X) + 1)/2
+        elif version_distance=="_pearson_raw":
+            # Pearson, without any transformation.
+            D = np.corrcoef(X)
         elif version_distance=="angle":
             # angle betwen vectors, ie., cos(angle) = dot(a,b)/(norm(a) * norm(b))
             # recaled so that 0 means parallel (angle 0) and 1 means ortho (angle 90).
@@ -908,7 +911,8 @@ class Clusters(object):
         return False
 
     def rsa_plot_heatmap(self, sort_order=None, diverge=False,
-                         X=None, ax=None, mask=None, zlims=None):
+                         X=None, ax=None, mask=None, zlims=None,
+                         SIZE=12):
         """ Plot the input data, which can be raw data or sim mat, anything that
         is 2d heatmapt, and has each row being a conjunction of levels of
         grouping vars, plots in useful way for inspecting relationships between levels,
@@ -922,6 +926,8 @@ class Clusters(object):
         If dist mat: Appkuies to row and columns.
         """
         from pythonlib.tools.listtools import argsort_list_of_tuples
+
+        assert X is None, "not coded"
 
         if zlims is None:
             zlims = (None, None)
@@ -956,7 +962,8 @@ class Clusters(object):
         # Plot
         fig, X, labels_col, labels_row, ax = self._plot_heatmap_data(X, labels_rows,
                                                                    labels_cols, diverge=diverge,
-                                                                     ax=ax, zlims=zlims)
+                                                                     ax=ax, zlims=zlims,
+                                                                     SIZE=SIZE)
         return fig, ax
 
 
@@ -1214,7 +1221,7 @@ class Clusters(object):
 
             return MASKS, fig, axes
         else:
-            return MASKS
+            return MASKS, None, None
 
     def rsa_distmat_score_same_diff(self, var_effect, vars_all,
                                     vars_test_invariance_over_dict,
@@ -1254,7 +1261,7 @@ class Clusters(object):
 
         # Generate masks.
         vars_context = [var for var in vars_all if not var==var_effect]
-        MASKS = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
+        MASKS, _, _ = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
                                       diffctxt_vars_same, diffctxt_vars_diff, PLOT=PLOT)
 
 
@@ -1323,7 +1330,7 @@ class Clusters(object):
             savefig(fig, plot_and_save_mask_path)
             plt.close("all")
         else:
-            MASKS = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
+            MASKS, _, _ = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
                               diffctxt_vars_same, diffctxt_vars_diff, PLOT=False)
 
         ######## COMPUTE correaltions
