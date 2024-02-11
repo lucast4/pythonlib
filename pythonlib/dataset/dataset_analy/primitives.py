@@ -182,6 +182,7 @@ def plot_all(D, SAVEDIR, animal, expt):
         strokes2 = _pick_single_strok(strokes2)
 
     #     return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian")
+        assert False, "replace with distStrokWrapper"
         return distanceStroksMustBePaired(strokes1, strokes2, ver="euclidian_diffs")
 
 

@@ -1,5 +1,6 @@
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 def stackTrials(Xlist, ver="append_nan"):
     """ 
@@ -141,9 +142,8 @@ def getSampleTimesteps(T, fs, force_T=False):
         t = np.linspace(0, Tnew, nsamp+1)
         return t
 
-
-
-def DTW(x, y, distfun, asymmetric=True):
+def DTW(x, y, distfun, asymmetric=True, plot_alignment=False,
+    additive_penalty=0, return_table=False, plot_table=False):
     """ dynamic time warping between two arrays x and y. can be 
     lists, or np arrays (e.g T x 2 vs. N x 2). 
     - distfun is distance function that takes in two elements and 
@@ -160,11 +160,21 @@ def DTW(x, y, distfun, asymmetric=True):
     # def distance(n, m):
     #     return (n - m)**2
 
+    def costfun(i,j):
+        cost = distfun(x[i], y[j])
+        # Penalize for i and j being different (i.e., warping oto much)
+        cost+= additive_penalty*np.abs(i-j)
+        # cost+= additive_penalty*(i-j)**2
+        return cost
+
+
     def minimumCostPath(i,j):
         # figures out the cost of the shortest path which uses the first i members of x and the first j members of y
         if (i,j) in table: return table[(i,j)]
 
-        cost = distfun(x[i], y[j])
+        # cost = distfun(x[i], y[j])
+        cost = costfun(i,j)
+
         if i > 0 and j > 0:        
             cost += min(minimumCostPath(i - 1, j - 1),
                         minimumCostPath(i - 1, j),
@@ -183,7 +193,8 @@ def DTW(x, y, distfun, asymmetric=True):
         from math import isclose 
 
         thisCost = table[(i,j)]
-        residual = thisCost - distfun(x[i], y[j])
+        # residual = thisCost - distfun(x[i], y[j]) # the accumultaed cost to get to (i, j), starting from (0,0)
+        residual = thisCost - costfun(i,j) # the accumultaed cost to get to (i, j), starting from (0,0)
 
         if i > 0 and j > 0 and isclose(table[(i - 1, j - 1)], residual):
             alignment = optimalAlignment(i - 1, j - 1)
@@ -224,7 +235,33 @@ def DTW(x, y, distfun, asymmetric=True):
         distmin = table[(m, n)]
         alignment = optimalAlignment(m, n)
 
-    return distmin, alignment
+    if plot_alignment:
+        fig, ax = plt.subplots()
+        alignment_arr = np.array(alignment)
+        ax.plot(alignment_arr[:,0], alignment_arr[:,1], "-ok")
+        ax.set_title("alignment")    
+
+    if plot_table:
+        # convert Table to array
+        xs = [k[0] for k in table.keys()]
+        ys = [k[1] for k in table.keys()]
+        table_arr = np.empty((max(xs), max(ys)))
+        for i in range(max(xs)):
+            for j in range(max(ys)):
+                table_arr[i,j] = table[(i, j)]
+                
+        fig, ax = plt.subplots()
+        im = ax.imshow(table_arr.T)
+        fig.colorbar(im, orientation='vertical')
+
+        # overlay best alignment
+        for a in alignment:
+            ax.plot(a[0], a[1], 'ok')
+
+    if return_table:
+        return distmin, alignment, table
+    else:
+        return distmin, alignment
 
 
 def getChangePoints(vals):
@@ -245,7 +282,7 @@ def getChangePoints(vals):
 def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up", 
     expected_direction_of_first_crossing=None, 
     force_single_output=False, ploton=False, take_first_crossing_in_expected_direction=False,
-    force_must_find_crossings=False, take_first_crossing=False):
+    force_must_find_crossings=False, take_first_crossing=False, REFRACT_DUR = 0.008):
     """ Get threshold crossings
     PARAMS;
     - times, array of timebin values
@@ -287,7 +324,7 @@ def get_threshold_crossings(times, vals, threshold, cross_dir_to_take="up",
     # if remove, must remove two... (or else lose the down, up, down, structure)
     # i;.e. if t1, t2 t3 and t2-t1 and t3-t2 are small, then removes t2 and t3. 
     # this happens if there quick zigzag adding an up and down crossing. rare.
-    REFRACT_DUR = 0.008 # crossings closer than this in time are considered erorrs.
+    # REFRACT_DUR = 0.008 # crossings closer than this in time are considered erorrs.
     inds_keep, inds_remove =remove_values_refrac_period(timecross, REFRACT_DUR)
     if len(inds_remove)%2==0:
         # then remove them

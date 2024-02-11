@@ -157,10 +157,11 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
         strokes = DS.Dat.iloc[inds]["strok"].tolist()
 
         # get pairwise dtw of strokes vel
-        distancever = "euclidian_diffs"
-        simmat = DS._cluster_compute_sim_matrix(strokes, strokes, distancever = distancever)
+        # distancever = "euclidian_diffs"
+        distancever = "dtw_vels_2d"
+        simmat = DS._cluster_compute_sim_matrix(strokes, strokes, distancever=distancever)
         if PLOT:
-            Cl = DS._cluster_compute_sim_matrix(strokes, strokes, distancever = distancever, return_as_Clusters=True)
+            Cl = DS._cluster_compute_sim_matrix(strokes, strokes, distancever=distancever, return_as_Clusters=True)
             Cl.plot_heatmap_data(SIZE=5);
 
             # plot 

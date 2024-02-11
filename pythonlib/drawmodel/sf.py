@@ -27,137 +27,124 @@ from ..dataset.dataset_strokes import DatStrokes
 
 #     # in all cases take one-Minus (not divide by max)
 
-def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever, 
-        rescale_strokes_ver=None, npts_space=50, DEBUG=False):
-    """ [gOOD] Wrapper to compute sim matrix between strokes_data and strokes_bsais
-    PARAMS:
-    - strokes_data, list of np array
-    - strokes_basis, same, but the basis set
-    RETURNS:
-    - similarity_matrix, siimlarity matrix, (ndat, nbasis).
-    NOTE:
-    - range_norm were decided by inspecting histrograms of distances using DEBUG, for 
-    Pancho charstrokeseqpan1b (around Jan 14th 2023). Erring on side of range_norm[1] being
-    lower, to increase the dynamic range for the strokes with low distance (high sim).
-    """
-    from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2, strokes_alignonset, strokes_centerize
-    from .strokedists import distMatrixStrok
-
-    if DEBUG:
-        print("TO debug, switch debug ona nd off by hand for each one below...")
-        assert False
-    
-    assert len(strokes_data)>0
-    assert len(strokes_basis)>0
-
-    ############# Extract data
-    assert not isinstance(strokes_data, pd.core.frame.DataFrame), "deprecated. use list strokes"
-
-    ############# Preprocess
-    if rescale_strokes_ver=="stretch_to_1":
-        assert False, "confirm this doesnt mutate strokes_data, then remove this assert"
-        strokes_data = [rescaleStrokes([s])[0] for s in strokes_data]
-        strokes_basis = [rescaleStrokes([s])[0] for s in strokes_basis] 
-    else:
-        assert rescale_strokes_ver is None, "which?"
-
-    # interpolate
-    if distancever in ["euclidian", "euclidian_diffs", "euclidian_both"]:
-        # then need to be same length
-        def _all_same_length(stroklist):
-            """Returns True if all strok in stroklist are same npts
-            otherwise False"""
-            list_n = [len(strok) for strok in stroklist]
-            if len(set(list_n))==1:
-                return True
-            else:
-                return False
-
-        if _all_same_length(strokes_data + strokes_basis):
-            pass
-        else:
-            strokes_data = strokesInterpolate2(strokes_data, N=["npts", npts_space], base="space")
-            strokes_basis = strokesInterpolate2(strokes_basis, N=["npts", npts_space], base="space")
-
-    ### Cmpute sim matrix
-    if distancever == "euclidian":
-        # Pt by pt euclidian, after aligning by onsets.
-
-        # align to onset
-        strokes_data = strokes_alignonset(strokes_data)
-        strokes_basis = strokes_alignonset(strokes_basis)
-
-        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
-                                   convert_to_similarity=True, distancever=distancever,
-                                   normalize_by_range=True, similarity_method="squared_one_minus",
-                                   # range_norm = [0, 260], DEBUG=False)
-                                   range_norm = [0, 220], DEBUG=False)
-
-    elif distancever == "euclidian_diffs":
-        # PT by pt euclidian of the differences between pts at adajcent timepoints
-
-        # align to onset
-        strokes_data = strokes_alignonset(strokes_data)
-        strokes_basis = strokes_alignonset(strokes_basis)
-
-        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
-                                   convert_to_similarity=True, distancever=distancever,
-                                   normalize_by_range=True, similarity_method="squared_one_minus",
-                                   # range_norm = [0, 19], DEBUG=False)
-                                   range_norm = [0, 16], DEBUG=False)
-
-    elif distancever == "hausdorff_alignedonset":
-        # Hausdorff (spatial), after aligning strokes by their onsets
-
-        # align to onset
-        strokes_data = strokes_alignonset(strokes_data)
-        strokes_basis = strokes_alignonset(strokes_basis)
-
-        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
-                           convert_to_similarity=True, distancever="hausdorff",
-                           similarity_method="squared_one_minus", 
-                           normalize_by_range=True, range_norm=[2,145],
-                           # normalize_by_range=True, range_norm=[2,170],
-                           DEBUG=False)
-
-    elif distancever == "hausdorff_centered":
-        # Hausdorff (spatial), after centering strokes in space
-
-        # center
-        strokes_data = strokes_centerize(strokes_data)
-        strokes_basis = strokes_centerize(strokes_basis)
-
-        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
-                           convert_to_similarity=True, distancever="hausdorff",
-                           similarity_method="squared_one_minus", 
-                           # normalize_by_range=True, range_norm=[2,170],
-                           normalize_by_range=True, range_norm=[2,145],
-                           DEBUG=False)
-
-    elif distancever == "hausdorff_max":
-        # Hausdorff (spatial), after centering strokes in space
-
-        # center
-        strokes_data = strokes_centerize(strokes_data)
-        strokes_basis = strokes_centerize(strokes_basis)
-
-        similarity_matrix = distMatrixStrok(strokes_data, strokes_basis,
-                           convert_to_similarity=True, distancever="hausdorff_max",
-                           similarity_method="squared_one_minus", 
-                           # normalize_by_range=True, range_norm=[2,170],
-                           normalize_by_range=True, range_norm=[2,145],
-                           DEBUG=False)
-
-
-    else:
-        print(distancever)
-        assert False
-
-    return similarity_matrix
+# def computeSimMatrixGivenBasis(strokes_data, strokes_basis, distancever,
+#         rescale_strokes_ver=None, npts_space=50, DEBUG=False):
+#     """ [gOOD] Wrapper to compute sim matrix between strokes_data and strokes_bsais
+#     PARAMS:
+#     - strokes_data, list of np array
+#     - strokes_basis, same, but the basis set
+#     RETURNS:
+#     - similarity_matrix, siimlarity matrix, (ndat, nbasis).
+#     NOTE:
+#     - range_norm were decided by inspecting histrograms of distances using DEBUG, for
+#     Pancho charstrokeseqpan1b (around Jan 14th 2023). Erring on side of range_norm[1] being
+#     lower, to increase the dynamic range for the strokes with low distance (high sim).
+#     """
+#     from pythonlib.tools.stroketools import rescaleStrokes, strokesInterpolate2, strokes_alignonset, strokes_centerize
+#     from .strokedists import distStrokWrapperMult
+#
+#     if DEBUG:
+#         print("TO debug, switch debug ona nd off by hand for each one below...")
+#         assert False
+#
+#     assert len(strokes_data)>0
+#     assert len(strokes_basis)>0
+#
+#     ############# Extract data
+#     assert not isinstance(strokes_data, pd.core.frame.DataFrame), "deprecated. use list strokes"
+#
+#     ############# Preprocess
+#     if rescale_strokes_ver=="stretch_to_1":
+#         assert False, "confirm this doesnt mutate strokes_data, then remove this assert"
+#         strokes_data = [rescaleStrokes([s])[0] for s in strokes_data]
+#         strokes_basis = [rescaleStrokes([s])[0] for s in strokes_basis]
+#     else:
+#         assert rescale_strokes_ver is None, "which?"
+#
+#     # interpolate
+#     if distancever in ["euclidian", "euclidian_diffs", "euclidian_both"]:
+#         # then need to be same length
+#         def _all_same_length(stroklist):
+#             """Returns True if all strok in stroklist are same npts
+#             otherwise False"""
+#             list_n = [len(strok) for strok in stroklist]
+#             if len(set(list_n))==1:
+#                 return True
+#             else:
+#                 return False
+#
+#         if _all_same_length(strokes_data + strokes_basis):
+#             pass
+#         else:
+#             strokes_data = strokesInterpolate2(strokes_data, N=["npts", npts_space], base="space")
+#             strokes_basis = strokesInterpolate2(strokes_basis, N=["npts", npts_space], base="space")
+#
+#     ### Cmpute sim matrix
+#     if distancever == "euclidian":
+#         # Pt by pt euclidian, after aligning by onsets.
+#
+#         # align to onset
+#         strokes_data = strokes_alignonset(strokes_data)
+#         strokes_basis = strokes_alignonset(strokes_basis)
+#
+#         similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
+#                                                  convert_to_similarity=True, similarity_method="squared_one_minus",
+#                                                  normalize_by_range=True, range_norm=[0, 220], DEBUG=False)
+#
+#     elif distancever == "euclidian_diffs":
+#         # PT by pt euclidian of the differences between pts at adajcent timepoints
+#
+#         # align to onset
+#         strokes_data = strokes_alignonset(strokes_data)
+#         strokes_basis = strokes_alignonset(strokes_basis)
+#
+#         similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
+#                                                  convert_to_similarity=True, similarity_method="squared_one_minus",
+#                                                  normalize_by_range=True, range_norm=[0, 16], DEBUG=False)
+#
+#     elif distancever == "hausdorff_alignedonset":
+#         # Hausdorff (spatial), after aligning strokes by their onsets
+#
+#         # align to onset
+#         strokes_data = strokes_alignonset(strokes_data)
+#         strokes_basis = strokes_alignonset(strokes_basis)
+#
+#         similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff",
+#                                                  convert_to_similarity=True, similarity_method="squared_one_minus",
+#                                                  normalize_by_range=True, range_norm=[2, 145], DEBUG=False)
+#
+#     elif distancever == "hausdorff_centered":
+#         # Hausdorff (spatial), after centering strokes in space
+#
+#         # center
+#         strokes_data = strokes_centerize(strokes_data)
+#         strokes_basis = strokes_centerize(strokes_basis)
+#
+#         similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff",
+#                                                  convert_to_similarity=True, similarity_method="squared_one_minus",
+#                                                  normalize_by_range=True, range_norm=[2, 145], DEBUG=False)
+#
+#     elif distancever == "hausdorff_max":
+#         # Hausdorff (spatial), after centering strokes in space
+#
+#         # center
+#         strokes_data = strokes_centerize(strokes_data)
+#         strokes_basis = strokes_centerize(strokes_basis)
+#
+#         similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff_max",
+#                                                  convert_to_similarity=True, similarity_method="squared_one_minus",
+#                                                  normalize_by_range=True, range_norm=[2, 145], DEBUG=False)
+#
+#
+#     else:
+#         print(distancever)
+#         assert False
+#
+#     return similarity_matrix
 
 
 def computeSimMatrix(SF, rescale_strokes_ver="idxs_stroklist_dat", 
-        distancever="euclidian_diffs", npts_space=50, Nbasis=300):
+        distancever="euclidian_diffs", npts_space=70, Nbasis=300):
     """ Get distance matrix, entire dataset, with random instances chosen for basis
     PARAMS:
     """

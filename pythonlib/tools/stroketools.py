@@ -4,7 +4,7 @@ and each element in a list being a stroke.
 """
 import numpy as np
 from pythonlib.drawmodel.features import *
-from pythonlib.drawmodel.strokedists import distanceDTW, distanceBetweenStrokes
+from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
 
@@ -21,21 +21,24 @@ def strokesInterpolate(strokes, N, uniform=False, Nver="numpts"):
     fake timesteps from 0 --> 1
     OBSOLETE - use strokesInterpolate2 isbntead, since is more flexible 
     in deciding how to interpllate."""
-    strokes_new = []
-    for s in strokes:
-        if uniform:
-            t_old = np.linspace(0,1, s.shape[0])
-            t_new = np.linspace(0,1, N)
-        else:
-            t_old = s[:,2]
-            t_new = np.linspace(t_old[0], t_old[-1], num=N)
-        s_new = np.concatenate([
-                        np.interp(t_new, t_old, s[:,0]).reshape(-1,1), 
-                        np.interp(t_new, t_old, s[:,1]).reshape(-1,1), 
-                        t_new.reshape(-1,1)], 
-                        axis=1)
-        strokes_new.append(s_new)
-    return strokes_new
+
+    return strokesInterpolate2(strokes, ["npts", N])
+
+    # strokes_new = []
+    # for s in strokes:
+    #     if uniform:
+    #         t_old = np.linspace(0,1, s.shape[0])
+    #         t_new = np.linspace(0,1, N)
+    #     else:
+    #         t_old = s[:,2]
+    #         t_new = np.linspace(t_old[0], t_old[-1], num=N)
+    #     s_new = np.concatenate([
+    #                     np.interp(t_new, t_old, s[:,0]).reshape(-1,1),
+    #                     np.interp(t_new, t_old, s[:,1]).reshape(-1,1),
+    #                     t_new.reshape(-1,1)],
+    #                     axis=1)
+    #     strokes_new.append(s_new)
+    # return strokes_new
 
 def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=False):
         """ 
@@ -51,6 +54,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         -- index, then replaces time with index before interpolating.
         -- time, then just uses time
         -- space, then uses cum dist.
+        --> useful if you want to interpolate evenly in a given dimension...
         RETURNS:
         - returns a copy
         NOTE:
@@ -62,12 +66,12 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         strokes_interp = []
 
         for strok in strokes:
-            
+            strok = strok.copy()
+
             if base=="index":
-                strok = strok.copy()
                 strok[:,2] = np.arange(len(strok))
             elif base=="space":
-                strok = strok.copy()
+                t_orig_for_space = strok[:,2]
                 strok = convertTimeCoord([strok], ver="dist")[0]
             else:
                 assert base=="time"
@@ -100,8 +104,13 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                     # assert False
                 elif N[0]=="input_times":
                     tnew = N[1] # (m,) array
-                    assert max(tnew)<=max(t), "interpolation timepoints must be within the data"
-                    assert min(tnew)>=min(t), "interpolation timepoints must be within the data"
+                    try:
+                        assert max(tnew)<=max(t), "interpolation timepoints must be within the data"
+                        assert min(tnew)>=min(t), "interpolation timepoints must be within the data"
+                    except Exception as err:
+                        print(t)
+                        print(tnew)
+                        raise err
                     COMPUTE_TNEW=False
                 else:
                     print(N)
@@ -122,6 +131,14 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                         plt.plot(t, strok[:,0], '-ok');
                         plt.plot(tnew, f(tnew), '-or');
 
+            # Replace in units of time
+            HACK = False # To replace with units approximately time.
+            if HACK and base=="space":
+                t_time = np.linspace(t_orig_for_space[0], t_orig_for_space[-1], nnew)
+                print(strokinterp.shape)
+                print(strokinterp[:5,:])
+                print(t_time[:5])
+                strokinterp[:,2] = t_time
             strokes_interp.append(strokinterp)
 
         # If new length is 0, replace with previous endpoints.
@@ -522,6 +539,8 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
     # Prep variables.
     strokes = [x.copy() for x in strokes]
     sample_rate = fs
+    del fs
+
     if DEBUG:
         ploton=True
 
@@ -559,15 +578,18 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
         if ploton:
             ax = axes.flatten()[0]
             ax.set_title(f'stroke (xy) before and after fitlter ({fs_new/2}hz) (fsorig={sample_rate})')
-            for strok in strokes:
+            for i_s, strok in enumerate(strokes):
                 for i in [0,1]:
-                    ax.plot(strok[:,2], strok[:,i], label=f"dim{i}")
-        strokes = strokesFilter(strokes, Wn = [None, fs_new/2], 
-            fs = sample_rate)
+                    ax.plot(strok[:,2], strok[:,i], label=f"s_{i_s}-dim{i}")
+
+        if sample_rate>fs_new*2:
+            strokes = strokesFilter(strokes, Wn = [None, fs_new/2],
+                fs = sample_rate)
         if ploton:
-            for strok in strokes:
+            for i_s, strok in enumerate(strokes):
                 for i in [0,1]:
-                    ax.plot(strok[:,2], strok[:,i], label=f"dim{i}")
+                    ax.plot(strok[:,2], strok[:,i],  label=f"s_{i_s}-dim{i}")
+            ax.legend()
 
     # ----- 1) downsample, this leads to better estimate for velocity.
     # before downsasmple, save vec length for later upsample
@@ -667,11 +689,12 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
                 # Skip, since tHis doesnt do much! Tested.
                 # assert False, "this doesnt help.. comment out if you really want to do it."
                 import matplotlib.pyplot as plt
-                if DEBUG:
-                    strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate,
-                                                 plotprepost_xy=ploton, plotprepost=ploton)[0]
-                else:
-                    strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate)[0]
+                if sample_rate/2>lowpass_freq:
+                    if DEBUG:
+                        strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate,
+                                                     plotprepost_xy=ploton, plotprepost=ploton)[0]
+                    else:
+                        strok_vels_t = strokesFilter([strok_vels_t], Wn = [None, lowpass_freq], fs = sample_rate)[0]
 
                 if ploton:
                     ax = axes.flatten()[2]
@@ -686,14 +709,13 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
             # 2) speed
             strok_speeds = np.linalg.norm(strok_vels_t[:,[0,1]], axis=1).reshape(-1,1) # (N,1)
             strok_speeds_t = np.concatenate([strok_speeds, strok_speeds, strok_vels_t[:,2][:,None]], axis=1)
-            # assert False
 
             if False:
                 # vels have already been interpoalted...
                 strok_speeds_t = strokesInterpolate2([strok_speeds_t],  N=["npts", n_orig], kind=kind_upsample)[0]
 
             assert np.all(strok_speeds_t[:,0]>=0), "sanity check, this used to happen sometimes if filter"
-            assert not np.any(np.isnan(strok_speeds_t[:,0])), "sanity check, this used to happen sometimes if filter"
+            assert not np.any(np.isnan(strok_speeds_t[:,0])), "sanity check, NAN, this used to happen sometimes if filter"
 
             if ploton:
                 ax = axes.flatten()[4]
@@ -773,8 +795,8 @@ def convertTimeCoord(strokes_in, ver="dist", fakegapdist=0.):
     """ methods to convert the time column to other things.
     Will return copy of strokes and leave input strokes unchanged.
     - ver:
-    -- "dist", is distance traveled in pixels, starting from 
-    onset of first stroke. will assume zero dist from stroke 
+    -- "dist", is distance traveled in pixels at each pt,
+    starting from onset of first stroke. will assume zero dist from stroke
     offsets to next strok onsets, unless enter a gap dist for
     fakegapdist (in pix)
     
@@ -1057,12 +1079,20 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
     at center.
     """
     if ver=="stretch_to_1":
+        # First, make all pts positive
+        strokes = strokes_make_all_pts_positive(strokes)
         pos = np.concatenate(strokes)
         maxval = np.max(np.abs(pos[:,[0,1]]))
         if strokes[0].shape[1]==3:
             strokes = [np.concatenate((s[:,[0,1]]/maxval, s[:,2].reshape(-1,1)), axis=1) for s in strokes]
         else:
             strokes = [s[:,[0,1]]/maxval for s in strokes]
+    elif ver=="stretch_to_1_diag":
+        # Keeps aspect ratio, stregth so that longest diagonal is 1
+        w, h, d = strokes_bounding_box_dimensions(strokes)
+        strokes = strokes_make_all_pts_positive(strokes)
+        for s in strokes:
+            s[:, [0,1]] = s[:, [0,1]]/d
     else:
         print(ver)
         assert False, "not codede"
@@ -1174,6 +1204,19 @@ def convertFlatToStrokes(strokes, flatvec):
     return tmp
 
 
+def strokes_bounding_box_dimensions(strokes):
+    """ Return (w, h, d)
+    """
+    [minx, maxx, miny, maxy] = strokes_bounding_box(strokes)
+    w = maxx-minx
+    h = maxy-miny
+    d = (w**2 + h**2)**0.5
+    return w, h, d
+
+def strokes_bounding_box(strokes):
+    """ returns [minx, maxx, miny, maxy] that
+    bounds strokes"""
+    return getMinMaxVals(strokes)
 
 def getMinMaxVals(strokes):
     """ get min and max pts across all pts in storkes
@@ -1183,7 +1226,6 @@ def getMinMaxVals(strokes):
     yvals = np.concatenate([s[:,1] for s in strokes])
     
     return [np.min(xvals), np.max(xvals), np.min(yvals), np.max(yvals)]
-    
 
 
 def check_strokes_in_temporal_order(strokes):
@@ -1823,7 +1865,8 @@ def timepoint_extract_features_continuous(strokes, twind, list_feature=["mean_xy
     return features
         
 
-def strokes_average(strokes, Ninterp=50, center_at_onset=False):
+def strokes_average(strokes, Ninterp=70, center_at_onset=False,
+                    ver="mean"):
     """ Get average of trajs in strokes, after linearly interpolating them
     to all be the same
     PARAMS:
@@ -1832,18 +1875,23 @@ def strokes_average(strokes, Ninterp=50, center_at_onset=False):
     - strokes, list of np array
     = strokes_stacked, np array, shape (n strokes, Ninterp, 3)
     """
-    from pythonlib.tools.stroketools import strokesInterpolate
 
     if center_at_onset:
-        def _center(strok):
-            return strok - strok[0,:]
-        strokes = [_center(s) for s in strokes]
+        strokes = strokes_alignonset(strokes)
+        # def _center(strok):
+        #     return strok - strok[0,:]
+        # strokes = [_center(s) for s in strokes]
 
     # interpolate each strokes (using actual time)
     # stack the arrays and then take average
     stroklist_interp = strokesInterpolate(strokes, Ninterp)    
     strokes_stacked = np.stack(stroklist_interp)
-    strok_mean = np.mean(strokes_stacked, axis=0)
+    if ver=="mean":
+        strok_mean = np.mean(strokes_stacked, axis=0)
+    elif ver=="median":
+        strok_mean = np.median(strokes_stacked, axis=0)
+    else:
+        assert False
     return strok_mean, strokes_stacked
 
 
@@ -1868,4 +1916,23 @@ def strokes_alignonset(strokes):
     def F(strok):
         return strok - strok[0,:]
     strokes = [F(strok) for strok in strokes]
+    return strokes
+
+def strokes_make_all_pts_positive(strokes):
+    """ Does this by translation.
+    Does this by finding global xmin and ymin,
+    then subtracting (xmin, ymin) from all strokes
+    RETURNS:
+        - translated copy of strokes
+    """
+    # FInd minimum
+    pts = np.concatenate(strokes)
+    xmin = np.min(pts[:,0])
+    ymin = np.min(pts[:,1])
+    ptmin = (xmin, ymin)
+
+    strokes = [s.copy() for s in strokes]
+    for s in strokes:
+        s[:,[0,1]] = s[:,[0,1]] - ptmin
+
     return strokes

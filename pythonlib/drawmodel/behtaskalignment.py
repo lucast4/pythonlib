@@ -36,7 +36,7 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
     - idxs, idxs for sorting columns. smat_sorted = smat[:, idxs]
     """
     from pythonlib.tools.stroketools import distanceDTW
-    from pythonlib.drawmodel.strokedists import distMatrixStrok
+    from pythonlib.drawmodel.strokedists import distStrokWrapperMult
 
     # 1) Get similarity matrix using the inputed strokes order (for now)
     if False:
@@ -48,15 +48,14 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
 
     # Decision: Use symmetric version. 
     # - use this for deciding sorting
-    smat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=True, 
-                           ploton=ploton, distancever = distancever_forsorting, 
-                           similarity_method=similarity_method, 
-                           distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+    smat = distStrokWrapperMult(strokes_beh, strokes_task, distancever=distancever_forsorting,
+                                convert_to_similarity=True, ploton=ploton, asymmetric_ver= None,
+                                similarity_method=similarity_method, cap_dist=cap_dist)  # (nbeh, ntask)
     # - use this for actual output similarity scores.
-    smat_output = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=True, 
-                           ploton=ploton, distancever = distancever_foroutput, 
-                           similarity_method=similarity_method, 
-                           distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+    smat_output = distStrokWrapperMult(strokes_beh, strokes_task, distancever=distancever_foroutput,
+                                       convert_to_similarity=True, ploton=ploton,
+                                       asymmetric_ver= None, similarity_method=similarity_method,
+                                       cap_dist=cap_dist)  # (nbeh, ntask)
 
     # smat_output = smat
     # 2) any normalizations?
@@ -101,17 +100,17 @@ def aligned_distance_matrix(strokes_beh, strokes_task, ploton=False,
         # use hausdorff_means, because want to really care about the shape match.
         from pythonlib.tools.stroketools import splitStrokesOneTime
         strokes_beh_split = splitStrokesOneTime(strokes_beh, num=2, reduce_num_if_smallstroke=True)
-        smat_split = distMatrixStrok(strokes_beh_split, strokes_task, convert_to_similarity=True, 
-                       ploton=ploton, distancever = "hausdorff_means", 
-                       similarity_method=similarity_method, 
-                       distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+        smat_split = distStrokWrapperMult(strokes_beh_split, strokes_task, distancever="hausdorff_means",
+                                          convert_to_similarity=True, ploton=ploton,
+                                          asymmetric_ver=None,
+                                          similarity_method=similarity_method, cap_dist=cap_dist)  # (nbeh, ntask)
         smat_split, max_sims_split, max_inds_split = _process_smat(smat_split, use_cap=False)
 
         strokes_beh_split = splitStrokesOneTime(strokes_beh, num=4, reduce_num_if_smallstroke=True)
-        smat_split = distMatrixStrok(strokes_beh_split, strokes_task, convert_to_similarity=True, 
-                       ploton=ploton, distancever = "hausdorff_means", 
-                       similarity_method=similarity_method, 
-                       distStrok_kwargs={"asymmetric_ver":None}, cap_dist=cap_dist) # (nbeh, ntask)
+        smat_split = distStrokWrapperMult(strokes_beh_split, strokes_task, distancever="hausdorff_means",
+                                          convert_to_similarity=True, ploton=ploton,
+                                          asymmetric_ver=None,
+                                          similarity_method=similarity_method, cap_dist=cap_dist)  # (nbeh, ntask)
         smat_split2, max_sims_split2, max_inds_split2 = _process_smat(smat_split, use_cap=False)
 
         # list_to_sort = [(i, s, i2, s2, indtaskstroke) for indtaskstroke, (i, s, i2, s2) 
@@ -182,7 +181,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
     sort_stroknum, then the strok num is arbitrary, so will sort so that the earliest touched 
     is 0, and so on.
     """
-    from pythonlib.drawmodel.strokedists import distMatrixStrok
+    from pythonlib.drawmodel.strokedists import distStrokWrapperMult
     from pythonlib.tools.stroketools import splitTraj
     
     if len(strokes_beh)==0:
@@ -212,7 +211,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
         Note, will only use num strokes equal to the min num strokes across strokes beh and task.
         """
         from scipy.optimize import linear_sum_assignment as lsa
-        dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
+        dmat = distStrokWrapperMult(strokes_beh, strokes_task, convert_to_similarity=False)
         inds1, inds2 = lsa(dmat)
         stroke_assignments = inds2.tolist()
         return stroke_assignments
@@ -278,7 +277,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
                 strok = strokes_beh[i]
 
                 # 1) dist from this beh strok to all task strokes
-                dmat1 = distMatrixStrok([strok], strokes_task, convert_to_similarity=False) # (1, ntask)
+                dmat1 = distStrokWrapperMult([strok], strokes_task, convert_to_similarity=False)  # (1, ntask)
                 inds_mindist = np.argsort(dmat1).squeeze()[:2] # [3,4] means task strokinds 3, then 4, are closest to this beh stroke.
 
                 # 2) ratio of min to 2nd min
@@ -297,7 +296,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
                 # 3) Split this beh stroke. if both of the 2 mindist task strokes now are closer to eitehr of the new split storkes, then 
                 # infer that this beh stroke is spanning those 2 task strokes.
                 list_stroksplit = splitTraj(strok)
-                dmat2 = distMatrixStrok(list_stroksplit, strokes_task, convert_to_similarity=False)
+                dmat2 = distStrokWrapperMult(list_stroksplit, strokes_task, convert_to_similarity=False)
                 dmat2_mins = np.min(dmat2, axis=0) # TODO: ideally use both beh strokes...
                 inds = dmat2_mins<dmat1.squeeze()
                 inds = inds.squeeze() # [True, False, ...]
@@ -308,7 +307,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
 
                     tmp = [strokes_task[i] for i in inds_task]
                     tmp = [np.concatenate(tmp)]
-                    dthis = distMatrixStrok([strok], tmp, convert_to_similarity=False)
+                    dthis = distStrokWrapperMult([strok], tmp, convert_to_similarity=False)
                     list_distances.append(dthis[0])
 
                 else:
@@ -326,7 +325,7 @@ def assignStrokenumFromTask(strokes_beh, strokes_task, ver="pt_pt", sort_stroknu
                     print(list_indstask_mindist)
         else:
             # 1) Simple, for each beh stroke get min dist task stroke.
-            dmat = distMatrixStrok(strokes_beh, strokes_task, convert_to_similarity=False)
+            dmat = distStrokWrapperMult(strokes_beh, strokes_task, convert_to_similarity=False)
             inds_task_mindist = np.argmin(dmat, axis=1)
             list_indstask_mindist = [[i] for i in inds_task_mindist]
             list_distances = np.min(dmat, axis=1)
