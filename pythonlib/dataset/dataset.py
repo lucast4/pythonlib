@@ -1618,6 +1618,13 @@ class Dataset(object):
         RETURNS:
         - throws error if fails
         """
+
+        # VERY HACKY, skip days with "align to onset"
+        if self.animals(True)[0]=="Pancho" and int(self.dates(True)[0])==220719:
+            print("SKIPPING taskclass_tokens_sanitycheck_gridloc_identical!")
+            print(".. because this day aligned to onset, so gridloc:loc mapping is not same across tasks")
+            return
+
         # Sanity check that all grids are aligned across tasks
         map_gridloc_loc_x = {}
         map_gridloc_loc_y = {}
@@ -1633,7 +1640,11 @@ class Dataset(object):
                     ygrid = tok["gridloc"][1]
                     
                     if xgrid in map_gridloc_loc_x.keys():
-                        assert np.isclose(map_gridloc_loc_x[xgrid], x)
+                        if not np.isclose(map_gridloc_loc_x[xgrid], x):
+                            print(map_gridloc_loc_x)
+                            print(xgrid)
+                            print(x)
+                            assert False, "maye this is becuase tasks are aligned at onset? same gridloc, but different center"
                     else:
                         map_gridloc_loc_x[xgrid] = x
                         
@@ -2088,7 +2099,38 @@ class Dataset(object):
         self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
         return GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
-    def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True): 
+    def cleanup_wrapper(self, ver):
+        """ To organize notes on cleanup inup
+        REcipes for cleaning up , since htey are all over the place.
+
+        HIERARCHY of steps:
+        concat
+        -- cleanup()
+
+        load_dataset_helper
+            _main_loader
+                -- cleanup()
+                    _cleanup_cut_strokes_whose_onset_is_at_fixation
+                    _cleanup_remove_strokes_that_are_actually_fixation_or_done
+                -- _check_consistency
+        -- load_tasks_helper
+            -- _cleanup_using_tasks
+        -- _cleanup_preprocess_each_time_load_dataset
+        """
+
+        if ver == "no_pruning_strokes":
+            # Do everything, except no pruning of strokes.
+            self._cleanup(remove_dot_strokes=False, remove_online_abort=False,
+                          remove_bad_strokes=False)
+            self._check_consistency()
+            self._cleanup_preprocess_each_time_load_dataset()
+        else:
+            print(ver)
+            assert False
+
+
+    def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True,
+                 remove_bad_strokes=True):
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
         - This should be run BEFORE preprocessDat, or else this might overwrite changes 
@@ -2169,11 +2211,12 @@ class Dataset(object):
             self.Dat["strokes_beh"] = strokeslist
 
         # Cleanup strokes concatted with fixation touch.
-        self._cleanup_cut_strokes_whose_onset_is_at_fixation(PLOT_DISTROS=True, 
-            PLOT_EXAMPLE_BAD_TRIALS=True)
+        if remove_bad_strokes:
+            self._cleanup_cut_strokes_whose_onset_is_at_fixation(PLOT_DISTROS=True,
+                PLOT_EXAMPLE_BAD_TRIALS=True)
 
-        self._cleanup_remove_strokes_that_are_actually_fixation_or_done(
-            PLOT_EXAMPLE_BAD_TRIALS=True)
+            self._cleanup_remove_strokes_that_are_actually_fixation_or_done(
+                PLOT_EXAMPLE_BAD_TRIALS=True)
 
         # Remove rows that now have no strokes
         inds_bad = [i for i,strokes in enumerate(self.Dat["strokes_beh"]) if len(strokes)==0]
@@ -2521,7 +2564,7 @@ class Dataset(object):
                 continue
 
             # FIND NEW STROKE ONSET
-            inds_peak, inds_trough = find_peaks_troughs(strok_speed, DEBUG)
+            inds_peak, inds_trough, _ = find_peaks_troughs(strok_speed, DEBUG)
 
             # first peak that is greater than max 
             inds_high = np.where(strok_speed>max_speed_allowed)[0].tolist()
@@ -2968,6 +3011,12 @@ class Dataset(object):
             assert len(x)==1, " multipel aniaml"
         return x
 
+    def dates(self, force_single=False):
+        x = sorted(list(set(self.Dat["date"])))
+        if force_single:
+            assert len(x)==1, " multipel dates"
+        return x
+
     def expts(self, force_single=False):
         """ returns list of expts
         """
@@ -3158,7 +3207,7 @@ class Dataset(object):
 
 
     def interpolateStrokesSpatial(self, strokes_ver ="strokes_beh", pts_or_interval = "pts",
-        npts=50, interval=10):
+        npts=70, interval=10):
         """ interpolate in space, to npts pts
         (uniformly sampled)
         INPUTS:
@@ -3826,7 +3875,7 @@ class Dataset(object):
 
 
     def sf_embedding_bysimilarity(self, rescale_strokes_ver = "stretch_to_1", distancever = "euclidian_diffs",
-        npts_space = 50, Nbasis = 300, saveon=True):
+        npts_space = 70, Nbasis = 300, saveon=True):
         """copmputs embedding of strokes in similarity space (ie defined by basis set of strokes). basis set
         picked randomly
         INPUT:
