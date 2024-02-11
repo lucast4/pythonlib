@@ -999,6 +999,20 @@ class Clusters(object):
             else:
                 return 1.
 
+        def dist_func_for_dist_angle(x, y):
+            """ x and y are dist angle, which is tuple
+            (distcum bin, angle bin). For dist does ordinal, and
+            angle, does circular ordinal
+            """
+
+            assert isinstance(x, tuple)
+            assert isinstance(y, tuple)
+            assert len(x)==len(y)
+            dist = 0
+            dist += np.abs(x[0] - y[0])
+            dist += dist_angle_hack(x[1], y[1])
+            return dist
+
         def dist_angle_hack(x,y, DEBUG=False):
             """ hacky, for binned angles between 1 and 4, returns
             the positive distnace between them, allwoing for rotation, so that
@@ -1058,6 +1072,16 @@ class Clusters(object):
             # 1,2,3. ... further apart.
             return np.abs(x-y)
 
+        def dist_func_tuple_of_ordinal(x, y):
+            # compares each item in tuple, then sums up across items.
+            assert isinstance(x, tuple)
+            assert isinstance(y, tuple)
+            assert len(x)==len(y)
+            dist = 0
+            for xx, yy in zip(x, y):
+                dist += np.abs(xx-yy)
+            return dist
+
         ########## FIRST, USE HAND-ENTERED
         # Construct all string names
         vars_angle_binned = []
@@ -1071,14 +1095,24 @@ class Clusters(object):
             for b in ["_dist"]:
                 for c in ["", "_binned"]:
                     tmp.append(f"{a}{b}{c}")
-        vars_categorical = ["shape_oriented",
+        vars_categorical = ["shape_oriented", "shape",
                             "gridloc", "seqc_0_loc",
                             "stroke_index_semantic",
                             "CTXT_loc_next", "CTXT_shape_next"] + tmp
 
+        # Ordinal
+        vars_ordinal = ["stroke_index", "stroke_index_fromlast",
+                        "stroke_index_fromlast_tskstks", "gridloc_x",
+                        "FEAT_num_strokes_task", "FEAT_num_strokes_beh",
+                        "FEAT_num_strokes_task"]
+
+        vars_tuple_of_ordinal = [] # each index in the tuple, use as ordinal.
+
         if var=="velmean_thbin":
             print("... using distfunc: dist_angle_hack_8")
             return dist_angle_hack_8
+        elif var=="dist_angle":
+            return dist_func_for_dist_angle
         if var in vars_categorical:
             # Categorical
             print("... using distfunc: dist_func_cat")
@@ -1087,11 +1121,13 @@ class Clusters(object):
             # Hacky, angles binned
             print("... using distfunc: vars_angle_binned")
             return dist_angle_hack
-        elif var in ["stroke_index", "stroke_index_fromlast", "stroke_index_fromlast_tskstks",
-                     "gridloc_x", "FEAT_num_strokes_task", "FEAT_num_strokes_beh", "FEAT_num_strokes_task"]:
+        elif var in vars_ordinal:
             # ordinal
             print("... using distfunc: dist_func_ord")
             return dist_func_ord
+        elif var in vars_tuple_of_ordinal:
+            print("... using distfunc: dist_func_ord")
+            return dist_func_tuple_of_ordinal
         else:
             pass # Try to get it auto below.
         ########## SECOND, TRY AUTOMATICALLY, based on type.
@@ -1145,7 +1181,8 @@ class Clusters(object):
 
     def rsa_mask_context_helper(self, var_effect, vars_context, diff_context_ver,
                                 diffctxt_vars_same=None, diffctxt_vars_diff=None,
-                                PLOT=False, mask_out_nans=True):
+                                PLOT=False, mask_out_nans=True,
+                                path_for_save_print_lab_each_mask=None):
         """
         Generate boolean mask to focus on "context" defined by relations for given variables.
         You can use this mask to then slice out data for analyses (restricting data).
@@ -1190,6 +1227,7 @@ class Clusters(object):
             assert isinstance(diffctxt_vars_diff, (tuple, list))
             assert isinstance(diffctxt_vars_same, (tuple, list))
             assert len(diffctxt_vars_diff)>0
+            assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
             ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
                 vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff)
         else:
@@ -1210,14 +1248,29 @@ class Clusters(object):
         }
 
         if PLOT:
-            titles = ["ma_context_same", "ma_context_diff", "ma_effect_same", "ma_effect_diff"]
-            fig, axes = plt.subplots(2,2, figsize=(15, 18))
-            for ax, ma, tit in zip(axes.flatten(),
-                                   [ma_context_same, ma_context_diff, ma_effect_same, ma_effect_diff],
-                                   titles):
+
+            # get each conjunction mask
+            ma_effD_ctxtD = ma_effect_diff & ma_context_diff
+            ma_effD_ctxtS = ma_effect_diff & ma_context_same
+            ma_effS_ctxtD = ma_effect_same & ma_context_diff
+            ma_effS_ctxtS = ma_effect_same & ma_context_same
+
+            titles = ["ma_context_same", "ma_context_diff", "ma_effect_same", "ma_effect_diff",
+                      "ma_effD_ctxtD", "ma_effD_ctxtS", "ma_effS_ctxtD", "ma_effS_ctxtS"]
+            masks = [ma_context_same, ma_context_diff, ma_effect_same, ma_effect_diff,
+                     ma_effD_ctxtD, ma_effD_ctxtS, ma_effS_ctxtD, ma_effS_ctxtS]
+
+            fig, axes = plt.subplots(3,3, figsize=(25, 28))
+            for ax, ma, tit in zip(axes.flatten(), masks, titles):
                 # Plot the actual mask
                 self.rsa_matindex_plot_bool_mask(ma, ax)
-                ax.set_title(tit, color="r")
+
+                # add the mean score in this mask to title.
+                sc = np.mean(self.Xinput[ma])
+                ax.set_title(f"{tit}-mean_{sc:.2f}", color="r")
+
+                # also print the mask
+                self.rsa_matindex_print_mask_labels(ma, path_for_save_print_lab_each_mask)
 
             return MASKS, fig, axes
         else:
@@ -1326,10 +1379,16 @@ class Clusters(object):
         vars_context = [var for var in vars_all if not var==var_effect]
         if plot_and_save_mask_path is not None:
             MASKS, fig, axes = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
-                                          diffctxt_vars_same, diffctxt_vars_diff, PLOT=True)
+                                          diffctxt_vars_same, diffctxt_vars_diff, PLOT=True,
+                                            path_for_save_print_lab_each_mask=f"{plot_and_save_mask_path}.txt")
             savefig(fig, plot_and_save_mask_path)
             plt.close("all")
         else:
+            # print(var_effect)
+            # print(vars_context)
+            # print(diff_context_ver)
+            # print(diffctxt_vars_same)
+            # print(diffctxt_vars_diff)
             MASKS, _, _ = self.rsa_mask_context_helper(var_effect, vars_context, diff_context_ver,
                               diffctxt_vars_same, diffctxt_vars_diff, PLOT=False)
 
@@ -1347,7 +1406,7 @@ class Clusters(object):
 
             if np.isnan(c):
                 print(Cltheor.Params["var"])
-                print(vec1, vec2)
+                print("Data: ", vec1, vec2)
                 print(c)
                 print(var_effect, vars_context, diff_context_ver, diffctxt_vars_same, diffctxt_vars_diff)
                 print("Locations of nans:")
@@ -1517,6 +1576,24 @@ class Clusters(object):
             assert False
         return label_vars
 
+    def rsa_matindex_print_mask_labels(self, ma, savepath):
+        """ Print the lab (row and col) for each True in this mask"""
+
+        # Given a mask, print all the pairs
+        inds = self._rsa_matindex_convert_from_mask_to_rowcol(ma)
+        strings =[]
+        strings.append(" -- ".join(self.rsa_labels_extract_label_vars()))
+        for i, indthis in enumerate(inds):
+            row = indthis[0]
+            col = indthis[1]
+            labrow = self.Labels[row]
+            labcol = self.LabelsCols[col]
+            strings.append(f"{i} -- ({row},{col}) -- {labrow} -- {labcol}")
+
+        from pythonlib.tools.expttools import writeStringsToFile
+        # path = "/tmp/test.txt"
+        writeStringsToFile(savepath, strings)
+
     def rsa_matindex_plot_bool_mask(self, ma, ax=None):
         """ Plot this boolean mask
         """
@@ -1554,6 +1631,13 @@ class Clusters(object):
         else:
             k=0
         return np.triu(np.ones_like(self.Xinput, dtype=bool), k=k)
+
+    def _rsa_matindex_convert_from_mask_to_rowcol(self, ma):
+        """ Return the indices using this mask, in paired list of rows, cols,
+        RETURNS:
+            - array, (npts, 2), each index into row, col.
+        """
+        return np.argwhere(ma)
 
     def _rsa_matindex_convert_to_mask_rect(self, rows, cols):
         """ Given row and column indices to slice (into rectangle), return
