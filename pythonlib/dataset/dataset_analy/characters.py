@@ -2,6 +2,7 @@
 Extract prims, gets their dsitance to basis sets of strokes, 
 plots.
 """
+import os
 
 import pandas as pd
 import numpy as np
@@ -17,7 +18,8 @@ def debug_eyeball_distance_metric_goodness(D):
     """
         
     # collect data, once for each distance metric
-    list_distance_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset"]
+    # list_distance_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset"]
+    list_distance_ver = ["dtw_vels_2d"]
     LIST_RES = []
     for dist in list_distance_ver:
         RES = generate_data(D, list_distance_ver=[dist])
@@ -30,19 +32,22 @@ def debug_eyeball_distance_metric_goodness(D):
 
 
 def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "character",
-    list_distance_ver=None):
+    list_distance_ver=None, suffix=None):
     """
     Full pipeline to generate and plot and save all, for character analysis.
     """
     
     if list_distance_ver is None:
-        list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+        # list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+        list_distance_ver = ["dtw_vels_2d"]
 
     savedir = D.make_savedir_for_analysis_figures("character_strokiness")
-    
+    if suffix is not None:
+        savedir = f"{savedir}/{suffix}"
+
     assert len(D.Dat)>0
 
-    RES = generate_data(D, filter_taskkind=filter_taskkind, 
+    RES = generate_data(D, filter_taskkind=filter_taskkind,
         list_distance_ver=list_distance_ver,
         which_features="beh_motor_sim")
 
@@ -53,13 +58,15 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
         list_strok_basis = RES["list_strok_basis"]
         list_shape_basis = RES["list_shape_basis"]
 
+        if "microstim_epoch_code" in DS.Dataset.Dat.columns:
+            plot_epoch_effects_paired_chars_microstim_wrapper(DS, savedir)
+
         plot_clustering(DS, list_strok_basis, list_shape_basis, savedir)
         plot_learning_and_characters(Dthis, savedir)
 
-
         for MIN_SCORE in [0., 0.7]:
             for sorted_unique_shapes in [True, False]:
-                plot_prim_sequences(RES, Dthis, savedir, MIN_SCORE, 
+                plot_prim_sequences(RES, Dthis, savedir, MIN_SCORE,
                     sorted_unique_shapes)
 
     return RES, savedir
@@ -87,9 +94,13 @@ def generate_data(D, version_trial_or_shapemean="trial",
     """
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
+    assert list_distance_ver is None, "does nothing.."
+
     ### Generate Strokes data
     Dthis = D.copy()
-    DS = DatStrokes(D)
+    Dthis.preprocessGood(params=["no_supervision", "remove_online_abort"])
+
+    DS = DatStrokes(Dthis)
     if ds_clean_methods is not None:
         DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
     # Filter to just "character" tasks
@@ -110,6 +121,28 @@ def generate_data(D, version_trial_or_shapemean="trial",
             ParamsGeneral, dfdat,
             which_features = which_features,
             trial_summary_score_ver=trial_summary_score_ver)
+
+    ###  order the prims by complexity
+    def map_shape_to_complexity(sh):
+        """ Had coded, the complexity of shapes based on how many segments..."""
+        lev0 = ["line"]
+        lev1 = ["Lcentered", "V", "arcdeep"]
+        lev2 = ["squiggle3", "usquare", "zigzagSq", "circle"]
+
+        if any([x in sh for x in lev0]):
+            return 0
+        elif any([x in sh for x in lev1]):
+            return 1
+        if any([x in sh for x in lev2]):
+            return 2
+        else:
+            print(sh)
+            assert False
+
+    complexities = []
+    for i in range(len(DS.Dat)):
+        complexities.append(map_shape_to_complexity(DS.Dat.iloc[i]["clust_sim_max_colname"]))
+    DS.Dat["clust_sim_max_colname_complexity"]=complexities
 
     # Prune dataset
     DS.dataset_prune_to_match_self()
@@ -136,96 +169,6 @@ def generate_data(D, version_trial_or_shapemean="trial",
         plt.hist(Cl.Xinput)
     
     return RES
-
-# def generate_data(D, which_basis_set="standard_17", 
-#         which_shapes="all_basis",
-#         trial_summary_score_ver="clust_sim_max",
-#         list_distance_ver=None, 
-#         plot_score_hist=False, filter_taskkind = None,
-#         ds_clean_methods = None, ds_clean_params = None,
-#         ds_filterdict = None):
-#     """
-#     Initial data generation: extracts strokes, extracts basis
-#     set of strokes to compare them to, does similarity matrix
-#     PARAMS;
-#     - which_basis_set, which_shapes, params for getting bassis set of 
-#     strokes (see within)
-#     - trial_summary_score_ver, str, which statistic to use as the
-#     summary score (i.e, a strokiness score)
-#     RETURNS:
-#     - RES, dict of results.
-#     """
-#     from pythonlib.dataset.dataset_strokes import DatStrokes
-
-#     if list_distance_ver is None:
-#         list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
-
-#     ### Generate Strokes data
-#     DS = DatStrokes(D)
-#     DS.features_generate_dataset_singletrial() # Prepare necessary columns
-
-#     if ds_clean_methods is not None:
-#         DS.clean_preprocess_data(methods=ds_clean_methods, params=ds_clean_params)
-    
-#     # Filter to just "character" tasks
-#     if filter_taskkind:
-#         DS.filter_dataframe({"task_kind":[filter_taskkind]}, True)
-
-#     if ds_filterdict is not None:
-#         DS.filter_dataframe(ds_filterdict, True)
-
-#     Cl, params = DS.clustergood_featurespace_project(DS.Dat, which_space="strok_sim_motor", 
-#         list_strok_basis=None, list_distance_ver=list_distance_ver)
-
-#     ### Extract scalar values summarizing the simialrity scores (e.g,, clustering)
-#     # For each beh stroke, get (i) match and (ii) uniqueness.
-#     sims_max = Cl.Xinput.max(axis=1)
-#     sims_min = Cl.Xinput.min(axis=1)
-#     # sims_mean = Cl.Xinput.mean(axis=1)
-#     sims_concentration = (sims_max - sims_min)/(sims_max + sims_min)
-#     # which shape does it match the best
-#     inds_maxsim = np.argmax(Cl.Xinput, axis=1)
-#     cols_maxsim = [Cl.LabelsCols[i] for i in inds_maxsim]
-
-#     ### Slide back into DS
-#     DS.Dat["clust_sim_max"] = sims_max
-#     DS.Dat["clust_sim_concentration"] = sims_concentration
-#     DS.Dat["clust_sim_max_ind"] = inds_maxsim
-#     DS.Dat["clust_sim_max_colname"] = cols_maxsim
-#     DS.Dat["clust_sim_vec"] = [vec for vec in Cl.Xinput]
-
-#     ### Slide back in to D: Collect scores (avg over strokes for a trial) and put back into D
-#     list_scores = []
-#     for i in range(len(D.Dat)):
-#         # get all rows in DS
-#         tc = D.Dat.iloc[i]["trialcode"]
-#         inds = DS._dataset_index_here_given_trialcode(tc)
-#         # inds = DS._dataset_index_here_given_dataset(i)
-#         if len(inds)>0:
-#             score = np.mean(DS.Dat.iloc[inds][trial_summary_score_ver])
-#         else:
-#             # assert False, "not sure why this D trial has no strokes..."
-#             score = np.nan
-#         list_scores.append(score)
-#     D.Dat["strokes_clust_score"] = list_scores
-
-#     # OUT
-#     RES = {
-#         "which_basis_set":which_basis_set,
-#         "trial_summary_score_ver":trial_summary_score_ver,
-#         "which_shapes":which_shapes,
-#         "DS":DS,
-#         "Cl":Cl,
-#         "list_strok_basis":params["list_strok_basis"],
-#         "list_shape_basis":params["list_shape_basis"],
-#         "list_distance_ver":list_distance_ver
-#     }
-    
-#     if plot_score_hist:        
-#         plt.figure()
-#         plt.hist(Cl.Xinput)
-    
-#     return RES
 
 
 def plot_example_trials(RES, nrand=5, list_inds=None):
@@ -267,6 +210,303 @@ def plot_example_trials(RES, nrand=5, list_inds=None):
         print(ind, int(100*simmax), int(100*simconc), simmaxname)
         print(simmaxind, simvec)
         print(" ")
+
+def _plot_microstim_effect(DS, savedir):
+    """ Plot effect of microstim on characters. Each plot is a scatter, with each char being a single datapt
+    This only works if "microstim_epoch_code" is a column.
+    Saves in (e.g) /gorilla1/analyses/main/character_strokiness/Diego_charstimdiego1_231209/epoch_effects
+    """
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+    import os
+
+    Dthis = DS.Dataset
+
+    if "microstim_epoch_code" not in Dthis.Dat.columns:
+        return
+
+    # Include Other metrics of strokes
+    Dthis.extract_beh_features()
+
+    # First, keep only chars that have both epochs
+    dfthis, dict_dfthis = extract_with_levels_of_conjunction_vars(Dthis.Dat, "epoch", ["character"], n_min=1)
+
+    # Get names of stim epochs.
+    stim_epochs = sorted(dfthis["microstim_epoch_code"].unique().tolist())
+    stim_epochs_on = [e for e in stim_epochs if not e=="off"]
+
+    sdir = f"{savedir}/epoch_effects_charlevel"
+    os.makedirs(sdir, exist_ok=True)
+    print("Saving plots at: ", sdir)
+    for var_outer in ["task_stagecategory", "epoch_orig"]:
+        for feat in ["FEAT_angle_overall", "FEAT_num_strokes_beh", "FEAT_circ", "FEAT_dist", "strokes_clust_score"]:
+            for stim_epoch in stim_epochs_on:
+                for plot_label in [False, True]:
+                    dfres, fig = plot_45scatter_means_flexible_grouping(dfthis, "microstim_epoch_code",
+                                                                        "off", y_lev_manip=stim_epoch,
+                                                                        var_value=feat, var_subplot=var_outer,
+                                                                        var_datapt="character",
+                                                           plot_text=plot_label, alpha=0.2, SIZE=4)
+                    savefig(fig, f"{sdir}/by_{var_outer}-score_{feat}-scatter-vs-{stim_epoch}-label_{plot_label}.pdf")
+
+
+            fig = sns.catplot(data=dfthis, x=var_outer, y=feat, hue="microstim_epoch_code", kind="point", ci=68)
+            path =f"{sdir}/by_{var_outer}-score_{feat}-pointplot.pdf"
+            print(path)
+            savefig(fig, path)
+            plt.close("all")
+
+def plot_epoch_effects_paired_chars_microstim_wrapper(DS, savedir, paired_by_char=True,
+                                    SAMPLE_RANDOM_SINGLE_TRIAL=False):
+    """
+    Plot effects of microstim, where chars have both microstim and no-stim trials.
+    :param DS:
+    :return:
+    """
+    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+    from pythonlib.tools.pandastools import convert_to_1d_dataframe_hist
+    from scipy.stats import entropy
+    from pythonlib.tools.nptools import bin_values_categorical_factorize
+
+
+    # Extract and preprocess
+    DS = DS.copy()
+    DS.dataset_append_column("microstim_epoch_code")
+    Dthis = DS.Dataset
+
+    # Keep only if char has both epochs
+    if paired_by_char:
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+        Dthis.Dat, _ = extract_with_levels_of_conjunction_vars(Dthis.Dat,
+                                                                      "epoch",
+                                                                      ["character"],
+                                                                      n_min=1)
+        # - Prune DS so that chars are matched across epochs.
+        DS.dataset_replace_dataset(Dthis)
+        DS.dataset_prune_self_to_match_dataset()
+
+    ## Pair up chars even more by getting a single trial per char
+    if SAMPLE_RANDOM_SINGLE_TRIAL:
+        from pythonlib.tools.pandastools import extract_trials_spanning_variable, append_col_with_grp_index
+        DS.Dataset.Dat = append_col_with_grp_index(DS.Dataset.Dat, ["character", "epoch"],
+                                                   "char_epoch", use_strings=True,
+                                                   strings_compact=True)
+        inds, chars = DS.Dataset.taskcharacter_extract_examples(var="char_epoch")
+        trialcodes = Dthis.Dat.iloc[inds]["trialcode"].tolist()
+        assert len(set(trialcodes))==len(trialcodes)
+
+        # slice DS by trialcodes
+        from pythonlib.tools.pandastools import slice_by_row_label
+        dfthis = slice_by_row_label(DS.Dat, "trialcode", trialcodes)
+    else:
+        # interim, just use all data
+        dfthis = DS.Dat
+    DS.Dat = dfthis
+
+    #### Datapt = char (Paired chars (scatter))
+    _plot_microstim_effect(DS, savedir)
+
+    #### LOCATION/SHAPE/INDEX distribitions
+    _plot_location_shape_index_distributions(DS, savedir)
+
+    #### MOTOR TIMING
+    _plot_timing(DS, savedir)
+
+    #### OTHER PLOTS
+    sdir = f"{savedir}/epoch_effects_strokelevel"
+    os.makedirs(sdir, exist_ok=True)
+
+    ### PLOTS
+    fig = sns.catplot(data=dfthis, x="clust_sim_max_colname", y="clust_sim_max", hue="epoch", aspect=1.5)
+    rotateLabel(fig)
+    savefig(fig, f"{sdir}/clust_sim_max-vs-clust_sim_max_colname-1.pdf")
+
+    fig = sns.catplot(data=dfthis, x="clust_sim_max_colname", y="clust_sim_max", hue="epoch", aspect=1.5,
+                      kind="point", ci=68)
+    rotateLabel(fig)
+    savefig(fig, f"{sdir}/clust_sim_max-vs-clust_sim_max_colname-2.pdf")
+
+    fig, ax = plt.subplots(1,1)
+    sns.histplot(data=dfthis, x="clust_sim_max", hue="microstim_epoch_code", ax=ax)
+    savefig(fig, f"{sdir}/hist_1d-clust_sim_max.pdf")
+
+    fig = sns.catplot(data=dfthis, x="microstim_epoch_code", y="clust_sim_max", kind="point")
+    rotateLabel(fig)
+    savefig(fig, f"{sdir}/pointplot-clust_sim_max.pdf")
+
+    # Histrograms
+    fig, ax = plt.subplots()
+    epochs = dfthis["epoch"].unique().tolist()
+    for ep in epochs:
+        dftmp = dfthis[dfthis["epoch"]==ep]
+        # shapes, vals, fig, ax = convert_to_1d_dataframe_hist(dftmp, "clust_sim_max_colname", True, ax=ax)
+        convert_to_1d_dataframe_hist(dftmp, "clust_sim_max_colname", True, ax=ax)
+        # # fig.savefig(f"{sdir}/hist_n_matches.pdf")
+    savefig(fig, f"{sdir}/hist_n_matches.pdf")
+
+    for var in ["clust_sim_max_colname", "clust_sim_max_colname_complexity"]:
+        _, fig, _, _ = convert_to_2d_dataframe(dfthis, var, "epoch", True, annotate_heatmap=True)
+        savefig(fig, f"{sdir}/hist_2d-{var}.pdf")
+
+        _, fig, _, _ = convert_to_2d_dataframe(dfthis, var, "epoch", True, norm_method="col_div",
+                                               annotate_heatmap=True)
+        savefig(fig, f"{sdir}/hist_2d-{var}-col_div.pdf")
+
+        fig, ax = plt.subplots(1,1)
+        sns.histplot(data=dfthis, x=var, hue="epoch", stat="probability",
+                     multiple="dodge", ax=ax)
+        from pythonlib.tools.plottools import rotate_x_labels
+        rotate_x_labels(ax, 45)
+        savefig(fig, f"{sdir}/hist_1d-{var}.pdf")
+
+
+    ##### get entropy of shape names as a function of thresholding
+    fig, ax = plt.subplots()
+    threshes = np.linspace(0, 1, 20)
+    for epoch in epochs:
+        entropies = []
+        list_n = []
+        for thresh in threshes:
+
+            # shapes = dfthis[dfthis["clust_sim_max"]>thresh]["clust_sim_max_colname"].factorize()
+            shapes = dfthis[(dfthis["clust_sim_max"]>thresh) & (dfthis["epoch"]==epoch)]["clust_sim_max_colname"].tolist()
+            shapes_int = bin_values_categorical_factorize(shapes)
+            entropies.append(entropy(shapes_int))
+            list_n.append(len(shapes_int))
+
+        ax.plot(threshes, entropies, "-o", label=epoch)
+        print("list n: ", epoch, list_n)
+    ax.legend()
+    ax.set_title("entropy of shape lables")
+    ax.set_ylabel("entropy")
+    ax.set_xlabel("thresh (keep data above this)")
+    savefig(fig, f"{sdir}/entropy-vs-threshold_clust_stim.pdf")
+
+    plt.close("all")
+
+
+def _plot_timing(DS, savedir, microstim_version=True):
+    """
+    Plot effect of micrositm on timing...
+    :param DS:
+    :param savedir:
+    :param microstim_version:
+    :return:
+    """
+    # go cue to each stroke
+    from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline, plot_triallevel_results
+    from pythonlib.dataset.dataset_analy.motortiming import _gapstrokes_preprocess_extract_strokes_gaps
+
+    sdir = f"{savedir}/timing"
+    os.makedirs(sdir, exist_ok=True)
+
+    D = DS.Dataset
+
+    # Dcopy = D.copy()
+    # DS, SAVEDIR, dfres, grouping = preprocess_plot_pipeline(Dcopy, microstim_version=True, PLOT=False)
+
+    # microstim_version = True
+    # Merge the DS from strokes clust with DS from primtiveness.
+    prune_strokes = True
+    VARS_CONTEXT = None
+    DS = _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version, prune_strokes, VARS_CONTEXT)
+
+    # Metric of stroke complexity
+
+    # plot timing where context is simply stroke index (here shape is less relevant)
+    contrast = "epoch"
+    # savedir = "/tmp"
+    if False:
+        context = "context"
+        # context var: stroke index x assigned shape
+        DS.grouping_append_and_return_inner_items(["stroke_index", "clust_sim_max_colname"], new_col_name="context")
+    else:
+        context = "stroke_index"
+    yvars = ["circularity", "time_duration", "velocity", "distcum", "gap_from_prev_dur",
+            "gap_from_prev_dist", "gap_from_prev_vel"]
+    plot_triallevel_results(DS, contrast, sdir, context, yvars)
+
+def _plot_location_shape_index_distributions(DS, savedir):
+    """
+    Plot effect of microstim on distribiotn of shapes,. locations.
+    :param RES:adfasdfasdf
+    :param RES:adfasdfasdf
+    :return:
+    """
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+    from pythonlib.tools.pandastools import applyFunctionToAllRows
+    from pythonlib.tools.plottools import color_make_pallete_categories
+
+    sdir = f"{savedir}/loc_shape_index_distros"
+    os.makedirs(sdir, exist_ok=True)
+
+    # Thresholds, for keeping only decent shapes for this plot.
+    thresh = 0.62
+    max_nstrokes = 4
+
+    # First, threshold it to just those that are good matches.
+    # DS = RES["DS"]
+
+    # get the center of the actual beh stroke
+    def F(x):
+        return x["Stroke"].extract_center()
+    DS.Dat = applyFunctionToAllRows(DS.Dat, F, "beh_center")
+
+    # Colors for each stroke index
+    cmap = color_make_pallete_categories(DS.Dat, "stroke_index", "turbo")
+
+    ### Plot distrubtions for each epoch
+    list_epoch = DS.Dat["epoch"].unique()
+    for epoch in list_epoch:
+        dfthis = DS.Dat[(DS.Dat["clust_sim_max"]>thresh) & (DS.Dat["stroke_index"]<=max_nstrokes) & (DS.Dat["epoch"]==epoch)].reset_index(drop=True)
+        # print(len(DS.Dat))
+        # print(len(dfthis))
+
+        # Combine all shapes, plot location
+        SIZE = 4
+        var = "beh_center"
+        fig, ax = plt.subplots(1,1, figsize=(SIZE, SIZE))
+        # locations
+        locations = np.asarray(dfthis[var].tolist())
+        indexes = np.asarray(dfthis["stroke_index"].tolist())
+        colors = [cmap[i] for i in indexes]
+        ax.scatter(locations[:,0], locations[:,1], c=colors, marker=".", alpha=0.3)
+        savefig(fig, f"{sdir}/locations-ALLDATA-{epoch}.pdf")
+
+        # Separate supblots for each level of (shape) or (stroke_index)
+        for var_subplot in ["clust_sim_max_colname", "stroke_index"]:
+            list_lev = sorted(dfthis[var_subplot].unique())
+            SIZE = 3
+            var = "beh_center"
+            ncols = 4
+            nrows = int(np.ceil(len(list_lev)/ncols))
+            fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
+
+            for sh, ax in zip(list_lev, axes.flatten()):
+                dfthisthis = dfthis[dfthis[var_subplot]==sh]
+                ax.set_title(sh)
+
+                # locations
+                locations =  np.asarray(dfthisthis[var].tolist())
+                indexes = np.asarray(dfthisthis["stroke_index"].tolist())
+                colors = [cmap[i] for i in indexes]
+                ax.scatter(locations[:,0], locations[:,1], c=colors, marker=".", alpha=0.25)
+                # ax.hist2d(locations[:,0], locations[:,1])
+                # ax.plot(locations[:,0], locations[:,1], '.k', alpha=0.2)
+
+            savefig(fig, f"{sdir}/locations-{var_subplot}-{epoch}.pdf")
+
+        # Bias for shapes
+        _, fig, _, _ = convert_to_2d_dataframe(dfthis, "clust_sim_max_colname",
+                                               "stroke_index", True, annotate_heatmap=False)
+        savefig(fig, f"{sdir}/2dheat-shape-stroke_index-NONORM-{epoch}.pdf")
+
+        for norm_method in ["row_div", "col_div"]:
+            _, fig, _, _ = convert_to_2d_dataframe(dfthis, "clust_sim_max_colname",
+                                                   "stroke_index", True, annotate_heatmap=False,
+                                                   norm_method=norm_method)
+            savefig(fig, f"{sdir}/2dheat-shape-stroke_index-{norm_method}-{epoch}.pdf")
 
 
 def plot_learning_and_characters(D, savedir, scorename = "strokes_clust_score"):
