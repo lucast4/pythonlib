@@ -512,10 +512,12 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
 
 
     # Repalce nan errors with 0
-    x_errors = x_errors.copy()
-    x_errors[np.isnan(x_errors)] = 0
-    y_errors = y_errors.copy()
-    y_errors[np.isnan(y_errors)] = 0
+    if x_errors is not None:
+        x_errors = x_errors.copy()
+        x_errors[np.isnan(x_errors)] = 0
+    if y_errors is not None:
+        y_errors = y_errors.copy()
+        y_errors[np.isnan(y_errors)] = 0
 
     # if np.all(x==0.)
     # print(x, y, y_errors, x_errors)
