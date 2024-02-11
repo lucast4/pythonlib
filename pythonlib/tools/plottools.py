@@ -341,11 +341,11 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue",
     return ax
 
 
-def plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None, 
-                       color="k", textcolor="r", alpha=0.05,
-                       plot_text_over_examples=False, return_inds_text=False, 
-                       SIZE=7, overlay_mean=False,
-                       text_to_plot = None):
+def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
+                         color="k", textcolor="r", alpha=0.05,
+                         plot_text_over_examples=False, return_inds_text=False,
+                         SIZE=7, overlay_mean=False,
+                         text_to_plot = None):
     """ 
     GOOD - scatter plot of X, taking oclumns of X as vectors.
     PARAMSL
@@ -368,7 +368,8 @@ def plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
     else:
         fig = None
     ALPHA = Xfit.shape[0]/500
-    ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+    # ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+    ax.plot(Xfit[:,0], Xfit[:,1], "x", color=color, alpha=alpha)
 
     if overlay_mean:
         xmean = np.mean(Xfit[:,0])
@@ -400,7 +401,8 @@ def plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
 
 def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     downsample_auto=True, ax=None, SIZE=8, overlay_mean=False,
-    ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None):
+    ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None,
+                       map_lev_to_color=None):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
@@ -408,6 +410,17 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     Will color differnetly by label.
     - downsample_auto, then subsamples in case there are too many datapts
     """
+
+    labellist = set(labels)
+    if map_lev_to_color is None:
+        # Color the labels
+        from pythonlib.tools.plottools import makeColors
+        # One color for each level of effect var
+        pcols = makeColors(len(labellist))
+        map_lev_to_color = {}
+        for lev, pc in zip(labellist, pcols):
+            map_lev_to_color[lev] = pc
+
 
     if labels is None:
         labels = ["IGNORE_LABEL" for _ in range(X.shape[0])]
@@ -421,37 +434,45 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             print(f"Randomly subsampling to {thresh}")
             X = X[indsthis,:]
             labels = [labels[i] for i in indsthis]
-    # Color the labels
-    from pythonlib.tools.plottools import makeColors
-    labellist = set(labels)
-    pcols = makeColors(len(labellist), cmap="rainbow")
+
 
     if text_to_plot is not None:
         assert len(text_to_plot)==X.shape[0]
 
+
     # Plot
     if ver=="overlay":
         for i, l in enumerate(labellist):
+            col = map_lev_to_color[l]
             inds = [i for i, lab in enumerate(labels) if lab==l]
-            Xthis = X[inds]
+            Xthis = X[inds, :]
             if text_to_plot is not None:
                 text_to_plot_this = [text_to_plot[i] for i in inds]
             else:
                 text_to_plot_this = None
+            _fig, _ax = _plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                           color=col, textcolor=col, alpha=alpha,
+                                             overlay_mean=overlay_mean,
+                                             plot_text_over_examples=plot_text_over_examples,
+                                             text_to_plot = text_to_plot_this,
+                                             SIZE=SIZE)
             if i==0:
                 # initiate a plot
-                fig, ax = plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                              color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
-                                              plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
-            else:
-                plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                              color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
-                                              plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
-        ax.legend(labellist)
+                fig = _fig
+                ax = _ax
+            # else:
+            #     _plotScatterXreduced(Xthis, dimsplot, ax=ax,
+            #                          color=col, textcolor=col, alpha=alpha, overlay_mean=overlay_mean,
+            #                          plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
+
+        # Add legend to the last axis
+        # ax.legend(labellist)
+        legend_add_manual(ax, map_lev_to_color.keys(), map_lev_to_color.values(), 0.1)
 
         return fig, ax
 
     elif ver in ["separate", "separate_no_background"]:
+        assert False, "no need for separate code here. just run outer mult times."
         n = len(labellist)
         nrows = int(np.ceil(n/ncols_separate))
         fig, axes = plt.subplots(nrows, ncols_separate, figsize=(SIZE*ncols_separate, SIZE*nrows))
@@ -464,11 +485,11 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             # initiate a plot
             if ver=="separate":
                 # Then genreate a background of all pts first.
-                plotScatterXreduced(X, dimsplot, ax=ax,
-                                              color="k", textcolor="k", alpha=alpha/5)
-            plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                          color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
-                                          plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
+                _plotScatterXreduced(X, dimsplot, ax=ax,
+                                     color="k", textcolor="k", alpha=alpha/5)
+            _plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                 color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
+                                 plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
             ax.set_title(f"label: {l}")
 
         return fig, axes
