@@ -10,6 +10,7 @@ def clusterSimMatrix(similarity_matrix, PCAdim = None, PCAdim_touse = 5,
     return dict with results
     - Not plotting...
     PARAMS:
+    - similarity_matrix, (ndat, nfeat)
     - PCAdim, max num dims to keep, both for output
     - PCAdim_touse, int, numdims to use for tsne and gmm
     """
@@ -19,9 +20,12 @@ def clusterSimMatrix(similarity_matrix, PCAdim = None, PCAdim_touse = 5,
     from sklearn.mixture import GaussianMixture as GMM
 
     # 1) Use output of PCA for below modeling
+    if PCAdim is not None:
+        assert PCAdim==similarity_matrix.shape[1]
     pca_model = PCA(n_components=PCAdim)
-    Xpca = pca_model.fit_transform(similarity_matrix)
+    Xpca = pca_model.fit_transform(similarity_matrix) # (nsamps, nPCs)
     Xpca_input_models = Xpca[:, :PCAdim_touse]
+
 
     # -- TSNE
     if "tsne" in things_to_do:

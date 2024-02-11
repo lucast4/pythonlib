@@ -195,7 +195,7 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
     
 
 def plotDatStrokesWrapper(strokes, ax, color=None, mark_stroke_onset=True, 
-    add_stroke_number=True, mark_stroke_center=False):
+    add_stroke_number=True, mark_stroke_center=False, alpha=0.55):
     """ [GOOD] WRapper to plot strokes a single color
     PARAMS:
     - color, either None (ordinal) or single color string code.
@@ -205,14 +205,14 @@ def plotDatStrokesWrapper(strokes, ax, color=None, mark_stroke_onset=True,
         # Use default colors.
         plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, add_stroke_number=add_stroke_number, 
             mark_stroke_onset=mark_stroke_onset, number_from_zero=True,
-                       mark_stroke_center=mark_stroke_center)
+                       mark_stroke_center=mark_stroke_center, alpha=alpha)
     else:
         # use the inputed color
         plotDatStrokes(strokes, ax, plotver="onecolor", pcol=color, 
             force_onsets_same_col_as_strokes=True, each_stroke_separate=True,
             add_stroke_number=add_stroke_number, mark_stroke_onset=mark_stroke_onset,
             number_from_zero=True,
-                       mark_stroke_center=mark_stroke_center)
+                       mark_stroke_center=mark_stroke_center, alpha=alpha)
         
 
 def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
@@ -575,7 +575,7 @@ def plotDatStrokesTimecourse(strokes, ax, plotver="raw", color=None,
 
 
 
-def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=50, ellipse_std = 1., color=(0,0,0), alpha=0.6, overlay_elipses=False):
+def plotDatStrokesMean(strokeslist, ax, strokenum, Ninterp=70, ellipse_std = 1., color=(0,0,0), alpha=0.6, overlay_elipses=False):
     """ given list of strokes (i.e., list of list of nparray)
     plots for  strokenum a single stroke representing mean.
     optioanlykl adds covariance elipses.

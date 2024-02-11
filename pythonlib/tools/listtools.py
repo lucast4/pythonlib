@@ -479,7 +479,8 @@ def extract_novel_unique_items_in_order(listin):
 
 def remove_values_refrac_period(times_in_order, refrac_period):
     """ Given list of times, return indices to slice, to remove times that
-    occur too close in time to preceding (i.e. interval less than refrac_period)
+    occur too close in time to preceding (i.e. interval less than refrac_period).
+    i.e., takes the first one that encounters...
     PARAMS:
     - times_in_order, list-like of times, assumed to be in order. will not check
     - refrac_period, duration.

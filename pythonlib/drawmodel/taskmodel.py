@@ -568,6 +568,7 @@ def makeLikeliFunction(ver="segments", norm_by_num_strokes=True,
         for p in t["model_parses"]:
             strokes_parse = p["strokes"]
             if ver=="modHaussdorf":
+
                 dist = -distanceBetweenStrokes(t["behavior"]["strokes"], strokes_parse)
                 if norm_by_num_strokes:
                     dist = dist/len(t["behavior"]["strokes"])
@@ -668,7 +669,6 @@ def makeParseFunction(ver="linePlusL"):
             chunk of 2 strokes or more, and no chunks of
             3 strokes or more.
             - only chunks strokes if they are close"""
-            from pythonlib.drawmodel.strokedists import distmatStrokes    
 
             # -- get stroke indices
             strokes_task = convertTask2Strokes(task)

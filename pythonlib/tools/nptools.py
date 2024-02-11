@@ -196,11 +196,13 @@ def sort_by_labels(X, labels, axis=0):
     
     return X, labels
 
-def find_peaks_troughs(vals, PLOT=False):
+def find_peaks_troughs(vals, PLOT=False, refrac_npts=None):
     """ Find indices of peaks and troughs in vals
     Does so by looking at diffs
     PARAMS:
     - vals, (1,N) or (N,) array of values.
+    - refrac_npts, no maxes will be close to each other npts less
+    than refrac_npts. same for mins
     RETURNS:
     - inds_peaks, inds_troughs, list of ints, indices into vals.
     """
@@ -218,15 +220,65 @@ def find_peaks_troughs(vals, PLOT=False):
     inds_troughs = list(np.where(np.diff(np.sign(np.diff(vals)))>0)[0]+1)
     inds_peaks = list(np.where(np.diff(np.sign(np.diff(vals)))<0)[0]+1)
 
+    def get_windowed_value(ind, flank):
+        """ Get ind-flank:ind+flank, aking care to
+        take subset if ind is too lclsoe tot edges"""
+        if (ind-flank-1)<0:
+            i1 = 0
+        else:
+            i1 = ind-flank-1
+        assert i1>=0
+
+        if ind+flank+1>len(vals)-1:
+            i2 = -1
+        else:
+            i2 = ind+flank+1
+        vals_windowed = vals[i1:i2]
+        return vals_windowed
+
+    # Check refractr
+    if refrac_npts is not None:
+        from pythonlib.tools.listtools import remove_values_refrac_period
+        inds_peaks_good = []
+        for ind_peak in inds_peaks:
+            vals_all = get_windowed_value(ind_peak, refrac_npts)
+            vals_peak = vals[ind_peak]
+            # print("----", ind_peak)
+            # print(vals_all)
+            # print(vals_peak)
+            if np.any(vals_all>vals_peak):
+                # Then remove this peak. there must be another that is higher close by
+                # print("removing")
+                pass
+            else:
+                # print("keeping")
+                inds_peaks_good.append(ind_peak)
+        # print(inds_peaks_good)
+        # print(inds_peaks)
+        inds_peaks = inds_peaks_good
+
+        inds_troughs_good = []
+        for ind_trough in inds_troughs:
+            vals_all = get_windowed_value(ind_trough, refrac_npts)
+            vals_trough = vals[ind_trough]
+            if np.any(vals_all<vals_trough):
+                # Then remove this peak. there must be another that is higher close by
+                pass
+            else:
+                inds_troughs_good.append(ind_trough)
+        inds_troughs = inds_troughs_good
+
     if PLOT:
         fig, ax = plt.subplots()
         ax.plot(range(len(vals)), vals, "ok")
         for idx in inds_troughs:
             ax.plot(idx, 0, "xr")
         for idx in inds_peaks:
-            ax.plot(idx, 0, "xb")        
+            ax.plot(idx, 0, "xb")
+    else:
+        fig = None
 
-    return inds_peaks, inds_troughs
+    return inds_peaks, inds_troughs, fig
 
 
 def optimize_offset_to_align_tdt_ml2(vals_tdt, vals_ml2):

@@ -152,6 +152,20 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # "shape_label" holds the label.
         DS = DS.clustergood_load_saved_cluster_shape_classes()
 
+        # Third, hard-coded pruning, to be above threshold value for clean prims
+        animal = D.animals(force_single=True)[0]
+        if animal=="Pancho":
+            THRESH_clust_sim_max = 1.1
+        elif animal=="Diego":
+            assert False
+        else:
+            assert False
+
+        _max = DS.Dat["clust_sim_max"].max()+1
+        a = DS.Dat["clust_sim_max"]>=THRESH_clust_sim_max
+        b = DS.Dat["clust_sim_max"]<=_max
+        DS.Dat = DS.Dat[a & b].reset_index(drop=True)
+
         if False:
             # Optaiolly, plot examples for each shape
             DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_subplots="shape_label", n_examples=5)
@@ -159,15 +173,24 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         print(version)
         assert False, "code it"
 
+    ####### HAND CODED THINGS, e.g., days with really bad shapes, just remove them
+    date = D.dates(True)[0]
+    animal = D.animals(True)[0]
+    if animal=="Diego" and date=="230618":
+        # Is very messy...
+        DS.Dat = DS.Dat[~(DS.Dat["shape_oriented"]=="zigzagSq-1-2-0")].reset_index(drop=True)
     return DS
 
 
 class DatStrokes(object):
     """docstring for DatStrokes"""
-    def __init__(self, Dataset=None, version="beh"):
+    def __init__(self, Dataset=None, version="beh", columns_to_append = None):
         """
         PARAMS:
         - version, string, whether each datapoint is "beh" or "task"
+        - columns_to_append, dict, wjhere each key is column, and values
+        must be list (len Dataset) of iterables, each the lenght
+        of num strokes for that row of Dartaset
         """
 
         if Dataset is None:
@@ -181,9 +204,8 @@ class DatStrokes(object):
         self._SampleRate = None
         if self.Dataset is not None:
             self._prepare_dataset()
-            self._extract_strokes_from_dataset(version=version)
+            self._extract_strokes_from_dataset(version=version, columns_to_append=columns_to_append)
             self._clean_preprocess()
-
 
     def _clean_preprocess(self):
         """ All things that generally want to run for preprocessing
@@ -234,7 +256,8 @@ class DatStrokes(object):
         # to get seq context, need to know if reached for done button
         D.sketchpad_done_button_did_reach_append_col()
 
-    def _extract_strokes_from_dataset(self, version="beh", tokens_extract_keys=None, tokens_get_relations=True):
+    def _extract_strokes_from_dataset(self, version="beh", tokens_extract_keys=None,
+                                      tokens_get_relations=True, columns_to_append=None):
         """ Flatten all trials into bag of strokes, and for each stroke
         storing its associated task stroke, and params for that taskstroke
         PARAMS:
@@ -254,6 +277,11 @@ class DatStrokes(object):
 
         assert tokens_extract_keys is None, "not coded. keeps datsegs anyway, so dont need it."
         D = self.Dataset
+
+        if columns_to_append is not None:
+            for column, list_values in columns_to_append.items():
+                assert len(list_values)==len(D.Dat)
+                # assert len(list_values)==len_strokes
 
         # Collect all beh strokes
         list_features = ["circularity", "distcum", "displacement", "angle"]
@@ -302,6 +330,13 @@ class DatStrokes(object):
 
             # 2) For each beh stroke, get its infor
             len_strokes = len(strokes)
+
+            # if columns_to_append is not None:
+            #     for column, list_values in columns_to_append.items():
+            if columns_to_append is not None:
+                for column, list_values in columns_to_append.items():
+                    assert len(list_values[ind])==len_strokes
+
             for i, (stroke, dseg, comb) in enumerate(zip(strokes, datsegs, out_combined)):
                 DAT_BEHPRIMS.append({
                     'Stroke':stroke,
@@ -310,6 +345,11 @@ class DatStrokes(object):
                 # get features for this stroke
                 for f in list_features:
                     DAT_BEHPRIMS[-1][f] = stroke.extract_single_feature(f)
+
+                if columns_to_append is not None:
+                    for column, list_values in columns_to_append.items():
+                        valthis = list_values[ind][i]
+                        DAT_BEHPRIMS[-1][column] = valthis
 
                 # Which task kind?
                 DAT_BEHPRIMS[-1]["task_kind"] =  T.get_task_kind()
@@ -330,8 +370,9 @@ class DatStrokes(object):
                     DAT_BEHPRIMS[-1]["aligned_beh_inds"] = comb[0]
                     DAT_BEHPRIMS[-1]["aligned_beh_strokes"] = comb[1]
 
-                # Get gap infrmation 
-                # (preceding gap)
+
+
+
 
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", "ind_behstrokes"]
@@ -583,7 +624,7 @@ class DatStrokes(object):
         list_nextgap_angle = []
         for ind in range(len(self.Dat)): 
             me = self.dataset_extract("motorevents", ind)
-            mt = self.dataset_extract("motortiming", ind)
+            # mt = self.dataset_extract("motortiming", ind)
             indstrok = self.Dat.iloc[ind]["stroke_index"]
             strokthis = self.Dat.iloc[ind]["strok"]
             strokes_beh = self.dataset_extract("strokes_beh", ind)
@@ -593,6 +634,15 @@ class DatStrokes(object):
             # onset and offset
             on = me["ons"][indstrok]
             off = me["offs"][indstrok]
+            try:
+                assert on==strokthis[0,2]==strokes_beh[indstrok][0,2]
+                assert off==strokthis[-1,2]==strokes_beh[indstrok][-1,2]
+            except Exception as err:
+                print(on)
+                print(strokthis)
+                print(strokes_beh[indstrok])
+                raise err
+
             # Note: I have checked that these match exactly what would get if use
             # neural "Session" object to get timings (which goes thru getTrials ...)
             
@@ -1034,6 +1084,24 @@ class DatStrokes(object):
             self._SampleRate = self.Dataset.get_sample_rate_alltrials()
         return self._SampleRate
 
+    def dataset_index_by_trialcode_strokeindex(self, trialcode, stroke_index,
+                                               return_none_if_doesnt_exist=False):
+        """ return the index into self.Dat which is this (trialcode, stroke_index)
+        """
+
+        if "trialcode_strokeidx" not in self.Dat.columns:
+            # - first, append a new colum that is the conjunction of trialcode and stroke index
+            self.Dat = append_col_with_grp_index(self.Dat, ["trialcode", "stroke_index"], new_col_name="trialcode_strokeidx",
+                                                 use_strings=False)
+
+        tmp = self.Dat[self.Dat["trialcode_strokeidx"]==(trialcode, stroke_index)]
+        if return_none_if_doesnt_exist and len(tmp)==0:
+            return None
+        else:
+            assert len(tmp)==1
+            return tmp.index.tolist()[0]
+
+
     def dataset_slice_by_trialcode_strokeindex(self, list_trialcode, list_stroke_index,
             df=None, assert_exactly_one_each=True):
         """ Returns self.Dat, sliced to subset of rows, matching exactly the inputed
@@ -1157,6 +1225,67 @@ class DatStrokes(object):
         return self.print_n_samples_per_combo_grouping(list_grouping)
 
     ####################### PLOTS
+    def plot_multiple_speed_and_drawing(self, inds):
+        """
+        Good wrapper to make plots, visualizing all trials both in speed and in xy drawing.
+        :param inds:
+        :return:
+        """
+        from pythonlib.tools.stroketools import strokesVelocity
+
+        # Plot
+        fig, axes = plt.subplots(2,2, figsize=(11,8))
+
+        if len(inds)>0:
+            # Get all strokes for this shape, interpolate to have same n pts, and then stack (ndat, NPTS, 3)
+            strokmean, strokstacked = self.cluster_compute_mean_stroke(inds, check_same_direction=False,
+                                                                          ver="median")
+
+            # First, find the time indices of the troughs and peaks in the mean stroke (template)
+            fs = 1/np.mean(np.diff(strokmean[:,2])) # is exact.
+            print(fs)
+            _, strokes_speeds = strokesVelocity([strokmean], fs)
+
+
+            # ============== DATA
+            # Plot velocitues foir all trials
+            ax = axes.flatten()[0]
+            ax.set_title("Speed")
+            ax.set_xlabel("time index")
+            _strokes = [s for s in strokstacked]
+            _strokes_speed = strokesVelocity(_strokes, fs)[1]
+            ts = np.arange(len(strokmean))
+            for sp in _strokes_speed:
+                ax.plot(ts, sp[:,0], "-", alpha=0.1)
+
+            ax = axes.flatten()[1]
+            ax.set_title("Speed")
+            ax.set_xlabel("time real (sec)")
+            _strokes = [s for s in strokstacked]
+            _strokes_speed = strokesVelocity(_strokes, fs)[1]
+            for sp in _strokes_speed:
+                ax.plot(sp[:,1], sp[:,0], "-", alpha=0.1)
+
+            # Mean speed
+            speed_mean = np.mean(np.stack(_strokes_speed), 0) # (npts, 2)
+            ax = axes.flatten()[2]
+            ax.set_title("Speed (mean)")
+            ax.set_xlabel("time index")
+            ts = np.arange(len(strokmean))
+            ax.plot(ts, speed_mean[:,0], "-o", alpha=1)
+
+            # plot the strokes
+            ax = axes.flatten()[3]
+            for strok in strokstacked:
+                self.plot_single_strok_bare(strok, ax=ax,alpha=0.3)
+                ax.set_title(f"each trial")
+
+            self.plot_single_strok(strokmean, ax=ax, color="k")
+            ax.set_title(f"mean")
+
+        return fig
+
+
     def plot_multiple_strok(self, list_strok, ver="beh", ax=None,
         overlay=True, titles=None, ncols=5, size_per_sublot=2):
         """
@@ -1192,17 +1321,26 @@ class DatStrokes(object):
         return fig, axes
 
 
+    def plot_single_strok_bare(self, strok, ax, color=None, alpha=0.5):
+        """ Very bare, low-level
+        """
+
+        ax.plot(strok[:,0], strok[:,1], "-", color=color, alpha=alpha)
+
     def plot_single_strok(self, strok, ver="beh", ax=None, 
-            color=None):
+            color=None, alpha_beh=0.55):
         """ plot a single inputed strok on axis.
         INPUT:
         - strok, np array,
         """
-        assert ax is not None
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
         from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
         if ver=="beh":
             plotDatStrokesWrapper([strok], ax, color=color, add_stroke_number=False, 
-                mark_stroke_onset=True)
+                mark_stroke_onset=True, alpha=alpha_beh)
         elif ver=="task_dots":
             plotDatStrokes([strok], ax, clean_unordered=True, alpha=0.2)
         elif ver=="task":
@@ -1241,7 +1379,7 @@ class DatStrokes(object):
 
 
     def plot_multiple_overlay_entire_trial(self, list_inds, ncols=5, 
-            overlay_beh_or_task="beh", titles=None):
+            overlay_beh_or_task="beh", titles=None, title_font_size=10):
         """ Plot Multipel strokes on multiple supblots, each one plot the stroke overlaying it on the etnire
         trial for that stroke. 
         """ 
@@ -1258,7 +1396,7 @@ class DatStrokes(object):
         if titles is not None:
             assert len(titles)==n
             for ax, tit in zip(axes.flatten(), titles):
-                ax.set_title(tit)
+                ax.set_title(tit, fontsize=title_font_size)
 
         return fig, axes, inds_trials_dataset
 
@@ -1289,7 +1427,7 @@ class DatStrokes(object):
         self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="beh")
 
     def plot_multiple(self, list_inds, ver_behtask=None, titles=None, ncols=5,
-            titles_by_dfcolumn=None, nrand=20):
+            titles_by_dfcolumn=None, nrand=20, SIZE=2.5):
         """ Plot mulitple strokes, each on a subplot, based on index into self.Dat
         PARAMS:
         - ver_behtask, "task", "beh", or None(default).
@@ -1308,7 +1446,8 @@ class DatStrokes(object):
 
         strokes = self.extract_strokes("list_list_arrays", 
             inds = list_inds, ver_behtask=ver_behtask)
-        fig, axes = self.Dataset.plotMultStrokes(strokes, titles=titles, ncols=ncols)
+        fig, axes = self.Dataset.plotMultStrokes(strokes, titles=titles, ncols=ncols,
+                                                 SIZE=SIZE)
 
         return fig, axes, list_inds
 
@@ -1882,7 +2021,7 @@ class DatStrokes(object):
 
     ################################ SIMILARITY/CLUSTERING
     def cluster_compute_mean_stroke(self, inds, center_at_onset=True,
-        check_same_direction=True):
+        check_same_direction=True, Npts = 70, ver="mean"):
         """Compute the mean stroke across these inds, after linear time warping to align them
         PARAMS:
         - inds, indices into self.Dat
@@ -1900,7 +2039,7 @@ class DatStrokes(object):
             assert self._strokes_check_all_aligned_direction(strokes, plot_failure=True), "same shape done in multipel directions?"
 
         strokmean, strokstacked = strokes_average(strokes, 
-            center_at_onset=center_at_onset)
+            center_at_onset=center_at_onset, Ninterp=Npts, ver=ver)
         return strokmean, strokstacked    
 
     def cluster_compute_mean_stroke_thisshape(self, shape, best_n_by_dist=None):
