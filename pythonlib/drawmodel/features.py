@@ -99,9 +99,85 @@ def strokeDisplacements(strokes):
     """displacement from strok onset to offset"""
     return [np.linalg.norm(s[-1,:2] - s[0,:2]) for s in strokes]
 
-def strokeCircularity(strokes):
+def strokeCircularitySigned(strokes, prune_outer_flanks_frac=False):
+    """ circulatiry, but signed, so that + means CCW.
+    NOTE: method for gettiung sign is rough, but works ok if is clean curvature.
+    Mostly works, but this should be improved --> mainly the curvatuyre code is
+    old, not really tested...
+    PARAMS:
+    - prune_outer_flanks_frac, either None (ignre) or fraction, in which case prunes
+    that from edges before computing
+    """
+    from pythonlib.tools.stroketools import strokesCurvature
+
+    circs = strokeCircularity(strokes, prune_outer_flanks_frac=prune_outer_flanks_frac)
+
+    # What direction is the curvature?
+    fs = int(1/np.mean(np.diff(strokes[0][:,2])))
+    strokes_curv = strokesCurvature(strokes, fs, absval=False)
+
+    list_median_curve = []
+    for sc in strokes_curv:
+
+        # Remove the first and last 100ms
+        t1 = sc[0, 1]+0.1
+        t2 = sc[-1, 1]-0.1
+        if t1<t2:
+            idx1 = np.argmin(np.abs(sc[:,1]-t1))
+            idx2 = np.argmin(np.abs(sc[:,1]-t2))
+            sc = sc[idx1:idx2, :]
+        list_median_curve.append(np.median(sc[:,0]))
+
+        # plot curvature
+        if False:
+            plotDatStrokesTimecourse([strok_curv], ax=ax, plotver="speed", label="curv", overlay_stroke_periods=False)
+            ax.set_title(f"median curv:, {np.median(strok_curv[:,0]):.4f}")
+            YMAX = 1/50
+            YMIN = -YMAX
+
+            ax.set_ylim([-0.1, 0.1])
+            ax.set_ylabel("1/pix (1/radius)")
+
+
+
+    return np.sign(list_median_curve) * np.asarray(circs)
+
+def strokes_prune_outer_flanks_frac(strokes, frac, column_time):
+    """ For each strok in strokes, remove the flanking fracs, e.g, if
+    frac is 0.1, then keeps the inner 0.8 (by time). ASSUMES that times
+    are regularly spaced...
+    """
+    strokes_pruned = []
+    for s in strokes:
+
+        npts = len(s)
+        npts_flank = int(np.floor(frac*npts))
+
+        # # Remove the first and last 100ms
+        # t1 = s[0, column_time] + npts_flank
+        # t2 = s[-1, column_time] - npts_flank
+        #
+        # idx1 = np.argmin(np.abs(s[:,column_time]-t1))
+        # idx2 = np.argmin(np.abs(s[:,column_time]-t2))
+        #
+        # print(len(s))
+        # print(npts_flank, idx1, idx2)
+        strokes_pruned.append(s[npts_flank:-npts_flank, :])
+
+    return strokes_pruned
+
+def strokeCircularity(strokes, prune_outer_flanks_frac=None):
     """ 0 for straint line, 1 for full circle.
-    is based on ratio of displacement to distance """
+    is based on ratio of displacement to distance
+    PARAMS;
+    - prune_outer_flanks_frac, either None (ignre) or fraction, in which case prunes
+    that from edges before computing. useful to exclude edge effects.
+    """
+
+    if prune_outer_flanks_frac is not None:
+        assert not isinstance(prune_outer_flanks_frac, bool), "shouod be number"
+        strokes = strokes_prune_outer_flanks_frac(strokes, prune_outer_flanks_frac, 2)
+
     displace = strokeDisplacements(strokes)
     distance = strokeDistances(strokes)
     return [1-p/t for p,t in zip(displace,distance)]
