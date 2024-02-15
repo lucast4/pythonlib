@@ -381,7 +381,14 @@ def counts_to_pdist(counts_dict, cats_in_order, dtype=None,
     
     return pdist
 
-
+def rank_items(li):
+    """ Retrurn rank of each item, in their order
+    e..g, [12 13 2 2] --> [3 4 1 1]
+    Note: ranks start at 1 (not 0).
+    """
+    import scipy.stats as ss
+    ranks = ss.rankdata(li, method="min") # e..g, [12 13 2 2] --> [3 4 1 1]
+    return ranks
 def rankinarray1_of_minofarray2(array1, array2, look_for_max=False):
     """ for the index of min in array2, what is the rank of the
     correspodning value in array1? e.g., if

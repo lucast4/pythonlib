@@ -10,6 +10,16 @@ def bin_values_categorical_factorize(vals):
     """
     return np.unique(vals, return_inverse=True)[1]
 
+
+def bin_values_by_rank(values, nbins=8, assert_all_vals_within_bins=True):
+    """ Convert values to vranks, then bin those, thus ensuring equal n
+    items in each class
+    """
+    from pythonlib.tools.listtools import rank_items
+    ranks = rank_items(values)
+    ranks_binned = bin_values(ranks, nbins, assert_all_vals_within_bins=assert_all_vals_within_bins)
+    return ranks_binned
+
 def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
     assert_all_vals_within_bins=True):
     """ REturn vals, but binned, unofrmly from min to max

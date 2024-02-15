@@ -540,7 +540,7 @@ def conjunctions_preprocess(D):
     anova_interaction = False
 
     Dall, dataset_pruned_for_trial_analysis, TRIALCODES_KEEP, params_anova, params_anova_extraction = \
-        dataset_apply_params(ListD, animal, DATE, which_level, ANALY_VER, anova_interaction)
+        dataset_apply_params(ListD, None, ANALY_VER, animal, DATE)
 
     # list_features = ["chunk_rank", "chunk_within_rank", "chunk_within_rank", "chunk_n_in_chunk"]
     list_features = []
@@ -643,8 +643,8 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     LIST_VARS_CONJUNCTION = [
         ["CTXT_prev_next", "gridloc", "epoch"],
     ]
-    DF, dictdf = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch", 
-                                                             vars_others=["CTXT_prev_next", "gridloc"], 
-                                                             n_min=2, lenient_allow_data_if_has_n_levels=2)
+    DF, dictdf = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch", vars_others=["CTXT_prev_next", "gridloc"],
+                                                         n_min_across_all_levs_var=2,
+                                                         lenient_allow_data_if_has_n_levels=2)
     if len(DF)>0:
         _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)

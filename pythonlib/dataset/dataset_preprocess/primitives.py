@@ -8,6 +8,8 @@ def preprocess(D, animal, expt, recenter=True):
     Extracts spatial coordinates and shapes, etc.
     """
 
+    D = D.copy()
+
     #### First preprocess dataset so that strokes are all centerized
     list_sb, list_st, D = D.extractStrokeLists(recenter=recenter)
     D.Dat["strokes_beh"] = list_sb

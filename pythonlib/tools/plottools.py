@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def radar_plot(ax, thetas, values, color="k", fill=True):
@@ -217,7 +218,25 @@ def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
         col2 = np.array(col2)
     return (pos*(col2-col1) + col1)[:3]
 
+def map_continuous_var_to_color_range(values, valmin=None, valmax=None):
+    """
+    Returns rgba values for each item in values.
+    """
+    from matplotlib.colors import Normalize
 
+    cmap = sns.color_palette("rocket", as_cmap=True)
+    cmap = sns.color_palette("rocket", as_cmap=True)
+    # cmap = sns.color_palette
+    cmap = sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True)
+    if valmin is None:
+        valmin = min(values)
+    if valmax is None:
+        valmax = max(values)
+
+    # Normalize data
+    norm = Normalize(vmin=valmin, vmax=valmax)
+    rgba_values = cmap(norm(values))
+    return rgba_values
 
 def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', edgecolor='none', **kwargs):
     """
@@ -368,8 +387,8 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
     else:
         fig = None
     ALPHA = Xfit.shape[0]/500
-    # ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
-    ax.plot(Xfit[:,0], Xfit[:,1], "x", color=color, alpha=alpha)
+    ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+    # ax.plot(Xfit[:,0], Xfit[:,1], "x", color=color, alpha=alpha)
 
     if overlay_mean:
         xmean = np.mean(Xfit[:,0])
@@ -402,7 +421,7 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
 def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     downsample_auto=True, ax=None, SIZE=8, overlay_mean=False,
     ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None,
-                       map_lev_to_color=None):
+                       map_lev_to_color=None, color_type="discr"):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
@@ -411,16 +430,18 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     - downsample_auto, then subsamples in case there are too many datapts
     """
 
-    labellist = set(labels)
-    if map_lev_to_color is None:
-        # Color the labels
-        from pythonlib.tools.plottools import makeColors
-        # One color for each level of effect var
-        pcols = makeColors(len(labellist))
-        map_lev_to_color = {}
-        for lev, pc in zip(labellist, pcols):
-            map_lev_to_color[lev] = pc
+    assert X.shape[0] == len(labels)
 
+    if color_type=="discr":
+        labellist = set(labels)
+        if map_lev_to_color is None:
+            # Color the labels
+            from pythonlib.tools.plottools import makeColors
+            # One color for each level of effect var
+            pcols = makeColors(len(labellist))
+            map_lev_to_color = {}
+            for lev, pc in zip(labellist, pcols):
+                map_lev_to_color[lev] = pc
 
     if labels is None:
         labels = ["IGNORE_LABEL" for _ in range(X.shape[0])]
@@ -435,39 +456,57 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             X = X[indsthis,:]
             labels = [labels[i] for i in indsthis]
 
-
     if text_to_plot is not None:
         assert len(text_to_plot)==X.shape[0]
 
-
     # Plot
     if ver=="overlay":
-        for i, l in enumerate(labellist):
-            col = map_lev_to_color[l]
-            inds = [i for i, lab in enumerate(labels) if lab==l]
-            Xthis = X[inds, :]
-            if text_to_plot is not None:
-                text_to_plot_this = [text_to_plot[i] for i in inds]
-            else:
-                text_to_plot_this = None
-            _fig, _ax = _plotScatterXreduced(Xthis, dimsplot, ax=ax,
-                                           color=col, textcolor=col, alpha=alpha,
-                                             overlay_mean=overlay_mean,
-                                             plot_text_over_examples=plot_text_over_examples,
-                                             text_to_plot = text_to_plot_this,
-                                             SIZE=SIZE)
-            if i==0:
-                # initiate a plot
-                fig = _fig
-                ax = _ax
-            # else:
-            #     _plotScatterXreduced(Xthis, dimsplot, ax=ax,
-            #                          color=col, textcolor=col, alpha=alpha, overlay_mean=overlay_mean,
-            #                          plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
+        if color_type=="discr":
+            # One layer on plot for each level
+            for i, l in enumerate(labellist):
+                col = map_lev_to_color[l]
+                inds = [i for i, lab in enumerate(labels) if lab==l]
+                Xthis = X[inds, :]
+                if text_to_plot is not None:
+                    text_to_plot_this = [text_to_plot[i] for i in inds]
+                else:
+                    text_to_plot_this = None
+                _fig, _ax = _plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                                               color=col, textcolor=col, alpha=alpha,
+                                                 overlay_mean=overlay_mean,
+                                                 plot_text_over_examples=plot_text_over_examples,
+                                                 text_to_plot = text_to_plot_this,
+                                                 SIZE=SIZE)
+                if i==0:
+                    # initiate a plot
+                    fig = _fig
+                    ax = _ax
+                # else:
+                #     _plotScatterXreduced(Xthis, dimsplot, ax=ax,
+                #                          color=col, textcolor=col, alpha=alpha, overlay_mean=overlay_mean,
+                #                          plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
 
-        # Add legend to the last axis
-        # ax.legend(labellist)
-        legend_add_manual(ax, map_lev_to_color.keys(), map_lev_to_color.values(), 0.1)
+            # Add legend to the last axis
+            # ax.legend(labellist)
+            if len(map_lev_to_color.keys())<50:
+                legend_add_manual(ax, map_lev_to_color.keys(), map_lev_to_color.values(), 0.2)
+        elif color_type=="cont":
+            xs = X[:, dimsplot[0]]
+            ys = X[:, dimsplot[1]]
+            sns.scatterplot(x=xs.squeeze(), y=ys.squeeze(), hue=labels, alpha=0.8, ax=ax)
+
+            #
+            # fig, ax = plt.subplots(1,1)
+            # label_rgbs = map_continuous_var_to_color_range(labels)
+            #
+            # im = ax.scatter(xs, ys, c=label_rgbs, alpha=0.75, marker="x", cmap=label_rgbs)
+            # fig.colorbar(im, ax=ax)
+            # assert False
+
+            fig = None
+        else:
+            print(color_type)
+            assert False
 
         return fig, ax
 
