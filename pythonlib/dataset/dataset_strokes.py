@@ -12,6 +12,7 @@ This supercedes all SF (strokefeats) things.
 
 See notebook: analy_spatial_220113 for development.
 """
+import pickle
 
 import pandas as pd
 import numpy as np
@@ -568,6 +569,25 @@ class DatStrokes(object):
                 print("Doing...:", meth)
                 assert "min_beh_task_dist" in params.keys()
                 self.Dat = self.Dat[self.Dat["dist_beh_task_strok"]<=params["min_beh_task_dist"]].reset_index(drop=True)
+            elif meth=="dataset_missing_stroke_in_context":
+                # remove inds which have part of their context missing. i..e, here contxt is
+                # pre and post stroke. if missing either one, then throw out the datapt.
+
+                # NOTE: THis might have problem where each time run it further prunes...
+
+                # Remove all data for which dont have the entire stroke, since then cant look at sequence context
+                keeps = []
+                removes = []
+                for ind in range(len(self.Dat)):
+                    this = self.dataset_extract_strokeslength_list_ind_here(ind, column="shape_oriented",
+                                                                            if_fail="return_none")
+                    if this is not None:
+                        keeps.append(ind)
+                    else:
+                        removes.append(ind)
+                print("Removing these inds from DS, since missing context:")
+                print(removes)
+                self.Dat = self.Dat.iloc[keeps].reset_index(drop=True)
             else:
                 print(meth)
                 assert False, "code it"
@@ -967,14 +987,14 @@ class DatStrokes(object):
         else:
             return row.index.tolist()[0]
 
-    def dataset_extract_strokeslength_list_ind_here(self, ind, column):
+    def dataset_extract_strokeslength_list_ind_here(self, ind, column, if_fail="error"):
         """ Same as dataset_extract_strokeslength_list(), but input
         the index into self.Dat (ind), i.e., stroke level.
         """
         trialcode = self.Dat.iloc[ind]["dataset_trialcode"]
         # ind_dataset = self._dataset_index(ind)
         # assert False, "use trialcode"
-        return self.dataset_extract_strokeslength_list(trialcode, column)
+        return self.dataset_extract_strokeslength_list(trialcode, column, if_fail=if_fail)
 
 
     def dataset_extract_strokeslength_list(self, trialcode, column,
@@ -993,8 +1013,6 @@ class DatStrokes(object):
         - list_vals, list of values, or None, if this dataset has no strokes in self
         """
 
-        assert if_fail=="error", "not coded yet!"
-
         inds = self._dataset_index_here_given_trialcode(trialcode)
         ind_dataset = self.Dataset.index_by_trialcode(trialcode)
 
@@ -1007,15 +1025,23 @@ class DatStrokes(object):
             
             # sanity check that got all beh strokes, in order from 0.
             try:
-                assert np.all(np.diff(df["stroke_index"])==1)
+                # print("HERE:", df["stroke_index"])
+                assert np.all(np.diff(df["stroke_index"])==1), "Probably you pruned strokes! Do that last, after this step..."
                 assert df.iloc[0]["stroke_index"]==0
                 assert len(df)==len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"])
             except Exception as err:
-                print(inds)
-                print(ind_dataset)
-                print(df["stroke_index"])
-                print(len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"]))
-                raise err
+                if if_fail=="error":
+                    # then throw error
+                    print(inds)
+                    print(ind_dataset)
+                    print(df["stroke_index"])
+                    print(len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"]))
+                    raise err
+                elif if_fail=="return_none":
+                    return None
+                else:
+                    print(if_fail)
+                    assert False
             
             # confirm trialcode
             tc = self.Dat.iloc[inds]["dataset_trialcode"].unique().tolist()
@@ -1133,7 +1159,8 @@ class DatStrokes(object):
         list_keys = [(tc, si) for tc, si in zip(list_trialcode, list_stroke_index)]
 
         # get slice
-        dfslice = slice_by_row_label(df, "trialcode_strokeidx", list_keys, assert_exactly_one_each=assert_exactly_one_each)
+        dfslice = slice_by_row_label(df, "trialcode_strokeidx", list_keys,
+                                     assert_exactly_one_each=assert_exactly_one_each)
 
         return dfslice
 
@@ -1379,13 +1406,14 @@ class DatStrokes(object):
 
 
     def plot_multiple_overlay_entire_trial(self, list_inds, ncols=5, 
-            overlay_beh_or_task="beh", titles=None, title_font_size=10):
+            overlay_beh_or_task="beh", titles=None, title_font_size=10,
+                                           SIZE = 2):
         """ Plot Multipel strokes on multiple supblots, each one plot the stroke overlaying it on the etnire
         trial for that stroke. 
         """ 
         n = len(list_inds)
         nrows = int(np.ceil(n/ncols))
-        fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(2*ncols, 2*nrows))
+        fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(SIZE*ncols, SIZE*nrows))
 
 
         inds_trials_dataset = []
@@ -1475,16 +1503,46 @@ class DatStrokes(object):
 
         return ax
 
-    def plotshape_egtrials_sorted_by_feature(self, shape, feature, nplot=20,
-            epoch=None):
+    def plot_multiple_sorted_by_feature_split_by_othervar(self, var_feature_subplots, vars_others_figures,
+                                                          plot_save_dir,
+                                                          nplot=20, overlay_beh_or_task="beh", SIZE=2,
+                                                          nmin_plot=None, only_plot_if_mult_lev_of_feature=False):
+        """
+        Makes separate figtures, one for each level of other_var, where within it each
+        subplot is a single value for feature, and subplots sorted by increasing value of
+        this featur e(which can be discrete or cont).
+        Useful for seeing variation in strokes, sorted in a semanticLYL meaniful way, grouped
+        by some other var.
+        PARAMS:
+        - nmin_plot, int or None(ingore), only plots leve of otehrvar with at least this many datapts.
+        :return:
+        """
+
+
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+        groupdict = grouping_append_and_return_inner_items(self.Dat, vars_others_figures)
+        for grp, inds in groupdict.items():
+            if (nmin_plot is None) or (len(inds)>=nmin_plot):
+                if only_plot_if_mult_lev_of_feature==False or len(self.Dat.iloc[inds][var_feature_subplots].unique())>1:
+                    fig, axes = self.plot_multiple_sorted_by_feature(inds, var_feature_subplots,
+                                                                     overlay_beh_or_task=overlay_beh_or_task,
+                                                                     nplot=nplot, SIZE=SIZE)
+                    savefig(fig, f"{plot_save_dir}/{'|'.join(vars_others_figures)}={grp}-sortby={var_feature_subplots}.pdf")
+                    plt.close("all")
+
+    def plot_multiple_sorted_by_feature(self, inds, feature, nplot=20,
+                                        overlay_beh_or_task="task", SIZE=2):
         """
         PLot grid of strokes, overlayd on tasks, sorted by feature (scalar), uniformly
         sampled across distribution of featrue
         """
         from pythonlib.tools.listtools import random_inds_uniformly_distributed
 
-        inds, dists = self.shape_extract_indices_sorted_by_behtaskdist(shape, 
-            feature=feature, epoch=epoch)
+
+        # Sort the indices
+        inds, dists = self.indices_sort_by_feature(inds, feature)
+        # # Get scores
+        # dists = self.Dat.iloc[inds][feature].values
 
         # Get random subset
         idxs = random_inds_uniformly_distributed(inds, dosort=False, ntoget=nplot)
@@ -1492,10 +1550,35 @@ class DatStrokes(object):
         dists = [dists[i] for i in idxs]
 
         if len(inds)>0:
-            fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task")
+            fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists,
+                                                                   overlay_beh_or_task=overlay_beh_or_task,
+                                                                   SIZE=SIZE)
             return fig, axes
         else:
             return None, None
+
+    def plotshape_egtrials_sorted_by_feature(self, shape, feature, nplot=20,
+            epoch=None):
+        """
+        PLot grid of strokes, overlayd on tasks, sorted by feature (scalar), uniformly
+        sampled across distribution of featrue
+        """
+
+        inds, dists = self.shape_extract_indices_sorted_by_behtaskdist(shape, 
+            feature=feature, epoch=epoch)
+
+        return self.plot_multiple_sorted_by_feature(inds, feature, nplot)
+
+        # # Get random subset
+        # idxs = random_inds_uniformly_distributed(inds, dosort=False, ntoget=nplot)
+        # inds = [inds[i] for i in idxs]
+        # dists = [dists[i] for i in idxs]
+        #
+        # if len(inds)>0:
+        #     fig, axes, _ = self.plot_multiple_overlay_entire_trial(inds, titles=dists, overlay_beh_or_task="task")
+        #     return fig, axes
+        # else:
+        #     return None, None
 
     def plotshape_singleshape_egstrokes_overlaid(self, shape=None, filtdict=None, nplot=40, 
         ver_behtask="beh"):
@@ -1876,7 +1959,7 @@ class DatStrokes(object):
 
 
     ############################### SEQUENTIAL CONTEXT
-    def context_define_local_context_motif(self, n_pre=1, n_post=1):
+    def context_define_local_context_motif(self, n_pre=1, n_post=1, version="strokes"):
         """ Give this stroek a value that represents its context, which is
         conjunction of pre and post strokes.
         PARAMS:
@@ -1897,11 +1980,21 @@ class DatStrokes(object):
             list_context = []
             list_context_this = []
             for ind in range(len(self.Dat)):
-                tokens_prev, tok_this, tokens_next = self.context_extract_tokens_pre_post_mult(ind, n_pre, n_post)
 
-                pre = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_prev]
-                this = (tok_this["gridloc"], tok_this["shape"])
-                post = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_next]
+                if version=="strokes":
+                    tokens_prev, tok_this, tokens_next = self.context_extract_tokens_pre_post_mult(ind, n_pre, n_post)
+                    pre = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_prev]
+                    this = (tok_this["gridloc"], tok_this["shape"])
+                    post = [(t["gridloc"], t["shape"]) if t is not None else ("NONE",) for t in tokens_next]
+                elif version=="substrokes_angle":
+                    # Context is binned angle.
+                    vals_prev, val_this, vals_next = self.context_extract_tokens_pre_post_mult(ind, n_pre, n_post, column="angle_binned_coarse")
+                    pre = [(t,) if t is not None else ("NONE",) for t in vals_prev]
+                    this = (val_this,)
+                    post = [(t,) if t is not None else ("NONE",) for t in vals_next]
+                else:
+                    print(version)
+                    assert False
 
                 context = tuple(pre + post)
                 list_context.append(context)
@@ -1955,7 +2048,7 @@ class DatStrokes(object):
 
         return tok_prev, tok_this, tok_next
 
-    def context_extract_tokens_pre_post_mult(self, ind, n_pre=1, n_post=1):
+    def context_extract_tokens_pre_post_mult(self, ind, n_pre=1, n_post=1, column="datseg"):
         """
         Pull out tokens precesding and following this index.
         Any tokens that dont exist: replace with None.
@@ -1966,7 +2059,7 @@ class DatStrokes(object):
         (for pre and next, if doesnt exist, reuturns None for that item in the list)
         """
         from pythonlib.tools.listtools import slice_list_relative_to_index_out_of_bounds
-        tokens, indstrok = self.context_extract_strokeslength_list(ind, "datseg")
+        tokens, indstrok = self.context_extract_strokeslength_list(ind, column)
 
         # tokens = [0,1,2,3,4]
         # print(indstrok)
@@ -3342,6 +3435,20 @@ class DatStrokes(object):
         else:
             return dfbasis, list_strok_basis, list_shape_basis
 
+    def indices_sort_by_feature(self, inds, feature):
+        """ sort these trials by a scalar feature.
+        returns inds so that inds[0] is lowest value of feature, and
+        inds[-1] highest
+        RETURNS:
+            - inds, dists
+        """
+        dists = self.Dat.iloc[inds][feature]
+        this = [(i, d) for i, d in zip(inds, dists)]
+        this = sorted(this, key=lambda x:x[1]) # increasing dists
+        inds = [t[0] for t in this]
+        dists = [t[1] for t in this]
+        return inds, dists
+
     def shape_extract_indices_sorted_by_behtaskdist(self, shape,
         feature="dist_beh_task_strok", epoch=None):
         """ for this shape, extract its indices, sorted from low to high,
@@ -3357,13 +3464,15 @@ class DatStrokes(object):
         else:
             inds = self.Dat[(self.Dat["shape"]==shape) & (self.Dat["epoch"]==epoch)].index.tolist()        
 
-        dists = self.Dat.iloc[inds][feature].tolist()
+        # dists = self.Dat.iloc[inds][feature].tolist()
+        #
+        # # do sort
+        # this = [(i, d) for i, d in zip(inds, dists)]
+        # this = sorted(this, key=lambda x:x[1]) # increasing dists
+        # inds = [t[0] for t in this]
+        # dists = [t[1] for t in this]
 
-        # do sort
-        this = [(i, d) for i, d in zip(inds, dists)]
-        this = sorted(this, key=lambda x:x[1]) # increasing dists
-        inds = [t[0] for t in this]
-        dists = [t[1] for t in this]
+        inds, dists = self.indices_sort_by_feature(inds, feature)
 
         return inds, dists
 
@@ -3459,6 +3568,27 @@ class DatStrokes(object):
         if params_dict is not None:
             from pythonlib.tools.expttools import writeDictToYaml
             writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
+
+    def save(self, pathdir, columns_keep_in_dataset=None):
+        """ saves self, incluind gall things, including self.Dataset.
+        PARAMS;
+        - columns_keep_in_dataset, if None, saves entire self.Dataset, otherwise
+        keeps just these columns (not: this is beh, not strokes, dataset).
+        """
+        import os
+        os.makedirs(pathdir, exist_ok=True)
+        path = f"{pathdir}/DS.pkl"
+
+        if columns_keep_in_dataset is not None:
+            DS = self.copy()
+            DS.Dataset.Dat = DS.Dataset.Dat.loc[:, columns_keep_in_dataset]
+        else:
+            DS = self
+
+        with open(path, "wb") as f:
+            pickle.dump(DS, f)
+
+        print("saved self to :", path)
 
     #############################
     def animal(self):
