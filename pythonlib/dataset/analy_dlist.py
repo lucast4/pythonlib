@@ -144,7 +144,7 @@ def concatDatasets(Dlist, do_cleanup=False):
     if do_cleanup:
         # Usually already cleaned up before concatting..
         # but run if you want
-        Dnew._cleanup()
+        Dnew._cleanup(True, True, True, True)
     else:
         # Sort so is in increasing by date. THis is done in cleanup, the one thing
         # that is global in a way that would wnat to run even if you have already cleaned up.

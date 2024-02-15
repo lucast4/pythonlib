@@ -171,7 +171,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         return strokes_interp
 
 def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
-                 adapt_win_len="adapt"):
+                 adapt_win_len="adapt", sanity_check_endpoint_not_different=True):
     """ returns copy of strokes, smoothed with window_time (seconds)
     - sample_rate in samp/sec (e.g., fd["params"]["sample_rate"])
     - adapt_win_len, what to do fro strokes that are shoerter than window.
@@ -217,6 +217,72 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                 print(strokes_sm[-1].shape)
                 print('orig')
                 print(s.shape)
+
+    # if plotprepost_xy:
+    #     # Overlay strokes on (x,y) plot
+    #     fig, ax = plt.subplots()
+    #     ax.plot(strok[:,0], strok[:,1], '-xk', alpha=0.8, label="input")
+    #     ax.plot(strokf[:,0], strokf[:,1], '-or', alpha=0.2, label="filtered")
+    #     # Compare to just smoothing
+    #     stroksm = smoothStrokes([strok], fs, window_time=1/Wn, window_type="hanning",
+    #                  adapt_win_len="adapt")[0]
+    #     ax.plot(stroksm[:,0], stroksm[:,1], '-og', alpha=0.2, label="smoothed")
+    #     plt.legend()
+    #     ax.set_title(f"Stroke {_i} (Wn={Wn})")
+    #
+    # # Save
+    # strokesfilt.append(strokf)
+    #
+    # # -- compare strokes pre and post (timecourses)
+    # if plotprepost:
+    #     from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+    #     fig, axes = plt.subplots(2,1, sharex=True, sharey=True)
+    #     ax = axes.flatten()[0]
+    #     plotDatStrokesTimecourse(strokes, ax=ax)
+    #     ax = axes.flatten()[1]
+    #     plotDatStrokesTimecourse(strokesfilt, ax=ax)
+    #     ax.set_title("strokesFilter() --> Filtered")
+
+    if sanity_check_endpoint_not_different:
+        # Sanity check
+        _, _, diag = strokes_bounding_box_dimensions(strokes)
+
+        for s, sf in zip(strokes, strokes_sm):
+            for idx_pt in [0, -1]:
+                d = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
+
+                # print("-----")
+                # print(d)
+                # print(diag)
+                # print("-----")
+                if d/diag > 0.2:
+                    from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
+                    print(s)
+                    print(sf)
+                    print(d)
+                    print(d/diag)
+
+                    fig, axes = plt.subplots(2,2)
+                    ax = axes.flatten()[0]
+
+                    from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+                    ax = axes.flatten()[0]
+                    plotDatStrokesTimecourse(strokes, ax=ax)
+                    ax = axes.flatten()[1]
+                    plotDatStrokesTimecourse(strokes_sm, ax=ax)
+                    ax.set_title("strokesFilter() --> Filtered")
+
+                    ax = axes.flatten()[2]
+                    plotDatStrokesWrapper(strokes, ax)
+
+                    ax = axes.flatten()[3]
+                    plotDatStrokesWrapper(strokes_sm, ax)
+
+                    # Find velocity
+                    fig.savefig("/tmp/tmp.png")
+
+                    assert False, "why smoothing made such big change to poisitons?"
+
     return strokes_sm
 
 def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False, 
@@ -343,13 +409,18 @@ def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filte
     """
     from pythonlib.tools.stroketools import strokesVelocity
 
-    assert LP>10, "this leads to problesm see strokeVel"
-    # 1) Get velocity and accel
-    strokes_vel = strokesVelocity(strokes, fs, fs_new = fs_new, lowpass_freq=LP, do_pre_filter=do_pre_filter, ploton=ploton)[0]
-    strokes_accel = strokesVelocity(strokes_vel, fs, fs_new=fs_new, lowpass_freq=LP, do_pre_filter=False, ploton=ploton)[0]
-#     print(strokes_vel[0].shape)
-#     print(strokes_accel[0].shape)
-#     print(strokes[0].shape)
+    if True:
+        # assert LP>10, "this leads to problesm see strokeVel"
+        # 1) Get velocity and accel
+        strokes_vel = strokesVelocity(strokes, fs, fs_new = fs_new, lowpass_freq=LP, do_pre_filter=do_pre_filter, ploton=ploton)[0]
+        strokes_accel = strokesVelocity(strokes_vel, fs, fs_new=fs_new, lowpass_freq=LP, do_pre_filter=False, ploton=ploton)[0]
+    #     print(strokes_vel[0].shape)
+    #     print(strokes_accel[0].shape)
+    #     print(strokes[0].shape)
+    else:
+        strokes_vel = strokesVelocity(strokes, fs, clean=True)[0]
+        strokes_accel = strokesVelocity(strokes_vel, fs, clean=True)[0]
+
     
 #     if ploton:
 #         import matplotlib.pyplot as plt
@@ -1211,6 +1282,11 @@ def strokes_bounding_box_dimensions(strokes):
     w = maxx-minx
     h = maxy-miny
     d = (w**2 + h**2)**0.5
+
+    if d==0:
+        print(strokes)
+        assert False
+
     return w, h, d
 
 def strokes_bounding_box(strokes):

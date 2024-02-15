@@ -266,7 +266,9 @@ class Dataset(object):
         if not self._reloading_saved_state:
             self._cleanup(
                 remove_dot_strokes = self.ParamsCleanup["remove_dot_strokes"],
-                remove_online_abort = self.ParamsCleanup["remove_online_abort"]
+                remove_online_abort = self.ParamsCleanup["remove_online_abort"],
+                remove_bad_strokes=True,
+                smooth_strokes=True,
                 )
             self._check_consistency()
         # Ignore this, since its not doing anything important, and will run later.
@@ -2121,7 +2123,7 @@ class Dataset(object):
         if ver == "no_pruning_strokes":
             # Do everything, except no pruning of strokes.
             self._cleanup(remove_dot_strokes=False, remove_online_abort=False,
-                          remove_bad_strokes=False)
+                          remove_bad_strokes=False, smooth_strokes=False)
             self._check_consistency()
             self._cleanup_preprocess_each_time_load_dataset()
         else:
@@ -2129,8 +2131,8 @@ class Dataset(object):
             assert False
 
 
-    def _cleanup(self, remove_dot_strokes=True, remove_online_abort=True,
-                 remove_bad_strokes=True):
+    def _cleanup(self, remove_dot_strokes, remove_online_abort,
+                 remove_bad_strokes, smooth_strokes):
         """ automaitcalyl clean up using default params
         Removes rows from self.Dat, and resets indices.
         - This should be run BEFORE preprocessDat, or else this might overwrite changes 
@@ -2201,30 +2203,6 @@ class Dataset(object):
                 return self.Metadats[idx]["metadat_probedat"]["expt"]
             self.Dat = applyFunctionToAllRows(self.Dat, F, "expt")
 
-        ################ STROKES
-        ###### remove strokes that are empty or just one dot
-        if remove_dot_strokes:
-            strokeslist = self.Dat["strokes_beh"].values
-            for i, strokes in enumerate(strokeslist):
-                strokes = [s for s in strokes if len(s)>1]
-                strokeslist[i] = strokes
-            self.Dat["strokes_beh"] = strokeslist
-
-        # Cleanup strokes concatted with fixation touch.
-        if remove_bad_strokes:
-            self._cleanup_cut_strokes_whose_onset_is_at_fixation(PLOT_DISTROS=True,
-                PLOT_EXAMPLE_BAD_TRIALS=True)
-
-            self._cleanup_remove_strokes_that_are_actually_fixation_or_done(
-                PLOT_EXAMPLE_BAD_TRIALS=True)
-
-        # Remove rows that now have no strokes
-        inds_bad = [i for i,strokes in enumerate(self.Dat["strokes_beh"]) if len(strokes)==0]
-        if len(inds_bad)>0:
-            print("REmoving this many rows becuase they have len 0 strokes:")
-            print(len(inds_bad))
-            print("These indices: ", inds_bad)
-        self.Dat = self.Dat.drop(index=inds_bad).reset_index(drop=True)
 
         ####### Remove columns of useless info.
         cols_to_remove = ["probe", "feedback_ver_prms", "feedback_ver",
@@ -2237,6 +2215,7 @@ class Dataset(object):
             if col in self.Dat.columns:
                 del self.Dat[col]
         print("Deleted unused columns from self.Dat")
+
 
         ####### Construct useful params
         # For convenience, add column for whether task is train or test (from
@@ -2255,12 +2234,6 @@ class Dataset(object):
         print("applying monkey train test names")
         self.Dat = applyFunctionToAllRows(self.Dat, F, "monkey_train_or_test")
 
-        # reset 
-        print("resetting index")
-        self.Dat = self.Dat.reset_index(drop=True)
-
-        ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
-        assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
 
         ### reset tvals to the new earliest data
         self._get_standard_time()
@@ -2271,6 +2244,7 @@ class Dataset(object):
         # Remove trial day since this might not be accurate anymore (if mixing datasets)
         if "trial_day" in self.Dat.columns:
             self.Dat = self.Dat.drop("trial_day", axis=1)
+
 
         # Replace epoch with rule, if that exists
         # 8/17/22 - now done in preprocessDat, because here would overwrite preprocessDat.
@@ -2301,8 +2275,12 @@ class Dataset(object):
             # Remove any trials that were online abort.
             self.Dat = self.Dat[self.Dat["aborted"]==False]
             print("Removed online aborts")
-        # print(sum(self.Dat["trialcode"] == "220608-1-132"))
-        # assert False
+
+        ################ STROKES
+        self.cleanup_strokes_all_wrapper(remove_dot_strokes, remove_bad_strokes,
+                                         smooth_strokes)
+
+        ################# OTHER STUFF
         if "Task" in self.Dat.columns:
             self._cleanup_using_tasks() 
 
@@ -2328,36 +2306,11 @@ class Dataset(object):
         # # fix a problem, sholdnt throw out epoch name
         # self.supervision_epochs_extract_orig()
 
-        # RE-extract stroke motor events and timing
-        # ORiginal items:
-            # {'nstrokes': 4,
-            #  'time_go2raise': 1.0335998000000073,
-            #  'time_raise2firsttouch': -2.4320000000000004,
-            #  'dist_raise2firsttouch': 14.599874703419573,
-            #  'sdur': 5.280000000000002,
-            #  'isi': 1.0879999999999992,
-            #  'time_touchdone': 0.4158021000000254,
-            #  'dist_touchdone': 479.12381428563003,
-            #  'dist_strokes': 1886.1317695259509,
-            #  'dist_gaps': 1292.682034468351}
-
-            #  {'go_cue': 6.022400199999993,
-            #  'raise': 5.912,
-            #  'ons': [4.624, 7.424, 8.744, 10.04],
-            #  'offs': [7.056, 8.408, 9.656, 10.992],
-            #  'done_touch': 11.376,
-            #  'done_triggered': 11.407802100000026}        
-        # currently just doing ons and offs
-        for ind in range(len(self.Dat)):
-            ons, offs = self.strokes_onsets_offsets(ind)
-            
-            # Place into ME
-            me = self.Dat.iloc[ind]["motorevents"]
-            me["ons"] = ons
-            me["offs"] = offs
-
-        ####
+        #########
         self.Dat = self.Dat.reset_index(drop=True)
+
+        ### confirm that trialcodes are all unique (this is assumed for subsequent stuff)
+        assert len(self.Dat["trialcode"])==len(self.Dat["trialcode"].unique().tolist()), "not sure why"
 
     def _cleanup_using_tasks(self, unique_names_post_Sep17=False):
         """ cleanups that require "Tasks" in columns,
@@ -2645,7 +2598,81 @@ class Dataset(object):
                 return x["unique_task_name"]
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname="character")
 
+    def _cleanup_remove_trials_with_empty_strokes(self):
+        """ Modifies self.Dat, to Remove rows that now have no strokes
+        i..e, empty list
+        """
+        inds_bad = [i for i, strokes in enumerate(self.Dat["strokes_beh"]) if len(strokes)==0]
+        if len(inds_bad)>0:
+            print("REmoving this many rows becuase they have len 0 strokes:")
+            print(len(inds_bad))
+            print("These indices: ", inds_bad)
+        self.Dat = self.Dat.drop(index=inds_bad).reset_index(drop=True)
 
+    def cleanup_strokes_all_wrapper(self, remove_dot_strokes=True, remove_bad_strokes=True,
+                                    smooth_strokes=True):
+        """ Holds all things relatd to cleaning up strokes.
+        IMportant, becuase there are oreder of operations that matter. e..g,
+        want to smooth BEFORE pruning, and so on.
+        """
+
+        ###### remove strokes that are empty or just one dot
+        if remove_dot_strokes:
+            strokeslist = self.Dat["strokes_beh"].values
+            for i, strokes in enumerate(strokeslist):
+                # First, remove empty strokes
+                strokes = [s for s in strokes if len(s)>1]
+
+                # Second, remove dist=0 strokes
+                from pythonlib.drawmodel.features import strokeDistances
+                list_d = strokeDistances(strokes)
+                strokes = [s for s,d in zip(strokes, list_d) if d>0]
+
+                strokeslist[i] = strokes
+            self.Dat["strokes_beh"] = strokeslist
+        self._cleanup_remove_trials_with_empty_strokes()
+
+        # Cleanup strokes concatted with fixation touch.
+        if remove_bad_strokes:
+            self._cleanup_cut_strokes_whose_onset_is_at_fixation(PLOT_DISTROS=True,
+                PLOT_EXAMPLE_BAD_TRIALS=True)
+            self._cleanup_remove_trials_with_empty_strokes()
+
+            self._cleanup_remove_strokes_that_are_actually_fixation_or_done(
+                PLOT_EXAMPLE_BAD_TRIALS=True)
+            self._cleanup_remove_trials_with_empty_strokes()
+
+        if smooth_strokes:
+            self.Dat["strokes_beh"] = self.strokes_smooth_preprocess()
+            self._cleanup_remove_trials_with_empty_strokes()
+
+        # RE-extract stroke motor events and timing
+        # ORiginal items:
+            # {'nstrokes': 4,
+            #  'time_go2raise': 1.0335998000000073,
+            #  'time_raise2firsttouch': -2.4320000000000004,
+            #  'dist_raise2firsttouch': 14.599874703419573,
+            #  'sdur': 5.280000000000002,
+            #  'isi': 1.0879999999999992,
+            #  'time_touchdone': 0.4158021000000254,
+            #  'dist_touchdone': 479.12381428563003,
+            #  'dist_strokes': 1886.1317695259509,
+            #  'dist_gaps': 1292.682034468351}
+
+            #  {'go_cue': 6.022400199999993,
+            #  'raise': 5.912,
+            #  'ons': [4.624, 7.424, 8.744, 10.04],
+            #  'offs': [7.056, 8.408, 9.656, 10.992],
+            #  'done_touch': 11.376,
+            #  'done_triggered': 11.407802100000026}
+        # currently just doing ons and offs
+        for ind in range(len(self.Dat)):
+            ons, offs = self.strokes_onsets_offsets(ind)
+
+            # Place into ME
+            me = self.Dat.iloc[ind]["motorevents"]
+            me["ons"] = ons
+            me["offs"] = offs
 
     # i.e. tvals from probedat might not be accurate if here combining multiple datsets
     def _get_standard_time(self, first_date=None):
@@ -5898,7 +5925,73 @@ class Dataset(object):
             for row in self.Dat.iterrows():
                 fakeTimesteps(row[1][newcolname])
 
+    def strokes_smooth_preprocess(self, window_time=None, PLOT_EXAMPLE=False):
+        """ Smooth all the strokes in self.Dat.  REturns strokes without
+        modifgyning self.Dat. To replace strokes in self,
+        just take output and pass into self.Dat["strokes_beh"].
+        PARAMS:
+        - window_time, in sec, the hanning winodw.
+        NOTES:
+            -- 0.15 is good, for Diego. could even go higher.
+            -- 0.3 probably good, for Diego, for getting substrokes.
+            -- 0.4 can even work, for smoothing, for Diego, since his strokes can
+            be long and take >1 sec.
+        NOTE: tried also strokesFilter, but that didnt work well for such low freq filtereing
+        needed here, and often would clip data to smaller.
+        NOTE: this automatically sanity checks that outptu endpoints are close to inputs'.
+        """
 
+        if window_time is None:
+            # Basic smoothing that should always do
+            if self.animals(True)[0]=="Diego":
+                window_time = 0.2
+            elif self.animals(True)[0]=="Pancho":
+                window_time = 0.1
+            else:
+                assert False
+
+        # 1) General preprocessing, smoothing
+        from pythonlib.tools.stroketools import strokesFilter, smoothStrokes
+
+        list_strokes = self.Dat["strokes_beh"]
+
+        # do smoothing
+        # window_type = "flat"
+        fs = self.get_sample_rate_alltrials()
+        window_type = "hanning"
+        adapt_win_len= "adapt"
+        list_strokes_filt = []
+        for strokes in list_strokes:
+            strokes_filt = smoothStrokes(strokes, fs,
+                window_time=window_time, window_type=window_type,
+                     adapt_win_len=adapt_win_len)
+            list_strokes_filt.append(strokes_filt)
+
+            if PLOT_EXAMPLE:
+                from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
+                from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+
+                fig, axes = plt.subplots(2,2)
+
+                ax = axes.flatten()[0]
+                plotDatStrokesTimecourse(strokes, ax=ax)
+
+                ax = axes.flatten()[1]
+                plotDatStrokesTimecourse(strokes_filt, ax=ax)
+                ax.set_title("strokesFilter() --> Filtered")
+
+                ax = axes.flatten()[2]
+                plotDatStrokesWrapper(strokes, ax)
+
+                ax = axes.flatten()[3]
+                plotDatStrokesWrapper(strokes_filt, ax)
+
+                # Find velocity
+                fig.savefig("/tmp/tmp.png")
+
+                assert False, "or el;se its too many plots."
+
+        return list_strokes_filt
 
     def parsesChooseSingle(self, convert_to_splines=True, add_fake_timesteps=True, 
         replace=False):
@@ -6127,14 +6220,12 @@ class Dataset(object):
         PRINT = False
         DEBUG = False
         lenient_allow_data_if_has_n_levels = 2 # 2 allows plotting all cases
-        dfout, dict_dfs = extract_with_levels_of_conjunction_vars(DF, var, list_vars_others, 
-                                                                  n_min=n_min, 
+        dfout, dict_dfs = extract_with_levels_of_conjunction_vars(DF, var, list_vars_others,
+                                                                  n_min_across_all_levs_var=n_min, PRINT=PRINT,
                                                                   lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
-                                                                 PRINT_AND_SAVE_TO=path,
-                                                                 ignore_values_called_ignore=ignore_values_called_ignore,
-                                                                 plot_counts_heatmap_savedir=plot_counts_heatmap_savedir,
-                                                                 PRINT=PRINT,
-                                                                 DEBUG=DEBUG)
+                                                                  DEBUG=DEBUG, PRINT_AND_SAVE_TO=path,
+                                                                  ignore_values_called_ignore=ignore_values_called_ignore,
+                                                                  plot_counts_heatmap_savepath=plot_counts_heatmap_savedir)
         return dfout, dict_dfs
 
     def grouping_append_col(self, grp_by, new_col_name, use_strings=True, strings_compact=True):
@@ -8245,14 +8336,21 @@ class Dataset(object):
 
         return suff
 
-    def save(self, savedir):
+    def save(self, savedir, columns_to_keep = None):
         """ saves dataset (the entire object) in
         savedir/dataset_beh.pkl
         """
+
+        if columns_to_keep is not None:
+            D = self.copy()
+            D.Dat = D.Dat.loc[:, columns_to_keep]
+        else:
+            D = self
+
         import pickle
         path = f"{savedir}/dataset_beh.pkl"
         with open(path, "wb") as f:
-            pickle.dump(self, f)        
+            pickle.dump(D, f)
 
     def save_state(self, SDIR_MAIN, SDIR_SUB, add_tstamp = True):
         """
