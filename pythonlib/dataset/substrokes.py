@@ -100,36 +100,53 @@ def database_shape_segmentation_get(animal):
     """
     if animal=="Diego":
         database_shape_segmentation = {
+
             "zigzagSq-1-1-1": [(0.24, 0.44), (0.54, 0.85)],
-            "V-2-2-0": [(0.31, 0.66)],
-            "arcdeep-4-3-0": [(0.38, 0.81)],
+
+            "V-2-2-0": [(0.3, 0.6)],
+
+            "arcdeep-4-3-0": [(0.20, 0.48), (0.52, 0.9)],
             "line-8-1-0": [],
-            "line-8-2-0": [],
+            "line-8-2-0": [(0.42, 0.74)],
             "line-8-3-0": [],
-            "line-8-4-0": [],
-            "Lcentered-4-1-0":[(0.36, 0.64)],
-            "arcdeep-4-2-0":[(0.25, 0.55), (0.6, 0.94)],
+            "line-8-4-0": [(0.64, 0.93)],
+            "Lcentered-4-1-0":[(0.33, 0.69)],
+            # "arcdeep-4-2-0":[(0.25, 0.55), (0.6, 0.94)],
+            "arcdeep-4-2-0":[(0.25, 0.55), (0.57, 0.94)],
+
             "V-2-3-0":[(0.39, 0.65)],
-            # "squiggle3-3-2-0":[(0.3, 0.45), (0.64, 0.76)],
-            "squiggle3-3-2-0":[(0.13, 0.5), (0.55, 0.8)],
-            "circle-6-1-0":[(0.18, 0.4), (0.58, 0.8)],
+
+            "squiggle3-3-2-0":[(0.1, 0.38), (0.45, 0.75)],
+
+            "circle-6-1-0":[(0.18, 0.42), (0.58, 0.83)],
+
             "usquare-1-4-0":[(0.5, 0.8)],
+
             "Lcentered-4-4-0":[(0.4, 0.72)],
-            "squiggle3-3-1-1":[],
-            "V-2-4-0":[(0.4, 0.6)],
+            "Lcentered-4-3-0":[(0.42, 0.72)],
+            "squiggle3-3-1-1":[(0.18, 0.44)],
+
+            "V-2-4-0":[(0.42, 0.65)],
+
             "arcdeep-4-4-0":[(0.5, 0.84)],
             "Lcentered-4-2-0":[(0.3, 0.55)],
-            "usquare-1-3-0":[(0.25, 0.53), (0.57, 0.86)],
-            # "usquare-1-2-0":[(0.2, 0.5), (0.52, 0.86)],
-            "usquare-1-2-0":[(0.52, 0.86)],
-            "zigzagSq-1-2-0":[(0.16, 0.36), (0.43, 0.9)],
-            # "zigzagSq-1-2-0":[(0.16, 0.36), (0.46, 0.90)],
-            "zigzagSq-1-2-1":[(0.2, 0.5), (0.6, 0.86)],
-            # "squiggle3-3-1-0":[(0.1, 0.32), (0.38, 0.60)],
-            "squiggle3-3-1-0":[(0.15, 0.4)],
-            "zigzagSq-1-1-0":[(0.2, 0.4), (0.5, 0.8)],
-            "Lcentered-4-3-0":[(0.44, 0.74)],
-            "squiggle3-3-2-1":[(0.2, 0.4), (0.6, 0.88)]
+
+            "usquare-1-3-0":[(0.27, 0.53)],
+
+
+            # "usquare-1-2-0":[(0.25, 0.48), (0.52, 0.86)],
+            "usquare-1-2-0":[(0.52, 0.86)], # first trough is not common
+
+            "zigzagSq-1-2-0":[(0.16, 0.36), (0.43, 0.7)],
+
+            "zigzagSq-1-2-1":[(0.2, 0.5), (0.6, 0.84)],
+
+            "squiggle3-3-1-0":[(0.1, 0.32), (0.38, 0.62)],
+            # "squiggle3-3-1-0":[(0.15, 0.4)],
+
+            "zigzagSq-1-1-0":[(0.18, 0.4), (0.52, 0.77)],
+
+            "squiggle3-3-2-1":[(0.18, 0.44), (0.5, 0.88)]
         }
     elif animal=="Pancho":
         database_shape_segmentation = {
@@ -137,10 +154,12 @@ def database_shape_segmentation_get(animal):
             "line-8-2-0": [],
             "line-8-3-0": [],
             "line-8-4-0": [],
-            "line-9-1-0": [],
+
+            "line-9-1-0": [(0.3, 0.84)],
             "line-9-2-0": [],
             "line-9-3-0": [],
             "line-9-4-0": [],
+
             "line-10-1-0": [],
             "line-10-2-0": [],
             "line-10-3-0": [],
@@ -155,16 +174,26 @@ def database_shape_segmentation_get(animal):
             "Lcentered-5-6-0":[(0.4, 0.6)],
             "Lcentered-5-8-0":[(0.25, 0.45)],
             "Lcentered-5-5-0":[(0.1, 0.3), (0.39, 0.63)],
-            "Lcentered-4-2-0":[(0.3, 0.54), (0.7, 0.9)],
-            "Lcentered-4-3-0":[(0.33, 0.62)],
-            "Lcentered-4-4-0":[(0.2, 0.46), (0.6, 0.88)],
+
+            # "Lcentered-4-2-0":[(0.3, 0.54), (0.7, 0.9)],
+            "Lcentered-4-2-0":[(0.3, 0.56)], # Secon peak is rare
+
+            "Lcentered-4-3-0":[(0.28, 0.62)],
+
+            "Lcentered-4-4-0":[(0.2, 0.54), (0.55, 0.92)],
+
             # "Lcentered-4-4-0":[(0.6, 0.88)],
             # "squiggle3-3-1-0":[(0.16, 0.38), (0.44, 0.66), (0.71, 0.91)],
             "squiggle3-3-1-0":[(0.16, 0.38), (0.44, 0.68)],
-            "squiggle3-3-2-1":[(0.15, 0.35), (0.42, 0.62)],
-            "circle-6-1-0":[(0.08, 0.28), (0.34, 0.6), (0.68, 0.88)],
+
+            "squiggle3-3-2-1":[(0.15, 0.39), (0.42, 0.80)],
+
+            "circle-6-1-0":[(0.08, 0.28), (0.32, 0.56), (0.58, 0.88)],
+
             "V-2-4-0":[(0.3, 0.5)],
-            "arcdeep-4-1-0":[(0.1, 0.3), (0.36, 0.68)],
+
+            "arcdeep-4-1-0":[(0.06, 0.29), (0.36, 0.86)],
+
             "Lzigzag1-3-5-1":[(0.18, 0.38), (0.4, 0.7)],
             "Lzigzag1-4-5-1":[(0.2, 0.36), (0.4, 0.6)],
             "Lzigzag1-4-6-0":[(0.16, 0.36)],
@@ -174,7 +203,7 @@ def database_shape_segmentation_get(animal):
             "Lzigzag1-4-5-0":[(0.16, 0.38), (0.44, 0.64)],
             "Lzigzag1-3-5-0":[(0.16, 0.38), (0.40, 0.64)],
             "V-2-1-0":[(0.1, 0.3), (0.36, 0.58)],
-            "arcdeep-4-2-0":[(0.58, 0.82)],
+            "arcdeep-4-2-0":[(0.42, 0.82)],
             "arcdeep-4-4-0":[(0.2, 0.43)],
         }
     else:
@@ -183,9 +212,11 @@ def database_shape_segmentation_get(animal):
     return database_shape_segmentation
 
 
-def pipeline_wrapper(D):
+def pipeline_wrapper(D, dosave=True):
     """ entire pipeline, going from D to Dsubs and DSsubs, which are "fake"
     datasets holding substrokes where you would expecte strokes.
+    PARAMS:
+    - dosave, bool, if True, then saved DSsubs and Dsubs.
     """
     from pythonlib.tools.pandastools import slice_by_row_label
     from pythonlib.dataset.dataset_strokes import DatStrokes
@@ -197,15 +228,29 @@ def pipeline_wrapper(D):
 
     PLOT = True
     Npts = 70
-    refrac_npts = int(0.1*Npts)
+    refrac_npts = int(0.1*Npts) # within this refrac, takes ony a single trough maximum.
     # assert Npts==50, "not sure if hard coded.."
-    THRESH = 0.6
+    THRESH = 0.65 # throws out any strokes with dtw distnace higher than this.
     animal = D.animals(True)[0]
     date = D.dates(True)[0]
     SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("substrokes_preprocess")
 
     # Get database
     database_shape_segmentation = database_shape_segmentation_get(animal)
+
+    # First, smooth all data in dataset
+    ## EMpticalyl determined to work for these guys, in imprioving hte getting
+    # of troughs.
+    print("SMOOTHING STROKES, to preprocess")
+    D = D.copy()
+    if D.animals(True)[0]=="Diego":
+        window_time = 0.35
+    elif D.animals(True)[0]=="Pancho":
+        window_time = 0.25
+    else:
+        assert False
+    list_strokes_filt = D.strokes_smooth_preprocess(window_time=window_time)
+    D.Dat["strokes_beh"] = list_strokes_filt
 
     # Get DS, cleaned
     from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
@@ -244,7 +289,8 @@ def pipeline_wrapper(D):
                                                                  list_frac_windows, refrac_npts,
                                                                  PLOT=False,
                                                                  MEAN_check_same_direction=False,
-                                                                 MEAN_ver="median",
+                                                                 # MEAN_ver="median",
+                                                                 MEAN_ver="mean",
                                                                  THRESH_dtw_dist=THRESH
                                                                  )
                 inds_ds_pruned = list(np.array(inds_ds_all)[MASKS["idxs_keep_final_bool"]])
@@ -456,41 +502,45 @@ def pipeline_wrapper(D):
     DSsubs.Dat = append_col_with_grp_index(DSsubs.Dat, ["shape", "index_within_stroke"], "shape_idxwithin", use_strings=False)
 
     ##### Plot, sanity check, compare to dataset
-    # Comapres to both Dsubs and D
-    if False:
-        ind = 301
-        DSsubs.plot_single_overlay_entire_trial(ind)
+    features_motor_extract_and_bin(DSsubs, plot_save_dir=SAVEDIR)
 
-        print(DSsubs.Dat.loc[ind, ["shape_idxwithin", "stroke_index_orig", "angle"]])
+    # # Comapres to both Dsubs and D
+    # if False:
+    #     ind = 301
+    #     DSsubs.plot_single_overlay_entire_trial(ind)
+    #
+    #     print(DSsubs.Dat.loc[ind, ["shape_idxwithin", "stroke_index_orig", "angle"]])
+    #
+    #     tc = DSsubs.Dat.iloc[ind]["trialcode"]
+    #     print(tc)
+    #     ind = D.Dat[D.Dat["trialcode"]==tc].index.tolist()[0]
+    #     D.plotSingleTrial(ind)
+    #
+    #
+    # nbins = 4
+    # for var in ["circularity", "distcum"]:
+    #     DSsubs.Dat[f"{var}_binned"] = bin_values(DSsubs.Dat[var].values, nbins=nbins)
+    # for var in ["angle"]:
+    #     DSsubs.Dat[f"{var}_binned"] = bin_angle_by_direction(DSsubs.Dat[var].values,
+    #                                                        num_angle_bins=nbins)
+    # # FInal - label each substroke
+    # DSsubs.Dat = append_col_with_grp_index(DSsubs.Dat, ["distcum_binned", "angle_binned"], "dist_angle", use_strings=False)
+    #
+    # # Save n conjunctions
+    # grouping_print_n_samples(DSsubs.Dat, ["index_within_stroke", "circularity_binned", "distcum_binned", "angle_binned", "shape"],
+    #                          savepath=f"{SAVEDIR}/substroke_features_groupings.txt", save_convert_keys_to_str = False,
+    #                          save_as="text", sorted_by_keys=True)
+    #
+    # # Plot joint distributions of features
+    # fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="shape_idxwithin", height=3.5)
+    # savefig(fig, f"{SAVEDIR}/substroke_features-color_shape_idx.pdf")
+    # fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="shape", height=3.5)
+    # savefig(fig, f"{SAVEDIR}/substroke_features-color_shape.pdf")
+    # fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="dist_angle", height=3.5)
+    # savefig(fig, f"{SAVEDIR}/substroke_features-color_bin.pdf")
+    #
+    # plt.close("all")
 
-        tc = DSsubs.Dat.iloc[ind]["trialcode"]
-        print(tc)
-        ind = D.Dat[D.Dat["trialcode"]==tc].index.tolist()[0]
-        D.plotSingleTrial(ind)
-
-    nbins = 4
-    for var in ["circularity", "distcum"]:
-        DSsubs.Dat[f"{var}_binned"] = bin_values(DSsubs.Dat[var].values, nbins=nbins)
-    for var in ["angle"]:
-        DSsubs.Dat[f"{var}_binned"] = bin_angle_by_direction(DSsubs.Dat[var].values,
-                                                           num_angle_bins=nbins)
-    # FInal - label each substroke
-    DSsubs.Dat = append_col_with_grp_index(DSsubs.Dat, ["distcum_binned", "angle_binned"], "dist_angle", use_strings=False)
-
-    # Save n conjunctions
-    grouping_print_n_samples(DSsubs.Dat, ["index_within_stroke", "circularity_binned", "distcum_binned", "angle_binned", "shape"],
-                             savepath=f"{SAVEDIR}/substroke_features_groupings.txt", save_convert_keys_to_str = False,
-                             save_as="text", sorted_by_keys=True)
-
-    # Plot joint distributions of features
-    fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="shape_idxwithin", height=3.5)
-    savefig(fig, f"{SAVEDIR}/substroke_features-color_shape_idx.pdf")
-    fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="shape", height=3.5)
-    savefig(fig, f"{SAVEDIR}/substroke_features-color_shape.pdf")
-    fig = sns.pairplot(data=DSsubs.Dat, vars=["circularity", "distcum", "displacement", "angle"], hue="dist_angle", height=3.5)
-    savefig(fig, f"{SAVEDIR}/substroke_features-color_bin.pdf")
-
-    plt.close("all")
 
     ### FINALY SANITY CHECK
     for shape in list_shapes:
@@ -509,7 +559,151 @@ def pipeline_wrapper(D):
             savefig(fig, f"{plot_savedir}/{shape}-title_shidx_stridx_distang-iter_{it}.pdf")
         plt.close("all")
 
+    # SAVE
+    from pythonlib.tools.expttools import writeDictToTxt
+    params_save = {
+        "Npts":Npts,
+        "refrac_npts":refrac_npts,
+        "THRESH":THRESH,
+        "SAVEDIR":SAVEDIR,
+        "MAP_IND_DS_TO_SUBSTROKES":MAP_IND_DS_TO_SUBSTROKES,
+        "MAP_IND_DS_TO_INDS_WITHIN_STROKE":MAP_IND_DS_TO_INDS_WITHIN_STROKE,
+        "MAP_IND_DS_TO_FRACS_WITHIN_STROKE":MAP_IND_DS_TO_FRACS_WITHIN_STROKE,
+        "res_by_shape":res_by_shape,
+        "inds_ds_used":inds_ds_used
+    }
+    writeDictToTxt(params_save, f"{SAVEDIR}/params_save.txt")
+    # DSsubs.save(SAVEDIR, columns_keep_in_dataset=["trialcode", "strokes_beh"])
+    DSsubs.save(SAVEDIR)
+
     return Dsubs, DSsubs, SAVEDIR
+
+
+def features_motor_extract_and_bin(DS, plot_save_dir=None):
+    """
+    GOOD, run this at very end of substrokes getting.
+    Clean extraction of all relevant motor features that characterize substrokes,
+    and then binning them, and then plotting (many).
+    Verified that these lead to very similar substrokes (by eye) across diff shapes, and
+    are accurately quantification of them
+    :param DSsubs:
+    - plot_save_dir, str, path to save figures. This is slow!
+    :return:
+    - MOdifies DS.Dat
+    """
+    from pythonlib.drawmodel.features import strokeCircularity, strokeCircularitySigned
+    from pythonlib.tools.nptools import bin_values
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.vectools import get_angle, bin_angle_by_direction, cart_to_polar
+    from pythonlib.tools.pandastools import grouping_print_n_samples
+
+
+    # GOOD BINNING
+    DS.Dat["circ_signed"] = strokeCircularitySigned(DS.Dat["strok"].tolist(), prune_outer_flanks_frac=0.1)
+    DS.Dat["circularity"] = strokeCircularity(DS.Dat["strok"].tolist(), prune_outer_flanks_frac=0.1)
+
+    # BIN ALL VALUES
+    nbins = 2
+    for var in ["velocity", "distcum"]:
+        DS.Dat[f"{var}_binned"] = bin_values(DS.Dat[var].values, nbins=nbins)
+    nbins = 3
+    for var in ["circ_signed", "circularity"]:
+        DS.Dat[f"{var}_binned"] = bin_values(DS.Dat[var].values, nbins=nbins)
+    nbins = 8
+    for var in ["angle"]:
+        DS.Dat[f"{var}_binned"] = bin_angle_by_direction(DS.Dat[var].values, num_angle_bins=nbins)
+    # DS.Dat["angle_binned"] = bin_angle_by_direction(DS.Dat["angle"], num_angle_bins=12)
+
+    # Also a coarse angl ebin
+    DS.Dat[f"angle_binned_coarse"] = bin_angle_by_direction(DS.Dat[var].values, num_angle_bins=3)
+
+    # CONTEXT DEFINITION
+    # Remove all data for which dont have the entire stroke, since then cant look at sequence context
+    tolerance = 0.85
+    n1 = len(DS.Dat)
+    DS.clean_preprocess_data(["dataset_missing_stroke_in_context"])
+    n2 = len(DS.Dat)
+    if n2/n1 < tolerance:
+        print(n1, n2)
+        assert False, "why removed so much?"
+    DS.context_define_local_context_motif(version="substrokes_angle")
+
+    # GROUP by conjunction bins
+    DS.Dat = append_col_with_grp_index(DS.Dat, ["distcum_binned", "angle_binned",
+                                                "circ_signed_binned", "velocity_binned"],
+                                       "di_an_ci_ve_bin", False)
+    DS.Dat = append_col_with_grp_index(DS.Dat, ["distcum_binned", "angle_binned"],
+                                       "dist_angle", use_strings=False)
+    DS.Dat = append_col_with_grp_index(DS.Dat, ["di_an_ci_ve_bin", "CTXT_prev_next"],
+                                       "ss_this_ctxt", use_strings=False)
+
+
+    ##### Remove substrokes that are too short in space or time.
+    # DO This at very end, since it would efefct context extraction.
+    methods = ["stroke_too_short", "stroke_too_quick"]
+    params = {
+        "min_stroke_length":35,
+        "min_stroke_dur":0.2
+    }
+    n1 = len(DS.Dat)
+    DS.clean_preprocess_data(methods=methods, params=params)
+    n2 = len(DS.Dat)
+    assert n2/n1>0.75, "why removed so much data?"
+
+    ##################### PLOTS
+    if plot_save_dir is not None:
+        # plot and save all conjunctions, can take time.
+        # FInal - label each substroke
+
+        # Save n conjunctions
+        grouping_print_n_samples(DS.Dat, ["index_within_stroke", "distcum_binned", "angle_binned", "circ_signed_binned", "velocity_binned", "shape"],
+                                 savepath=f"{plot_save_dir}/substroke_features_groupings.txt", save_convert_keys_to_str = False,
+                                 save_as="text", sorted_by_keys=True)
+
+        # Plot joint distributions of features
+        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape_idxwithin", height=3.5)
+        savefig(fig, f"{plot_save_dir}/substroke_features-color_shape_idx.pdf")
+        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape", height=3.5)
+        savefig(fig, f"{plot_save_dir}/substroke_features-color_shape.pdf")
+        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="dist_angle", height=3.5)
+        savefig(fig, f"{plot_save_dir}/substroke_features-color_bin.pdf")
+
+        plt.close("all")
+
+        ## PLOT example drawings, grouped by shape
+        DS.plot_multiple_sorted_by_feature_split_by_othervar("di_an_ci_ve_bin", ["shape_idxwithin"],
+                                                             plot_save_dir=plot_save_dir, nmin_plot=4,
+                                                             only_plot_if_mult_lev_of_feature=True)
+        # for sh_idx_within in DS.Dat["shape_idxwithin"].unique().tolist():
+        #     inds = DS.Dat[DS.Dat["shape_idxwithin"]==sh_idx_within].index.tolist()
+        #     # for feature in ["circ_signed", "velocity", "distcum", "angle"]:
+        #     for feature in ["di_an_ci_ve_bin"]:
+        #         fig, axes = DS.plot_multiple_sorted_by_feature(inds, feature, overlay_beh_or_task="beh", nplot=15, SIZE=2)
+        #         savefig(fig, f"{plot_save_dir}/grp_shape_{sh_idx_within}-sortby_{feature}.pdf")
+        #         plt.close("all")
+
+        ## PLOT example drawings, grouped by shape
+        DS.plot_multiple_sorted_by_feature_split_by_othervar("shape_idxwithin", ["di_an_ci_ve_bin"],
+                                                             plot_save_dir=plot_save_dir, nmin_plot=4,
+                                                             only_plot_if_mult_lev_of_feature=True)
+        DS.plot_multiple_sorted_by_feature_split_by_othervar("shape_idxwithin", ["di_an_ci_ve_bin", "CTXT_prev_this_next"],
+                                                             plot_save_dir=plot_save_dir, nmin_plot=4,
+                                                             only_plot_if_mult_lev_of_feature=True)
+
+    # Conjucntions
+    # How mnay cases with variation in shapes, conditioned on substroke motor, including context.
+    if plot_save_dir is not None:
+        from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+        for vars_others in [
+            ["di_an_ci_ve_bin"],
+            ["di_an_ci_ve_bin", "CTXT_prev_this_next"],
+            ]:
+            var = "shape_idxwithin"
+            # vars_others = ["di_an_ci_ve_bin", "CTXT_prev_this_next"]
+            extract_with_levels_of_conjunction_vars(DS.Dat, var, vars_others, n_min_across_all_levs_var=5,
+                                                    lenient_allow_data_if_has_n_levels=2, prune_levels_with_low_n=True,
+                                                    plot_counts_heatmap_savepath=f"{plot_save_dir}/conj-{var}-vs-{'|'.join(vars_others)}-GOOD.pdf",
+                                                    PRINT_AND_SAVE_TO=f"{plot_save_dir}/conj-{var}-vs-{'|'.join(vars_others)}-GOOD.txt")
 
 
 ### CLEAN - so only strokes that (i) have segments with endpoints within winod and (ii) DTW distance not too large
@@ -939,3 +1133,35 @@ def preprocess_segment_from_DS(DS, inds_ds, Npts, list_frac_windows,
         plt.close("all")
 
     return list_inds_trough_in_dat, strokes_warped, list_dists, MASKS
+
+def load_presaved_using_pipeline(D):
+    """ Load subtsrokes data that was previously computeda nd saved using
+    pipeline_wrapper().
+    REturns:
+        - DSsubs, only with trialcodes that are in D.Dat
+        - Dsubs, only with trialcodes that are in D.Dat
+    """
+    import pickle as pkl
+
+    # Given a dataset, load its pruned substrokes versions
+    SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("substrokes_preprocess")
+
+    path = f"{SAVEDIR}/DS.pkl"
+    with open(path, "rb") as f:
+        DSsubs = pkl.load(f)
+
+    # path = f"{SAVEDIR}/dataset_beh.pkl"
+    # with open(path, "rb") as f:
+    #     Dsubs = pkl.load(f)
+
+    # prune all to match the inputed dataset
+    trialcodes_keep = D.Dat["trialcode"].tolist()
+    DSsubs.Dat = DSsubs.Dat[DSsubs.Dat["trialcode"].isin(trialcodes_keep)].reset_index(drop=True)
+
+    # Also extract dataset
+    Dsubs = DSsubs.Dataset
+    Dsubs.Dat = Dsubs.Dat[Dsubs.Dat["trialcode"].isin(trialcodes_keep)].reset_index(drop=True)
+
+    return DSsubs, Dsubs
+
+
