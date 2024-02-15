@@ -498,11 +498,9 @@ def plot_sequential_context_strokes(DS, savedir):
             path_text = f"{savedir}/divergent_locshape-n_min_{n_min}-{suffix}.txt"
             path_fig = f"{savedir}/divergent_locshape-n_min_{n_min}-{suffix}.pdf"
 
-
-            extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min=n_min, 
-                                                    lenient_allow_data_if_has_n_levels=2, 
-                                                    PRINT_AND_SAVE_TO=path_text,
-                                                    plot_counts_heatmap_savedir=path_fig)
+            extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min_across_all_levs_var=n_min,
+                                                    lenient_allow_data_if_has_n_levels=2, PRINT_AND_SAVE_TO=path_text,
+                                                    plot_counts_heatmap_savepath=path_fig)
 
     for VER in ["divergent", "convergent"]:
 

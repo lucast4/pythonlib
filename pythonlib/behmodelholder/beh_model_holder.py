@@ -820,8 +820,8 @@ class BehModelHolder(object):
                 n = len(data)
                 print(len(data))
                 # first, prune so each char has all epochs
-                data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX, n_min=1, 
-                                                                      PRINT=False, DEBUG=False)
+                data, _ = extract_with_levels_of_conjunction_vars(data, var=var, vars_others=INDEX,
+                                                                  n_min_across_all_levs_var=1, PRINT=False, DEBUG=False)
                 print(len(data))
 
             if len(data)>0:

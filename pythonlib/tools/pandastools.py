@@ -1757,7 +1757,7 @@ def replaceNone(dfthis, column, replace_with):
 
 
 def slice_by_row_label(df, colname, rowvalues, reset_index=True, 
-    assert_exactly_one_each=False):
+    assert_exactly_one_each=False, prune_to_value_exist_in_df=True):
     """ Return a sliced dataframe, where rows are sliced
     to match the list of labels (rowvalues) for a column
     PARAMS:
@@ -1771,7 +1771,7 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     matches exactly one and only one. Can be confident that the OUTPUT
     matches input rowvalues exactly.
     NOTES:
-        - enforces that even item in rowvalues must exist in df[col]
+        - enforces that even item in rowvalues must exist in df[col] (if prune_to_value_exist_in_df==False)
         - returns in order of rowvalues.
         - assert_exactly_one_each==False, then gets all rows in
         df which match an item in rowbales.
@@ -1792,16 +1792,14 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     assert isinstance(colname, str)
     assert isinstance(rowvalues, list)
 
-    # the dataframe must have each value in rowvalues.
-    if False:
-        # This is now checked below. quicer
-        tmp = df[colname].tolist()
-        for v in rowvalues:
-            if v not in tmp:
-                print(v)
-                print("this item in rowvalues does not exist in df[colname]")
-                raise NotEnoughDataException
+    if assert_exactly_one_each:
+        prune_to_value_exist_in_df = False
 
+    if prune_to_value_exist_in_df:
+        assert assert_exactly_one_each==False, "incompatible"
+        rowvalues = [v for v in rowvalues if v in df[colname].tolist()]
+
+    # the dataframe must have each value in rowvalues.
     try:
         dfout = df.set_index(colname).loc[rowvalues] # sets index to values of colname,
         # and then pulls out rows that have indices in rowvalues, in order they appear in
@@ -1812,7 +1810,8 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
         for v in rowvalues:
             if v not in tmp:
                 print(v)
-                print("this item in rowvalues does not exist in df[colname]")
+                print("this item in rowvalues does not exist in df[colname]. Could be (i) passed in too many values, and prune_to_value_exist_in_df==False")
+        print("ERROR:", err)
         raise NotEnoughDataException
 
     if reset_index:
@@ -2082,6 +2081,7 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
 
     return dfthisout, dfcounts
 
+
 def extract_with_levels_of_var(df, var, levels=None):
     """
     Split df into multiple smaller mutually exclusive dataframes,
@@ -2089,6 +2089,7 @@ def extract_with_levels_of_var(df, var, levels=None):
     PARAMS:
     - var, column in df
     - levels, list of values of var, or None to use all.
+    - min_n_keep_lev, int, throws out levels that dont have at least this much data
     RETURNS:
     - dict_levs, dict[lev] = df_sub
     - levels, list of levels in dict.keys()
@@ -2160,12 +2161,50 @@ def assign_epochsets_group_by_matching_levels_of_var(df, var_outer_trials, var_i
     return df, list_epochsets_unique
 
 
-def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = None, 
-    n_min = 8, PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
-    prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
-    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
-    ignore_values_called_ignore=False,
-    plot_counts_heatmap_savedir=None):
+def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
+    """
+    Return df that keeps only levels of var which have at least n_min_per_var trials.
+    :param df:
+    :param var:
+    :param levels_var:
+    :param n_min_per_var:
+    :return:
+    """
+
+    assert isinstance(grp_vars, list)
+
+    groupdict = grouping_append_and_return_inner_items(df, grp_vars)
+    inds_keep =[]
+    for lev, inds in groupdict.items():
+        if len(inds)>=n_min_per_var:
+            # keep
+            inds_keep.extend(inds)
+
+    inds_keep = sorted(inds_keep)
+    assert len(inds_keep)==len(set(inds_keep))
+
+    dfthis = df.iloc[inds_keep].reset_index(drop=True)
+
+    return dfthis, inds_keep
+
+    #
+    # try:
+    #     assert "_dummy" not in df.columns
+    #     df["_dummy"] = "dummy"
+    #     dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, ["_dummy"], levels_var,
+    #                                                                  n_min_across_all_levs_var=n_min_per_var)
+    #     del df["_dummy"]
+    # except Exception as err:
+    #     del df["_dummy"]
+    #     raise err
+    #
+    # return dfout, dict_dfthis
+
+def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=None, n_min_across_all_levs_var=8,
+                    PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
+                    prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
+                    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
+                    ignore_values_called_ignore=False, plot_counts_heatmap_savepath=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -2177,14 +2216,14 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     new goruping var.
     - levels_var, either list of items, for each must have at least n_min.
     if None, then takes the unique levels across entire df
-    - n_min, min n trials desired for each level of var. will only keep
+    - n_min_across_all_levs_var, min n trials desired for each level of var. will only keep
     conucntions of (vars_others) which have at least this many for each evel of
     var.
     - lenient_allow_data_if_has_n_levels, either None (ignore) or int, in which case
     is more leneint. keeps a given level of vars_others if it has >= this many
     levels of var which has >=n_min datapts. usually requires _all_ levels of vars_others
     to have >=n_min datapts.
-    - prune_levels_with_low_n, bool, then removes levles with n data < n_min. 
+    - prune_levels_with_low_n, bool, then removes levles with n data < n_min_across_all_levs_var.
     - balance_no_missed_conjunctions, bool, if True, then makes sure the resulting
     dfthis is "square" in that each level of var has at least some data for
     each level of vars_others. Does this in an interative fashion, removing levels
@@ -2193,7 +2232,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     var) with "ignore" string, will throw out. could be any caps, and coiuld be within
     tuple/list. e.g,, ("ignore", "good") would throw out becuaes at l;esat one item is
     ignore. unloimited depth
-    - plot_counts_heatmap_savedir, str of None. if str, then plots heatmap of num counts
+    - plot_counts_heatmap_savepath, str of None. if str, then plots heatmap of num counts
     of each conj of var vs. vars_others. and saved to this path.
     EG:
     - you wish to ask about shape moudlation for each combaiton of location and 
@@ -2201,6 +2240,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     RETURNS:
     - dataframe, with new column "vars_others", concated across all levels of varothers
     - dict, level_of_varothers:df_sub
+    NOTE: will have column "_index" guarateed to match indices of input df.
     EXAMPLE:
         from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
 
@@ -2218,13 +2258,15 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
     if len(df)==0:
         return pd.DataFrame([]), {}
 
-    assert n_min is not None, "not coded. just make this one"
+    assert n_min_across_all_levs_var is not None, "not coded. just make this one"
 
     if DEBUG:
         PRINT = True
 
     # make a copy, becuase will have to append to this dataframe
-    df = df.copy()
+    df = df.copy().reset_index(drop=True)
+    # Store index
+    df["_index"] = df.index
 
     if lenient_allow_data_if_has_n_levels is None:
         # levels_var must be extracted here from entire dataset 
@@ -2282,7 +2324,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             df.loc[:, "dummy_var"] = "dummy"
             REMOVE_DUMMY = True
         else:
-            assert isinstance(vars_others, list)
+            assert isinstance(vars_others, (list, tuple))
             REMOVE_DUMMY = False
 
         # 1) Append conjucntions
@@ -2306,9 +2348,9 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             # get data
             dfthis = df[df[var_conj_of_others] == lev]
 
-            good, levels_passing = check_data_has_all_levels(dfthis, var, levels_var, n_min, 
-                lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
-                PRINT=PRINT) 
+            good, levels_passing = check_data_has_all_levels(dfthis, var, levels_var, n_min_across_all_levs_var,
+                                                             lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels,
+                                                             PRINT=PRINT)
             if DEBUG:
                 print(lev, ' -- ',  var, ' -- ',  levels_var, ' -- ', good)
             if good:
@@ -2363,13 +2405,13 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var = N
             list_s = []
         writeStringsToFile(PRINT_AND_SAVE_TO, list_s)
 
-    if len(dfout)>0 and plot_counts_heatmap_savedir:
+    if len(dfout)>0 and plot_counts_heatmap_savepath:
         if False:
             fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
         else:
             fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
                 vars_others=None)
-        savefig(fig, plot_counts_heatmap_savedir)
+        savefig(fig, plot_counts_heatmap_savepath)
 
     return dfout, dict_dfthis
 

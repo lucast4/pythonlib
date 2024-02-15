@@ -229,7 +229,8 @@ def _plot_microstim_effect(DS, savedir):
     Dthis.extract_beh_features()
 
     # First, keep only chars that have both epochs
-    dfthis, dict_dfthis = extract_with_levels_of_conjunction_vars(Dthis.Dat, "epoch", ["character"], n_min=1)
+    dfthis, dict_dfthis = extract_with_levels_of_conjunction_vars(Dthis.Dat, "epoch", ["character"],
+                                                                  n_min_across_all_levs_var=1)
 
     # Get names of stim epochs.
     stim_epochs = sorted(dfthis["microstim_epoch_code"].unique().tolist())
@@ -278,10 +279,8 @@ def plot_epoch_effects_paired_chars_microstim_wrapper(DS, savedir, paired_by_cha
     # Keep only if char has both epochs
     if paired_by_char:
         from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
-        Dthis.Dat, _ = extract_with_levels_of_conjunction_vars(Dthis.Dat,
-                                                                      "epoch",
-                                                                      ["character"],
-                                                                      n_min=1)
+        Dthis.Dat, _ = extract_with_levels_of_conjunction_vars(Dthis.Dat, "epoch", ["character"],
+                                                               n_min_across_all_levs_var=1)
         # - Prune DS so that chars are matched across epochs.
         DS.dataset_replace_dataset(Dthis)
         DS.dataset_prune_self_to_match_dataset()

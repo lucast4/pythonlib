@@ -230,9 +230,9 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
         assert grouping == ["locshape_pre_this", "epoch", "block"], "assumign this...change otheriwse."
         print("Before and after pruning dfres to balance [microstim_version]:")
         print(len(dfres))
-        dfres, _ = extract_with_levels_of_conjunction_vars(dfres, 
-            "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"], 
-                                           n_min=1)
+        dfres, _ = extract_with_levels_of_conjunction_vars(dfres, "microstim_epoch_code",
+                                                           ["epoch_orig", "locshape_pre_this", "block"],
+                                                           n_min_across_all_levs_var=1)
         print(len(dfres))
 
     return dfres, grouping

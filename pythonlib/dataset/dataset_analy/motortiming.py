@@ -169,8 +169,9 @@ def _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=False, pru
         DS.dataset_append_column("microstim_epoch_code")
         # Then enforce that each locshape_pre_this x epoch_orig has at least one datapt per stim condition
         # group to make a new var
-        DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code", ["epoch_orig", "locshape_pre_this", "block"],
-                                               n_min=1)
+        DS.Dat, _ = extract_with_levels_of_conjunction_vars(DS.Dat, "microstim_epoch_code",
+                                                            ["epoch_orig", "locshape_pre_this", "block"],
+                                                            n_min_across_all_levs_var=1)
 
     ########### additional motor stuff
     return DS
@@ -231,7 +232,8 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
         ### first, prune to keep only context with at least 2 stroke indices
         n_min = 5
         DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=[VAR_CONTEXT],
-                                               n_min = n_min, lenient_allow_data_if_has_n_levels=2)
+                                                            n_min_across_all_levs_var=n_min,
+                                                            lenient_allow_data_if_has_n_levels=2)
         print(len(DS.Dat))
         print(len(DFTHIS))
 
@@ -340,7 +342,8 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     #print("**** len DS (1)", len(DS.Dat))
     # NOTE: This prunes too much, like 50% of trials in one test case.
     DFTHIS, _ = extract_with_levels_of_conjunction_vars(DS.Dat, var=VAR, vars_others=["context"],
-                                           n_min = n_min, lenient_allow_data_if_has_n_levels=2)
+                                                        n_min_across_all_levs_var=n_min,
+                                                        lenient_allow_data_if_has_n_levels=2)
     #print("**** len DS (2)", len(DFTHIS))
 
     if len(DFTHIS)>0:
@@ -542,8 +545,10 @@ def _plotscatter_durvsdist_all(DS, savedir):
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
     NMIN = 5
     DFTHISGOOD, dict_df = extract_with_levels_of_conjunction_vars(DS.Dat, var="epoch",
-                                          vars_others=["CTXT_shape_prev", "shape", "CTXT_loc_prev", "gridloc"],
-                                           n_min=NMIN, lenient_allow_data_if_has_n_levels=2)
+                                                                  vars_others=["CTXT_shape_prev", "shape",
+                                                                               "CTXT_loc_prev", "gridloc"],
+                                                                  n_min_across_all_levs_var=NMIN,
+                                                                  lenient_allow_data_if_has_n_levels=2)
     if len(DFTHISGOOD)==0:
         DFTHISGOOD = DS.Dat.copy()
 
