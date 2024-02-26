@@ -29,7 +29,7 @@ class GrammarDat(object):
             """ Input the dataset and a trial index
             """
             ind = input_data_dict["ind_dataset"]
-            self.Dataset = input_data_dict["dataset"].copy()
+            self.Dataset = input_data_dict["dataset"].copy(just_df=True)
             # self.DatasetInd = ind
             self.DatasetTrialcode = self.Dataset.Dat.iloc[ind]["trialcode"]
 

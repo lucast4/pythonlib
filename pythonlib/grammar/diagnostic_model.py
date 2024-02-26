@@ -81,7 +81,7 @@ class DiagnosticModel(object):
                 # print("kind", motifkind)
                 # print("paramd", motif_params)
                 # 2) Collect behavior
-                tokens = D.taskclass_tokens_extract_wrapper(indtrial)
+                tokens = D.taskclass_tokens_extract_wrapper(indtrial, "beh_firsttouch")
                 matches_summary_frac_beh = find_motif_in_beh_wildcard(tokens, motifkind, motif_params, return_as_number_instances=False)
                 ntok_expected_pertrial = _count_num_tokens_used(matches_summary_frac_beh)
         #         ntok_expected_pertrial = sum([_ntok_per_group(motifkind, k)*v for k, v in matches_summary_frac_beh.items()])

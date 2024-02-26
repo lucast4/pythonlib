@@ -14,7 +14,7 @@ MAP_EPOCHKIND_EPOCH = {
     "direction":["D", "U", "R", "L", "TR"],
     "shape":["LVl1", "lVL1", "VlL1", "llV1", "ZlA1"],
     "(AB)n":["(AB)n", "LolDR"],
-    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0"],
+    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "llCV3"],
     "AnBmDir":["LCr2", "CLr2", "AnBmTR", "LCr1", "CLr1", "LCr3"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
     "ranksup":["rndstr", "rank"],
