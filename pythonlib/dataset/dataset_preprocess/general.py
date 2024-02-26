@@ -73,6 +73,10 @@ def _groupingParams(D, expt):
     # Microstim
     map_ttl_region = {}
 
+    # Replace shapes in tokens with shape labels extracted and saved previosuly. If cant find
+    # shape labels to load, then ignores this and uses default (i.,e taskclass tokens).
+    replace_shapes_with_clust_labels_if_exist=False
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -146,6 +150,8 @@ def _groupingParams(D, expt):
         features_to_remove_nan =  []
         features_to_remove_outliers = []
         grouping_levels = ["straight", "bent"]
+        replace_shapes_with_clust_labels_if_exist=True
+
     elif expt=="linecircle":
         F = {}
         grouping = "epoch"
@@ -154,6 +160,8 @@ def _groupingParams(D, expt):
         features_to_remove_outliers = []
         grouping_levels = ["null"]
         feature_names = ["hdoffline"]
+        replace_shapes_with_clust_labels_if_exist=True
+
     elif expt=="figures9":
         F = {}
         grouping = "epoch"
@@ -232,6 +240,8 @@ def _groupingParams(D, expt):
             3:"TTL3",
             4:"TTL4"
         }
+        replace_shapes_with_clust_labels_if_exist=True
+
     elif expt=="coldirgrammardiego1":
         # 10/1/23 - grammar, but also flips cue-stim on random trails.
 
@@ -384,6 +394,7 @@ def _groupingParams(D, expt):
         grouping_reassign = False
         color_is_considered_instruction = True
         color_is_considered_instruction = True
+        replace_shapes_with_clust_labels_if_exist=True
 
     elif "gridlinecircle" in expt:
         grouping_reassign = True
@@ -471,6 +482,7 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = True        
     elif "char" in expt:
         color_is_considered_instruction = True
+        replace_shapes_with_clust_labels_if_exist=True
         pass
     else:
         # pass, just use defaults
@@ -579,7 +591,7 @@ def _groupingParams(D, expt):
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
         mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip, \
-        color_is_considered_instruction
+        color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
         mapper_character_to_category=None, append_probe_status=True,
@@ -854,7 +866,8 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
     score_all_pairwise_within_task=False, extract_features = False, 
-    only_keep_trials_across_groupings=False):
+    only_keep_trials_across_groupings=False,
+    rename_shapes_if_cluster_labels_exist=True):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -865,6 +878,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     - only_if_sequence_different_across_grouping, then only trials where sequence is not used in other groups.
     THis ideally goes with get_sequence_rank=True, sequence_rank_confidence_min=0.1, as only make sense if
     sequence assignment is accurate/confident.
+    - rename_shapes_if_cluster_labels_exist, bool, if True (and if doing so is specified for this day) then
+    will do this. If False, overwrites whataver was supposed to do for this day.
     NOTE:
     - if D.Dat ends up being empty, then returns None
     - if all flags False, then doesnt do any mods to D, just returns groupings, etc.
@@ -900,9 +915,30 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
         mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict, \
-        epoch_append_cue_stim_flip, color_is_considered_instruction \
+        epoch_append_cue_stim_flip, color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist \
         = _groupingParams(D, expt)
     print(len(D.Dat))
+
+    # If they exist, replace shapes (in tokens) with pre-saved shape labels...
+    # Note: should allow the above to run first, since this inherits those results for
+    # tasks that are not characters.
+    if replace_shapes_with_clust_labels_if_exist and rename_shapes_if_cluster_labels_exist:
+        print(" -- Replacing shape labels with char cluster labels... (only runs if not already extracted")
+
+        if (not D.TokensVersion=="regenerated_from_raw") or (len(D.TokensStrokesBeh)==0) or (len(D.TokensTask)==0):
+
+            # 1) Wrapper to exatract and add as columns in D, sanity checks that strokes match D
+            print(" -- 1. extracting saved labels")
+            trialcodes_failed = D.charclust_shape_labels_extract_presaved_from_DS(skip_if_labels_not_found=True)
+            # Remove the failed trials, their shapes are bad [actuall, just leave, since shapes ar  "IGN"
+
+            # 2) Replace all tokens with extracted shapes.
+            print(" -- 2. Replacing tokens in Dataset")
+            D.tokens_generate_replacement_from_raw()
+
+            # 3) delete older tokens
+            print(" -- 3. Deleting and locking older tokens")
+            D.sequence_tokens_clear_behclass_and_taskclass_and_lock()
 
     # Only keep characters that have at lesat one trial across all grouping levels.
     if only_keep_trials_across_groupings:

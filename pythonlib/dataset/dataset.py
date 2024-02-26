@@ -37,11 +37,13 @@ def _checkPandasIndices(df):
     assert np.unique(np.diff(df.index)) ==1 
 
 
-def load_dataset_daily_helper(animal, date):
+def load_dataset_daily_helper(animal, date, rename_shapes_if_cluster_labels_exist=True):
     """Helper, just pass in animal and dat, load the
     single dataset for this day. 
     PARAMS;
     - date, YYMMDD, either str or int
+    - rename_shapes_if_cluster_labels_exist, bool, if True, then allows renaming shapes
+    by thier cluster labels (usually for char).
     RETURNS:
     - D, dataset.
     """
@@ -59,10 +61,12 @@ def load_dataset_daily_helper(animal, date):
         # Load
         expt = list_metadat[0][0]
         print("Loading this dataset", animal, expt, date)
-        D = load_dataset_notdaily_helper(animal, expt, rulelist=[date])
+        D = load_dataset_notdaily_helper(animal, expt, rulelist=[date],
+                                         rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
         return D
 
-def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=False):
+def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=False,
+                                 rename_shapes_if_cluster_labels_exist=True):
     """
     Helper to load a dataset, using most common methods. Works for both
     daily and main analysis (see PARAMS).
@@ -89,7 +93,8 @@ def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=Fa
         assert isinstance(rulelist, list)
 
     D = Dataset([])
-    D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist)
+    D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist,
+                          rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
     if return_rulelist:
         return D, rulelist
     else:
@@ -142,7 +147,11 @@ class Dataset(object):
         self._ParserPathBase = None
         self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
         self._BehClassExtracted = False
-        self.Log_preprocessGood = []    
+        self.Log_preprocessGood = []
+        # For swtiching to Dataset-stored toekns
+        self.TokensStrokesBeh = None
+        self.TokensTask = None
+        self.TokensVersion = "taskclass"
 
         self.ML2_FILEDATA = {}
 
@@ -172,7 +181,8 @@ class Dataset(object):
             print(ver)
             assert False
 
-    def load_dataset_helper(self, animal, expt, ver="single", rule=""):
+    def load_dataset_helper(self, animal, expt, ver="single", rule="",
+                            rename_shapes_if_cluster_labels_exist=True):
         """ load a single dataset. 
         - ver, str
         --- "single", endures that there is one and only one.
@@ -230,7 +240,8 @@ class Dataset(object):
             self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt_orig)
         else:
             # 2/4/23 - Now run preprocess whenever load.
-            GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = self._cleanup_preprocess_each_time_load_dataset()
+            GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = self._cleanup_preprocess_each_time_load_dataset(
+                rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
 
         # self._analy_preprocess_done = False
         # self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
@@ -398,22 +409,27 @@ class Dataset(object):
         """
         assert False, "not coded, didnt think necesayr"
 
-    def copy(self, dfdeep=True):
+    def copy(self, dfdeep=True, just_df=False):
         """ returns a copy. does this by extracting 
-        data
+        data, and unlocks perprocessing.
         PARAMS:
         - dfdeep, whether to copy self.Dat deep. pandas defualt is True. if
         False, will not be changed even if you subsample the original dataframe..
         It will change though if tyou change the index or data.
         NOTE: copies over all metadat, regardless of whether all
         metadats are used.
-
+        - just_df, then quicker, just gets the df and main things, not all attributes.
+        If True, then also gets thigns that start with cap or with _Cap.
         """
         import copy
+        from pythonlib.tools.classtools import attributes_get_capitalized_or_underscore_capitalized
+
+        # Get attriburtes start with captial, or _<capital>
+        attributes_with_capital = attributes_get_capitalized_or_underscore_capitalized(self)
 
         Dnew = Dataset([])
-
         Dnew.Dat = self.Dat.copy(deep=dfdeep)
+
         if hasattr(self, "GrammarDict"):
             Dnew.GrammarDict = copy.copy(self.GrammarDict)
         else:
@@ -430,6 +446,13 @@ class Dataset(object):
         if hasattr(self, "BlockParamsDefaults"):
             Dnew.BlockParamsDefaults = copy.deepcopy(self.BlockParamsDefaults)
 
+        if not just_df:
+            for attr in attributes_with_capital:
+                setattr(Dnew, attr, copy.deepcopy(getattr(self, attr)))
+
+        # Unlock, since one goal of copy is speciifacl to do so.
+
+        Dnew.LockPreprocess = False
         return Dnew
 
     def is_finalized(self):
@@ -549,7 +572,10 @@ class Dataset(object):
 
         indices = self.Dat[self.Dat["trialcode"] == tc].index.tolist()
         if assert_only_one_match:
-            assert len(indices)==1
+            if not len(indices)==1:
+                print(indices)
+                print(len(indices))
+                assert False, "Trialcode probably doesnt exist..."
         return indices[0]
 
     def trialcode_tuple_extract_assign(self):
@@ -1607,11 +1633,16 @@ class Dataset(object):
         return xgrid, ygrid    
 
     def taskclass_get_grid_ver(self, ind):
-        """ return string naem of grid
+        """ return string naem of grid ("on_rel" or "on_grid"),
+        forcing that if this is "character",
+        then it cant be on grid.
         """
-
-        T = self.Dat.iloc[ind]["Task"]
-        return T.get_grid_ver()
+        if self.Dat.iloc[ind]["task_kind"] == "character":
+            # Then is not grid
+            return "on_rel"
+        else:
+            T = self.Dat.iloc[ind]["Task"]
+            return T.get_grid_ver()
 
     def taskclass_tokens_sanitycheck_gridloc_identical(self):
         """ Check that each tasks gridloc:loc mapping is the same
@@ -1631,10 +1662,10 @@ class Dataset(object):
         map_gridloc_loc_x = {}
         map_gridloc_loc_y = {}
         for ind in range(len(self.Dat)):
-            tokens = self.taskclass_tokens_extract_wrapper(ind)
+            tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
             # print(ind, len(tokens))
             for tok in tokens:
-                if tok["gridloc"] is not None:
+                if tok["gridloc"] is not None and not tok["gridloc"]==("IGN", "IGN"):
                     x = tok["Prim"].extract_as("params")["cnr_x"]
                     y = tok["Prim"].extract_as("params")["cnr_y"]
                     # chars are None
@@ -1660,9 +1691,61 @@ class Dataset(object):
         print("x...", map_gridloc_loc_x)
         print("y...", map_gridloc_loc_y)   
 
-    def taskclass_tokens_extract_wrapper(self, ind, which_order="beh_firsttouch", 
-            plot=False, return_as_tokensclass=False):
-        """ [GOOD] REturn tokens (lsit of dict) for this trial, in any order,
+    def tokens_generate_replacement_from_raw(self, shape_sequence_col="charclust_shape_seq",
+                                             skip_if_labels_not_found=False):
+        """
+        Generate Tokens based on actual beh strokes for each trial,
+        and store in self.TokensStrokesBeh, and switch TokensVersion to
+        "regenerated_from_raw". This will then be used as replacement
+        for all tokens stuff (e.g., in constructing DatasetStrokes), useful
+        for tasks where strokes do not nicely align wiht task strokes (which
+        formed to default Tokens), such as chars. The idea is that these data can be used
+        in taskclass_tokens_extract_wrapper. The shapes must have already been loaded
+        and stored in tuples in self.Dat[<charclust_shape_seq>].
+        :param shape_sequence_col:
+        :return:
+        - updates self.TokensStrokesBeh, dict from trialcode --> tokens (strokes, beh)
+        - updates self.TokensTask, dict from trialcode --> tokens (task)
+        """
+        from pythonlib.drawmodel.tokens import generate_tokens_from_raw
+
+        assert skip_if_labels_not_found==False, "not coded"
+
+        # Only run this if Tokens are not already regenrated.
+        if (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0):
+            TokensStrokesBeh = {}
+            TokensTask = {}
+            for ind in range(len(self.Dat)):
+                shape_seq = self.Dat.iloc[ind][shape_sequence_col]
+                strokes = self.Dat.iloc[ind]["strokes_beh"]
+                tc = self.Dat.iloc[ind]["trialcode"]
+
+                # Keep gridlocs?
+                if self.taskclass_get_grid_ver(ind)=="on_grid":
+                    # Then keep locations...
+                    tokens_old = self.taskclass_tokens_extract_wrapper(ind, "beh")
+                    gridlocs = [t["gridloc"] for t in tokens_old]
+                    gridlocs_local = [t["gridloc_local"] for t in tokens_old]
+                else:
+                    # Fill with Nones.
+                    gridlocs = None
+                    gridlocs_local = None
+
+                Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local)
+                TokensStrokesBeh[tc] = Tk
+
+                # Also save task tokens, so that can safely delete task tokens and still use it here.
+                Task = self.Dat.iloc[ind]["Task"]
+                TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
+
+            # Switch so that always uses these tokens
+            self.TokensVersion = "regenerated_from_raw"
+            self.TokensStrokesBeh = TokensStrokesBeh
+            self.TokensTask = TokensTask
+
+    def taskclass_tokens_extract_wrapper(self, ind, which_order,
+                                         plot=False, return_as_tokensclass=False):
+        """ [GOOD] The helper to rEturn tokens (lsit of dict) for this trial, in any order,
         and with aligned indices into beh strokes.
         PARAMS:
         - which_order, in
@@ -1673,48 +1756,78 @@ class Dataset(object):
         - list of dict, a reordered tokens
         """
 
-        self.behclass_preprocess_wrapper()
+        if not hasattr(self, "TokensVersion"):
+            self.TokensVersion = "taskclass"
 
-        # mapper from taskstrokeinds to beh
-        mapper_taskstroke_to_beh = {}
-        this = self.behclass_extract_beh_and_task(ind)[3]
+        if self.TokensVersion == "regenerated_from_raw":
+        # if use_replacement_strokesbeh_tokens:
+            # Completely ignore original taskclass based tokens
 
-        for x in this:
-            ind_task = x[2]["ind_taskstroke_orig"]
-            mapper_taskstroke_to_beh[ind_task] = x[0] # indidces into storkes_beh
-        # some tasktrokes were missed
-        n_task_strokes = len(self.Dat.iloc[ind]["strokes_task"])
-        for i in range(n_task_strokes):
-            if i not in mapper_taskstroke_to_beh.keys():
-                mapper_taskstroke_to_beh[i] = []
+            tc = self.Dat.iloc[ind]["trialcode"]
 
-        if which_order=="task":
-            Task = self.Dat.iloc[ind]["Task"]
-            tokens = Task.tokens_generate(assert_computed=True)
-        elif which_order=="beh":
-            tokens = self.behclass_extract_beh_and_task(ind)[1]
-        elif which_order=="beh_firsttouch":
-            tokens = self.behclass_extract_beh_and_task(ind)[2]
+            if which_order == "beh":
+                assert self.TokensStrokesBeh is not None, "run tokens_generate_replacement_from_strokesbeh()"
+                Tk = self.TokensStrokesBeh[tc]
+            elif which_order == "task":
+                assert self.TokensTask is not None, "run tokens_generate_replacement_from_strokesbeh()"
+                Tk = self.TokensTask[tc]
+            else:
+                print(which_order)
+                assert False, "only beh and task make sense for 'regenerated_from_raw'..."
+
+            if return_as_tokensclass:
+                return Tk
+            else:
+                return Tk.Tokens
+        elif self.TokensVersion == "taskclass":
+            self.behclass_preprocess_wrapper()
+
+            # mapper from taskstrokeinds to beh
+            mapper_taskstroke_to_beh = {}
+            this = self.behclass_extract_beh_and_task(ind)[3]
+
+            for x in this:
+                ind_task = x[2]["ind_taskstroke_orig"]
+                mapper_taskstroke_to_beh[ind_task] = x[0] # indidces into storkes_beh
+            # some tasktrokes were missed
+            n_task_strokes = len(self.Dat.iloc[ind]["strokes_task"])
+            for i in range(n_task_strokes):
+                if i not in mapper_taskstroke_to_beh.keys():
+                    mapper_taskstroke_to_beh[i] = []
+
+            Beh = self.Dat.iloc[ind]["BehClass"]
+
+            if which_order=="task":
+                Task = self.Dat.iloc[ind]["Task"]
+                tokens = Task.tokens_generate(assert_computed=True)
+            elif which_order=="beh":
+                tokens = Beh.alignsim_extract_datsegs_both_beh_task()[1]
+                # tokens = self.behclass_extract_beh_and_task(ind)[1]
+            elif which_order=="beh_firsttouch":
+                tokens = Beh.alignsim_extract_datsegs_both_beh_task()[2]
+                # tokens = self.behclass_extract_beh_and_task(ind)[2]
+            else:
+                print(which_order)
+                assert False, "not coded yet"
+
+            # Also get the corresponding beahvior
+            for t in tokens:
+                t["ind_behstrokes"] = mapper_taskstroke_to_beh[t["ind_taskstroke_orig"]]
+                # print(t["ind_taskstroke_orig"],  t["ind_behstrokes"])
+
+            if plot:
+                self.grammarmatlab_extract_beh_and_task(ind, ploton=True)
+            # print(tokens[0])
+            # assert False
+            # assert False
+
+            if return_as_tokensclass:
+                from pythonlib.drawmodel.tokens import Tokens
+                return Tokens(tokens)
+            else:
+                return tokens
         else:
-            print(which_order)
-            assert False, "not coded yet"
-
-        # Also get the corresponding beahvior
-        for t in tokens:
-            t["ind_behstrokes"] = mapper_taskstroke_to_beh[t["ind_taskstroke_orig"]]
-            # print(t["ind_taskstroke_orig"],  t["ind_behstrokes"])
-
-        if plot:
-            self.grammarmatlab_extract_beh_and_task(ind, ploton=True)
-        # print(tokens[0])
-        # assert False
-        # assert False
-
-        if return_as_tokensclass:
-            from pythonlib.drawmodel.tokens import Tokens
-            return Tokens(tokens)
-        else:
-            return tokens
+            assert False
 
     def taskclass_shapes_loc_configuration_extract(self, ind, loc_version="gridloc",
                                                    use_recomputed_prim_labels=False):
@@ -1806,7 +1919,9 @@ class Dataset(object):
 
     def taskclass_shapes_extract(self, ind):
         """ Return list of shape strings used in 
-        this task, in order of indices in taskstrokes
+        this task, in order of indices in taskstrokes (HAS NOTHING
+        TO DO WITH BEHAVIOR)
+        (i.e. get shape sequence)
         """
         tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
         shapes = [d["shape_oriented"] for d in tokens]
@@ -2045,7 +2160,7 @@ class Dataset(object):
         print("New column catch_trial")
         if PRINT:
             # should be correlated
-            D.grouping_print_n_samples(["catch_trial", "epochset"])        
+            self.grouping_print_n_samples(["catch_trial", "epochset"])
 
     ############# ASSERTIONS
     def _check_is_single_dataset(self):
@@ -2086,11 +2201,19 @@ class Dataset(object):
 
 
     ############# CLEANUP
-    def _cleanup_preprocess_each_time_load_dataset(self):
+    def _cleanup_preprocess_each_time_load_dataset(self, rename_shapes_if_cluster_labels_exist=True):
         # e..g, if loading saved dataset using neuralmonkey
         print("=== CLEANING UP self.Dat (_cleanup_reloading_saved_state) ===== ")
         if not hasattr(self, "_BehClassExtracted"):
             self._BehClassExtracted = None
+
+        # SInce this is a pre-saved dataset, some failure modes to address
+        # - taskclass
+        # for i in range(len(self.Dat)):
+        #     T = self.Dat.iloc[i]["Task"]
+        #     if not hasattr(T, "_BehClassExtracted"):
+        #         T._TokensLocked = None
+
 
         # 2/4/24 - Decided to just rerun entire preprocessDat, since that is actualyl very quick,
         # except the step of behclass_preprocess_wrapper, but that would be done here anyway (the
@@ -2098,7 +2221,11 @@ class Dataset(object):
         from pythonlib.dataset.dataset_preprocess.general import preprocessDat
         expt = self.expts(force_single=True)[0]
         self._analy_preprocess_done=False
-        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
+        self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt,
+                                                    rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+
+        # print("1.5 dfafasf", self.TokensVersion)
+
         return GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
     def cleanup_wrapper(self, ver):
@@ -6282,18 +6409,39 @@ class Dataset(object):
 
     ################# EXTRACT DATA AS OTHER CLASSES
     def behclass_preprocess_wrapper(self, reset_tokens=True, skip_if_exists=True):
-        """ Wrapper of general preprocess steps for entire datset
+        """ Wrapper of general preprocess steps for entire datset. SKIPS if it detects
+        that BehClass already extracted.
+        Also skips if the self.TokensVersion is "regenerated_from_raw", which means all tokens, shapes
+        etc will never use BehClass...
         PARAMS;
         - reset_tokens, then resets the tokens in TaskClass, if they exist
         """
+        # if hasattr(self, "TokensVersion"):
+        #     print("8 dfafasf", self.TokensVersion)
+        # else:
+        #     print("8 dfafasf", "DoeSNT EXIXT")
 
-        exists = self.behclass_check_if_tokens_extracted()
-        if skip_if_exists and exists:
-            # dont rerun
-            pass
+        if not hasattr(self, "TokensVersion"):
+            # Just the default ...
+            self.TokensVersion = "taskclass"
+
+        if self.TokensVersion == "regenerated_from_raw":
+            # Then skip
+            # Otherwise it WILL fail, beucase all TaskClass instances are
+            # locked. (i.e., self._TokensLocked==True)
+            return
         else:
-            # generate
-            self._behclass_generate_alltrials(reset_tokens=reset_tokens)  
+            exists = self.behclass_check_if_tokens_extracted()
+            if skip_if_exists and exists:
+                # dont rerun
+                pass
+            else:
+                # generate
+                self._behclass_generate_alltrials(reset_tokens=reset_tokens)
+
+                # Prune cases where beh did not match any task strokes.
+                # NOTE: added here 2/21/24, used to be in dataset_strokes.py (_prepare_dataset)
+                self.behclass_clean()
 
     def behclass_generate(self, indtrial, expt=None, reset_tokens=False):
         """ Generate the BehaviorClass object for this trial
@@ -6502,7 +6650,9 @@ class Dataset(object):
         if False:
             # These can differ if beh stroke doesnt match task
             assert len(Beh.Strokes) == len(datsegs_behlength)
-            
+
+        # assert [s() for s in Beh.Strokes] == self.Dat.iloc[indtrial]["strokes_beh"]
+
         return Beh.Strokes, datsegs_behlength, datsegs_tasklength_firsttouch, out_combined
 
     def behclass_clean(self):
@@ -6734,9 +6884,13 @@ class Dataset(object):
         from pythonlib.dataset.modeling.discrete import MAP_EPOCH_EPOCHKIND
         from pythonlib.tools.pandastools import applyFunctionToAllRows
 
-        def F(x):
-            return MAP_EPOCH_EPOCHKIND[x["epoch"]]
-        self.Dat = applyFunctionToAllRows(self.Dat, F, "epochkind")
+        try:
+            def F(x):
+                return MAP_EPOCH_EPOCHKIND[x["epoch"]]
+            self.Dat = applyFunctionToAllRows(self.Dat, F, "epochkind")
+        except Exception as err:
+            print(self.Dat["epoch"].value_counts())
+            print("Probably simply need to ass this (all) epochs to MAP_EPOCHKIND_EPOCH in discrete.py")
 
         print("Updated self.Dat with new column: epochkind")
 
@@ -7499,6 +7653,23 @@ class Dataset(object):
             assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
         return taskstroke_inds_beh_order
 
+    def grammarparses_chunks_plot_example(self, ind):
+        """
+        Plot example trial and draing, and print chunk data (from Tokens)
+        to confirm by eye this is accurate
+        :param ind:
+        :return:
+        """
+        # SANIYT CHECKS
+        # self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch", plot=True, return_as_tokensclass=True)
+        tok = self.taskclass_tokens_extract_wrapper(ind, "beh", return_as_tokensclass=False)
+
+        self.grammarparses_print_plot_summarize(ind)
+        print(" ")
+        print("CHUNK RANK: ", [t["chunk_rank"] for t in tok])
+        print("CHUNK WITHIN RANK:", [t["chunk_within_rank"] for t in tok])
+        print("CHUNK WITHIN RANK FROM LAST:", [t["chunk_within_rank_fromlast"] for t in tok])
+
     def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
         return_n_in_chunk=False):
         """
@@ -7903,16 +8074,37 @@ class Dataset(object):
 
 
     #####################################################
+    def sequence_tokens_clear_behclass_and_taskclass_and_lock(self):
+        """ Guaranteed to completely remove any trace of extracted
+        datsegs, by deleling behclass entirely, and removing
+        tokens from taskclass. Similar to sequence_tokens_clear_behclass_and_taskclass
+        but just stronger.
+        And lock means it blocks code from generating tokens in future.
+        """
+
+        self.sequence_tokens_clear_behclass_and_taskclass()
+
+        for i in range(len(self.Dat)):
+            self.Dat.iloc[i]["Task"]._TokensLocked = True
+            self.Dat.iloc[i]["BehClass"]._TokensLocked = True
+
+        # Move BehClass to other column
+        self.Dat["_BehClass"] = self.Dat["BehClass"]
+        del self.Dat["BehClass"]
+
     def sequence_tokens_clear_behclass_and_taskclass(self):
-        """ Remove cached tokens, datsegs by deleting them. Useful if you want to reextract them.
+        """ Remove cached tokens, datsegs by deleting them.
+        Useful if you want to reextract them.
         """
         for i in range(len(self.Dat)):
             Task = self.Dat.iloc[i]["Task"]
             Beh = self.Dat.iloc[i]["BehClass"]
             if hasattr(Task, "_DatSegs"):
-                del Task._DatSegs
+                Task._tokens_delete()
             if hasattr(Beh, "Alignsim_Datsegs"):
                 del Beh.Alignsim_Datsegs        
+            if hasattr(Beh, "Alignsim_Datsegs_BehLength"):
+                del Beh.Alignsim_Datsegs_BehLength
 
     def sequence_tasksequencer_shapeseq_assign(self):
         """
@@ -8143,6 +8335,120 @@ class Dataset(object):
             assert n_beh == n_task
         return one_to_one
 
+    ##################################### CHAR CLUSTER RESULTS
+    def charclust_shape_labels_extract_presaved_from_DS(self, skip_if_labels_not_found=False):
+        """ Good - Load the shape labels already computed and saved using
+        DS (see character_cluster_extract_shape_labels.py). And then
+        stores in self.Dat['charclust_shape_seq'], each item is
+        tuple of strings.
+        GUARANTEES:
+        - character tasks:
+        --- every trial and stroke in DS must be found in self (but ONLY CHECKS this
+        for "character" task_kind trials (others are given their shapes in actual) is gotten.
+        ACTUALLY, guarantees some fraction (usually 0.9) of char trials gets all stroes.
+        The failures will use IGN.
+        - non-character tasks:
+        --- tries to find. if not, then uses defaults (datsegs).
+        PARAMS:
+        - skip_if_labels_not_found, bool, whether to fail (False) or return None (True) if
+        no pre-saved labels are found.
+        - replace_seq_context_cols, bool (True), then replaces columsn in self.Dat related
+        to shape sequence, e.g., seqc_0_shape ...
+        RETURNS:
+        - WIthout pruning self, updates shape labels in self.Dat
+        - trialcodes_chars_failed, list of tcs whch did not get all their strokes matched.
+        """
+        from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
+
+        nstart = len(self.Dat)
+
+        # First, get all the strokes.
+        DS = preprocess_dataset_to_datstrokes(self, "all_no_clean") # get all strokes.
+        DS = DS.clustergood_load_saved_cluster_shape_classes(
+            skip_if_labels_not_found=skip_if_labels_not_found)
+        if DS is None:
+            # Then no data found
+            print("Skipping cluster labels extractioun! no data found")
+        else:
+
+            # plot examples for each shape
+            if False:
+                DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_subplots="shape_label", n_examples=5);
+
+            # Assign back to D, to get sequence context using DS.
+            DS.dataset_replace_dataset(self)
+            # inds_keep = []
+            shapes_keep = []
+            clust_sim_maxes_keep = []
+            n_failures = 0
+            n_success = 0
+            trialcodes_chars_failed = []
+            did_replace = []
+            for i, row in self.Dat.iterrows():
+                tc = row["trialcode"]
+                if row["task_kind"]=="character":
+                    # then look for shape labels. IF fail, this bad, relace with ignore, and note failure.
+                    tmp = DS.dataset_extract_strokeslength_list(tc, "shape_label", if_fail="return_none")
+                    if tmp is not None:
+                        shapes = tuple(tmp)
+                        clust_sim_maxes = tuple(DS.dataset_extract_strokeslength_list(tc, "clust_sim_max", if_fail="error"))
+                        n_success += 1
+                        did_replace.append(True)
+                    else:
+                        # Use the labels based on ground-truth shapes.
+                        shapes = ["IGN" for _ in range(len(row["strokes_beh"]))]
+                        clust_sim_maxes = tuple([np.nan for _ in range(len(shapes))])
+                        n_failures += 1
+                        trialcodes_chars_failed.append(tc)
+                        did_replace.append(False)
+                else:
+                    # If tc exists, than pull it out. Else is ok to skip, will use the orignial datsegs.
+                    tmp = DS.dataset_extract_strokeslength_list(tc, "shape_label", if_fail="return_none")
+                    if tmp is not None:
+                        shapes = tuple(tmp)
+                        clust_sim_maxes = tuple(DS.dataset_extract_strokeslength_list(tc, "clust_sim_max", if_fail="error"))
+                        did_replace.append(True)
+                    else:
+                        # Use the labels based on ground-truth shapes.
+                        shapes = self.seqcontext_extract_shapes_in_beh_order(i)
+                        clust_sim_maxes = tuple([np.nan for _ in range(len(shapes))])
+                        did_replace.append(False)
+
+                # inds_keep.append(i)
+                shapes_keep.append(shapes)
+                clust_sim_maxes_keep.append(clust_sim_maxes)
+
+            if n_success/(n_failures + n_success)<0.9:
+                print(n_success, n_failure)
+                print(len(DS.Dat["trialcode"].unique()))
+                print(len(D.Dat["trialcode"].unique()))
+                assert False, "why skipped so many? Id expect the only reason to skipt o be very rare losses of strokes (e.g, noise reduction)"
+
+            # Assign them back to
+            # self.Dat = self.Dat.iloc[inds_keep].reset_index(drop=True)
+            self.Dat["charclust_shape_seq"] = shapes_keep
+            self.Dat["charclust_shape_seq_scores"] = clust_sim_maxes_keep
+            self.Dat["charclust_shape_seq_did_replace"] = did_replace
+
+            print("Appended column of shape labels: charclust_shape_seq")
+
+            # if replace_seq_context_cols:
+            #     # Extract seq context info, given the new labels.
+            #     from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
+            #
+            #     # make sure all seqc are replaced
+            #     n = 100
+            #     for i in range(n):
+            #         if f"seqc_{i}_shape" not in self.Dat.columns:
+            #             break
+            #     nmax = max([i, 9]) # man n strokes to take for seqc...
+            #
+            #     preprocess_dataset(self, n_strok_max=nmax, version="char_clust_labels")
+            #     print("Replaced all seqc_{}_shape columns with char clust labels!")
+
+            assert len(self.Dat)==nstart
+
+            return trialcodes_chars_failed
 
     ######################################
     def grammarparsesmatlab_score_wrapper_append(self):
@@ -8267,6 +8573,30 @@ class Dataset(object):
 
 
     #################
+
+    def seqcontext_plot_examples_and_print_context(self, nexamples=10, nstrokes_max=5):
+        """ Quick ehlper to plot n trials, and also print their sequence context
+        (shapes) for inspection that things are alright.
+        Best run in Notebook
+        """
+
+        # Plot examples
+        fig, axes, inds = self.plotMultTrials2(nexamples)
+        display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_shape" for i in range(nstrokes_max)] + ["charclust_shape_seq_scores"]])
+        display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_loc" for i in range(nstrokes_max)]])
+
+
+    def seqcontext_extract_shapes_in_beh_order(self, ind):
+        """ Return list of strings (shapes) drawn on this trial,
+        using tokens, based on touch (not just the frist touch, but
+        inlcuding all beh strokes)
+        RETURNS:
+            - shapes, tuple of strings.
+        """
+        shapes = tuple([tok["shape"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh")])
+        assert len(shapes) == len(self.Dat.iloc[ind]["strokes_beh"])
+        return shapes
+
     def seqcontext_preprocess(self):
         """ Extract new columns into self.Dat, for each trial noting sequence 
         context inforamtion ,such as n strokes, shape of first stroke, etc

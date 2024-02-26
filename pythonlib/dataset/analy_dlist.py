@@ -2,6 +2,7 @@
 This is distinct from a concatenated dset, in the here can
 do seprate operations on each dset before concat.
 """
+import copy
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -88,55 +89,96 @@ def concatDatasets(Dlist, do_cleanup=False):
     """
     from .dataset import Dataset
     # from pythonlib.dataset.dataset import Dataset
+    from pythonlib.tools.checktools import check_objects_identical
 
     Dnew = Dataset([])
 
-    if True:
-        # New, updates metadat.
-        ct = 0
-        dflist = []
-        metadatlist = []
-        BlockParamsDefaults = {}
-        for i, D in enumerate(Dlist):
-            
-            if len(D.Metadats)>1:
-                print("check that this is working.. only confied for if len is 1")
-                assert False
+    # New, updates metadat.
+    ct = 0
+    dflist = []
+    metadatlist = []
+    BlockParamsDefaults = {}
+    for i, D in enumerate(Dlist):
 
-            # add to metadat index
-            df = D.Dat.copy()
-            df["which_metadat_idx"] = df["which_metadat_idx"]+ct
-            dflist.append(df)
+        if len(D.Metadats)>1:
+            print("check that this is working.. only confied for if len is 1")
+            assert False
 
-            # Combine metadats
-            metadatlist.extend([m for m in D.Metadats.values()])
-            # print(D.BlockParamsDefaults.keys())
-            assert list(D.BlockParamsDefaults.keys())==[0], "not coded for cases with > 1"
-            BlockParamsDefaults[i] = D.BlockParamsDefaults[0] # shift them up
+        # add to metadat index
+        df = D.Dat.copy()
+        df["which_metadat_idx"] = df["which_metadat_idx"]+ct
+        dflist.append(df)
 
-            ct = ct+len(D.Metadats)
-        Dnew.Dat = pd.concat(dflist).reset_index(drop=True)
-        Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
-        Dnew.BlockParamsDefaults = BlockParamsDefaults
-        print("Done!, new len of dataset", len(Dnew.Dat))
+        # Combine metadats
+        metadatlist.extend([m for m in D.Metadats.values()])
+        # print(D.BlockParamsDefaults.keys())
+        assert list(D.BlockParamsDefaults.keys())==[0], "not coded for cases with > 1"
+        BlockParamsDefaults[i] = D.BlockParamsDefaults[0] # shift them up
 
-        assert Dnew.BlockParamsDefaults.keys() == Dnew.Metadats.keys()
-        # print(Dnew.Dat["which_metadat_idx"].unique())
-        # print(BlockParamsDefaults.keys())
-        assert max(Dnew.Dat["which_metadat_idx"]) <= max(list(Dnew.BlockParamsDefaults.keys()))
-    else:
-        # OLD: did not update metadat.
-        dflist = [D.Dat for D in Dlist]
-        Dnew.Dat = pd.concat(dflist)
+        ct = ct+len(D.Metadats)
+    Dnew.Dat = pd.concat(dflist).reset_index(drop=True)
+    Dnew.Metadats = {i:m for i,m in enumerate(metadatlist)}
+    Dnew.BlockParamsDefaults = BlockParamsDefaults
+    print("Done!, new len of dataset", len(Dnew.Dat))
 
-        del Dnew.Dat["which_metadat_idx"] # remove for now, since metadats not carried over.
+    assert Dnew.BlockParamsDefaults.keys() == Dnew.Metadats.keys()
+    # print(Dnew.Dat["which_metadat_idx"].unique())
+    # print(BlockParamsDefaults.keys())
+    assert max(Dnew.Dat["which_metadat_idx"]) <= max(list(Dnew.BlockParamsDefaults.keys()))
 
-        Dnew.Dat = Dnew.Dat.reset_index(drop=True)
+    ######### DATA THAT YOU NEED TO MERGE ACROSS DATASETS
+    from pythonlib.tools.classtools import concat_objects_attributes_flexible
+    concat_objects_attributes_flexible(Dnew, Dlist)
+    #
+    # # (1) Attributes that start with captial, or _<capital>, and are string type --> they must be
+    # # identical across input objects. Will inherit that value.
+    # list_attr_identical = attributes_get_capitalized_or_underscore_capitalized(Dlist[0])
+    # # Only those that are strings
+    # list_attr_identical = [attr for attr in list_attr_identical if isinstance(getattr(Dlist[0], attr), str)]
+    # # print(list_attr_identical)
+    # # list_attr_identical = ["TokensVersion"]
+    # for attr in list_attr_identical:
+    #     items = [getattr(d, attr) for d in Dlist]
+    #     for i in range(len(items)):
+    #         for j in range(i+1, len(items)):
+    #             if check_objects_identical(items[i], items[j], PRINT=True)==False:
+    #                 print("These items are different across object you are trying to concat:")
+    #                 print(items)
+    #                 assert False
+    #     item_take = items[0]
+    #     print(f"- Assigning to D.{attr} this value:", item_take)
+    #     setattr(Dnew, attr, item_take)
+    #
+    # # (2) Attributes which are dicts, and which has keys that are trialcodes, they will be concated.
+    # def _is_trialcode(x, Dthis):
+    #     """ return True if is string and is like yyyyyy-{}-{}"""
+    #     return x in Dthis.Dat["trialcode"].tolist()
+    #
+    # list_attr_identical = attributes_get_capitalized_or_underscore_capitalized(Dlist[0])
+    # list_attr_identical_and_concat = []
+    # for attr in list_attr_identical:
+    #     obj = getattr(Dlist[0], attr)
+    #     if isinstance(obj, dict) and _is_trialcode(list(obj.keys())[0], Dlist[0]):
+    #         list_attr_identical_and_concat.append(attr)
+    # print("These attributes are dicts, which will concat:", list_attr_identical_and_concat)
+    #
+    # for attr in list_attr_identical_and_concat:
+    #     dict_this = copy.copy(getattr(Dlist[0], attr))
+    #     for d in Dlist[1:]:
+    #         for tc, val in getattr(d, attr).items():
+    #             if tc in dict_this:
+    #                 assert check_objects_identical(dict_this[tc], val), "how can diff datasets have overlapping trialcodes with diff values?"
+    #             else:
+    #                 # append it
+    #                 dict_this[tc] = val
+    #     setattr(Dnew, attr, dict_this)
+    #     print(f"- Assigning to D.{attr} this dict (concatted, with trialcode keys, showing first 5):")
+    #     print(list(dict_this.items())[:5])
+    #     # for k, v in dict_this.items():
+    #
+    # # TODO (3) Attributes which are lists, in which case take either union or intersection
 
-        print("Done!, new len of dataset", len(Dnew.Dat))
-        # Dnew.Metadats = copy.deepcopy(self.Metadats)
-
-    # Check consisitency
+    ######### Check consisitency
     Dnew.Dat = Dnew.Dat.reset_index(drop=True)
     Dnew._check_consistency() 
 

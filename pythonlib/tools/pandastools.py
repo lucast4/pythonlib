@@ -80,6 +80,33 @@ def mergeOnIndex(df1, df2):
         right_index=True, how='outer', validate='one_to_one')
     return dfout
 
+def merge_subset_indices_prioritizing_second(df_old, df_new, index_col):
+    """
+    Merge two dataframes, prioritizing df_new.
+    Takes dataframes that have overlapping indices (in column, index_col),
+    such that, for indices that that both have, take the value from df_new,
+    otherwise keep the value from df_old.
+    If df_new has index that doesn't exist in df_old, it will be added as a new
+    row, with null values for columns that exist in df_old but not df_new.
+
+    :param df_old: The older DataFrame to merge
+    :param df_new: The newer DataFrame whose values are prioritized
+    :param index_col: The column name to use as the index for merging
+    :return: Merged DataFrame with prioritization for df_new
+    """
+
+    # Ensure the index_col is the index for both DataFrames
+    df_old.set_index(index_col, inplace=True, drop=False)
+    df_new.set_index(index_col, inplace=True, drop=False)
+
+    # Combine DataFrames, prioritizing df_new
+    merged_df = df_new.combine_first(df_old)
+
+    # Optionally, reset the index if you want index_col to be a column again
+    merged_df.reset_index(drop=True, inplace=True)
+
+    return merged_df
+
 
 #############################vvvv OBSOLETE - USE aggregGeneral
 # def aggreg(df, group, values, aggmethod=["mean","std"]):
@@ -593,11 +620,13 @@ def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int)):
 
     # n_min_per_level = 40 # min total n trials for level
     from pythonlib.tools.checktools import check_is_categorical
-    
+
+    df["_index"] = df.index
     levels = df[colname].unique().tolist()
 
     indstoremove = []
 
+    print("--- [filter_by_min_n], checking var=", colname)
     for lev in levels:
         # Skip if this level is numerical
         if check_is_categorical(lev):
@@ -607,8 +636,9 @@ def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int)):
                 # then remove it
                 inds = df[df[colname]==lev].index.tolist()
                 indstoremove.extend(inds)
-                print(f'REMOVING, n={n} |', lev, ' --------  ', sum(df[colname]==lev))
-            print(lev, ' --------  ', sum(df[colname]==lev))
+                print(f"level {lev}, REMOVING, n={n}")
+            else:
+                print(f"level {lev}, keeping, n={n}")
     print('(removing this many indices): ', len(set(indstoremove)))
     df = df.copy()
     df = df.drop(list(set(indstoremove))).reset_index(drop=True)
@@ -1679,6 +1709,10 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
     RETURNS:
     - outdict, dict[level]=n
     """
+
+    if len(df)==0:
+        return {}
+
     outdict = {}
     out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
 
@@ -1738,6 +1772,46 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
 
 
 
+# def replace_values_with_this(df, column, value_template, replace_with):
+#     """ MOdify df, replacing all values in <column> that match
+#     <value_template> with <replace_with>
+#     :param value_template, eitehr None (replace values that are None) or
+#     item to match
+#     """
+#     if value_template is None:
+#         inds = df[column].isna()
+#         if sum(inds)>0:
+#             if isinstance(replace_with, tuple):
+#                 replace_with = [replace_with for i in range(sum(inds))]
+#             df.loc[inds, column] = replace_with
+#     else:
+#         inds = df[column]==value_template
+#         if sum(inds)>0:
+#             if isinstance(replace_with, tuple):
+#                 replace_with = [replace_with for i in range(sum(inds))]
+#             print(inds)
+#             print(replace_with)
+#             df.loc[inds, column] = replace_with
+
+def replace_values_with_this(df, column, value_template, replace_with):
+    """ MOdify df, replacing all values in <column> that match
+    <value_template> with <replace_with>
+    :param value_template, eitehr None (replace values that are None) or
+    flexible, even iterables
+    :param replace_with: value to replace with, works even if this is tuple/list.
+    item to match
+    """
+
+    if isinstance(replace_with, (list, tuple)) and value_template is None:
+        # Slow, but needed.
+        df[column] = df[column].apply(lambda x: replace_with if pd.isna(x) else x)
+    elif isinstance(replace_with, (list, tuple)):
+        df[column] = df[column].apply(lambda x: replace_with if x == value_template else x)
+    elif value_template is None:
+        # Faster
+        df.loc[df[column].isna(), column] = replace_with
+    else:
+        df.loc[df[column] == value_template, column] = replace_with
 
 def replaceNone(dfthis, column, replace_with):
     """ replace Nones in this column with... 
@@ -1756,8 +1830,8 @@ def replaceNone(dfthis, column, replace_with):
     return dfthis
 
 
-def slice_by_row_label(df, colname, rowvalues, reset_index=True, 
-    assert_exactly_one_each=False, prune_to_value_exist_in_df=True):
+def slice_by_row_label(df, colname, rowvalues, reset_index=True,
+                       assert_exactly_one_each=False, prune_to_values_that_exist_in_df=True):
     """ Return a sliced dataframe, where rows are sliced
     to match the list of labels (rowvalues) for a column
     PARAMS:
@@ -1793,9 +1867,9 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     assert isinstance(rowvalues, list)
 
     if assert_exactly_one_each:
-        prune_to_value_exist_in_df = False
+        prune_to_values_that_exist_in_df = False
 
-    if prune_to_value_exist_in_df:
+    if prune_to_values_that_exist_in_df:
         assert assert_exactly_one_each==False, "incompatible"
         rowvalues = [v for v in rowvalues if v in df[colname].tolist()]
 
@@ -2382,10 +2456,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     if balance_no_missed_conjunctions:
         # 2) balance (var, othervars)
         # print("Starting len:", len(dfthis))
-        dfout, _ = conjunction_vars_prune_to_balance(dfout, var, "vars_others", 
-            prefer_to_drop_which=balance_prefer_to_drop_which,
-            PLOT=DEBUG);
-        # print("Ending len:", len(dfthis))
+        if len(dfout)>0:
+            dfout, _ = conjunction_vars_prune_to_balance(dfout, var, "vars_others",
+                prefer_to_drop_which=balance_prefer_to_drop_which,
+                PLOT=DEBUG)
+            # print("Ending len:", len(dfthis))
 
     if PRINT_AND_SAVE_TO is not None:
         # print and save text of sampel size fo alll concuutison
@@ -2630,7 +2705,8 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
 
 def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
-                          annotate_heatmap=False, return_dfs=False):
+                          annotate_heatmap=False, return_dfs=False,
+                          ZLIMS=None, title_size=10):
     """
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar per
@@ -2641,6 +2717,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     :param var_subplot:
     :return:
     """
+
+    assert isinstance(var_subplot, str)
 
     # list_row = df[varrow].unique().tolist()
     list_subplot = df[var_subplot].unique().tolist()
@@ -2660,6 +2738,11 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     else:
         zlims = (None, None)
 
+    if ZLIMS is not None:
+        zlims = ZLIMS
+
+    # zlims = (-0.2, 0.2)
+    # diverge=True
     DictSubplotsDf ={}
     for lev_subplot, ax in zip(list_subplot, axes.flatten()):
         a = df[var_subplot]==lev_subplot
@@ -2670,7 +2753,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                                 val_name,
                                 ax=ax, annotate_heatmap=annotate_heatmap,
                                 diverge=diverge, zlims=zlims, norm_method=norm_method)
-        ax.set_title(lev_subplot)
+        ax.set_title(lev_subplot, color="r", fontsize=title_size)
         DictSubplotsDf[lev_subplot] = df2d
 
     if return_dfs:

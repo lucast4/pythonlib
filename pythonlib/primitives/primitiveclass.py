@@ -47,7 +47,13 @@ class PrimitiveClass(object):
                 if k not in params.keys() or params[k] is None:
                     self.ParamsAbstract[k] = None
                 else:
-                    self.ParamsAbstract[k] = int(params[k])
+                    try:
+                        self.ParamsAbstract[k] = int(params[k])
+                    except Exception as err:
+                        # One time I had this usquare-86-5.5-0.8 [usquare 86 5.5 0]
+                        # This is fine! See shape_string_convert_to_components() for
+                        # explanation
+                        self.ParamsAbstract[k] = params[k]
 
             self.ParamsConcrete = {}
             list_keys_concrete = ["x", "y", "theta", "sx", "sy", "order"]
@@ -121,7 +127,8 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
-    def label_classify_prim_using_stroke(self, return_as_string=False):
+    def label_classify_prim_using_stroke(self, return_as_string=False,
+                                         shape_rename_perfblockey_decimals_to_defaults=False):
         """ To classify this prim, qwhich usualy would be
         liek line-10-0-1, but this doesnt generaklkly work,
         becuase somtimes you have extra transfomrs that chagne how this
@@ -142,8 +149,8 @@ class PrimitiveClass(object):
         cen = S.extract_center()
 
         # define the endpoint1 to be that more on the lower-left.
-        loc1 = S.Stroke[0, :2]
-        loc2 = S.Stroke[-1, :2]
+        # loc1 = S.Stroke[0, :2]
+        # loc2 = S.Stroke[-1, :2]
 
         # make sure loc1 is the one towards the bottom left
         if np.sum(S.Stroke[0, :2]-cen) > np.sum(S.Stroke[-1, :2]-cen): # np.sum() does project onto (1,1).
@@ -167,6 +174,22 @@ class PrimitiveClass(object):
 
         # return as tuple
         label = (shcat, scale, angle1, angle2)
+
+        if shape_rename_perfblockey_decimals_to_defaults:
+            # e.g., 231204, diego, for Perfblocky, convert shapes that have decimal names to their closest default shape.
+            # THis would require by eye writing mapping.
+            # Or better is to do it auto by comapring distance to DS saved strokes (which has rtask strokes).
+            # Decided to skip this, and instead use motor- ckuster labels for analyuses (which I prev did for char, but here
+            # decide to do also for SP and PIG).
+
+            # If do this, also prob should have this done auto in dataset_preprocess, early on, before seq context stuff, etc.
+
+            # Would need to code  mapping:
+            # (shcat, scale, angle1, angle2) --> (shcat, scale, angle1, angle2) [with integers, the defaults]
+
+            # ujseful noteobok: 230623_char_STROKES_CLUSTERING --> section "plot examples of all the prims"
+
+            assert False, "code this. and add flag so that dataset_preprocess knows to do this. Or make it default?"
 
         if return_as_string:
             label_str = [label[0], f"{label[1]:.0f}", f"{label[2]:.1f}", f"{label[3]:.1f}"]

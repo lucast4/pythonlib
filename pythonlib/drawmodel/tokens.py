@@ -3,6 +3,143 @@ Can be used for either beh or task ordered tokens
 """
 
 import numpy as np
+
+def shape_string_convert_to_components(shape_str):
+    """
+    "arcdeep-4-1-0" --> ('arcdeep', '4', '1', '0')
+    NOTE: sometimes the input shape can have decimels (e..g, Diego, 23/12/04
+    Reason is these are non-standard shapes, e.g., perfblocky, and
+    they are renamed using their actual params. e/g.,.
+    V-83-5.8-0. They do end up being categorical tbhough, so
+    is fine to use them as is.
+    """
+    if shape_str=="IGN" or shape_str is None:
+        # this shape will be ignored in other code, so is ok.
+        return "IGN", -1, -1, -1
+
+    from pythonlib.tools.expttools import deconstruct_filename
+    tmp = deconstruct_filename(shape_str)
+    if len(tmp["filename_components_hyphened"])<4:
+        print(shape_str)
+        print(tmp)
+        assert False, "bug upstream?"
+    else:
+        shape_abstract = tmp["filename_components_hyphened"][0]
+        scale = tmp["filename_components_hyphened"][1]
+        rotation = tmp["filename_components_hyphened"][2]
+        reflect = tmp["filename_components_hyphened"][3]
+        return shape_abstract, scale, rotation, reflect
+
+def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None,
+                             reclassify_shape_using_stroke=False):
+    """
+    [NOTE: ONLY use this for genreated tokens in default order. this important becuase
+    generates and caches. To reorder, see tokens_reorder]
+    Designed for grid tasks, where each prim is a distinct location on grid,
+    so "relations" are well-defined based on adjacency and direction
+    PARAMS:
+    - params, dict, like things defining the grid params for this expt
+    - inds_taskstrokes, list of ints, order for the taskstrokes. e..g,, [0,4,2]
+    if None, then uses the default order.
+    - track_order, bool, whether order is relevant. if True (e.g, for behavior)
+    then tracks things related to roder (e.g., sequential relations). If False
+    (e.g. for chunks where care only about grouping not order), then ignore those
+    features.
+    - hack_is_gridlinecircle, for gridlinecirlce epxeirments, hacked the grid...
+    for both "gridlinecircle", "chunkbyshape2"
+    - input_grid_xy, either None (extracts grid params for this task auto), or a
+    list of two arrays [gridx, gridy] where each array is sorted (incresaing) scalar coordinates
+    for each grid location.
+    RETURNS:
+    - datsegs, list of dicts, each a token.
+    """
+    from pythonlib.primitives.primitiveclass import PrimitiveClass
+
+    ############ PREPARE DATA
+    # Convert to Primitives, since the rest of code requires that.
+    assert len(strokes)==len(shapes)
+    Prims = []
+    for traj, sh in zip(strokes, shapes):
+        shape_abstract, scale, rotation, reflect = shape_string_convert_to_components(sh)
+        P = PrimitiveClass()
+        try:
+            P.input_prim("prototype_prim_abstract", {
+                "shape":shape_abstract,
+                "scale":scale,
+                "rotation":rotation,
+                "reflect":reflect},
+                traj = traj)
+        except Exception as err:
+            print(sh, shape_abstract, scale, rotation, reflect)
+            assert False
+        Prims.append(P)
+
+    inds_taskstrokes = list(range(len(Prims)))
+
+    ################ METHODS (doesnt matter if on grid)
+    # def _orient(i):
+    #     if _shape(i)=="line-8-1-0":
+    #         return "horiz"
+    #     elif _shape(i)=="line-8-2-0":
+    #         return "vert"
+    #     else:
+    #         return "undef"
+    #     # elif _shape(i) in ["circle-6-1-0", "arcdeep-4-4-0"]:
+    #     #     return "undef"
+    #     # else:
+    #     #     print(_shape(i))
+    #     #     assert False, "code it"
+
+    # Spatial scales.
+    def _width(i):
+        return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["width"]
+    def _height(i):
+        return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["height"]
+    def _diag(i):
+        return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["diag"]
+    def _max_wh(i):
+        return Prims[i].Stroke.extract_spatial_dimensions(scale_convert_to_int=True)["max_wh"]
+
+    def _shapeabstract(i):
+        # e.g, "line"
+        return Prims[i].ShapeNotOriented
+
+    def _shape(i):
+        # return string
+        if reclassify_shape_using_stroke:
+            return Prims[i].label_classify_prim_using_stroke(return_as_string=True)
+        else:
+            return Prims[i].shape_oriented(include_scale=True)
+        # return objects[i][0]
+
+    ################## GRID METHODS
+
+    # Create sequence of tokens
+    datsegs = []
+
+    for i in range(len(Prims)):
+
+        # 1) Things that don't depend on grid
+        datsegs.append({
+            "shapeabstract":_shapeabstract(i),
+            "shape":_shape(i),
+            "shape_oriented":_shape(i),
+            "width":_width(i),
+            "height":_height(i),
+            "diag":_diag(i),
+            "max_wh":_max_wh(i),
+            "Prim":Prims[i],
+            "ind_taskstroke_orig":inds_taskstrokes[i],
+            "center": Prims[i].Stroke.extract_center(), # in pixels
+            "gridloc": gridlocs[i] if gridlocs is not None else ("IGN", "IGN"),
+            "gridloc_local": gridlocs_local[i] if gridlocs_local is not None else ("IGN", "IGN"),
+            })
+
+    Tk = Tokens(datsegs, version="beh")
+    Tk.sequence_context_relations_calc()
+
+    return Tk
+
 class Tokens(object):
     """
     """
@@ -16,6 +153,12 @@ class Tokens(object):
             assert version in ["beh", "task"]
         self.Version = version
         self.Tokens = tuple(tokens) # order is immutable
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        else:
+            return self.Tokens == other.Tokens
 
     def extract_locations_concrete(self, assign_to_tokens=True):
         """ Return the concrete locations (2-tuples, xy) for each
@@ -203,33 +346,54 @@ class Tokens(object):
 
         grid_ver = "on_grid"
         for dseg in tokens:
-            if dseg[GRIDLOC_VER] is None:
+            if dseg[GRIDLOC_VER] == ("IGN",) or dseg[GRIDLOC_VER] == ("IGN", "IGN"):
                 grid_ver = "on_rel"
 
         def _location(i):
-            xloc, yloc = tokens[i][GRIDLOC_VER]
+            if grid_ver == "on_grid":
+                # print(tok[GRIDLOC_VER] for tok in tokens)
+                # print(tokens[i])
+                # print(tokens[i][GRIDLOC_VER])
+                xloc, yloc = tokens[i][GRIDLOC_VER]
+            elif grid_ver == "on_rel":
+                xloc = "IGN"
+                yloc = "IGN"
+            else:
+                assert False
+
             return xloc, yloc
 
         def _posdiffs(i, j):
             # return xdiff, ydiff, 
             # in grid units.
-            pos1 = _location(i)
-            pos2 = _location(j)
-            return pos2[0]-pos1[0], pos2[1] - pos1[1]
+            if grid_ver == "on_grid":
+                pos1 = _location(i)
+                pos2 = _location(j)
+                return pos2[0]-pos1[0], pos2[1] - pos1[1]
+            elif grid_ver == "on_rel":
+                return "IGN", "IGN"
+            else:
+                assert False
 
         def _direction(i, j):
             # only if adjacnet on grid.
-            xdiff, ydiff = _posdiffs(i,j)
-            if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
-                return "up"
-            elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
-                return "down"
-            elif xdiff ==-1. and np.isclose(ydiff, 0.):
-                return "left"
-            elif xdiff ==1. and np.isclose(ydiff, 0.):
-                return "right"
+            if grid_ver == "on_grid":
+                xdiff, ydiff = _posdiffs(i,j)
+                if np.isclose(xdiff, 0.) and np.isclose(ydiff, 1.):
+                    return "up"
+                elif np.isclose(xdiff, 0.) and np.isclose(ydiff, -1.):
+                    return "down"
+                elif xdiff ==-1. and np.isclose(ydiff, 0.):
+                    return "left"
+                elif xdiff ==1. and np.isclose(ydiff, 0.):
+                    return "right"
+                else:
+                    return "far"
+            elif grid_ver == "on_rel":
+                return "IGN"
             else:
-                return "far"
+                assert False
+
 
         def _relation_from_previous(i):
             # relation to previous stroke
@@ -268,10 +432,12 @@ class Tokens(object):
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 # give none for params
-                dseg["rel_from_prev"] = None
                 # datsegs[-1]["rel_to_next"] = None
-                dseg["h_v_move_from_prev"] = None
                 # datsegs[-1]["h_v_move_to_next"] = None
+                # dseg["rel_from_prev"] = None
+                # dseg["h_v_move_from_prev"] = None
+                dseg["rel_from_prev"] = "IGN"
+                dseg["h_v_move_from_prev"] = "IGN"
             else:
                 print(grid_ver)
                 assert False, "code it"
@@ -301,7 +467,10 @@ class Tokens(object):
             dseg["CTXT_loc_next_local"] = loc_next_local
             dseg["CTXT_shape_next"] = shape_next
 
-
+    def print_summary(self):
+        for i, tok in enumerate(self.Tokens):
+            print("--- token: ", i)
+            print(tok)
 
 
 

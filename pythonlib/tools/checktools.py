@@ -63,11 +63,19 @@ def check_objects_identical(obj1, obj2, PRINT=False):
                 print('obj2',obj2)
             return False
     else:
-        print('obj1',obj1)
-        print('obj2',obj2)
-        print(type(obj1))
-        print(type(obj2))
-        assert False, "add this type"
+        # use standard equality
+        try:
+            if not obj1==obj2:
+                if PRINT:
+                    print('obj1',obj1)
+                    print('obj2',obj2)
+                return False
+        except Exception as err:
+            print('obj1',obj1)
+            print('obj2',obj2)
+            print(type(obj1))
+            print(type(obj2))
+            assert False, "add this type"
     
     if PRINT:
         print("tests passed")

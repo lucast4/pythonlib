@@ -21,6 +21,7 @@ class TaskClass(object):
         self.Parser = None
         self.Parses = None
         self.ShapesOldCoords = None
+        self._TokensLocked = False
 
     def initialize(self, ver, params, coord_force_same_aspect_ratio=True,
             convert_coords_to_abstract=True, split_large_jumps=False,
@@ -1240,7 +1241,9 @@ class TaskClass(object):
         track_order=True, hack_is_gridlinecircle=False, assert_computed=True,
         include_scale=False, input_grid_xy=None, return_as_tokensclass=False,
                         reclassify_shape_using_stroke=False):
-        """ Wrapper to eitehr create new or to return cached. see 
+        """ [CONFIRMED - this is the ONLY place where self._DatSegs is accessed (across
+        all code files).
+        Wrapper to eitehr create new or to return cached. see
         _tokens_generate for more
         PARAMS:
         - assert_computed, bool, by default True, so that you explciitly turn this off 
@@ -1249,6 +1252,12 @@ class TaskClass(object):
         - input_grid_xy, see inner
         - reclassify_shape_using_stroke, see Dataset()
         """
+
+        if not hasattr(self, "_TokensLocked"):
+            self._TokensLocked = False
+
+        if self._TokensLocked:
+            assert False, "tried to generate new toekns, but it is locked..."
 
         if params is None:
             params = {}
@@ -1305,8 +1314,8 @@ class TaskClass(object):
         import copy
 
         # Shallow copy is good enough, becuase you just want to avoid replacing the
-        # value in self._DatSegs[i][key]. Tested that this is fine.
-        datsegs_new = [copy.copy(d) for d in self._DatSegs]
+        datsegs_new = self.tokens_generate()
+        # datsegs_new = [copy.copy(d) for d in self._DatSegs]
         datsegs_new = [datsegs_new[i] for i in inds_taskstrokes]
         return self._tokens_generate_relations(datsegs_new)
 
@@ -1352,8 +1361,11 @@ class TaskClass(object):
         RETURNS:
         - datsegs, list of dicts, each a token.
         """
-
         from math import pi
+
+        shape_rename_perfblockey_decimals_to_defaults = False
+        # Not yet coded, this would require hand=coding the shape labels (e.g., binning angles, etc), which can do in
+        # taskgeneral
 
         if params is None:
             params = {}
@@ -1494,7 +1506,10 @@ class TaskClass(object):
         def _shape(i):
             # return string
             if reclassify_shape_using_stroke:
-                return Prims[i].label_classify_prim_using_stroke(return_as_string=True)
+                sh = Prims[i].label_classify_prim_using_stroke(return_as_string=True,
+                                               shape_rename_perfblockey_decimals_to_defaults=shape_rename_perfblockey_decimals_to_defaults)
+
+                return sh
             else:
                 return Prims[i].shape_oriented(include_scale=include_scale)
             # return objects[i][0]
@@ -1568,7 +1583,6 @@ class TaskClass(object):
                             print(isin_close(prms["x"], xgrid, atol=ATOL))
                             print("---")
                             print(self.PlanDat["RelsBeforeRescaleToGrid"])
-                            i
                             assert False, "prob just need to input it."
 
                     else:
@@ -1615,8 +1629,8 @@ class TaskClass(object):
             elif grid_ver=="on_rel":
                 # Then this is using relations, not spatial grid.
                 # give none for params
-                datsegs[-1]["gridloc"] = None
-                datsegs[-1]["gridloc_local"] = None
+                datsegs[-1]["gridloc"] = ("IGN", "IGN")
+                datsegs[-1]["gridloc_local"] = ("IGN", "IGN")
             else:
                 print(grid_ver)
                 assert False, "code it"

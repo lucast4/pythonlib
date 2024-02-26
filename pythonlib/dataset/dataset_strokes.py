@@ -12,6 +12,7 @@ This supercedes all SF (strokefeats) things.
 
 See notebook: analy_spatial_220113 for development.
 """
+import os.path
 import pickle
 
 import pandas as pd
@@ -142,16 +143,97 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         n2 = len(DS.Dat)
         assert n2/n1>0.75, "why removed so much data?"
 
-    elif version=="clean_chars_load_clusters":
+    elif version == "clean_chars_clusters_without_reloading":
+        # Clean as for chars, and then remove strokes whose cluster labels
+        # scores are worse than threshold and are chracter. If not character,
+        # then doesnt remove.
+        # Requires clust_sim_max already having been loaded into D.
+
+        D.preprocessGood(params=["no_supervision", "remove_online_abort"])
+
+        assert "charclust_shape_seq_scores" in D.Dat.columns, "you must have already loaded this into Dataset"
+        columns_to_append = {} # one value for each (substroke)
+        for column in ["charclust_shape_seq_scores"]:
+            columns_to_append[column] = D.Dat[column].tolist()
+        DS = DatStrokes(D, columns_to_append=columns_to_append)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "stroke_too_quick"]
+        params = {
+            # "min_stroke_length":50,
+            "min_stroke_length":75, # Still pretty conservative at 75
+            "min_stroke_dur":0.1,
+        }
+        n1 = len(DS.Dat)
+        DS.clean_preprocess_data(methods=methods, params=params)
+
+        # Third, hard-coded pruning, to be above threshold value for clean prims
+        animal = D.animals(force_single=True)[0]
+        if animal=="Pancho":
+            THRESH_clust_sim_max = 1.1
+        elif animal=="Diego":
+            THRESH_clust_sim_max = 1.2 # based on 12/1/23...
+        else:
+            assert False
+
+        # Remove those that are (i) character and (ii) below threshold
+        a = DS.Dat["charclust_shape_seq_scores"]<THRESH_clust_sim_max
+        b = DS.Dat["task_kind"] == "character"
+        print("Before remove character tasks with low clust score: ", len(DS.Dat))
+        DS.Dat = DS.Dat.loc[~(a & b)].reset_index(drop=True)
+        print("After remove character tasks with low clust score: ", len(DS.Dat))
+
+        n2 = len(DS.Dat)
+        assert n2/n1>0.7, "why removed so much data?"
+
+    elif version=="chars_load_clusters":
+        # Without pruning DS basd on whether or not a given row has pre-saved char cluster label,
         # load pre-saved clustres (shape labels) --> column in DS called "shape_label"
         # And other columns: clust_sim_max, shape_label, velmean_th, velmean_thbin
 
+        # ie same as clean_chars_load_clusters, but do not remove trials that dont have shape label.
+
+        # IMPORTANT: shape label information overwrites "shape" and "shape_oriented", for the rows
+        # that have it.
+
+        assert False, "best to first load into D, and then genreate DS. Otehrwise can have inconsistentcies (e.g,, sequenc context...)"
+
         # First, get DS
-        DS = preprocess_dataset_to_datstrokes(D, version="clean_one_to_one")
+        DS = preprocess_dataset_to_datstrokes(D, version="clean_chars")
 
         # Second, load presaved
         # "shape_label" holds the label.
-        DS = DS.clustergood_load_saved_cluster_shape_classes()
+        # THIS PRUNES to just characters (or the rows that have saved data).
+        ds = DS.clustergood_load_saved_cluster_shape_classes()
+
+        # Merge this into DS, since ds usualyl is just "character" taskkinds, and so is pruned
+        from pythonlib.tools.pandastools import merge_subset_indices_prioritizing_second
+        print("Before merge:", len(DS.Dat))
+        DS.Dat = merge_subset_indices_prioritizing_second(DS.Dat, ds.Dat, "index_datapt")
+        print("After merge:", len(DS.Dat))
+
+    elif version=="clean_chars_load_clusters":
+        # Does two things (1) cleans as you would for chars, and (2)
+        # load pre-saved clustres (shape labels) --> column in DS called "shape_label"
+        # This ONLY keeps rows that have pre-saved character cluster label.
+        # And other columns: clust_sim_max, shape_label, velmean_th, velmean_thbin
+
+        assert False, "best to first load into D, and then genreate DS. Otehrwise can have inconsistentcies (e.g,, sequenc context...)"
+        assert False, "If you do plan to use this, maybe dont throw out the non-character tasks. see clean_chars_clusters_without_reloading for how to do"
+
+        # First, get DS
+        DS = preprocess_dataset_to_datstrokes(D, version="clean_chars")
+
+        # Second, load presaved
+        # "shape_label" holds the label.
+        # THIS PRUNES to just characters (or the rows that have saved data).
+        ds = DS.clustergood_load_saved_cluster_shape_classes()
+
+        # Merge this into DS, since ds usualyl is just "character" taskkinds, and so is pruned
+        from pythonlib.tools.pandastools import merge_subset_indices_prioritizing_second
+        print("Before merge:", len(DS.Dat))
+        DS.Dat = merge_subset_indices_prioritizing_second(DS.Dat, ds.Dat, "index_datapt")
+        print("After merge:", len(DS.Dat))
 
         # Third, hard-coded pruning, to be above threshold value for clean prims
         animal = D.animals(force_single=True)[0]
@@ -166,6 +248,7 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         a = DS.Dat["clust_sim_max"]>=THRESH_clust_sim_max
         b = DS.Dat["clust_sim_max"]<=_max
         DS.Dat = DS.Dat[a & b].reset_index(drop=True)
+        print("After remove by threshodl of clust_sim_max:", len(DS.Dat))
 
         if False:
             # Optaiolly, plot examples for each shape
@@ -198,7 +281,7 @@ class DatStrokes(object):
             # just for methods
             self.Dataset = None
         else:
-            self.Dataset = Dataset.copy()
+            self.Dataset = Dataset.copy(just_df=False)
         self.Dat = None
         self.Params = {}
         self.Version = None
@@ -243,16 +326,18 @@ class DatStrokes(object):
 
         D = self.Dataset
         assert len(D.Dat)>0
-        D.behclass_preprocess_wrapper()
-        assert len(D.Dat)>0
 
-        # Prune cases where beh did not match any task strokes.
-        D.behclass_clean()
-        assert len(D.Dat)>0
+        if False: # Skip, since it will automatically run when you extract tokens if you use behcalss
+            D.behclass_preprocess_wrapper()
+            assert len(D.Dat)>0
 
-        # Sanity check that all gridloc are relative the same grid (across trials).
-        D.taskclass_tokens_sanitycheck_gridloc_identical()
-        assert len(D.Dat)>0
+            # Prune cases where beh did not match any task strokes.
+            D.behclass_clean()
+            assert len(D.Dat)>0
+
+            # Sanity check that all gridloc are relative the same grid (across trials).
+            D.taskclass_tokens_sanitycheck_gridloc_identical()
+            assert len(D.Dat)>0
 
         # to get seq context, need to know if reached for done button
         D.sketchpad_done_button_did_reach_append_col()
@@ -271,10 +356,12 @@ class DatStrokes(object):
         key from tokens and appends as a new column in self.Dat
         - tokens_get_relations, bool, if true, does preproess of toekns so they have relatioms
         and sequence context.
+        - columns_to_append, dict, col:values, where values is list of lists, matching (trial, stroke idnex)
         RETURNS:
         - modifies self.Dat to hold dataframe where each row is stroke.
         """
         from pythonlib.drawmodel.tokens import Tokens
+        from pythonlib.behavior.strokeclass import StrokeClass
 
         assert tokens_extract_keys is None, "not coded. keeps datsegs anyway, so dont need it."
         D = self.Dataset
@@ -294,15 +381,20 @@ class DatStrokes(object):
                 print(ind)
             T = D.Dat.iloc[ind]["Task"]
             
-            # 1) get each beh stroke, both continuous and discrete represntations.
-            primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
             strokes_task = D.Dat.iloc[ind]["strokes_task"]
+            strokes_beh = D.Dat.iloc[ind]["strokes_beh"]
 
             if version=="beh":
-                strokes = primlist
-                datsegs = datsegs_behlength
+                # By using taskclass_tokens_extract_wrapper, this allows optionally NOT using BehClass (e.g., for char),
+                # based on the state of D.
+                strokes = [StrokeClass(s) for s in strokes_beh]
+                datsegs = D.taskclass_tokens_extract_wrapper(ind, "beh")
+                # strokes = primlist
+                # datsegs = datsegs_behlength
                 out_combined = (None for _ in range(len(strokes)))
             elif version=="task":
+                # 1) get each beh stroke, both continuous and discrete represntations.
+                primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
                 strokes = [dat[2]["Prim"].Stroke for dat in out_combined] # list of PrimitiveClass
                 datsegs = [dat[2] for dat in out_combined] # task version
                 assert datsegs == datsegs_tasklength, "bug?"
@@ -327,7 +419,6 @@ class DatStrokes(object):
                 print(ind)
                 print(D.Dat.iloc[ind])
                 raise err
-
 
             # 2) For each beh stroke, get its infor
             len_strokes = len(strokes)
@@ -371,9 +462,10 @@ class DatStrokes(object):
                     DAT_BEHPRIMS[-1]["aligned_beh_inds"] = comb[0]
                     DAT_BEHPRIMS[-1]["aligned_beh_strokes"] = comb[1]
 
-
-
-
+                # # If character cluster labels exist, then extract them
+                # if "charclust_shape_seq_scores" in D.Dat.columns:
+                #     score = D.Dat.iloc[ind]["charclust_shape_seq_scores"][i]
+                #     DAT_BEHPRIMS[-1]["charclust_score"] = score
 
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", "ind_behstrokes"]
@@ -386,7 +478,7 @@ class DatStrokes(object):
                             DAT["gridloc_x"] = v[0]
                             DAT["gridloc_y"] = v[1]
                         else:
-                            assert v is None, "for not on grid, how are there gridlocs? this assumption is wrong?"
+                            assert (v==("IGN", "IGN")) or (v is None), "for not on grid, how are there gridlocs? this assumption is wrong?"
                             DAT["gridloc_x"] = None
                             DAT["gridloc_y"] = None
 
@@ -595,6 +687,43 @@ class DatStrokes(object):
             print("New len: ", len(self.Dat))
         self.Dat = self.Dat.reset_index(drop=True)
 
+    def clean_preprocess_if_reloaded(self):
+        """ Things to run if reloading pickeled DS (e.g,,
+        in neural Session object).
+        e.g., replace values with None --> usable values.
+        """
+
+        ## Replace None with "IGN", (None, None) with ("IGN", "IGN")
+        from pythonlib.tools.pandastools import replace_values_with_this
+        # Cases to replace with tuple
+        columns_to_update = ['gridloc', 'gridloc_local', 'CTXT_loc_prev',
+                             'CTXT_loc_prev_local', 'CTXT_loc_next', 'CTXT_loc_next_local']
+        replace_with = ("IGN", "IGN")
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+        # Cases to replace with "IGN"
+        columns_to_update = ['gridloc_x', 'gridloc_y']
+        replace_with = "IGN"
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+
+        columns_to_update = ['shapeabstract', 'shape', 'shape_oriented', 'shape_char']
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+        # Regenerate loc_shape
+        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
+        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
+
+        assert sum(self.Dat["gridloc"].isna())==0
 
     ######################### PREP THE DATASET
     def distgood_compute_beh_task_strok_distances(self):
@@ -1032,10 +1161,10 @@ class DatStrokes(object):
             except Exception as err:
                 if if_fail=="error":
                     # then throw error
-                    print(inds)
-                    print(ind_dataset)
-                    print(df["stroke_index"])
-                    print(len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"]))
+                    print("Inds in DS, given tc: ", inds)
+                    print("Ind into D, given tc:", ind_dataset)
+                    print("Stroke indices, in DS: ", df["stroke_index"])
+                    print("Expect n strokes, from D:", len(self.Dataset.Dat.iloc[ind_dataset]["strokes_beh"]))
                     raise err
                 elif if_fail=="return_none":
                     return None
@@ -1634,10 +1763,37 @@ class DatStrokes(object):
                 fig = X[0]
                 fig.savefig(f"{savedir}/egstrokes-{i}.pdf")
                 plt.close("all")
-            
+
+    def plotcheck_compare_to_dataset(self, nplot=5):
+        """ For debugging extraction of DS, plot to compare example trials to the
+        matched dataset, and print the tokens
+        """
+        import random
+
+        inds = random.sample(range(len(self.Dat)), nplot)
+        self.plot_multiple_overlay_entire_trial(inds)
+        self.plot_multiple_overlay_entire_trial(inds, overlay_beh_or_task="task")
+
+        for i in inds:
+            print("   ")
+            print("=== Ind: ", i)
+            tokens = self.dataset_extract_strokeslength_list_ind_here(i, "datseg")
+            for i, tok in enumerate(tokens):
+                print(i, " -- ", tok)
+            for col in ["shape", "gridloc", "gridloc_local", "center"]:
+                print(f"==== {col}")
+                print([(tok[col]) for i, tok in enumerate(tokens)])
+            for col in ["chunk_rank", "chunk_within_rank",
+                        "chunk_within_rank_fromlast", "chunk_n_in_chunk"
+                        "chunk_diff_from_prev", "chunk_n_in_chunk_prev"]:
+                if col in self.Dat.columns:
+                    vals = self.dataset_extract_strokeslength_list_ind_here(i, col)
+                    print(f"==== {col}")
+                    print([(v) for i, v in enumerate(vals)])
+
 
     def plotshape_multshapes_egstrokes(self, key_subplots = "shape_oriented",
-            n_examples_total_per_shape = 4, color_by=None, list_shape=None):
+            n_examples_total_per_shape = 4, color_by=None, list_shape=None, ver_behtask="beh"):
     # def plot_egstrokes_grouped_by_shape(self, key_subplots = "shape_oriented",
     #         n_examples_total_per_shape = 4, color_by=None, list_shape=None):
         """ Wrapper to make one subplot per shape, either plotting mean stroke (not 
@@ -1647,7 +1803,6 @@ class DatStrokes(object):
         """
 
         key_to_extract_stroke_variations_in_single_subplot = None
-        ver_behtask = "beh"
 
         return self.plotshape_multshapes_egstrokes_grouped_in_subplots(None, key_subplots,
                                              key_to_extract_stroke_variations_in_single_subplot,
@@ -1738,13 +1893,13 @@ class DatStrokes(object):
         from pythonlib.tools.plottools import subplot_helper
         from pythonlib.tools.pandastools import extract_trials_spanning_variable
         import random
-
                 
         if task_kind=="character":
             key_to_extract_stroke_variations_in_single_subplot = None
 
-        if any([x is None for x in self.Dat[key_to_extract_stroke_variations_in_single_subplot]]):
-            key_to_extract_stroke_variations_in_single_subplot = None
+        if key_to_extract_stroke_variations_in_single_subplot is not None:
+            if any([x is None for x in self.Dat[key_to_extract_stroke_variations_in_single_subplot]]):
+                key_to_extract_stroke_variations_in_single_subplot = None
 
         # 0) Static params:
         # filtdict = {}
@@ -2422,7 +2577,7 @@ class DatStrokes(object):
             list_shape = df["shape"].tolist()
 
             # convert to one-hot
-            encoder = OneHotEncoder(handle_unknown='ignore')
+            encoder = OneHotEncoder(handle_unknown="ignore")
             X = encoder.fit_transform(df[["shape_cat_abstract"]]).toarray()
 
             labels_rows = list_shape
@@ -2603,39 +2758,51 @@ class DatStrokes(object):
                 
                 plt.close("all")
 
-    def clustergood_load_saved_cluster_shape_classes(self):
+    def clustergood_load_saved_cluster_shape_classes(self, skip_if_labels_not_found=False):
         """ Laod cluster labels, make copy of self, and append labels
-        to this copy.
+        to rows if those rows are found in the loaded data. I.,e, usualyl I
+        only save thius for subset of data (e.g., chars), and so anything not
+        loaded will have a "IGNORE" in that column.
+        RETURNS DS that includes ONLY those rows that found shape label.
         """
         self.Dat = self.datamod_append_unique_indexdatapt_copy()
         DS = self.copy()
 
         PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/{DS.animal()}/{DS.date()}"
         path = f"{PATHDIR}/DS_data.pkl"
-        df = pd.read_pickle(path)
-        df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+        if os.path.exists(path):
+            df = pd.read_pickle(path)
+            df = DS.datamod_append_unique_indexdatapt_copy(df=df)
 
-        # Only keep indices that exist in both self and loaded DS_data
-        indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
-        print("Len DS: ", len(DS.Dat))
-        print("Len loaded DS: ", len(df))
-        print("Len DS: ", len(indices))
-        assert len(indices)>0
+            # Only keep indices that exist in both self and loaded DS_data
+            indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
+            print("Len DS: ", len(DS.Dat))
+            print("Len loaded DS: ", len(df))
+            print("Len DS: ", len(indices))
+            assert len(indices)>0
 
-        # slice both so they match
-        DS.Dat = DS.dataset_slice_by("index_datapt", indices)
-        df = DS.dataset_slice_by("index_datapt", indices, df=df)
+            # slice both so they match
+            DS.Dat = DS.dataset_slice_by("index_datapt", indices)
+            df = DS.dataset_slice_by("index_datapt", indices, df=df)
 
-        assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
+            assert len(df)>0
+            assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
 
-        # Combine them
-        cols_take = ["clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
-        for col in cols_take:
-            assert col not in DS.Dat.columns
-            DS.Dat[col] = df[col]
-            print("Merged this column: ", col)
+            # Replace all shape labels...
+            # Replace shape_label, beucase I had grouped shapes but decided best not to do that here.
+            df["shape_label"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+            df["shape_oriented"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+            df["shape"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
 
-        return DS
+            # Combine them
+            cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
+            for col in cols_take:
+                assert col not in DS.Dat.columns
+                DS.Dat[col] = df[col]
+                print("Merged this column: ", col)
+            return DS
+        else:
+            return None
 
     def clustergood_extract_saved_clusterobject(self, WHICH_FEATURE="beh_motor_sim"):
         # WHICH_FEATURE = "beh_motor_sim" 
@@ -3549,7 +3716,7 @@ class DatStrokes(object):
         """
 
         ds = DatStrokes()
-        ds.Dataset = self.Dataset.copy()
+        ds.Dataset = self.Dataset.copy(just_df=False)
         ds.Dat = self.Dat.copy()
         ds.Params = self.Params.copy()
         ds.Version = self.Version
@@ -3566,8 +3733,8 @@ class DatStrokes(object):
         print("saved self.Dat to :", path)
 
         if params_dict is not None:
-            from pythonlib.tools.expttools import writeDictToYaml
-            writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
+            from pythonlib.tools.expttools import writeDictToTxt
+            writeDictToTxt(params_dict, f"{pathdir}/params.txt")
 
     def save(self, pathdir, columns_keep_in_dataset=None):
         """ saves self, incluind gall things, including self.Dataset.
@@ -3623,4 +3790,9 @@ def concat_dataset_strokes(list_DS):
     else:
         # list_DS was [None, ...] all
         return None
+
+    ################### MERGE ATTRIBUTES
+    from pythonlib.tools.classtools import concat_objects_attributes_flexible
+    concat_objects_attributes_flexible(DS, list_Datasets)
+
     return DS

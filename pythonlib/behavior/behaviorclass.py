@@ -35,6 +35,7 @@ class BehaviorClass(object):
         self.Strokes = None # holds strokes as strokeclass
         self.StrokesVel = None
         self.StrokesOrdinal = None
+        self._TokensLocked = False
 
         if ver=="dataset":
             D = params["D"].copy()
@@ -500,6 +501,12 @@ class BehaviorClass(object):
         """
         import copy
 
+        if not hasattr(self, "_TokensLocked"):
+            self._TokensLocked = False
+
+        if self._TokensLocked:
+            assert False, "tried to generate new toekns, but it is locked... bug. you should be loading tokens directly from D."
+
         # THought about having datsegs always dynamically computed, but decided that might be
         # too expensive.
         # if not recompute:
@@ -543,17 +550,17 @@ class BehaviorClass(object):
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted
-        datsegs = Task.tokens_reorder(inds_taskstrokes)
         # Saved cached datsegs
-        self.Alignsim_Datsegs = datsegs
+        # datsegs = Task.tokens_reorder(inds_taskstrokes)
+        self.Alignsim_Datsegs = Task.tokens_reorder(inds_taskstrokes)
 
         if plot_print_on:
-            for x in datsegs:
+            for x in self.Alignsim_Datsegs:
                 print(x)
             self.alignsim_plot_summary()
 
         # Extract best guess for behavior-length datsegs
-        datsegs_behlength = [copy.copy(datsegs[i]) for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices]
+        datsegs_behlength = [copy.copy(self.Alignsim_Datsegs[i]) for i in self.Alignsim_taskstrokeinds_foreachbeh_sorted_newindices]
         self.Alignsim_Datsegs_BehLength = datsegs_behlength
  
         # Sanity cehcek, confirming that I am sure what is coming out.
@@ -565,7 +572,7 @@ class BehaviorClass(object):
         # Sanity check
         assert [t["ind_taskstroke_orig"] for t in self.Alignsim_Datsegs] == self.Alignsim_taskstrokeinds_sorted, "no idea. mistake somewhere"
         assert [t["ind_taskstroke_orig"] for t in self.Alignsim_Datsegs_BehLength] == self.Alignsim_taskstrokeinds_foreachbeh_sorted_origindices, "no idea. mistake somewhere"
-        return datsegs
+        return self.Alignsim_Datsegs
 
     def alignsim_extract_datsegs_both_beh_task(self, DEBUG=False):
         """
