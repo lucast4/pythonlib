@@ -430,6 +430,9 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     - downsample_auto, then subsamples in case there are too many datapts
     """
 
+    if labels is None:
+        labels = ["IGNORE_LABEL" for _ in range(X.shape[0])]
+
     assert X.shape[0] == len(labels)
 
     if color_type=="discr":
@@ -443,10 +446,8 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             for lev, pc in zip(labellist, pcols):
                 map_lev_to_color[lev] = pc
 
-    if labels is None:
-        labels = ["IGNORE_LABEL" for _ in range(X.shape[0])]
-
     if downsample_auto:
+        # Reduce n poiints to plot, if neded.
         import random
         thresh = 20000
         nthis = X.shape[0]

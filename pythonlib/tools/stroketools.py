@@ -247,41 +247,42 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
         # Sanity check
         _, _, diag = strokes_bounding_box_dimensions(strokes)
 
-        for s, sf in zip(strokes, strokes_sm):
-            for idx_pt in [0, -1]:
-                d = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
+        if diag > 20: # Otherwise dont fail for things like dots, ebcuase of small diagonal.
+            for s, sf in zip(strokes, strokes_sm):
+                for idx_pt in [0, -1]:
+                    d = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
 
-                # print("-----")
-                # print(d)
-                # print(diag)
-                # print("-----")
-                if d/diag > 0.2:
-                    from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
-                    print(s)
-                    print(sf)
-                    print(d)
-                    print(d/diag)
+                    # print("-----")
+                    # print(d)
+                    # print(diag)
+                    # print("-----")
+                    if d/diag > 0.2:
+                        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
+                        print(s)
+                        print(sf)
+                        print(d)
+                        print(d/diag)
 
-                    fig, axes = plt.subplots(2,2)
-                    ax = axes.flatten()[0]
+                        fig, axes = plt.subplots(2,2)
+                        ax = axes.flatten()[0]
 
-                    from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
-                    ax = axes.flatten()[0]
-                    plotDatStrokesTimecourse(strokes, ax=ax)
-                    ax = axes.flatten()[1]
-                    plotDatStrokesTimecourse(strokes_sm, ax=ax)
-                    ax.set_title("strokesFilter() --> Filtered")
+                        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+                        ax = axes.flatten()[0]
+                        plotDatStrokesTimecourse(strokes, ax=ax)
+                        ax = axes.flatten()[1]
+                        plotDatStrokesTimecourse(strokes_sm, ax=ax)
+                        ax.set_title("strokesFilter() --> Filtered")
 
-                    ax = axes.flatten()[2]
-                    plotDatStrokesWrapper(strokes, ax)
+                        ax = axes.flatten()[2]
+                        plotDatStrokesWrapper(strokes, ax)
 
-                    ax = axes.flatten()[3]
-                    plotDatStrokesWrapper(strokes_sm, ax)
+                        ax = axes.flatten()[3]
+                        plotDatStrokesWrapper(strokes_sm, ax)
 
-                    # Find velocity
-                    fig.savefig("/tmp/tmp.png")
+                        # Find velocity
+                        fig.savefig("/tmp/tmp.png")
 
-                    assert False, "why smoothing made such big change to poisitons?"
+                        assert False, "why smoothing made such big change to poisitons?"
 
     return strokes_sm
 
@@ -1282,10 +1283,10 @@ def strokes_bounding_box_dimensions(strokes):
     w = maxx-minx
     h = maxy-miny
     d = (w**2 + h**2)**0.5
-
-    if d==0:
-        print(strokes)
-        assert False
+    #
+    # if d==0:
+    #     print(strokes)
+    #     assert False
 
     return w, h, d
 
