@@ -2061,9 +2061,6 @@ class Dataset(object):
 
         return DictRuleFailures, dffails
 
-
-
-
     def objectclass_wrapper_extract_sequence_chunk_color(self, ind, plot_summary=False):
         """ Helps to extract all relevant info this trial regarding online 
         supervision of chunking and sequencing, looking mainly into ObjectClass
@@ -2143,6 +2140,77 @@ class Dataset(object):
             "stroke_colors_orig_order": stroke_colors,
         }
         return out
+
+    ############### SHAPE SEMANTIC (e.g., novel shape)
+    def shapesemantic_classify_novel_shape(self, DS=None):
+        """
+        Append columns idnicating wehther shapes are novel, eacjh stroke
+        a shape, using the semantic lable of the shape.
+        NOTE: for any rows that are "character" task_kind, skips, since might
+        run into error if this is using cluster labels.. (?) either way is not
+        relevant.
+        :return: None, but appends to self.Dat two columns:
+        'shape_is_novel_list" (tuple)
+        "shape_is_novel_all" (bool)
+        """
+
+        # Get learned shapes
+        if DS is None:
+            from pythonlib.dataset.dataset_strokes import DatStrokes
+            DS = DatStrokes(self)
+        map_shape_to_shapesemantic = DS.shapesemantic_stroke_shape_cluster_database()
+        labels_learned = list(map_shape_to_shapesemantic.values())
+
+        # Extract from D
+        labels_all_trials = []
+        list_novels = []
+        list_novels_all_strokes = []
+        for i, row in self.Dat.iterrows():
+            tokens_task = self.taskclass_tokens_extract_wrapper(i, "task")
+            labels = []
+            novels = []
+            for tok in tokens_task:
+                try:
+                    lab = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                except Exception as err:
+                    print(tok)
+                    print(row["trialcode"])
+                    self.plotSingleTrial(i)
+                    assert False, "why..."
+                labels.append(lab)
+                novels.append(lab not in labels_learned)
+
+            labels_all_trials.append(labels)
+            list_novels.append(tuple(novels))
+            list_novels_all_strokes.append(all(novels))
+
+        # Append to self.Dat
+        self.Dat["shape_is_novel_list"] = list_novels
+        self.Dat["shape_is_novel_all"] = list_novels_all_strokes
+        self.Dat["shape_semantic_labels"] = labels_all_trials
+
+        # FAILS -- This looks at beh strokes..
+        # if DS is None:
+        #     from pythonlib.dataset.dataset_strokes import DatStrokes
+        #     DS = DatStrokes(self)
+        #
+        # list_novels = []
+        # list_novels_all_strokes = []
+        # for i, row in self.Dat.iterrows():
+        #     if row["task_kind"] == "character":
+        #         # then this is not novel shape
+        #         novels = [False for _ in range(len(row["strokes_beh"]))]
+        #     else:
+        #         tc = row["trialcode"]
+        #         novels = DS.dataset_extract_strokeslength_list(tc, "shape_is_novel")
+        #
+        #     list_novels.append(tuple(novels))
+        #     list_novels_all_strokes.append(all(novels))
+        #     # assert all(novels) or not any(novels)
+        #
+        # self.Dat["shape_is_novel_list"] = list_novels
+        # self.Dat["shape_is_novel_all"] = list_novels_all_strokes
+
 
     ############### MICROSTIM
     def microstim_assign_catch_trial_objectclass(self, PRINT=False):

@@ -1,4 +1,5 @@
 """ Represents a single primitive, usually a task stroke.
+Especially useful if doing stuff with low-level coordinates (e.g., classifying based on hand-coded rules).
 Usually this is a base primitive. Usually corresponds to a single stroke, 
 but doesnt have to (i.e. could be a chunk, which is multiple strokes concatenated
 into a single new stroke)
@@ -127,8 +128,109 @@ class PrimitiveClass(object):
         for k, v in self.ParamsConcrete.items():
             print(f"{k}: {v}")
 
+
+    def _label_stroke_features(self):
+        """ Return dict with features of the stroke, treating it
+        as an image, and which can be used to define semantic label"""
+        from pythonlib.tools.vectools import get_angle, bin_angle_by_direction
+
+        shcat = self.extract_as()[1] # e.g, ('line-11-1-0', 'line', 11, 1, 0, 0.0, -0.614)
+
+        # a marker of scale and angle.
+        S = self.Stroke
+        cen = S.extract_center()
+
+        # define the endpoint1 to be that more on the lower-left.
+        # loc1 = S.Stroke[0, :2]
+        # loc2 = S.Stroke[-1, :2]
+
+        npts = S.Stroke.shape[0]
+
+        # make sure loc1 is the one towards the bottom left
+        centhis = [cen[0], cen[1]]
+        if np.sum(S.Stroke[0, :2]-centhis) > np.sum(S.Stroke[-1, :2]-centhis): # np.sum() does project onto (1,1).
+            loc1 = S.Stroke[-1, :2]
+            loc2 = S.Stroke[0, :2]
+
+            # use 2/5 and 3/5 so that flatter Z can be similar result as less-flat Z
+            loc1_midpt = S.Stroke[int(np.floor(3/5 * npts)), :2]
+            loc2_midpt = S.Stroke[int(np.floor(2/5 * npts)), :2]
+
+            loc1_midpt_arm = S.Stroke[int(np.floor(4/5 * npts)), :2]
+            loc2_midpt_arm = S.Stroke[int(np.floor(1/5 * npts)), :2]
+        else:
+            loc1 = S.Stroke[0, :2]
+            loc2 = S.Stroke[-1, :2]
+
+            loc1_midpt = S.Stroke[int(np.floor(2/5 * npts)), :2]
+            loc2_midpt = S.Stroke[int(np.floor(3/5 * npts)), :2]
+            loc1_midpt_arm = S.Stroke[int(np.floor(1/5 * npts)), :2]
+            loc2_midpt_arm = S.Stroke[int(np.floor(4/5 * npts)), :2]
+
+        # midpoint
+        loc3 = S.Stroke[int(np.floor(npts/2)), :2]
+
+        if False:
+            # Old version (before 2/26,24) which failed to disambig L that have same nedpoints but diff orientation
+            # - center --> onset
+            vec1 = loc1 - cen # vec from cen to onset.
+            angle1 = np.round(get_angle(vec1), decimals=1)
+            # angle_bin = bin_angle_by_direction([get_angle(vec)], num_angle_bins=16)[0] # bin the angle
+
+            # - center --> offset
+            vec2 = loc2 - cen # vec from cen to onset.
+            angle2 = np.round(get_angle(vec2), decimals=1)
+
+            # - center --> midpoint of curve (useful to disambiguate L that have same endpoint but diff orientatoin)
+            vec3 = loc3 - cen
+            angle3 = np.round(get_angle(vec3), decimals=1)
+        else:
+            # vec1 = loc1 - loc3 # vec from midpt to onset.
+            vec1 = loc1 - loc1_midpt # vec from midpt to onset.
+            angle1 = get_angle(vec1)
+
+            vec1 = loc1 - loc1_midpt_arm # vec from midpt to onset.
+            angle1_arm = get_angle(vec1)
+
+            # vec2 = loc2 - loc3 # vec from midpt to offset.
+            vec2 = loc2 - loc2_midpt # vec from midpt to offset.
+            angle2 = get_angle(vec2)
+
+            vec2 = loc2 - loc2_midpt_arm # vec from midpt to offset.
+            angle2_arm = get_angle(vec2)
+
+        # scale
+        vec = loc1 - cen # vec from cen to onset.
+        scale = np.linalg.norm(vec)
+
+        # from pythonlib.tools.stroketools import strokes_bounding_box_dimensions
+        # strokes_bounding_box_dimensions([])
+        tmp = S.extract_spatial_dimensions()
+        height_divide_width = tmp["height"]/tmp["width"]
+
+        features = {
+            "shape_cat":shcat,
+            # "vec_midpt_to_onset":vec1,
+            # "vec_midpt_to_offset":vec2,
+            "angle_midpt_to_onset":angle1,
+            "angle_midpt_to_offset":angle2,
+            "angle_midpt_to_onset_arm":angle1_arm,
+            "angle_midpt_to_offset_arm":angle2_arm,
+            "scale":scale,
+            "height_divide_width":height_divide_width
+        }
+        return features
+
+
+    def label_classify_prim_using_stroke_semantic(self, return_as_string=True):
+        """ Helper to return just the 3 features that define each shape, instead of 4,
+        i.e,, exclude scale. as string or 3-tuple
+        """
+        return self.label_classify_prim_using_stroke(return_as_string=return_as_string, version="semantic", exclude_scale=True)
+
     def label_classify_prim_using_stroke(self, return_as_string=False,
-                                         shape_rename_perfblockey_decimals_to_defaults=False):
+                                         shape_rename_perfblockey_decimals_to_defaults=False,
+                                         version="default", exclude_scale=False):
         """ To classify this prim, qwhich usualy would be
         liek line-10-0-1, but this doesnt generaklkly work,
         becuase somtimes you have extra transfomrs that chagne how this
@@ -142,38 +244,194 @@ class PrimitiveClass(object):
         """
         from pythonlib.tools.vectools import get_angle, bin_angle_by_direction
 
-        shcat = self.extract_as()[1] # e.g, ('line-11-1-0', 'line', 11, 1, 0, 0.0, -0.614)
+        # shcat = self.extract_as()[1] # e.g, ('line-11-1-0', 'line', 11, 1, 0, 0.0, -0.614)
+        #
+        # # a marker of scale and angle.
+        # S = self.Stroke
+        # cen = S.extract_center()
+        #
+        # # define the endpoint1 to be that more on the lower-left.
+        # # loc1 = S.Stroke[0, :2]
+        # # loc2 = S.Stroke[-1, :2]
+        #
+        # # make sure loc1 is the one towards the bottom left
+        # if np.sum(S.Stroke[0, :2]-cen) > np.sum(S.Stroke[-1, :2]-cen): # np.sum() does project onto (1,1).
+        #     loc1 = S.Stroke[-1, :2]
+        #     loc2 = S.Stroke[0, :2]
+        # else:
+        #     loc1 = S.Stroke[0, :2]
+        #     loc2 = S.Stroke[-1, :2]
+        # # midpoint
+        # npts = S.Stroke.shape[0]
+        # loc3 = S.Stroke[int(np.floor(npts/2)), :2]
+        #
+        # if False:
+        #     # Old version (before 2/26,24) which failed to disambig L that have same nedpoints but diff orientation
+        #     # - center --> onset
+        #     vec1 = loc1 - cen # vec from cen to onset.
+        #     angle1 = np.round(get_angle(vec1), decimals=1)
+        #     # angle_bin = bin_angle_by_direction([get_angle(vec)], num_angle_bins=16)[0] # bin the angle
+        #
+        #     # - center --> offset
+        #     vec2 = loc2 - cen # vec from cen to onset.
+        #     angle2 = np.round(get_angle(vec2), decimals=1)
+        #
+        #     # - center --> midpoint of curve (useful to disambiguate L that have same endpoint but diff orientatoin)
+        #     vec3 = loc3 - cen
+        #     angle3 = np.round(get_angle(vec3), decimals=1)
+        # else:
+        #     vec1 = loc1 - loc3 # vec from midpt to onset.
+        #     angle1 = np.round(get_angle(vec1), decimals=1)
+        #
+        #     vec2 = loc2 - loc3 # vec from midpt to offset.
+        #     angle2 = np.round(get_angle(vec2), decimals=1)
+        #
+        # # scale
+        # vec = loc1 - cen # vec from cen to onset.
+        # scale = np.round(np.linalg.norm(vec), decimals=0)
+        from math import pi
+        features = self._label_stroke_features()
 
-        # a marker of scale and angle.
-        S = self.Stroke
-        cen = S.extract_center()
-
-        # define the endpoint1 to be that more on the lower-left.
-        # loc1 = S.Stroke[0, :2]
-        # loc2 = S.Stroke[-1, :2]
-
-        # make sure loc1 is the one towards the bottom left
-        if np.sum(S.Stroke[0, :2]-cen) > np.sum(S.Stroke[-1, :2]-cen): # np.sum() does project onto (1,1).
-            loc1 = S.Stroke[-1, :2]
-            loc2 = S.Stroke[0, :2]
-        else:
-            loc1 = S.Stroke[0, :2]
-            loc2 = S.Stroke[-1, :2]
-
-        # - center --> onset
-        vec1 = loc1 - cen # vec from cen to onset.
-        angle1 = np.round(get_angle(vec1), decimals=1)
-        # angle_bin = bin_angle_by_direction([get_angle(vec)], num_angle_bins=16)[0] # bin the angle
-
-        # - center --> offset
-        vec2 = loc2 - cen # vec from cen to onset.
-        angle2 = np.round(get_angle(vec2), decimals=1)
-
-        # scale
-        scale = np.round(np.linalg.norm(vec1), decimals=0)
+        def _vec_to_angle_bin(vec):
+            a = get_angle(vec)
+            a_binned = bin_angle_by_direction([a], starting_angle=-pi/8, num_angle_bins=8)
+            return a_binned
 
         # return as tuple
-        label = (shcat, scale, angle1, angle2)
+        if version=="default":
+            shcat = features["shape_cat"]
+            scale = features["scale"]
+            angle1 = features["angle_midpt_to_onset"]
+            angle2 = features["angle_midpt_to_offset"]
+            label = (shcat, scale, angle1, angle2)
+        elif version=="semantic":
+            shcat = features["shape_cat"]
+            scale = features["scale"]
+            # scale = "X" # ignore
+
+            if shcat in ["circle"]:
+                label = (shcat, scale, "XX" , "XX")
+            elif shcat in ["V", "arcdeep", "usquare"]:
+                a1 = features["angle_midpt_to_onset_arm"]
+                a2 = features["angle_midpt_to_offset_arm"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if a1==3 and a2==3:
+                    label = (shcat, scale, "UU" , "UU") # opens to top
+                elif a1==5 and a2==5:
+                    label = (shcat, scale, "LL" , "LL") # opens to top
+                elif a1==7 and a2==7:
+                    label = (shcat, scale, "DD" , "DD") # opens to top
+                elif a1==1 and a2==1:
+                    label = (shcat, scale, "RR" , "RR") # opens to top
+                else:
+                    print(features)
+                    print(a1, a2)
+                    print(self.extract_as())
+                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+            # elif shcat in ["arcdeep"]:
+            #     a1 = features["angle_midpt_to_onset"]
+            #     a2 = features["angle_midpt_to_offset"]
+            #     a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+            #     a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+            #
+            #     if a1==4 and a2==3:
+            #         label = (shcat, scale, "UU" , "UU")
+            #     elif a1==6 and a2==5:
+            #         label = (shcat, scale, "LL" , "LL")
+            #     elif a1==7 and a2==7:
+            #         label = (shcat, scale, "DD" , "DD")
+            #     elif a1==6 and a2==1:
+            #         label = (shcat, scale, "RR" , "RR")
+            #     else:
+            #         print(features)
+            #         print(a1, a2)
+            #         print(self.extract_as())
+            #         assert False
+            elif shcat in ["Lcentered"]:
+                a1 = features["angle_midpt_to_onset"]
+                a2 = features["angle_midpt_to_offset"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if a1==3 and a2==1:
+                    label = (shcat, scale, "UR" , "UR") # opens to top-right
+                elif a1==4 and a2==2:
+                    label = (shcat, scale, "UU" , "UU") # opens to top
+                elif a1==5 and a2==3:
+                    label = (shcat, scale, "UL" , "UL") #
+                elif a1==6 and a2==4:
+                    label = (shcat, scale, "LL" , "LL") #
+                elif a1==6 and a2==8:
+                    label = (shcat, scale, "DD" , "DD") #
+                elif a1==7 and a2==1:
+                    label = (shcat, scale, "DR" , "DR") #
+                elif a1==8 and a2==2:
+                    label = (shcat, scale, "RR" , "RR") #
+                elif a1==5 and a2==7:
+                    label = (shcat, scale, "DL" , "DL") #
+                else:
+                    print(features)
+                    print(a1, a2)
+                    print(self.extract_as())
+                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+            elif shcat in ["Lzigzag", "squiggle3", "Lzigzag1", "zigzagSq"]:
+                a1 = features["angle_midpt_to_onset"]
+                a2 = features["angle_midpt_to_offset"]
+                hw = features["height_divide_width"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if (a1 in [3, 4] and a2==8) or (a2 in [3, 4] and a1==8):
+                    label = (shcat, scale, "LL" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [6, 7] and a2==2 and hw<1:
+                    label = (shcat, scale, "LL" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [5, 6] and a2==2 and hw>1:
+                    label = (shcat, scale, "UU" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [1, 8] and a2==4:
+                    label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                else:
+                    print(features)
+                    print(a1, a2)
+                    print(self.extract_as())
+                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+            elif shcat in ["line"]:
+                a1 = features["angle_midpt_to_onset"]
+                a2 = features["angle_midpt_to_offset"]
+                hw = features["height_divide_width"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if (a1==4 and a2==8) or (a1==8 and a2==4):
+                    label = (shcat, scale, "UL" , "UL") # direction of line, in top hemisphere
+                elif a1==5 and a2==1:
+                    label = (shcat, scale, "LL" , "LL") # direction of line, in top hemisphere
+                elif a1==6 and a2==2:
+                    label = (shcat, scale, "UR" , "UR") # direction of line, in top hemisphere
+                elif a1==7 and a2==3:
+                    label = (shcat, scale, "UU" , "UU") # direction of line, in top hemisphere
+
+                else:
+                    print(features)
+                    print(a1, a2)
+                    print(self.extract_as())
+                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+            elif "novelprim" in shcat:
+                shcat = features["shape_cat"]
+                scale = features["scale"]
+                angle1 = features["angle_midpt_to_onset"]
+                angle2 = features["angle_midpt_to_offset"]
+                label = (shcat, scale, angle1, angle2)
+            else:
+                print(shcat)
+                print(features)
+                assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+        else:
+            print(version)
+            assert False, "code it"
+
+        assert isinstance(label, tuple) and len(label)==4
 
         if shape_rename_perfblockey_decimals_to_defaults:
             # e.g., 231204, diego, for Perfblocky, convert shapes that have decimal names to their closest default shape.
@@ -191,11 +449,44 @@ class PrimitiveClass(object):
 
             assert False, "code this. and add flag so that dataset_preprocess knows to do this. Or make it default?"
 
+        # Round, so that doesnt suffer from num imprecicion.
+        label = list(label)
+        for i in range(1, len(label)):
+            if not isinstance(label[i], str):
+                if i==1:
+                    label[i] = np.round(label[i], decimals=0)
+                else:
+                    label[i] = np.round(label[i], decimals=1)
+        label = tuple(label)
+
         if return_as_string:
-            label_str = [label[0], f"{label[1]:.0f}", f"{label[2]:.1f}", f"{label[3]:.1f}"]
-            return "-".join([x for x in label_str])
+            label_str = [label[0]]
+
+            if isinstance(label[1], str):
+                label_str.append(label[1])
+            else:
+                label_str.append(f"{label[1]:.0f}")
+
+            if isinstance(label[2], str):
+                label_str.append(label[2])
+            else:
+                label_str.append(f"{label[2]:.1f}")
+
+            if isinstance(label[3], str):
+                label_str.append(label[3])
+            else:
+                label_str.append(f"{label[3]:.1f}")
+
+            if exclude_scale:
+                return "-".join([label_str[0], label_str[2], label_str[3]])
+            else:
+                # label_str = [label[0], f"{label[1]:.0f}", f"{label[2]:.1f}", f"{label[3]:.1f}"]
+                return "-".join([x for x in label_str])
         else:
-            return label
+            if exclude_scale:
+                return tuple([label[0], label[2], label[3]])
+            else:
+                return label
 
     def shape_oriented(self, include_scale=True):
         """ Returns shape oriented, e.g., line-3-0

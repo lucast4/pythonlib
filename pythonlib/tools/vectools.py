@@ -172,7 +172,7 @@ def transform_data_to_negative_start(angles_all, negative_angle):
 # spits out a same-size array as angles_all, but with categorical info
 # i.e. creates bins, and categorizes your angles
 def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4, 
-    binnames = None):
+    binnames = None, PLOT=False):
     """ bin angle, based on slicing circle into same-sized slices, with first bin
     always starting from (1,0), and going CCW.
     INPUTS:
@@ -186,7 +186,11 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
     - nans will be 
     """
     from math import pi
-    
+
+    if PLOT:
+        import copy
+        angles_all_orig = copy.copy(angles_all)
+
     if binnames is None:
         binnames = {i+1:i+1 for i in range(num_angle_bins)}
         binnames[num_angle_bins+1] = np.nan
@@ -199,8 +203,14 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
 
     assert starting_angle<=0 and starting_angle>=-2*pi, "starting_angle is not between [-2pi,0]"
 
+    # Shift convert angles to [starting_angle, 2*pi+starting_angle], then
+    # shift back so that starting angle starts bin 0.
+    angles_all = np.asarray(angles_all)
+    angles_all = transform_data_to_negative_start(angles_all, starting_angle) - starting_angle
+
     # bin angles
-    bins = np.linspace(starting_angle, starting_angle+2*pi, num_angle_bins+1)
+    # bins = np.linspace(starting_angle, starting_angle+2*pi, num_angle_bins+1)
+    bins = np.linspace(0, 2*pi, num_angle_bins+1)
     angles_all_binned = [np.digitize(a, bins) for a in angles_all]
 
 #     plt.figure()
@@ -209,6 +219,14 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
     # assign bin to a label
     # binnames = {1: "L->R", 2:"R->L", 3:"R->L", 4:"L->R", 5:"undefined"}
     angles_named = [binnames[b] for b in angles_all_binned]
+
+    if PLOT:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(angles_all_orig, angles_named, "ok")
+        ax.axvline(2*pi+starting_angle)
+        ax.set_ylabel("bins")
+        ax.set_xlabel("input angles (blue, vline is starting angle)")
 
     return angles_named
 

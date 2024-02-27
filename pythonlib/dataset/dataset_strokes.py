@@ -292,10 +292,11 @@ class DatStrokes(object):
             self._clean_preprocess()
 
     def _clean_preprocess(self):
-        """ All things that generally want to run for preprocessing
-        """
+        """ Run all things here every time load dataset, whether from scratch or from pkl (e..g, neural Session).
+        All things that generally want to run for preprocessing.
 
-        ############ GIVE SHAPES A HASH 
+        """
+        ############ GIVE SHAPES A HASH
         # Useful for shapes with non-informative name (e..g, novel prims), 
         # append a suffix to name
         # And replace shape oriented.
@@ -315,8 +316,44 @@ class DatStrokes(object):
             return f"{x['shape_oriented']}|{idx_char}"
         self.Dat = applyFunctionToAllRows(self.Dat, F, "shape_char")
 
-        # Extract motor timing. I use thie enought to make this general.
-        self.motor_velocity_timing_extract()
+        # # Extract motor timing. I use thie enought to make this general.
+        # self.motor_velocity_timing_extract()
+
+        # Extract novel prims
+        if False:
+            # THIS DOESNT WORK!! it takes beh strokes instead of task strokes..
+            self.shapesemantic_classify_novel_shapes_prims()
+
+        ################ Replace None with "IGN", (None, None) with ("IGN", "IGN")
+        from pythonlib.tools.pandastools import replace_values_with_this
+        # Cases to replace with tuple
+        columns_to_update = ['gridloc', 'gridloc_local', 'CTXT_loc_prev',
+                             'CTXT_loc_prev_local', 'CTXT_loc_next', 'CTXT_loc_next_local']
+        replace_with = ("IGN", "IGN")
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+        # Cases to replace with "IGN"
+        columns_to_update = ['gridloc_x', 'gridloc_y']
+        replace_with = "IGN"
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+        columns_to_update = ['shapeabstract', 'shape', 'shape_oriented', 'shape_char']
+        for column in columns_to_update:
+            if column in self.Dat.columns:
+                replace_values_with_this(self.Dat, column, None, replace_with)
+                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+
+        ############ Regenerate loc_shape context
+        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
+        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
+
+        assert sum(self.Dat["gridloc"].isna())==0
 
     def _prepare_dataset(self):
         """ Prepare dataset before doing strokes extraction
@@ -503,7 +540,11 @@ class DatStrokes(object):
         # seq context
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
-        
+
+        # Extract motor timing. I use thie enought to make this general.
+        self.motor_velocity_timing_extract()
+
+        # Extract epoch
         self.dataset_append_column("epoch")
         
         # DEBUGGING
@@ -693,37 +734,41 @@ class DatStrokes(object):
         e.g., replace values with None --> usable values.
         """
 
-        ## Replace None with "IGN", (None, None) with ("IGN", "IGN")
-        from pythonlib.tools.pandastools import replace_values_with_this
-        # Cases to replace with tuple
-        columns_to_update = ['gridloc', 'gridloc_local', 'CTXT_loc_prev',
-                             'CTXT_loc_prev_local', 'CTXT_loc_next', 'CTXT_loc_next_local']
-        replace_with = ("IGN", "IGN")
-        for column in columns_to_update:
-            if column in self.Dat.columns:
-                replace_values_with_this(self.Dat, column, None, replace_with)
-                replace_values_with_this(self.Dat, column, (None, None), replace_with)
+        self._clean_preprocess()
+        #
+        # ################ Replace None with "IGN", (None, None) with ("IGN", "IGN")
+        # from pythonlib.tools.pandastools import replace_values_with_this
+        # # Cases to replace with tuple
+        # columns_to_update = ['gridloc', 'gridloc_local', 'CTXT_loc_prev',
+        #                      'CTXT_loc_prev_local', 'CTXT_loc_next', 'CTXT_loc_next_local']
+        # replace_with = ("IGN", "IGN")
+        # for column in columns_to_update:
+        #     if column in self.Dat.columns:
+        #         replace_values_with_this(self.Dat, column, None, replace_with)
+        #         replace_values_with_this(self.Dat, column, (None, None), replace_with)
+        #
+        # # Cases to replace with "IGN"
+        # columns_to_update = ['gridloc_x', 'gridloc_y']
+        # replace_with = "IGN"
+        # for column in columns_to_update:
+        #     if column in self.Dat.columns:
+        #         replace_values_with_this(self.Dat, column, None, replace_with)
+        #         replace_values_with_this(self.Dat, column, (None, None), replace_with)
+        #
+        # columns_to_update = ['shapeabstract', 'shape', 'shape_oriented', 'shape_char']
+        # for column in columns_to_update:
+        #     if column in self.Dat.columns:
+        #         replace_values_with_this(self.Dat, column, None, replace_with)
+        #         replace_values_with_this(self.Dat, column, (None, None), replace_with)
+        #
+        # ############ Regenerate loc_shape context
+        # self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
+        # self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
+        #
+        # assert sum(self.Dat["gridloc"].isna())==0
+        #
+        # ###########
 
-        # Cases to replace with "IGN"
-        columns_to_update = ['gridloc_x', 'gridloc_y']
-        replace_with = "IGN"
-        for column in columns_to_update:
-            if column in self.Dat.columns:
-                replace_values_with_this(self.Dat, column, None, replace_with)
-                replace_values_with_this(self.Dat, column, (None, None), replace_with)
-
-
-        columns_to_update = ['shapeabstract', 'shape', 'shape_oriented', 'shape_char']
-        for column in columns_to_update:
-            if column in self.Dat.columns:
-                replace_values_with_this(self.Dat, column, None, replace_with)
-                replace_values_with_this(self.Dat, column, (None, None), replace_with)
-
-        # Regenerate loc_shape
-        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
-        self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
-
-        assert sum(self.Dat["gridloc"].isna())==0
 
     ######################### PREP THE DATASET
     def distgood_compute_beh_task_strok_distances(self):
@@ -959,6 +1004,15 @@ class DatStrokes(object):
             assert len(strokes)==1
         list_strokes_vel = [strokes[0] for strokes in list_strokes_vel] # convert to list of strok
         return list_strokes_vel
+
+    def extract_datseg_tokens_this_stroke(self, ind):
+        """
+        Get token for this stroke, i.e, self.Dat.iloc[ind]
+        :param ind:
+        :return:
+        """
+        tokens, indstroke = self.context_extract_strokeslength_list(ind, "datseg")
+        return tokens[indstroke]
 
     def extract_datseg_tokens(self, ind):
         """ return the datseg tokens for the entire trial this ind is in.
@@ -1362,7 +1416,6 @@ class DatStrokes(object):
 
         print("\n ==== n samples per combo of params")
         self.print_n_samples_per_combo_grouping(Nmin=Nmin)
-
 
     def print_n_samples_per_combo_grouping(self, 
         list_grouping = None, 
@@ -1791,6 +1844,24 @@ class DatStrokes(object):
                     print(f"==== {col}")
                     print([(v) for i, v in enumerate(vals)])
 
+
+    def plotshape_multshapes_egstrokes_onefig_eachshape(self, savedir, key="shape"):
+        """ Good, show in detail individual trials, each subplot a trial, each
+        plot a shape, overlaying beh on task.
+        Too many plots, so must give savedir.
+        RETURNS:
+            - saves plots in f"{savedir}/{shape}.pdf"
+        """
+        from pythonlib.tools.plottools import savefig
+        self.Dat[key].value_counts()
+        grpdict = self.grouping_append_and_return_inner_items([key])
+        for grp, inds in grpdict.items():
+            # DS.plot_strokes_overlaid(inds)
+            # fig, axes, inds_trials_dataset = DS.plot_multiple_overlay_entire_trial(inds[:10])
+            shape = grp[0]
+            fig, axes, inds_trials_dataset = self.plot_multiple_overlay_entire_trial(inds[:20], overlay_beh_or_task="task")
+            savefig(fig, f"{savedir}/{shape}.pdf")
+            plt.close("all")
 
     def plotshape_multshapes_egstrokes(self, key_subplots = "shape_oriented",
             n_examples_total_per_shape = 4, color_by=None, list_shape=None, ver_behtask="beh"):
@@ -2266,6 +2337,76 @@ class DatStrokes(object):
                 list_chunk_n_in_chunk_prev.append(tok_prev["chunk_n_in_chunk"])
         self.Dat["chunk_n_in_chunk_prev"] = list_chunk_n_in_chunk_prev
 
+    ################################ prims/shape, novel, etc
+    def shapesemantic_label_append(self):
+        """
+        Append to self.Dat column "shape_semantic", which is scale-invariant string that is
+        the shapeabstract + rotation. e.g, Lzigzag1-UU-1.0'
+        :return:
+        """
+
+        assert False, "dont use this, it takes beh stroeks not task strokes"
+
+        labels_data = []
+        for ind in range(len(self.Dat)):
+            P = self.extract_datseg_tokens_this_stroke(ind)["Prim"]
+            label = P.label_classify_prim_using_stroke_semantic()
+            labels_data.append(label)
+        self.Dat["shape_semantic"] = labels_data
+
+    def shapesemantic_stroke_shape_cluster_database(self):
+        """
+        Get list of learned shapes for this animal, using the strokes database, returning as list of strings
+        that are the semantic shape label
+        RETURN:
+            - map_shape_to_shapesemantic, dict from old shape string to semantic string.
+        """
+        from pythonlib.drawmodel.tokens import shape_string_convert_to_components, generate_tokens_from_raw
+
+        # Get basis strokes, semantic strings
+        # auto get the base prims for this subset
+        dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper()
+        strokes = dfbasis["strok_task"].tolist()
+        shapes = dfbasis["shape"].tolist()
+        Tk = generate_tokens_from_raw(strokes, shapes)
+
+        map_shape_to_shapesemantic = {}
+        for sh, tok in zip(shapes, Tk.Tokens):
+            assert sh == tok["shape"]
+            P = tok["Prim"]
+            map_shape_to_shapesemantic[sh] = P.label_classify_prim_using_stroke_semantic()
+
+        return map_shape_to_shapesemantic
+    
+    def shapesemantic_classify_novel_shapes_prims(self, PRINT_RESULTS=True):
+        """
+        For each row, determine whether its shape is novel or learned, based on this animals' prim set
+        RETURNS:
+            - appends "shape_is_novel" to self.Dat (bool)
+        """
+
+        assert False, "dont use this, it takes beh stroeks not task strokes"
+
+        # Get basis strokes, semantic tuples
+        # auto get the base prims for this subset
+        map_shape_to_shapesemantic = self.shapesemantic_stroke_shape_cluster_database()
+        labels_learned = list(map_shape_to_shapesemantic.values())
+
+        # classify prims as novel, based on animal
+        self.shapesemantic_label_append()
+        labels_data = self.Dat["shape_semantic"].tolist()
+
+        # For each trial, score whether is is learned or novel.
+        is_novel = []
+        for lab in labels_data:
+            is_novel.append(lab not in labels_learned)
+
+        self.Dat["shape_is_novel"] = is_novel
+        print("Appended self.Dat[shape_is_novel]")
+
+        if PRINT_RESULTS:
+            print("PRINTING (shape_is_novel, shape_semantic, shape)")
+            self.print_n_samples_per_combo_grouping(["shape_is_novel", "shape_semantic", "shape"])
 
     ################################ SIMILARITY/CLUSTERING
     def cluster_compute_mean_stroke(self, inds, center_at_onset=True,
@@ -3572,7 +3713,7 @@ class DatStrokes(object):
         # Which shapes to extract from this set
         if which_shapes=="current_dataset":
             # v1: Use the shapes in the ground truth tasks.
-            list_shape_basis = DS.Dat["shape"].unique().tolist()
+            list_shape_basis = self.Dat["shape"].unique().tolist()
             list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
         elif which_shapes=="all_basis" or which_shapes is None:
             # use all within the basis set

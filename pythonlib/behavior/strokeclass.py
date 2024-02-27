@@ -43,6 +43,7 @@ class StrokeClass(object):
 
     ############# STROKE FEATURES
     def extract_center(self):
+        # Returns [x,y] list
         from pythonlib.tools.stroketools import getCenter
         return getCenter([self.Stroke])
 
@@ -99,6 +100,12 @@ class StrokeClass(object):
 
         return outdict
     
+    def plot_stroke(self, ax=None):
+        import matplotlib.pyplot as plt
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
+        if ax is None:
+            fig, ax = plt.subplots()
+        plotDatStrokesWrapper([self.Stroke], ax=ax)
 
 
 
