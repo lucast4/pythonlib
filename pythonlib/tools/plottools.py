@@ -540,7 +540,8 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
         
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
-    means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None):
+    means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None,
+                  fontsize=4):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -598,7 +599,7 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
 
         if plot_string_ind:
             for i, (xx, yy) in enumerate(zip(x,y)):
-                ax.text(xx, yy, i)
+                ax.text(xx, yy, i, fontsize=fontsize)
 
     if MAX>MIN:
         ax.set_xlim(MIN, MAX)

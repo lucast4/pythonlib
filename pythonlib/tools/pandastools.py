@@ -13,6 +13,16 @@ import matplotlib.pyplot as plt
 from pythonlib.tools.plottools import savefig
 import seaborn as sns
 
+def _check_index_reseted(df):
+    """
+    Assert that indices are 0, 1, 2....
+    This is assumed for lots of my code...
+    :param df:
+    :return:
+    """
+    inds = df.index.tolist()
+    assert (list(sorted(set(inds)))==inds) and (inds[-1] == len(inds)-1), "this dataframe.index is not 0, 1, 2.... [should do df.reset_index(drop=True)]"
+
 def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     """ merge df1 and 2, with output being same length
     as df1, and same indices. 
@@ -1553,6 +1563,9 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     {date1:<list of strings of unique characters for date1>, 
     date2:<list of strings ....}
     """
+
+    _check_index_reseted(df)
+
     if groupouter_levels is None:
         groupouter_levels = df[groupouter].unique()
 
@@ -1596,6 +1609,16 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         groupdict[lev] = itemsinner
     return groupdict
 
+def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars):
+    """ Quicker version of grouping_append_and_return_inner_items
+    RETURNS:
+    - groupdict, grptuple:list_indices_into_df
+    """
+    groupdict = {}
+    for grp in df.groupby(list_groupouter_grouping_vars):
+        groupdict[grp[0]] = grp[1].index.tolist()
+    return groupdict
+
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
     groupinner="index", groupouter_levels=None, new_col_name="grp",
     return_df=False, sort_keys=True):
@@ -1613,6 +1636,7 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     NOTE: does NOT modify df.
     """
 
+    _check_index_reseted(df)
     assert not isinstance(groupinner, list)
 
     # 1) Append new grouping variable to each row
@@ -1714,7 +1738,8 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
         return {}
 
     outdict = {}
-    out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
+    # out = grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars)
+    out = grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars)
 
     # out[grp] = list_indices.
     for k in sort_mixed_type(list(out.keys())):
@@ -2245,6 +2270,7 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
     :return:
     """
 
+    _check_index_reseted(df)
     assert isinstance(grp_vars, list)
 
     groupdict = grouping_append_and_return_inner_items(df, grp_vars)
@@ -2328,6 +2354,8 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
 
         extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
     """
+
+    _check_index_reseted(df)
 
     if len(df)==0:
         return pd.DataFrame([]), {}
@@ -2791,12 +2819,12 @@ def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
                                            plot_text=True,
-                                           alpha=0.8, SIZE=3, shareaxes=False):
+                                           alpha=0.8, SIZE=3, shareaxes=False, plot_error_bars=True):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
     PARAMS:
-    - var_manip, str, name of col whose values will define x and y coord.
+    - var_manip, str, name of col whose values will define x and y values.
     - x_lev_manip, str, categorical level of var_manip, each value defines the x-values
     that will be averaged for each datapt.
     - var_subplot, str, categorical col, levels dedefine subplots. if List, then groups
@@ -2881,9 +2909,12 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
         # Plot
         xs = dftmp_x[var_value]
-        x_errors = dftmp_x[f"{var_value}_sem"]
         ys = dftmp_y[var_value]
-        y_errors = dftmp_y[f"{var_value}_sem"]
+        if plot_error_bars:
+            x_errors = dftmp_x[f"{var_value}_sem"]
+            y_errors = dftmp_y[f"{var_value}_sem"]
+        else:
+            x_errors, y_errors = None, None
         if plot_text:
             labels = list_date
         else:
