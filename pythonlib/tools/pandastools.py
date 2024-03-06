@@ -726,7 +726,7 @@ def printOverview(df, MAX=50):
 # @param grp: [col1 col2 col3]
 # @return: new column with index for category (based on col1/2/3 perm)
 def append_col_with_grp_index(df, grp, new_col_name, use_strings=True, 
-        strings_compact=False, return_col_name=False):
+        strings_compact=True, return_col_name=False):
     """ for each col, gets its grp index (based on grp list),
     and appends as new column. first converts to string by str(list)
     INPUTS:
@@ -2029,7 +2029,7 @@ def drop_using_position_index(dfthis, index, axis):
         assert False
 
 def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
-    prefer_to_drop_which=None):
+    prefer_to_drop_which=None, force_to_drop_which=None):
     """
     Given two variables, prune df that that each level of var1 has 
     the same levels of var2 (not sample size, but simpl,y whether has it).
@@ -2051,6 +2051,11 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
     DIVISOR = 4
     nstart = len(dfthis)
+
+    if force_to_drop_which is not None:
+        # "force" takes precedence.
+        prefer_to_drop_which = None
+        assert force_to_drop_which in (1,2)
 
     def _evaluate_data_size(dfcounts):
         """ Helper for summarizing size of this 2d dataframe"""
@@ -2080,14 +2085,24 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
         # return sum of scores.
         score = tmp1 + tmp2
 
-        if prefer_to_drop_which==1:
+        if force_to_drop_which==1:
+            # Then reduce score by n totla counts, since this guarantees it iwll
+            # all values in score wil be lower than the lowst value in other score
+            #( will be negative).
             if which_axis==var1:
-                score = score/DIVISOR
-        elif prefer_to_drop_which==2:
+                score = score - np.sum(np.sum(dfcounts))
+        elif force_to_drop_which==2:
             if which_axis==var2:
-                score = score/DIVISOR
+                score = score - np.sum(np.sum(dfcounts))
         else:
-            assert prefer_to_drop_which is None
+            if prefer_to_drop_which==1:
+                if which_axis==var1:
+                    score = score/DIVISOR
+            elif prefer_to_drop_which==2:
+                if which_axis==var2:
+                    score = score/DIVISOR
+            else:
+                assert prefer_to_drop_which is None
 
         return score
 
@@ -2152,8 +2167,7 @@ def conjunction_vars_prune_to_balance(dfthis, var1, var2, PLOT=False,
             # fails if index values are tuples
             dfcounts = dfcounts.drop(lev_to_remove, axis = AXIS)    
         else:
-            print(11)
-            dfcounts = drop_using_position_index(dfcounts, indexnum_to_remove, axis = AXIS)    
+            dfcounts = drop_using_position_index(dfcounts, indexnum_to_remove, axis = AXIS)
 
 
     # plot heatmap
@@ -2304,7 +2318,8 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
                     PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
                     balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
-                    ignore_values_called_ignore=False, plot_counts_heatmap_savepath=None):
+                    ignore_values_called_ignore=False, plot_counts_heatmap_savepath=None,
+                                            balance_force_to_drop_which=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -2487,6 +2502,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
         if len(dfout)>0:
             dfout, _ = conjunction_vars_prune_to_balance(dfout, var, "vars_others",
                 prefer_to_drop_which=balance_prefer_to_drop_which,
+                force_to_drop_which=balance_force_to_drop_which,
                 PLOT=DEBUG)
             # print("Ending len:", len(dfthis))
 
@@ -2515,6 +2531,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
             fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
                 vars_others=None)
         savefig(fig, plot_counts_heatmap_savepath)
+    if len(dfout)>0:
+        dict_dfthis = {} # level:df
+        for lev in levels_others:
+            dict_dfthis[lev] = dfout[dfout["vars_others"] == lev].copy()
 
     return dfout, dict_dfthis
 
