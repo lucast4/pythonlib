@@ -20,8 +20,9 @@ def _check_index_reseted(df):
     :param df:
     :return:
     """
-    inds = df.index.tolist()
-    assert (list(sorted(set(inds)))==inds) and (inds[-1] == len(inds)-1), "this dataframe.index is not 0, 1, 2.... [should do df.reset_index(drop=True)]"
+    if len(df)>0:
+        inds = df.index.tolist()
+        assert (list(sorted(set(inds)))==inds) and (inds[-1] == len(inds)-1), "this dataframe.index is not 0, 1, 2.... [should do df.reset_index(drop=True)]"
 
 def _mergeKeepLeftIndex(df1, df2, how='left',on=None):
     """ merge df1 and 2, with output being same length
@@ -1683,6 +1684,13 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     - groupdict, see grouping_get_inner_items
     NOTE: does NOT modify df.
     """
+
+    # If empty...
+    if len(df)==0:
+        if return_df:
+            return {}, df
+        else:
+            return {}
 
     _check_index_reseted(df)
     assert not isinstance(groupinner, list)

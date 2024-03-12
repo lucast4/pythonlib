@@ -8906,7 +8906,7 @@ class Dataset(object):
                 clust_sim_maxes_keep.append(clust_sim_maxes)
 
             if n_success/(n_failures + n_success)<0.9:
-                print(n_success, n_failure)
+                print(n_success, n_failures)
                 print(len(DS.Dat["trialcode"].unique()))
                 print(len(D.Dat["trialcode"].unique()))
                 assert False, "why skipped so many? Id expect the only reason to skipt o be very rare losses of strokes (e.g, noise reduction)"
