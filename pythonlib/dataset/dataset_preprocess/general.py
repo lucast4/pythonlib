@@ -919,6 +919,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         = _groupingParams(D, expt)
     print(len(D.Dat))
 
+    # First, quickly generate placeholder datsegs for beh, since downstream code might require it.
+    D.tokens_generate_replacement_quick_from_beh()
+
     # If they exist, replace shapes (in tokens) with pre-saved shape labels...
     # Note: should allow the above to run first, since this inherits those results for
     # tasks that are not characters.

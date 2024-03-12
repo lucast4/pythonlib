@@ -364,7 +364,7 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
                          color="k", textcolor="r", alpha=0.05,
                          plot_text_over_examples=False, return_inds_text=False,
                          SIZE=7, overlay_mean=False,
-                         text_to_plot = None):
+                         text_to_plot = None, overlay_ci=True):
     """ 
     GOOD - scatter plot of X, taking oclumns of X as vectors.
     PARAMSL
@@ -373,6 +373,9 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
     - n_overlay_text, int, overlays text for this many random pts.
     """
     import random
+
+    if text_to_plot is not None:
+        plot_text_over_examples = True
 
     # assert labels is None, "not codede, use plotScatterOverlay"
     if dims_to_take is None:
@@ -394,7 +397,8 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
         xmean = np.mean(Xfit[:,0])
         ymean = np.mean(Xfit[:,1])
         ax.plot(xmean, ymean, 's', color=color, markersize=10)
-        confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
+        if overlay_ci:
+            confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
 
     # === pick out random indices, highlight them in the plot, and plot them
     if plot_text_over_examples and text_to_plot is None:
@@ -421,7 +425,8 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
 def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     downsample_auto=True, ax=None, SIZE=8, overlay_mean=False,
     ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None,
-                       map_lev_to_color=None, color_type="discr"):
+                       map_lev_to_color=None, color_type="discr",
+                        overlay_ci=True):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
@@ -474,7 +479,7 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
                     text_to_plot_this = None
                 _fig, _ax = _plotScatterXreduced(Xthis, dimsplot, ax=ax,
                                                color=col, textcolor=col, alpha=alpha,
-                                                 overlay_mean=overlay_mean,
+                                                 overlay_mean=overlay_mean, overlay_ci=overlay_ci,
                                                  plot_text_over_examples=plot_text_over_examples,
                                                  text_to_plot = text_to_plot_this,
                                                  SIZE=SIZE)

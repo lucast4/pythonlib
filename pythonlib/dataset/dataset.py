@@ -150,6 +150,7 @@ class Dataset(object):
         self.Log_preprocessGood = []
         # For swtiching to Dataset-stored toekns
         self.TokensStrokesBeh = None
+        self.TokensStrokesBehUsingTaskStrokes = None
         self.TokensTask = None
         self.TokensVersion = "taskclass"
 
@@ -1691,12 +1692,291 @@ class Dataset(object):
         print("x...", map_gridloc_loc_x)
         print("y...", map_gridloc_loc_y)   
 
+    def tokens_append_to_dataframe_column(self):
+        """
+        Extract tokens and store in self.Dat (simply "expose"). Useful for nerual stuff.
+        You ned to have first extracted strokesbeh tokens --
+        :return:
+        - Appends to self.Dat (Tokens Object)
+            self.Dat["Tkbeh_stkbeh"] = list_Tk_beh_1
+            self.Dat["Tkbeh_stktask"] = list_Tk_beh_2
+            self.Dat["Tktask"] = list_Tk_task
+        """
+
+        # Must run this first to get strokesbeh tokens
+        self.tokens_generate_replacement_from_raw_helper()
+
+        list_Tk_beh_1 = []
+        list_Tk_beh_2 = []
+        list_Tk_task = []
+        for ind in range(len(self.Dat)):
+            list_Tk_beh_1.append(self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True))
+            list_Tk_beh_2.append(self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True))
+            list_Tk_task.append(self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True))
+        self.Dat["Tkbeh_stkbeh"] = list_Tk_beh_1
+        self.Dat["Tkbeh_stktask"] = list_Tk_beh_2
+        self.Dat["Tktask"] = list_Tk_task
+
+    def tokens_extract_variables_as_dataframe(self, list_var, tk_ver="beh_using_beh_data"):
+        """
+        Generate a dataframe where each row is a set of variables extracted from token.
+        Useful for doing stuff with tokens.
+        Place variables back into self.Dat using tokens_assign_dataframe_back_to_self
+        :param list_var: list of str, variable sto extract (new columns). First looks for it in
+        tokens. if not find, then looks in self.Dat
+        :return: dataframe
+        """
+        res = []
+        for i, row in self.Dat.iterrows():
+            Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
+            for j, tok in enumerate(Tk.Tokens):
+                res.append({
+                    "idx":i,
+                    "idx_tok":j,
+                })
+                for var in list_var:
+                    if var in tok.keys():
+                        res[-1][var] = tok[var]
+                    else:
+                        res[-1][var] = row[var]
+        df = pd.DataFrame(res)
+
+        # Store the token ver
+        df["token_ver"] = tk_ver
+
+        return df
+
+    def tokens_assign_dataframe_back_to_self(self, df, var_extract, tk_ver="beh_using_beh_data",
+                                             var_name_assign=None):
+        """
+        Given a dataframe genreated using tokens_extract_as_dataframe, assign a column back
+        to self.Dat, making sure to get all rows and toekns that exist in self.Dat (fails
+        if cant find one).
+        :param df:
+        :param var_extract: variable from df to extract
+        :param var_name_assign: name of column in self.Dat to overwrite. if None, then uses
+        var_extract
+        :return: modifies self.Dat
+        """
+
+        if var_name_assign is None:
+            var_name_assign = var_extract
+
+        assert np.all(df["token_ver"] == tk_ver)
+
+        for i, row in self.Dat.iterrows():
+            Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
+            for j, tok in enumerate(Tk.Tokens):
+                tmp = df[(df["idx"] == i) & (df["idx_tok"] == j)][var_extract].values
+                assert len(tmp)==1
+                tok[var_name_assign] = tmp[0]
+
+    def tokens_gridloc_replace_with_recomputed_loc_chars(self, PRINT=False):
+        """
+        BEcuase for "character" task_kind the gridloc is not defined, here
+        replace gridloc in tokens with recomputed gridloc based
+        on stroke onset, binned within chars only, doing this only for chars.
+
+        :return: modifies tokens
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+        from pythonlib.tools.pandastools import grouping_print_n_samples
+
+        # Extract flattened tokens
+        vars = ["task_kind", "gridloc", "locon_bin_in_loc"]
+        df = self.tokens_extract_variables_as_dataframe(vars)
+        if PRINT:
+            print(" ----- BEFORE:")
+            grouping_print_n_samples(df, vars)
+
+        # Replace gridloc, for chars
+        inds = df["task_kind"] == "character"
+        df.loc[inds, "gridloc"] = df.loc[inds, "locon_bin_in_loc"]
+        if PRINT:
+            print(" ----- AFTER:")
+            grouping_print_n_samples(df, vars)
+
+        # put back into dataset
+        self.tokens_assign_dataframe_back_to_self(df, "gridloc")
+
+    def tokens_sequence_bin_location_within_gridloc(self, nbins=2):
+        """
+        Bin touch onset location within categorical values of gridloc.
+        (which generlaly means within char, and within (SP + PIG).
+        :return: Modifies tokens (beh using beh)
+        """
+        from pythonlib.tools.pandastools import bin_values_conditioned_on_class
+
+        if False:
+            # PROBLEM: this just acted on seqc variables, which dont carry over to
+            # DS.
+
+            # bin locations within each gridloc
+            assert "seqc_0_locon" in self.Dat.columns, "extract usingn seqcontext_preprocess"
+            for i in range(10):
+                if f"seqc_{i}_locon" in self.Dat.columns:
+                    print("Binning ", f"seqc_{i}_locon", "within ", f"seqc_{i}_loc")
+                    self.Dat = bin_values_conditioned_on_class(self.Dat, f"seqc_{i}_locon", [f"seqc_{i}_loc"], nbins,
+                                                               var_bin_ndim=2, new_col_name=f"seqc_{i}_locon_bin_in_loc")
+        else:
+            # BETTER - this modifies tokens directly.
+
+            # Extract dataframe
+            var_bin = "loc_on"
+            vars_condition = ["gridloc"]
+            list_var = [var_bin] + vars_condition
+            df = self.tokens_extract_variables_as_dataframe(list_var, "beh_using_beh_data")
+
+            # Bin values
+            new_col_name = "locon_bin_in_loc"
+            df = bin_values_conditioned_on_class(df, var_bin, vars_condition, nbins,
+                                                       var_bin_ndim=2, new_col_name=new_col_name)
+
+            # Put back into tokens
+            self.tokens_assign_dataframe_back_to_self(df, new_col_name, 'beh_using_beh_data')
+
+    def tokens_bin_feature_across_all_data(self, feature, ver_token, nbins=3, PLOT=False):
+        """
+        Helper, for a given feature in Tokens, extract all across all data (trials x strokes), convert
+        to binned data (vby value, not rank) and then store in tokens with colname = f"{feature}_binned"
+        :param feature:
+        :param nbins:
+        :return:
+        """
+        from pythonlib.tools.nptools import bin_values
+        from pythonlib.tools.vectools import bin_angle_by_direction
+
+        # Collect values across all trials.
+        values =[]
+        list_i_j = []
+        for i, row in self.Dat.iterrows():
+            Tk = self.taskclass_tokens_extract_wrapper(i, ver_token, return_as_tokensclass=True)
+
+            if feature not in Tk.Tokens[0].keys():
+                # Collect this feature from all tokens
+                Tk.features_extract_wrapper([feature])
+
+            for j, tok in enumerate(Tk.Tokens):
+                values.append(tok[feature])
+                list_i_j.append((i,j))
+
+        # Bin the values
+        # - params - what is size of feature
+        tmp = self.taskclass_tokens_extract_wrapper(0, ver_token, return_as_tokensclass=True).Tokens[0][feature]
+
+        if isinstance(tmp, (float)):
+            ndims = 1
+        elif isinstance(tmp, np.ndarray) and len(tmp.shape)==0:
+            ndims = 1
+        else:
+            ndims = len(self.taskclass_tokens_extract_wrapper(0, ver_token, return_as_tokensclass=True).Tokens[0][feature])
+        print(f"ndims for feature {feature} = {ndims}")
+        if ndims ==2:
+            values_arr = np.stack(values, axis=0)
+            assert values_arr.shape[0] == len(values), f"problem with stacking? shape = {values_arr.shape}"
+            xs = values_arr[:,0]
+            ys = values_arr[:,1]
+            # xs_binned = bin_values_by_rank(xs, nbins=2)
+            # ys_binned = bin_values_by_rank(ys, nbins=2)
+            xs_binned = bin_values(xs, nbins=nbins)
+            ys_binned = bin_values(ys, nbins=nbins)
+            # Convert to list of 2-tuples
+            values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)]
+            # values_binned = np.stack([xs_binned, ys_binned], axis=1)
+        elif ndims==1:
+            if "angle" in feature:
+                values_binned = bin_angle_by_direction(values, num_angle_bins=nbins, PLOT=PLOT)
+            else:
+                values_binned = bin_values(values, nbins=nbins)
+        else:
+            print(ndims)
+            assert False, 'Code it'
+
+        # Store binned values in tokens
+        colname = f"{feature}_binned"
+        assert len(values_binned) == len(list_i_j)
+        assert len(values_binned) == len(values)
+        for i_j, val_binned in zip(list_i_j, values_binned):
+            i, j = i_j
+            Tk = self.taskclass_tokens_extract_wrapper(i, ver_token, return_as_tokensclass=True)
+            Tk.Tokens[j][colname] = val_binned
+        print("New colname in tokens:", colname)
+
+        if PLOT:
+            import seaborn as sns
+            fig, ax = plt.subplots()
+            if ndims==2:
+                df = pd.DataFrame({"x":values_arr[:,0], "y": values_arr[:,1], "bin":[tuple(v) for v in values_binned]})
+                sns.scatterplot(data=df, x="x", y="y", hue="bin", alpha=0.5, ax=ax)
+            elif ndims==1:
+                # print(values)
+                # print(values_binned)
+                sns.scatterplot(x=values, y=np.ones((len(values))), hue=values_binned, ax=ax)
+            else:
+                assert False
+
+    def tokens_generate_replacement_from_raw_helper(self):
+        """
+        Runt his only once - replace Tokens with new version. advartnageS:
+        - works for Chars, using pre-saved cluster labels.
+        - seprates into 3 kinds of tokens (just 1 for char): (i) beh using beh strokes
+        (ii) beh using task strokes (iii) task.
+        :return:
+        """
+        if "charclust_shape_seq" in self.Dat.columns:
+            self.tokens_generate_replacement_from_raw(shape_sequence_col="charclust_shape_seq")
+        else:
+            self.tokens_generate_replacement_from_raw(shape_sequence_col="TASK_SHAPES")
+
+    def tokens_generate_replacement_quick_from_beh(self):
+        """
+        QWUick and dirtly, always ruin this in preprocess, to generate beh datsegs.
+        Overwrites self.TokensStrokesBeh with tokens using beh strokes, nothing do to
+        with task, except using the shape from task.
+        """
+        from pythonlib.drawmodel.tokens import generate_tokens_from_raw
+        from pythonlib.drawmodel.tokens import Tokens
+
+        # Only run this if Tokens are not already regenrated.
+        TokensStrokesBeh = {} # len beh, using strokes beh
+        for ind in range(len(self.Dat)):
+            tc = self.Dat.iloc[ind]["trialcode"]
+
+            # (1) Strokes beh, what sahpes to call each beh stroke
+            tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
+            shape_seq = [tok["shape"] for tok in tokens_beh_old]
+            strokes = self.Dat.iloc[ind]["strokes_beh"]
+            assert len(strokes)==len(shape_seq)
+
+            # (2) Strokes beh, what locations to call each beh stroke
+            if self.taskclass_get_grid_ver(ind)=="on_grid":
+                assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+                # Then keep locations...
+                gridlocs = [t["gridloc"] for t in tokens_beh_old]
+                gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+            else:
+                # For char, this should be recomputed later, by binning across all data
+                assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
+                # Fill with Nones.
+                gridlocs = None
+                gridlocs_local = None
+
+            # Generate tokens: strokesbeh_using_beh
+            Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local)
+            assert Tk is not None
+            TokensStrokesBeh[tc] = Tk
+
+            # Switch so that always uses these tokens
+            self.TokensStrokesBeh = TokensStrokesBeh
+
     def tokens_generate_replacement_from_raw(self, shape_sequence_col="charclust_shape_seq",
                                              skip_if_labels_not_found=False):
         """
         Generate Tokens based on actual beh strokes for each trial,
         and store in self.TokensStrokesBeh, and switch TokensVersion to
-        "regenerated_from_raw". This will then be used as replacement
+        "regenerated_from_raw". And do this differentyl for SP/PIG vs. CHAR, where
+        the latter completely throws out task-related information.
+        This will then be used as replacement
         for all tokens stuff (e.g., in constructing DatasetStrokes), useful
         for tasks where strokes do not nicely align wiht task strokes (which
         formed to default Tokens), such as chars. The idea is that these data can be used
@@ -1705,43 +1985,72 @@ class Dataset(object):
         :param shape_sequence_col:
         :return:
         - updates self.TokensStrokesBeh, dict from trialcode --> tokens (strokes, beh)
+        [if char, then the following two are identical to above]
+        - updates self.TokensStrokesBehUsingTaskStrokes, dict from trialcode --> tokens (strokes, task)
         - updates self.TokensTask, dict from trialcode --> tokens (task)
         """
         from pythonlib.drawmodel.tokens import generate_tokens_from_raw
+        from pythonlib.drawmodel.tokens import Tokens
 
         assert skip_if_labels_not_found==False, "not coded"
 
         # Only run this if Tokens are not already regenrated.
-        if (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0):
-            TokensStrokesBeh = {}
-            TokensTask = {}
+        if (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0):
+            TokensStrokesBeh = {} # len beh, using strokes beh
+            TokensStrokesBehUsingTaskStrokes = {} # len beh, using best-aligned task strok
+            TokensTask = {} # len task, using task strokes.
             for ind in range(len(self.Dat)):
-                shape_seq = self.Dat.iloc[ind][shape_sequence_col]
-                strokes = self.Dat.iloc[ind]["strokes_beh"]
                 tc = self.Dat.iloc[ind]["trialcode"]
+                tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
 
-                # Keep gridlocs?
-                if self.taskclass_get_grid_ver(ind)=="on_grid":
-                    # Then keep locations...
-                    tokens_old = self.taskclass_tokens_extract_wrapper(ind, "beh")
-                    gridlocs = [t["gridloc"] for t in tokens_old]
-                    gridlocs_local = [t["gridloc_local"] for t in tokens_old]
+                # (1) Strokes beh, what sahpes to call each beh stroke
+                if shape_sequence_col == "TASK_SHAPES":
+                    shape_seq = [tok["shape"] for tok in tokens_beh_old]
                 else:
+                    shape_seq = self.Dat.iloc[ind][shape_sequence_col] #
+                strokes = self.Dat.iloc[ind]["strokes_beh"]
+                assert len(strokes)==len(shape_seq)
+
+                # (2) Strokes beh, what locations to call each beh stroke
+                if self.taskclass_get_grid_ver(ind)=="on_grid":
+                    assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+                    # Then keep locations...
+                    gridlocs = [t["gridloc"] for t in tokens_beh_old]
+                    gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+
+                else:
+                    # For char, this should be recomputed later, by binning across all data
+                    assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
                     # Fill with Nones.
                     gridlocs = None
                     gridlocs_local = None
 
+                # Generate tokens: strokesbeh_using_beh
                 Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local)
                 TokensStrokesBeh[tc] = Tk
 
-                # Also save task tokens, so that can safely delete task tokens and still use it here.
-                Task = self.Dat.iloc[ind]["Task"]
-                TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
+                #### HOW TO DEFINE TASK STROKE TOKENS
+                if self.taskclass_get_grid_ver(ind)=="on_grid":
+                    assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+                    # Use the standard.
+                    # (2) Also save task tokens, so that can safely delete task tokens and still use it here.
+                    Task = self.Dat.iloc[ind]["Task"]
+                    TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
+
+                    # (3) Also save the old "beh strokes, aligned to task"
+                    TokensStrokesBehUsingTaskStrokes[tc] = Tokens(tokens_beh_old)
+                else:
+                    # For char, should ignore entirely any task tokens, since they are meaninglesss. This avoids erros later.
+                    # Make them identical to Beh
+                    assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
+                    TokensTask[tc] = TokensStrokesBeh[tc]
+                    TokensStrokesBehUsingTaskStrokes[tc] = TokensStrokesBeh[tc]
 
             # Switch so that always uses these tokens
             self.TokensVersion = "regenerated_from_raw"
             self.TokensStrokesBeh = TokensStrokesBeh
             self.TokensTask = TokensTask
+            self.TokensStrokesBehUsingTaskStrokes = TokensStrokesBehUsingTaskStrokes
 
     def taskclass_tokens_extract_wrapper(self, ind, which_order,
                                          plot=False, return_as_tokensclass=False):
@@ -1750,7 +2059,8 @@ class Dataset(object):
         PARAMS:
         - which_order, in
         --- 'task', order of ind_taskstrokes
-        --- 'beh', matching each beh stroke,
+        --- 'beh_using_beh_data', matching each beh stroke, holding data of strokes_beh (tok["Prim"])
+        --- 'beh', matching each beh stroke, holding data on the best-matching task stroke
         --- 'beh_firsttouch', ordered by behstroke first touch, but length <=ntask.
         RETURNS:
         - list of dict, a reordered tokens
@@ -1764,10 +2074,15 @@ class Dataset(object):
             # Completely ignore original taskclass based tokens
 
             tc = self.Dat.iloc[ind]["trialcode"]
-
-            if which_order == "beh":
+            if which_order=="beh_using_beh_data":
+                # Beh length, beh strokes
                 assert self.TokensStrokesBeh is not None, "run tokens_generate_replacement_from_strokesbeh()"
                 Tk = self.TokensStrokesBeh[tc]
+                assert Tk is not None
+            elif which_order == "beh_using_task_data":
+                # beh lenght, task strokes (DEFAULT)
+                assert self.TokensStrokesBehUsingTaskStrokes is not None, "run tokens_generate_replacement_from_strokesbeh()"
+                Tk = self.TokensStrokesBehUsingTaskStrokes[tc]
             elif which_order == "task":
                 assert self.TokensTask is not None, "run tokens_generate_replacement_from_strokesbeh()"
                 Tk = self.TokensTask[tc]
@@ -1796,11 +2111,22 @@ class Dataset(object):
                     mapper_taskstroke_to_beh[i] = []
 
             Beh = self.Dat.iloc[ind]["BehClass"]
-
-            if which_order=="task":
+            if which_order=="beh_using_beh_data":
+                assert self.TokensStrokesBeh is not None, "run self.tokens_generate_quick_from_beh"
+                tc = self.Dat.iloc[ind]["trialcode"]
+                Tk = self.TokensStrokesBeh[tc]
+                assert Tk is not None
+                assert Tk.Tokens is not None
+                assert Tk.Tokens[0] is not None
+                # REturn here, since it doesnt have valid taskstroke_orig indices.
+                if return_as_tokensclass:
+                    return Tk
+                else:
+                    return Tk.Tokens
+            elif which_order=="task":
                 Task = self.Dat.iloc[ind]["Task"]
                 tokens = Task.tokens_generate(assert_computed=True)
-            elif which_order=="beh":
+            elif which_order=="beh_using_task_data":
                 tokens = Beh.alignsim_extract_datsegs_both_beh_task()[1]
                 # tokens = self.behclass_extract_beh_and_task(ind)[1]
             elif which_order=="beh_firsttouch":
@@ -1817,9 +2143,6 @@ class Dataset(object):
 
             if plot:
                 self.grammarmatlab_extract_beh_and_task(ind, ploton=True)
-            # print(tokens[0])
-            # assert False
-            # assert False
 
             if return_as_tokensclass:
                 from pythonlib.drawmodel.tokens import Tokens
@@ -1829,7 +2152,38 @@ class Dataset(object):
         else:
             assert False
 
-    def taskclass_shapes_loc_configuration_extract(self, ind, loc_version="gridloc",
+    # def taskclass_shapes_loc_configuration_extract_helper(self, ind, force_all_task_kind_same_loc_coord=False):
+    #     """
+    #     Extract the "task config", in a way that works for any task, i.e,., SP, PIG, CHAR.
+    #     :param ind:
+    #     :param force_all_task_kind_same_loc_coord, bool, if True, then uses center_binned, based on recomputing
+    #     binning across all trials. If False, then does that for Char, but for others uses the task gridloc.
+    #     :return:
+    #     """
+    #
+    #     task_kind = self.Dat.iloc[ind]["task_kind"]
+    #     if task_kind in ["singleprim", "prims_on_grid"]:
+    #         # Then easy, use the task, ingoring behavior.
+    #         shape_token = "task"
+    #         shape_ver = "shape"
+    #         if force_all_task_kind_same_loc_coord:
+    #             # use binned center of
+    #             loc_token = "beh_using_task_data"
+    #             loc_version = "center_binned"
+    #         else:
+    #             loc_token = "task"
+    #             loc_version = "gridloc"
+    #     elif task_kind in ["character"]:
+    #         # Ignore the task entirely. Instead, use the shape labels assigned to each
+    #         # beh stroke, and the binned location.
+    #         shape_token = "beh_using_beh_data"
+    #         shape_ver = "shape"
+    #         loc_token = "beh_using_beh_data"
+    #         loc_version = "center_binned"
+
+
+    def taskclass_shapes_loc_configuration_extract(self, ind, shape_token = "task", loc_token="task",
+                                                   shape_version="shape", loc_version="gridloc",
                                                    use_recomputed_prim_labels=False):
         """ Extract the shapes or location config (global) for this task. 
         Ignores behavior.
@@ -1843,22 +2197,31 @@ class Dataset(object):
         --- "loc":tuple of tuples, eahc holding two ints, a gridloc
         --- "shape_loc": tuple of (shape, loc) tuples.
         The lists are sorted, so a given task will always return 
-        the same thing
+        the same thing. This means that shape and loc are NOT aligned, but each iten within shape_loc is algined.
         """
-        tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
 
-        if loc_version=="gridloc":
-            LOC = "gridloc"
-        elif loc_version=="pixel":
+        # To ensure that tokens for shape and loc are aligned, thesea re the only compatible combinations
+        if shape_token in ["task"]:
+            assert loc_token in ["task"]
+        elif shape_token in ["beh_using_beh_data", "beh_using_task_data"]:
+            assert loc_token in ["beh_using_beh_data", "beh_using_task_data"]
+        else:
+            print(shape_token, loc_token)
+            assert False, "does this combo aligned?"
+
+        tokens_shape = self.taskclass_tokens_extract_wrapper(ind, shape_token)
+        tokens_loc = self.taskclass_tokens_extract_wrapper(ind, loc_token)
+
+        assert len(tokens_shape)==len(tokens_loc), f"you chose incompatible token versions, {shape_token}, {loc_token}"
+
+        if loc_version=="pixel":
             LOC = "center"
         else:
-            print(loc_version)
-            assert False
+            LOC = loc_version
 
-        list_shapes = tuple(sort_mixed_type([t["shape"] for t in tokens]))
-        list_loc = tuple(sort_mixed_type([t[LOC] for t in tokens]))
-        list_shape_loc = tuple(sort_mixed_type([(t["shape"], t[LOC]) for t in tokens]))
-        # list_shape_loc = tuple([(t["shape"], t[LOC]) for t in tokens])
+        list_shapes = tuple(sort_mixed_type([t[shape_version] for t in tokens_shape]))
+        list_loc = tuple(sort_mixed_type([t[LOC] for t in tokens_loc]))
+        list_shape_loc = tuple(sort_mixed_type([(ts[shape_version], tl[LOC]) for ts, tl in zip(tokens_shape, tokens_loc)]))
 
         return {
             "shape":list_shapes,
@@ -1866,9 +2229,15 @@ class Dataset(object):
             "shape_loc":list_shape_loc
         }
 
-    def taskclass_shapes_loc_configuration_assign_column(self):
+    def taskclass_shapes_loc_configuration_assign_column(self, version="task", shape_ver="shape",
+                                                         plot_examples=False, suffix=None):
         """ Assigns three new columns indicating the tasks shape, loc, and 
         shape_loc configurations
+        PARAMS:
+        - version, str, which toekns to use to define task config:
+        --- "task", then uses task, ignoring entirely the beh
+        --- "char", then optimized for characters, same as "task" but using recomputed location bins, instaed of
+        gridloc.
         RETURNS:
         - modifies self.Dat, with columsn:
         --- "taskconfig_loc"
@@ -1876,20 +2245,58 @@ class Dataset(object):
         --- "taskconfig_shploc"
         """
 
+        if version=="task":
+            # This is general, works for SP, PIG, and CHAR, since char now has correct task tokens.
+            shape_token = "task"
+            shape_ver = shape_ver
+            loc_token = "task"
+            loc_version = "gridloc"
+        elif version=="char":
+            # Same, except use recomputed binned locations (centers) insteadf of gridloc, which is not
+            # defined for chars
+            # shape_token = "beh_using_beh_data"
+            # shape_ver = "shape_semantic"
+            # loc_token = "beh_using_beh_data"
+            # loc_version = "center_binned"
+            shape_token = "task"
+            shape_ver = shape_ver
+            loc_token = "task"
+            # loc_version = "center_binned"
+            loc_version = "gridloc"
+        else:
+            print(version)
+            assert False
+
+
         list_loc =[]
         list_sh = []
         list_shloc =[]
         for ind in range(len(self.Dat)):
-            this = self.taskclass_shapes_loc_configuration_extract(ind)
+            this = self.taskclass_shapes_loc_configuration_extract(ind, shape_token,  loc_token, shape_ver, loc_version)
             list_loc.append(this["loc"])
             list_sh.append(this["shape"])
             list_shloc.append(this["shape_loc"])
 
         # Append
-        self.Dat["taskconfig_loc"] = list_loc
-        self.Dat["taskconfig_shp"] = list_sh
-        self.Dat["taskconfig_shploc"] = list_shloc
+        if suffix is not None:
+            suffix = f"_{suffix}"
+        else:
+            suffix = ""
 
+        self.Dat[f"taskconfig_loc{suffix}"] = list_loc
+        self.Dat[f"taskconfig_shp{suffix}"] = list_sh
+        self.Dat[f"taskconfig_shploc{suffix}"] = list_shloc
+
+        if plot_examples:
+            # Print/plot showing taskshape config
+            import random
+            n = 5
+            inds = random.sample(range(len(self.Dat)), n)
+            fig, axes, idxs = self.plotMultTrials2(inds)
+            fig, axes, idxs = self.plotMultTrials2(inds, "strokes_task")
+            # D.Dat.loc[inds, ["taskconfig_loc", "taskconfig_shp", "taskconfig_shploc"]]
+
+            print(self.Dat.loc[inds, [f"taskconfig_shploc{suffix}"]].values)
 
     def taskclass_shapes_extract_unique_alltrials(self):
         """ REturn list of (sorted) shapes across all trial sin dataset,
@@ -2166,17 +2573,22 @@ class Dataset(object):
         list_novels = []
         list_novels_all_strokes = []
         for i, row in self.Dat.iterrows():
-            tokens_task = self.taskclass_tokens_extract_wrapper(i, "task")
+            Tk = self.taskclass_tokens_extract_wrapper(i, "task", return_as_tokensclass=True)
+            if "shape_semantic" not in Tk.Tokens[0].keys():
+                Tk.features_extract_wrapper(["shape_semantic"])
+            tokens_task = Tk.Tokens
+
             labels = []
             novels = []
             for tok in tokens_task:
-                try:
-                    lab = tok["Prim"].label_classify_prim_using_stroke_semantic()
-                except Exception as err:
-                    print(tok)
-                    print(row["trialcode"])
-                    self.plotSingleTrial(i)
-                    assert False, "why..."
+                lab = tok["shape_semantic"]
+                # try:
+                #     lab = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                # except Exception as err:
+                #     print(tok)
+                #     print(row["trialcode"])
+                #     self.plotSingleTrial(i)
+                #     assert False, "why..."
                 labels.append(lab)
                 novels.append(lab not in labels_learned)
 
@@ -6306,6 +6718,13 @@ class Dataset(object):
         from pythonlib.drawmodel.features import strokesAngleOverall, strokeCircularity, strokeDistances
         feature_list_names = []
 
+        # Otheriwse shows unecesary waribng: PerformanceWarning: DataFrame is highly fragmented.
+        # This is usually the result of calling `frame.insert` many times, which has poor performance.
+        # Consider joining all columns at once using pd.concat(axis=1) instead. To get a de-fragmented frame, use `newframe = frame.copy()`
+        # https://stackoverflow.com/questions/68292862/performancewarning-dataframe-is-highly-fragmented-this-is-usually-the-result-o
+        from warnings import simplefilter
+        simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+
         # get overall angle for each task
         for f in feature_list:
             if not isinstance(f, str):
@@ -7626,7 +8045,7 @@ class Dataset(object):
         print("=========================================")
         print("BEH (taskstroke inds): ", self.grammarparses_extract_beh_taskstroke_inds(ind))
 
-        tokens = self.taskclass_tokens_extract_wrapper(ind, which_order="beh")
+        tokens = self.taskclass_tokens_extract_wrapper(ind, which_order="beh_using_task_data")
         if "chunk_rank" in tokens[0].keys():
             print("=========================================")
             print("chunk_rank:", [(t["chunk_rank"]) for t in tokens])
@@ -7730,7 +8149,7 @@ class Dataset(object):
         """
         # SANIYT CHECKS
         # self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch", plot=True, return_as_tokensclass=True)
-        tok = self.taskclass_tokens_extract_wrapper(ind, "beh", return_as_tokensclass=False)
+        tok = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=False)
 
         self.grammarparses_print_plot_summarize(ind)
         print(" ")
@@ -7759,7 +8178,7 @@ class Dataset(object):
         rs = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["rulestring"]
         
         beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
-        tmp = self.taskclass_tokens_extract_wrapper(ind, which_order="beh")
+        tmp = self.taskclass_tokens_extract_wrapper(ind, which_order="beh_using_task_data")
         assert len(beh)==len(tmp), "beh_firsttouch doesnt exist beh. cannot do assignment."
 
         try:
@@ -7778,7 +8197,7 @@ class Dataset(object):
         
         # based on this hier, assign chunks ids to each stroke
         PLOT = False
-        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh", plot=PLOT, return_as_tokensclass=True)
+        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", plot=PLOT, return_as_tokensclass=True)
         return Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
         # chunks, chunks_within = Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
         # print(ind, epoch, beh, C.Hier, Tk.chunks_update_by_chunksobject(C))
@@ -8606,7 +9025,7 @@ class Dataset(object):
         taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
         if ploton:
             Beh = self.Dat.iloc[ind]["BehClass"]
-            datsegs = self.taskclass_tokens_extract_wrapper(ind, "beh", plot=False)
+            datsegs = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", plot=False)
             # Beh.alignsim_extract_datsegs()
             # # datsegs = Beh.Alignsim_Datsegs
             for x in datsegs:
@@ -8641,6 +9060,57 @@ class Dataset(object):
 
 
     #################
+    # def seqcontext_replace_gridloc_with_recomputed_loc_chars(self):
+    #     """
+    #     BEcuase for "character" task_kind the gridloc is not defined, here
+    #     replace gridloc in seqc variables with the recomputed gridloc based
+    #     on stroke onset, binned within chars only.
+    #     Does this only for seqc_{i}_loc variables.
+    #     Copies seqc_{i}_locon_bin_in_loc --> seqc_{i}_loc
+    #
+    #     And finally regenerates shape x loc variables.
+    #
+    #     :return: modify self.Dat
+    #     """
+    #     from pythonlib.tools.pandastools import append_col_with_grp_index
+    #
+    #     assert False, "this is garvbage. should modify Tokens"
+    #
+    #     # BASE = 10
+    #     n_strokes = self.seqcontext_count_n_strokes()
+    #     # For all tokens, if is char, replace gridloc with gridloc_within
+    #     inds = self.Dat["task_kind"]=="character"
+    #     for n in range(n_strokes):
+    #         if False: # This kept failing..,.
+    #             # add 10, so that doesnt get confused with original gridloc
+    #             # (i.e., these are different coordinate systems)
+    #             tmp = np.stack(self.Dat.loc[inds, f"seqc_{n}_locon_bin_in_loc"])+BASE
+    #             # D.Dat.loc[inds, f"seqc_{n}_loc"] = pd.Series([tuple(x) for x in tmp.tolist()])
+    #             self.Dat.loc[inds, f"seqc_{n}_loc"] = [tuple(x) for x in tmp.tolist()]
+    #         else:
+    #             self.Dat.loc[inds, f"seqc_{n}_loc"] = self.Dat.loc[inds, f"seqc_{n}_locon_bin_in_loc"]
+    #
+    #     # Regenerate shape-loc variables, now that loc is updated.
+    #     for n in range(n_strokes):
+    #         self.Dat = append_col_with_grp_index(self.Dat, [f"seqc_{n}_shape", f"seqc_{n}_loc"], f"seqc_{n}_shapeloc")
+    #         self.Dat = append_col_with_grp_index(self.Dat, [f"seqc_{n}_shape", f"seqc_{n}_loc"], f"seqc_{n}_loc_shape")
+
+    def seqcontext_count_n_strokes(self):
+        """
+        Count n strokes exist as columns in self.Dat with names like
+        "seqc_2_shape".
+        E.g., If "seqc_2_shape" exists but "seqc_3_shape" does not,
+        then returns 3.
+        Returns 0 if no columns exist at all.
+        :return: n_strokes, int.
+        """
+        n_strokes = 0
+        for i in range(100):
+            if f"seqc_{i}_shape" in self.Dat.columns:
+                n_strokes = i+1
+            else:
+                return n_strokes
+        assert False
 
     def seqcontext_plot_examples_and_print_context(self, nexamples=10, nstrokes_max=5):
         """ Quick ehlper to plot n trials, and also print their sequence context
@@ -8661,18 +9131,18 @@ class Dataset(object):
         RETURNS:
             - shapes, tuple of strings.
         """
-        shapes = tuple([tok["shape"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh")])
+        shapes = tuple([tok["shape"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")])
         assert len(shapes) == len(self.Dat.iloc[ind]["strokes_beh"])
         return shapes
 
-    def seqcontext_preprocess(self):
+    def seqcontext_preprocess(self, plot_examples=False, force_run=False):
         """ Extract new columns into self.Dat, for each trial noting sequence 
         context inforamtion ,such as n strokes, shape of first stroke, etc
         """
 
-        if "seqc_0_shape" not in self.Dat.columns:
+        if "seqc_0_shape" not in self.Dat.columns or force_run:
             from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
-            preprocess_dataset(self)
+            preprocess_dataset(self, plot_examples=plot_examples)
 
             # also extract gridsize
             list_gridsize = []
@@ -9325,6 +9795,35 @@ class Dataset(object):
         else:
             return fig
         # return idxs
+
+    def strokes_onsets_offsets_location(self, ind):
+        """
+        Return the coordinates of onset and offset of beh strokes.
+        :param ind:
+        :return: onlocs, list of np (2,) arrays (x,y) pixel lcoation of each strok onset
+        :return: offlocs, list of np (2,) arrays (x,y) pixel lcoation of each strok offset
+        """
+        strokes = self.Dat.iloc[ind]["strokes_beh"]
+        onlocs = [s[0, :2] for s in strokes]
+        offlocs = [s[-1, :2] for s in strokes]
+        return onlocs, offlocs
+
+    def strokes_onsets_offsets_location_append(self):
+        """
+        Append "stroke_on_locs" and "stroke_off_locs",
+        each row a tuple, len n strokes, holding
+        onset or offset location, as (2,) arrays
+        :return:
+        """
+        list_on = []
+        list_off = []
+        for ind in range(len(self.Dat)):
+            onlocs, offlocs = self.strokes_onsets_offsets_location(ind)
+            list_on.append(tuple(onlocs))
+            list_off.append(tuple(offlocs))
+        self.Dat["stroke_on_locs"] = list_on
+        self.Dat["stroke_off_locs"] = list_off
+
 
     def strokes_onsets_offsets(self, ind):
         """

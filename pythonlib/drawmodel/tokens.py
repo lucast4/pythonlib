@@ -4,31 +4,103 @@ Can be used for either beh or task ordered tokens
 
 import numpy as np
 
-def shape_string_convert_to_components(shape_str):
-    """
-    "arcdeep-4-1-0" --> ('arcdeep', '4', '1', '0')
-    NOTE: sometimes the input shape can have decimels (e..g, Diego, 23/12/04
-    Reason is these are non-standard shapes, e.g., perfblocky, and
-    they are renamed using their actual params. e/g.,.
-    V-83-5.8-0. They do end up being categorical tbhough, so
-    is fine to use them as is.
-    """
-    if shape_str=="IGN" or shape_str is None:
-        # this shape will be ignored in other code, so is ok.
-        return "IGN", -1, -1, -1
+# (1) Get database for each aniaml
+# from pythonlib.dataset.dataset_strokes import DatStrokes
+# DS = DatStrokes()
+# # For each, convert to semantic
+# map_shape_to_shapesemantic_Diego = DS.shapesemantic_stroke_shape_cluster_database(which_basis_set="Diego")
+# map_shape_to_shapesemantic_Pancho = DS.shapesemantic_stroke_shape_cluster_database(which_basis_set="Pancho")
 
-    from pythonlib.tools.expttools import deconstruct_filename
-    tmp = deconstruct_filename(shape_str)
-    if len(tmp["filename_components_hyphened"])<4:
-        print(shape_str)
-        print(tmp)
-        assert False, "bug upstream?"
-    else:
-        shape_abstract = tmp["filename_components_hyphened"][0]
-        scale = tmp["filename_components_hyphened"][1]
-        rotation = tmp["filename_components_hyphened"][2]
-        reflect = tmp["filename_components_hyphened"][3]
-        return shape_abstract, scale, rotation, reflect
+# map_shape_to_shapesemantic_Diego = {
+#     'Lcentered-4-2-0': 'Lcentered-DL-DL',
+#      'Lcentered-4-3-0': 'Lcentered-DR-DR',
+#      'Lcentered-4-4-0': 'Lcentered-UR-UR',
+#      'V-2-1-0': 'V-LL-LL',
+#      'V-2-2-0': 'V-DD-DD',
+#      'V-2-4-0': 'V-UU-UU',
+#      'arcdeep-4-1-0': 'arcdeep-LL-LL',
+#      'arcdeep-4-2-0': 'arcdeep-DD-DD',
+#      'arcdeep-4-4-0': 'arcdeep-UU-UU',
+#      'circle-6-1-0': 'circle-XX-XX',
+#      'line-8-1-0': 'line-LL-LL',
+#      'line-8-2-0': 'line-UU-UU',
+#      'line-8-3-0': 'line-UR-UR',
+#      'line-8-4-0': 'line-UL-UL',
+#      'squiggle3-3-1-0': 'squiggle3-LL-0.0',
+#      'squiggle3-3-2-0': 'squiggle3-LL-1.0',
+#      'squiggle3-3-2-1': 'squiggle3-LL-0.0'}
+
+# map_shape_to_shapesemantic_Pancho = {
+#     'Lcentered-4-1-0': 'Lcentered-UL-UL',
+#      'Lcentered-4-2-0': 'Lcentered-DL-DL',
+#      'Lcentered-4-3-0': 'Lcentered-DR-DR',
+#      'Lcentered-4-4-0': 'Lcentered-UR-UR',
+#      'V-2-2-0': 'V-DD-DD',
+#      'V-2-3-0': 'V-RR-RR',
+#      'V-2-4-0': 'V-UU-UU',
+#      'arcdeep-4-2-0': 'arcdeep-DD-DD',
+#      'arcdeep-4-3-0': 'arcdeep-RR-RR',
+#      'arcdeep-4-4-0': 'arcdeep-UU-UU',
+#      'circle-6-1-0': 'circle-XX-XX',
+#      'line-8-1-0': 'line-LL-LL',
+#      'line-8-2-0': 'line-UU-UU',
+#      'line-8-3-0': 'line-UR-UR',
+#      'line-8-4-0': 'line-UL-UL',
+#      'squiggle3-3-1-0': 'squiggle3-LL-0.0',
+#      'squiggle3-3-1-1': 'squiggle3-UU-0.0',
+#      'squiggle3-3-2-0': 'squiggle3-LL-1.0',
+#      'squiggle3-3-2-1': 'squiggle3-LL-0.0',
+#      'usquare-1-2-0': 'usquare-DD-DD',
+#      'usquare-1-3-0': 'usquare-RR-RR',
+#      'usquare-1-4-0': 'usquare-UU-UU',
+#      'zigzagSq-1-1-0': 'zigzagSq-LL-1.0',
+#      'zigzagSq-1-1-1': 'zigzagSq-LL-0.0',
+#      'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
+#      'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
+
+# for k, v in map_shape_to_shapesemantic_Diego.items():
+#     if k in map_shape_to_shapesemantic_Pancho:
+#         assert v==map_shape_to_shapesemantic_Pancho[k]
+
+# MAP_SHAPE_TO_SHAPESEMANTIC = {}
+# for map_each_animal in [map_shape_to_shapesemantic_Diego, map_shape_to_shapesemantic_Pancho]:
+#     for k, v in map_each_animal.items():
+#         if k not in MAP_SHAPE_TO_SHAPESEMANTIC:
+#             MAP_SHAPE_TO_SHAPESEMANTIC[k] = v
+#         else:
+#             assert v==MAP_SHAPE_TO_SHAPESEMANTIC[k]
+
+# HACKY -- use the above code to generate this...
+MAP_SHAPE_TO_SHAPESEMANTIC = {
+    'Lcentered-4-2-0': 'Lcentered-DL-DL',
+    'Lcentered-4-3-0': 'Lcentered-DR-DR',
+    'Lcentered-4-4-0': 'Lcentered-UR-UR',
+    'V-2-1-0': 'V-LL-LL',
+    'V-2-2-0': 'V-DD-DD',
+    'V-2-4-0': 'V-UU-UU',
+    'arcdeep-4-1-0': 'arcdeep-LL-LL',
+    'arcdeep-4-2-0': 'arcdeep-DD-DD',
+    'arcdeep-4-4-0': 'arcdeep-UU-UU',
+    'circle-6-1-0': 'circle-XX-XX',
+    'line-8-1-0': 'line-LL-LL',
+    'line-8-2-0': 'line-UU-UU',
+    'line-8-3-0': 'line-UR-UR',
+    'line-8-4-0': 'line-UL-UL',
+    'squiggle3-3-1-0': 'squiggle3-LL-0.0',
+    'squiggle3-3-2-0': 'squiggle3-LL-1.0',
+    'squiggle3-3-2-1': 'squiggle3-LL-0.0',
+    'Lcentered-4-1-0': 'Lcentered-UL-UL',
+    'V-2-3-0': 'V-RR-RR',
+    'arcdeep-4-3-0': 'arcdeep-RR-RR',
+    'squiggle3-3-1-1': 'squiggle3-UU-0.0',
+    'usquare-1-2-0': 'usquare-DD-DD',
+    'usquare-1-3-0': 'usquare-RR-RR',
+    'usquare-1-4-0': 'usquare-UU-UU',
+    'zigzagSq-1-1-0': 'zigzagSq-LL-1.0',
+    'zigzagSq-1-1-1': 'zigzagSq-LL-0.0',
+    'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
+    'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
+
 
 def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None,
                              reclassify_shape_using_stroke=False):
@@ -53,25 +125,26 @@ def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None
     RETURNS:
     - datsegs, list of dicts, each a token.
     """
-    from pythonlib.primitives.primitiveclass import PrimitiveClass
+    from pythonlib.primitives.primitiveclass import PrimitiveClass, generate_primitiveclass_from_raw
 
     ############ PREPARE DATA
     # Convert to Primitives, since the rest of code requires that.
     assert len(strokes)==len(shapes)
     Prims = []
     for traj, sh in zip(strokes, shapes):
-        shape_abstract, scale, rotation, reflect = shape_string_convert_to_components(sh)
-        P = PrimitiveClass()
-        try:
-            P.input_prim("prototype_prim_abstract", {
-                "shape":shape_abstract,
-                "scale":scale,
-                "rotation":rotation,
-                "reflect":reflect},
-                traj = traj)
-        except Exception as err:
-            print(sh, shape_abstract, scale, rotation, reflect)
-            assert False
+        P = generate_primitiveclass_from_raw(traj, sh)
+        # shape_abstract, scale, rotation, reflect = shape_string_convert_to_components(sh)
+        # P = PrimitiveClass()
+        # try:
+        #     P.input_prim("prototype_prim_abstract", {
+        #         "shape":shape_abstract,
+        #         "scale":scale,
+        #         "rotation":rotation,
+        #         "reflect":reflect},
+        #         traj = traj)
+        # except Exception as err:
+        #     print(sh, shape_abstract, scale, rotation, reflect)
+        #     assert False
         Prims.append(P)
 
     inds_taskstrokes = list(range(len(Prims)))
@@ -148,6 +221,11 @@ class Tokens(object):
         PARAMS:
         - version, string, e.g, "beh" or "task"
         """
+
+        assert isinstance(tokens, (list, tuple))
+
+        if len(tokens)>0:
+            assert isinstance(tokens[0], dict)
 
         if version is not None:
             assert version in ["beh", "task"]
@@ -471,6 +549,52 @@ class Tokens(object):
         for i, tok in enumerate(self.Tokens):
             print("--- token: ", i)
             print(tok)
+
+    ########################### FEATURES
+    def features_extract_wrapper(self, features_get = None, shape_semantic_regenerate_from_stroke=False):
+        """
+        WRapper to generate features for each token,
+        which are appended to tokens. Where
+        features is flexible -- semantic, motor, image, etc.
+        Goal is to consoldiate all methods for doing so into here.
+        Methods may be from:
+            taskgeneral, taskmodel, prim, stroketools, features, ds
+        :return: Addpends to self.Tokens
+        NOTE: THis is the ONLY place shape_semantic is computed
+        """
+        from pythonlib.tools.stroketools import angle_of_stroke_segment
+        from pythonlib.tools.expttools import deconstruct_filename
+
+        if features_get is None:
+            features_get = ["shape_semantic", "loc_on", "angle"]
+
+        for tok in self.Tokens:
+            strok = tok["Prim"].Stroke()
+            for feature in features_get:
+                if feature=="shape_semantic":
+                    if shape_semantic_regenerate_from_stroke:
+                        # Then force rgenerate from raw stroke
+                        tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                    else:
+                        # First, try to get mapping between shap string and semantic.
+                        if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
+                            tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
+                        else:
+                            # If that fails, then try to compute it. But this will often fail for CHAR, since
+                            # these strokes are not task-strokes, so are irregular.
+                            tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+
+                    tmp = deconstruct_filename(tok["shape_semantic"])
+                    tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
+
+                elif feature=="loc_on":
+                    tok["loc_on"] = strok[0,:2]
+                elif feature=="angle":
+                    # angle of onset.
+                    tok["angle"] = angle_of_stroke_segment([strok], twind=[0, 0.2])[0]
+                else:
+                    print(feature)
+                    assert False, "code it"
 
 
 

@@ -90,7 +90,7 @@ def mergeOnIndex(df1, df2):
         right_index=True, how='outer', validate='one_to_one')
     return dfout
 
-def merge_subset_indices_prioritizing_second(df_old, df_new, index_col):
+def merge_subset_indices_prioritizing_second(df_old, df_new, index_col=None):
     """
     Merge two dataframes, prioritizing df_new.
     Takes dataframes that have overlapping indices (in column, index_col),
@@ -101,13 +101,15 @@ def merge_subset_indices_prioritizing_second(df_old, df_new, index_col):
 
     :param df_old: The older DataFrame to merge
     :param df_new: The newer DataFrame whose values are prioritized
-    :param index_col: The column name to use as the index for merging
+    :param index_col: The column name to use as the index for merging. None means use df.index
     :return: Merged DataFrame with prioritization for df_new
     """
 
-    # Ensure the index_col is the index for both DataFrames
-    df_old.set_index(index_col, inplace=True, drop=False)
-    df_new.set_index(index_col, inplace=True, drop=False)
+    if index_col is not None:
+        # Then reset the index to this clumns values
+        # Ensure the index_col is the index for both DataFrames
+        df_old.set_index(index_col, inplace=True, drop=False)
+        df_new.set_index(index_col, inplace=True, drop=False)
 
     # Combine DataFrames, prioritizing df_new
     merged_df = df_new.combine_first(df_old)
@@ -395,6 +397,52 @@ def getCount(df, group, colname):
 
     return df.groupby(group)[colname].count().reset_index()
 
+
+def bin_values_conditioned_on_class(df, var_bin, vars_condition, nbins,
+                                    var_bin_ndim=1, new_col_name=None):
+    """
+    Bin values in <var_bin> running separtely for each class of the careogtical
+    varaible <vars_condition>, and appending to a new column.
+    e..g, vcc is shape, and vb is location..., then bin indepently for each shape.
+    :param df:
+    :param var_bin: str, name of variable to bin
+    :param vars_condition: list of str.
+    :param nbins: int, how mnay bins
+    :param var_bin_ndim: 1 or 2, n dimensions. if 2, then bins each (x,y) dimenisions indepdenly. (--> tuple of ints).
+    :param new_col_name: str to name new column, or None, in which case uses <var_bin>_binned
+    :return: df copied, and with new column of binned values.
+    """
+    from pythonlib.tools.nptools import bin_values
+
+    if new_col_name is None:
+        new_col_name = f"{var_bin}_binned"
+
+    # Define a function to apply binning to each group
+    if var_bin_ndim==1:
+        def bin_values_helper(group):
+            # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
+            group[new_col_name] = bin_values(group[var_bin], nbins=nbins)
+            return group
+    elif var_bin_ndim==2:
+        def bin_values_helper(group):
+            # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
+
+            values = np.stack(group[var_bin].tolist(), axis=0)
+            assert values.shape[0]==len(group)
+            assert values.shape[1]==2
+
+            xs_binned = bin_values(values[:,0], nbins=nbins)
+            ys_binned = bin_values(values[:,1], nbins=nbins)
+            # Convert to list of 2-tuples
+            values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)]
+
+            group[new_col_name] = values_binned
+            return group
+
+    # Apply binning separately for each class of B
+    binned_df = df.groupby(vars_condition).apply(bin_values_helper)
+
+    return binned_df
 
 def binColumn(df, col_to_bin, nbins, bin_ver = "percentile"):
     """ bin values from a column, assign to a new column.
@@ -2531,10 +2579,14 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
             fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
                 vars_others=None)
         savefig(fig, plot_counts_heatmap_savepath)
+
+    # Finalyl, extract each sub df
+    dict_dfthis = {} # level:df
     if len(dfout)>0:
-        dict_dfthis = {} # level:df
         for lev in levels_others:
-            dict_dfthis[lev] = dfout[dfout["vars_others"] == lev].copy()
+            dfthis = dfout[dfout["vars_others"] == lev]
+            if len(dfthis)>0:
+                dict_dfthis[lev] = dfthis.copy()
 
     return dfout, dict_dfthis
 

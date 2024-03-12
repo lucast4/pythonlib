@@ -8,6 +8,61 @@ into a single new stroke)
 
 import numpy as np
 
+def shape_string_convert_to_components(shape_str):
+    """
+    Decompose shape string..
+    "arcdeep-4-1-0" --> ('arcdeep', '4', '1', '0')
+    NOTE: sometimes the input shape can have decimels (e..g, Diego, 23/12/04
+    Reason is these are non-standard shapes, e.g., perfblocky, and
+    they are renamed using their actual params. e/g.,.
+    V-83-5.8-0. They do end up being categorical tbhough, so
+    is fine to use them as is.
+    """
+    if shape_str=="IGN" or shape_str is None:
+        # this shape will be ignored in other code, so is ok.
+        return "IGN", -1, -1, -1
+
+    from pythonlib.tools.expttools import deconstruct_filename
+    tmp = deconstruct_filename(shape_str)
+    if len(tmp["filename_components_hyphened"])<4:
+        print(shape_str)
+        print(tmp)
+        assert False, "bug upstream?"
+    else:
+        shape_abstract = tmp["filename_components_hyphened"][0]
+        scale = tmp["filename_components_hyphened"][1]
+        rotation = tmp["filename_components_hyphened"][2]
+        reflect = tmp["filename_components_hyphened"][3]
+        return shape_abstract, scale, rotation, reflect
+
+def generate_primitiveclass_from_raw(traj, shape_string):
+    """
+    Helper to generate a P from input raw data
+    :param traj:
+    :param shape_string: something like Lcentered-4-2-0
+    :return:
+    """
+    assert shape_string is not None, "this leads to confusions later (calling it IGN). give it a name."
+
+    if shape_string is not None:
+        shape_abstract, scale, rotation, reflect = shape_string_convert_to_components(shape_string)
+    else:
+        shape_abstract, scale, rotation, reflect = None, None, None, None
+    P = PrimitiveClass()
+    try:
+        P.input_prim("prototype_prim_abstract", {
+            "shape":shape_abstract,
+            "scale":scale,
+            "rotation":rotation,
+            "reflect":reflect},
+            traj = traj)
+    except Exception as err:
+        print(traj.shape)
+        print(shape_string, shape_abstract, scale, rotation, reflect)
+        assert False
+    return P
+
+
 class PrimitiveClass(object):
     """
     """
@@ -221,10 +276,9 @@ class PrimitiveClass(object):
         }
         return features
 
-
     def label_classify_prim_using_stroke_semantic(self, return_as_string=True):
         """ Helper to return just the 3 features that define each shape, instead of 4,
-        i.e,, exclude scale. as string or 3-tuple
+        i.e,, exclude scale. as string or 3-tuple (including the shape string).
         """
         return self.label_classify_prim_using_stroke(return_as_string=return_as_string, version="semantic", exclude_scale=True)
 
@@ -236,6 +290,8 @@ class PrimitiveClass(object):
         becuase somtimes you have extra transfomrs that chagne how this
         is actually angled, etc. Here solves this problem by replacing the
         scale and angle with actual measured, based on stroke.'
+        PARAMS:
+        - exclude_scale, if True, then returns 3 items, else 4.
         RETURNS:
             - label, tuple that uniquely ids this prim, (sh, scale, angle to on, angle to off)
             e.g., ('line', 60.0, 1.57, 4.71)
@@ -299,12 +355,15 @@ class PrimitiveClass(object):
 
         # return as tuple
         if version=="default":
+            # Use the actual numerical values to label this shape.
             shcat = features["shape_cat"]
             scale = features["scale"]
             angle1 = features["angle_midpt_to_onset"]
             angle2 = features["angle_midpt_to_offset"]
             label = (shcat, scale, angle1, angle2)
         elif version=="semantic":
+            # Map from stroke properties --> a semantic label.
+            # assert False, "first check if this label is in strokes database.. if so, then use that."
             shcat = features["shape_cat"]
             scale = features["scale"]
             # scale = "X" # ignore

@@ -947,3 +947,86 @@ def plotSketchpad(spad, ax):
     X = spad
     ax.hlines(X[1,:], X[0,0], X[0,1], color="k", alpha=0.3)
     ax.vlines(X[0,:], X[1,0], X[1,1], color="k", alpha=0.3)
+
+def overlay_stroke_on_plot_mult_rand(strokes, xs, ys, ax, nrand=10, align_to="onset", color=None):
+    """
+    Helper to overlay multipel small icons of strokes on a single axis, sampling random ones if needed.
+    E,g,m to overlay on a scatterplot the strokes associated with each datapt.
+    :param strokes:
+    :param xs:
+    :param ys:
+    :param nrand:
+    :param align_to:
+    :param color:
+    :return:
+    """
+    import random
+
+    assert len(strokes)==len(xs)==len(ys)
+
+    inds = range(len(strokes))
+
+    if len(inds)>nrand:
+        inds = random.sample(inds, nrand)
+
+    for i in inds:
+        strok = strokes[i][:, :2]
+        # times = strokes[i][:, 2]
+        x = xs[i]
+        y = ys[i]
+        overlay_stroke_on_plot(strok, x, y, ax, align_to=align_to, color=color)
+
+
+def overlay_stroke_on_plot(strok, x, y, ax, SIZE = 0.04, align_to="onset", color=None,
+                           alpha=0.5):
+    """
+    Overlay a strok onto a plot, scaling, shearing, to fit aspect ratio and size of plot,
+    and aligning to onset of a pt. Useful for showing example drawings or task for
+    indiv datapts.
+    PARAMS:
+    - strok, np array, (:, 3)
+    - x, y, coor to plot
+    - SIZE, frac of screen to make the size of the strok.
+    - align_to, str, whether to align strok to pt by strok's onset or center
+    """
+
+    if color is None:
+        color="k"
+    from pythonlib.tools.stroketools import strokes_bounding_box_dimensions
+    # Get dimensions of figure, so can correctly scale stroke
+    XLIM = ax.get_xlim()
+    YLIM = ax.get_ylim()
+    xdiff = XLIM[1] - XLIM[0]
+    ydiff = YLIM[1] - YLIM[0]
+    d_ax = (xdiff**2 + ydiff**2)**0.5
+
+    # Decide if align at onset (beh) or center (task)
+    from pythonlib.tools.stroketools import strokes_alignonset, strokes_centerize
+    import matplotlib.pyplot as plt
+    if align_to == "onset":
+        strok = strokes_alignonset([strok])[0]
+    elif align_to == "center":
+        strok = strokes_centerize([strok])[0]
+    elif align_to is None:
+        pass
+    else:
+        print(align_to)
+        assert False
+
+    # Rescale stroke
+    w, h, d = strokes_bounding_box_dimensions([strok])
+    rescale = SIZE * d_ax/d
+    aspect = [1, ydiff/xdiff]
+    strok = strok * rescale # rescale to page
+    strok = strok * aspect # to make sure strok aspect is visually accurate
+    strok[:,0] += x
+    strok[:,1] += y # move to location
+    # strok = strok + np.array([x,y])
+
+    # Plot
+    ax.plot(strok[:,0], strok[:,1], '-', alpha=alpha, color=color)
+    # ax.scatter(strok[:,0], strok[:,1], c=times)
+    # if align_to=="onset":
+    ax.plot(x, y, 'o', mfc="none", alpha=0.3, color=color)
+
+

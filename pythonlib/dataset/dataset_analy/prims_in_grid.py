@@ -265,7 +265,7 @@ def plot_abort_cause(D, DS, SAVEDIR, abort_or_success="abort"):
 
     res = []
     for ind in inds_abort:
-        tokens = D.taskclass_tokens_extract_wrapper(ind, "beh")
+        tokens = D.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
         if len(tokens)>0:
             if abort_or_success=="abort":
                 # Only take the last index

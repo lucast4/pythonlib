@@ -1878,7 +1878,34 @@ def insert_strok_into_strokes_to_maximize_alignment(strokes_template, strokes_mo
         strokes_mod.insert(slot, traj)
     return slot
 
-def sliceStrokes(strokes, twind, retain_n_strokes=False):
+def angle_of_stroke_segment(strokes, twind=[0, 0.2]):
+    """
+    REturn angles, one for each strok in strokes, for segments
+    sliced using twind.
+    :param strokes:
+    :param twind: [t1, t2], in sec, relative to strok onset
+    :return: angles, lsit of angles same len as strokes
+    """
+    from pythonlib.tools.vectools import get_angle
+
+    tdiff = strokes[0][1,2] - strokes[0][0,2]
+    if tdiff>=1:
+        print("did you enter task strokes?")
+        print(strokes)
+        assert False
+
+    strokes_sliced = sliceStrokes(strokes, twind, time_is_relative_each_onset=True)
+
+    # Angle from on to off of stroke sequemnt
+    angles = []
+    for strok in strokes_sliced:
+        v = strok[-1,:2] - strok[0, :2]
+        angles.append(get_angle(v))
+
+    return angles
+
+def sliceStrokes(strokes, twind, retain_n_strokes=False,
+                 time_is_relative_each_onset=False):
     """ Get a time slice of strokes, returned in strokes format.
     PARAMS:
     - [IGNORE] list_twind, list of twinds, where keeps pts that are within any of the 
@@ -1893,6 +1920,10 @@ def sliceStrokes(strokes, twind, retain_n_strokes=False):
     - strokes_out
     """
 
+    if time_is_relative_each_onset:
+        strokes = [strok.copy() for strok in strokes]
+        for s in strokes:
+            s[:,2] = s[:,2] - s[0,2]
 
     def _slice(traj):
         assert traj.shape[1]>=2, "you dont have a time column..."

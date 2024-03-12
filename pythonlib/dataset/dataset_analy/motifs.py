@@ -572,7 +572,7 @@ def generate_dict_of_all_used_motifs(D, nprims=2,
     list of indices, where and index is (trial, starting strokenum)
     """
 
-    assert WHICH_DATSEGS in {"beh", "beh_firsttouch"}, "these are the only ones that make sens..."
+    assert WHICH_DATSEGS in {"beh_using_task_data", "beh_firsttouch"}, "these are the only ones that make sens..."
     # assert WHICH_DATSEGS == "beh", "this is the only one that maintains mappign between stroke indices across all dat. if use beh_firsttouch, plots will be weird."
 
     if variables_keep is None:

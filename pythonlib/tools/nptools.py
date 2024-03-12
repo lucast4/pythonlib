@@ -29,7 +29,8 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
     - nbins, num bbins.
     - epsilon, scalar, small number to pad, to make sure get all values.
     RETIURNS:
-    - array, (n,), will be same type as input, not int, becuase is theres nan then it must be float arary.
+    - list of ints (len n).
+    - [OLD]array, (n,), will be same type as input, not int, becuase is theres nan then it must be float arary.
 
     # DBUG CODE:
         x = np.array([1,2,3,4, np.nan, 2, 0, -2, 5])
@@ -56,7 +57,7 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
             valmax = np.max(vals)
 
         bins = np.linspace(valmin-epsilon, valmax+epsilon, nbins+1)
-        vals_binned = np.array([np.digitize(v, bins) for v in vals], dtype=np.int_)
+        vals_binned = np.array([np.digitize(v, bins) for v in vals], dtype=np.int_).astype(int)
 
         # print(vals_binned)
         if assert_all_vals_within_bins:
@@ -80,6 +81,9 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
         raise err
     vals_out = vals_input.copy()
     vals_out[inds] = vals_to_bin_binned
+
+    # make it list of ints
+    vals_out = vals_out.astype(int).tolist()
 
     return vals_out
 
