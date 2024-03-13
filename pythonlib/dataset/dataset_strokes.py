@@ -37,6 +37,11 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
 
     if version=="all_no_clean":
         DS = DatStrokes(D)
+    elif version =="all_no_abort_superv":
+        # get all data, doing prepocess only to remove supervision and online aborrt.
+        # e.g., for novel single prims..
+        D.preprocessGood(params=["no_supervision", "remove_online_abort"])
+        DS = DatStrokes(D)
 
     elif version=="singleprim":
         # Super clean
@@ -425,11 +430,14 @@ class DatStrokes(object):
                 # By using taskclass_tokens_extract_wrapper, this allows optionally NOT using BehClass (e.g., for char),
                 # based on the state of D.
                 strokes = [StrokeClass(s) for s in strokes_beh]
-                datsegs = D.taskclass_tokens_extract_wrapper(ind, "beh")
+                datsegs_beh = D.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data")
+                assert datsegs_beh[0] is not None
+                datsegs_task = D.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
                 # strokes = primlist
                 # datsegs = datsegs_behlength
                 out_combined = (None for _ in range(len(strokes)))
             elif version=="task":
+                assert False, "only doing beh now, since the onset strokes etc should all make sense as variables (ie realted to beh not to taskstroke)."
                 # 1) get each beh stroke, both continuous and discrete represntations.
                 primlist, datsegs_behlength, datsegs_tasklength, out_combined = D.behclass_extract_beh_and_task(ind)
                 strokes = [dat[2]["Prim"].Stroke for dat in out_combined] # list of PrimitiveClass
@@ -443,15 +451,15 @@ class DatStrokes(object):
             try:
                 if tokens_get_relations:
                     # get this ind's sequence context
-                    Tk = Tokens(datsegs)
+                    Tk = Tokens(datsegs_task)
                     Tk.sequence_context_relations_calc()
-                    datsegs = Tk.Tokens
+                    datsegs_task = Tk.Tokens
             except Exception as err:
                 # fig, ax = plt.subplots()
                 # self.plot_single_overlay_entire_trial(ind, ax=ax, overlay_beh_or_task="beh", SIZE=2)
                 # fig, ax = plt.subplots()
                 # self.plot_single_overlay_entire_trial(ind, ax=ax, overlay_beh_or_task="task", SIZE=2)
-                for tok in datsegs:
+                for tok in datsegs_task:
                     print(tok)
                 print(ind)
                 print(D.Dat.iloc[ind])
@@ -466,9 +474,10 @@ class DatStrokes(object):
                 for column, list_values in columns_to_append.items():
                     assert len(list_values[ind])==len_strokes
 
-            for i, (stroke, dseg, comb) in enumerate(zip(strokes, datsegs, out_combined)):
+            for i, (stroke, dseg_beh, dseg, comb) in enumerate(zip(strokes, datsegs_beh, datsegs_task, out_combined)):
                 DAT_BEHPRIMS.append({
                     'Stroke':stroke,
+                    'datseg_beh':dseg_beh,
                     'datseg':dseg})
                 
                 # get features for this stroke
@@ -515,7 +524,8 @@ class DatStrokes(object):
                             DAT["gridloc_x"] = v[0]
                             DAT["gridloc_y"] = v[1]
                         else:
-                            assert (v==("IGN", "IGN")) or (v is None), "for not on grid, how are there gridlocs? this assumption is wrong?"
+                            # Skip this assertion, since could hve replaced gridloc wuith loc_within_gridlo (fgor char).
+                            # assert (v==("IGN", "IGN")) or (v is None), "for not on grid, how are there gridlocs? this assumption is wrong?"
                             DAT["gridloc_x"] = None
                             DAT["gridloc_y"] = None
 
@@ -1091,6 +1101,37 @@ class DatStrokes(object):
             print(version)
             assert False
         return strokes
+
+    ###################### TOKENS
+    def tokens_append(self, ver="beh_using_task_data"):
+        """
+        Append a new column in self.Dat, holding toklens, which will
+        be a single token (stroke), using either stroke for beh or for
+        task
+        :param ver: str, either "task" or "beh".
+        -- task: uses task stroke that best fits this beh.
+        -- "beh": uses beh stroke.
+        :return:
+        """
+        from pythonlib.drawmodel.tokens import Tokens
+
+        tokens = []
+        for ind in range(len(self.Dat)):
+            # convert datseg to Tokens
+            if ver=="beh_using_task_data":
+                dseg = self.Dat.iloc[ind]["datseg"]
+            elif ver=="beh_using_beh_data":
+                dseg = self.Dat.iloc[ind]["datseg_beh"]
+            else:
+                print(ver)
+                assert False
+            tokens.append(Tokens([dseg]))
+
+        if ver=="beh_using_task_data":
+            self.Dat["TokTask"] = tokens
+        else:
+            self.Dat["TokBeh"] = tokens
+
 
     ###################### RELATED to original dataset
     def _dataset_find_trialcodes_incomplete_data(self, D=None):
@@ -2187,7 +2228,7 @@ class DatStrokes(object):
     ############################### SEQUENTIAL CONTEXT
     def context_define_local_context_motif(self, n_pre=1, n_post=1, version="strokes"):
         """ Give this stroek a value that represents its context, which is
-        conjunction of pre and post strokes.
+        conjunction of pre and post strokes (behavior).
         PARAMS:
         - n_pre, int, how many strokes preceding this (ind) to take. if not
         this many exist, then the preceding will be given ...
@@ -2234,7 +2275,8 @@ class DatStrokes(object):
 
 
     def context_extract_strokeslength_list(self, ind, column="datseg"):
-        """ A wrapper for extracting the entire trial's data that this stroke (ind) is in
+        """ A wrapper for extracting the entire trial's data that this stroke (ind) is in,
+        using beh.
         PARAMS:
         - ind, index into self.Dat (stroke-level)
         RETURNS:
@@ -2338,43 +2380,74 @@ class DatStrokes(object):
         self.Dat["chunk_n_in_chunk_prev"] = list_chunk_n_in_chunk_prev
 
     ################################ prims/shape, novel, etc
-    def shapesemantic_label_append(self):
+    def shapesemantic_label_and_novel_append(self, PRINT=False):
         """
         Append to self.Dat column "shape_semantic", which is scale-invariant string that is
         the shapeabstract + rotation. e.g, Lzigzag1-UU-1.0'
+        This is based on the bset-matching task stroke from Dataset, and using the
+        label that is saved in Dataset.Dat["shape_semantic_labels"]
         :return:
+        - Appends columns "shape_semantic" and "shape_is_novel"
         """
 
-        assert False, "dont use this, it takes beh stroeks not task strokes"
+        # # First, make sure data exists in Dataset
+        # if "shape_semantic_labels" not in self.Dataset.Dat.columns:
+        #     self.Dataset.shapesemantic_classify_novel_shape()
 
-        labels_data = []
-        for ind in range(len(self.Dat)):
-            P = self.extract_datseg_tokens_this_stroke(ind)["Prim"]
-            label = P.label_classify_prim_using_stroke_semantic()
-            labels_data.append(label)
-        self.Dat["shape_semantic"] = labels_data
+        if True:
+            # For each stroke,find the best-fitting task-stroke, and extract its features.
+            shapes = []
+            for ind in range(len(self.Dat)):
+                # beh token, using task stroke.
+                shsem = self.Dat.iloc[ind]["datseg"]["shape_semantic"]
+                shapes.append(shsem)
 
-    def shapesemantic_stroke_shape_cluster_database(self):
+            # Figure out if each shape is novel
+            map_shape_to_shsem = self.shapesemantic_stroke_shape_cluster_database()
+            labels_learned = list(map_shape_to_shsem.values())
+            novels = [lab not in labels_learned for lab in shapes]
+
+        else:
+            # OLD, "dont use itinnaturruately looks at taskstroke ind, with is bad for chars."
+            shapes = []
+            novels = []
+            for ind in range(len(self.Dat)):
+
+                list_shape_semantic = self.dataset_extract("shape_semantic_labels", ind)
+                list_shape_is_novel = self.dataset_extract("shape_is_novel_list", ind)
+                indstrok = self.Dat.iloc[ind]["ind_taskstroke_orig"]
+
+                shapes.append(list_shape_semantic[indstrok])
+                novels.append(list_shape_is_novel[indstrok])
+
+        self.Dat["shape_semantic"] = shapes
+        self.Dat["shape_is_novel"] = novels
+
+        # Print summary
+        if PRINT:
+            self.print_n_samples_per_combo_grouping(["shape", "shape_semantic", "shape_is_novel"])
+
+    def shapesemantic_stroke_shape_cluster_database(self, which_basis_set=None):
         """
         Get list of learned shapes for this animal, using the strokes database, returning as list of strings
         that are the semantic shape label
         RETURN:
             - map_shape_to_shapesemantic, dict from old shape string to semantic string.
         """
-        from pythonlib.drawmodel.tokens import shape_string_convert_to_components, generate_tokens_from_raw
+        from pythonlib.drawmodel.tokens import generate_tokens_from_raw
 
         # Get basis strokes, semantic strings
         # auto get the base prims for this subset
-        dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper()
+        dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper(which_basis_set=which_basis_set)
         strokes = dfbasis["strok_task"].tolist()
         shapes = dfbasis["shape"].tolist()
         Tk = generate_tokens_from_raw(strokes, shapes)
+        Tk.features_extract_wrapper(["shape_semantic"], shape_semantic_regenerate_from_stroke=True)
 
         map_shape_to_shapesemantic = {}
         for sh, tok in zip(shapes, Tk.Tokens):
             assert sh == tok["shape"]
-            P = tok["Prim"]
-            map_shape_to_shapesemantic[sh] = P.label_classify_prim_using_stroke_semantic()
+            map_shape_to_shapesemantic[sh] = tok["shape_semantic"]
 
         return map_shape_to_shapesemantic
     
@@ -3638,6 +3711,32 @@ class DatStrokes(object):
 
                 fig, axes = DS.plot_multiple_strok(list_strok_task, ver="task", overlay=False, ncols=9, titles=titles);
                 savefig(fig, f"{sdir}/mean_stroke_each_shape-{i}-TASK.pdf")
+
+    def stroke_shape_align_flip_vs_task(self, ind):
+        """
+        Deterine qwhether beh stroek is bets aligned to task if task is flipped, or as is.
+        Only makes sense for PIG and SP.
+        This doesnt make sense for closed shapes (e.g, circle).
+        :param ind:
+        :return: flip, bool, if True, then onset of beh is closer to offset of task.
+        """
+
+        # Determine onset location for each beh stroke
+        strok_beh = self.extract_strokes(inds=[ind], ver_behtask="beh")[0]
+        strok_task = self.extract_strokes(inds=[ind], ver_behtask="task_aligned_single_strok")[0]
+
+        if False:
+            # This doesnt work well if beh is loopy
+            d1 = np.linalg.norm(strok_beh[0, :2] - strok_task[0, :2]) + np.linalg.norm(strok_beh[-1, :2] - strok_task[-1, :2])
+            d2 = np.linalg.norm(strok_beh[-1, :2] - strok_task[0, :2]) + np.linalg.norm(strok_beh[0, :2] - strok_task[-1, :2])
+            flip = d1>d2
+        else:
+            # just compare onset
+            d1 = np.linalg.norm(strok_beh[0, :2] - strok_task[0, :2])
+            d2 = np.linalg.norm(strok_beh[0, :2] - strok_task[-1, :2])
+            flip = d1>d2
+
+        return flip
 
 
     def stroke_shape_cluster_database_load(self, animal, expt, date, suffix):
