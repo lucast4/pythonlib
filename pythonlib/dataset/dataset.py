@@ -1835,6 +1835,89 @@ class Dataset(object):
             # Put back into tokens
             self.tokens_assign_dataframe_back_to_self(df, new_col_name, 'beh_using_beh_data')
 
+    def tokens_cluster_touch_onset_loc_across_all_data(self, token_ver="beh_using_beh_data",
+                                                       PLOT_SIL=False, PLOT_FINAL=False):
+        """
+        Collect onset locations (beh stroke) acrioss tok in Tokens, then clluster these in 2d space
+        (kmeans) so that each has a class label. Then store this label in tokens as "loc_on_clust".
+
+        Works even across different task_kinds (e.g., PIG and CHAR).
+
+        Automaitlcaly determeins n_clust by using n_clust that maximizes silhouette score.
+
+        :param token_ver:
+        :param PLOT_SIL:
+        :param PLOT_FINAL:
+        :return: TokensBeh adds two new columns: loc_on and loc_on_clust
+        """
+        from pythonlib.tools.statstools import cluster_kmeans_with_silhouette_score
+        n_clusters_min_max=[5, 26]
+        # Get required data from tokens.
+        for ind in range(len(self.Dat)):
+
+            # Beh strokes
+            Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
+            Tk_behdata.features_extract_wrapper(["loc_on"])
+
+        # Extract dataframe
+        if False:
+            df = self.tokens_extract_variables_as_dataframe(["Stroke"], token_ver)
+            X = np.stack([row["Stroke"]()[0,:2] for _, row in df.iterrows()])
+        else:
+            df = self.tokens_extract_variables_as_dataframe(["loc_on"], token_ver)
+            X = np.stack(df["loc_on"])
+
+        cluster_labels, fig, fig_final = cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=n_clusters_min_max,
+                                                              PLOT_SIL=PLOT_SIL, PLOT_FINAL=PLOT_FINAL,
+                                                              return_figs=True)
+        df["loc_on_clust"] = cluster_labels
+
+        # Put back into tokens
+        self.tokens_assign_dataframe_back_to_self(df, "loc_on_clust", token_ver)
+
+        return fig, fig_final
+
+    def tokens_cluster_touch_offset_loc_across_all_data(self, token_ver="beh_using_beh_data",
+                                                       PLOT_SIL=False, PLOT_FINAL=False):
+        """
+        Collect offset locations (beh stroke) acrioss tok in Tokens, then clluster these in 2d space
+        (kmeans) so that each has a class label. Then store this label in tokens as "loc_off_clust".
+
+        Works even across different task_kinds (e.g., PIG and CHAR).
+
+        Automaitlcaly determeins n_clust by using n_clust that maximizes silhouette score.
+
+
+        :param token_ver:
+        :param PLOT_SIL:
+        :param PLOT_FINAL:
+        :return: TokensBeh adds two new columns: loc_off and loc_off_clust
+        """
+        from pythonlib.tools.statstools import cluster_kmeans_with_silhouette_score
+
+        n_clusters_min_max=[5, 26]
+        # Get required data from tokens.
+        for ind in range(len(self.Dat)):
+
+            # Beh strokes
+            Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
+            Tk_behdata.features_extract_wrapper(["loc_off"])
+
+        # Extract dataframe
+        df = self.tokens_extract_variables_as_dataframe(["loc_off"], token_ver)
+        X = np.stack(df["loc_off"])
+
+        cluster_labels, fig, fig_final = cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=n_clusters_min_max,
+                                                              PLOT_SIL=PLOT_SIL, PLOT_FINAL=PLOT_FINAL,
+                                                              return_figs=True)
+        df["loc_off_clust"] = cluster_labels
+
+        # Put back into tokens
+        self.tokens_assign_dataframe_back_to_self(df, "loc_off_clust", token_ver)
+
+        return fig, fig_final
+
+
     def tokens_bin_feature_across_all_data(self, feature, ver_token, nbins=3, PLOT=False):
         """
         Helper, for a given feature in Tokens, extract all across all data (trials x strokes), convert
@@ -7509,8 +7592,8 @@ class Dataset(object):
 
         # 1) indicate for each trial whether it is using color instruction
         # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
-        if "INSTRUCTION_COLOR" not in self.Dat.columns:
-            self.supervision_check_is_instruction_using_color_assign()
+        # if "INSTRUCTION_COLOR" not in self.Dat.columns:
+        self.supervision_check_is_instruction_using_color_assign()
         # list_issup = []
         # for ind in range(len(self.Dat)):
         #     list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
@@ -8605,8 +8688,8 @@ class Dataset(object):
         sorted tuple of ints (codes to shapes).
         """
 
-        if "taskconfig_shp" not in self.Dat.columns:
-            self.taskclass_shapes_loc_configuration_assign_column()
+        # if "taskconfig_shp" not in self.Dat.columns:
+        self.taskclass_shapes_loc_configuration_assign_column()
 
         list_epoch = self.Dat["epoch_orig"].unique().tolist()
         ruledict_by_epoch = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
@@ -9044,8 +9127,8 @@ class Dataset(object):
             print("*** Correct order: ", taskstroke_inds_correct_order)
 
         # 3) What there sequence supervision?
-        if "supervision_stage_concise" not in self.Dat.columns:
-            self.supervision_summarize_into_tuple("concise", new_col_name = "supervision_stage_concise")
+        # if "supervision_stage_concise" not in self.Dat.columns:
+        self.supervision_summarize_into_tuple("concise", new_col_name = "supervision_stage_concise")
         supervision_tuple = self.Dat.iloc[ind]["supervision_stage_concise"]
 
         # COLLECT all
@@ -9140,17 +9223,17 @@ class Dataset(object):
         context inforamtion ,such as n strokes, shape of first stroke, etc
         """
 
-        if "seqc_0_shape" not in self.Dat.columns or force_run:
-            from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
-            preprocess_dataset(self, plot_examples=plot_examples)
+        # if "seqc_0_shape" not in self.Dat.columns or force_run:
+        from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
+        preprocess_dataset(self, plot_examples=plot_examples)
 
-            # also extract gridsize
-            list_gridsize = []
-            for i in range(len(self.Dat)):
-                T = self.Dat.iloc[i]["Task"]
-                list_gridsize.append(T.PlanDat["TaskGridClass"]["Gridname"])
-            self.Dat["gridsize"] = list_gridsize
-            print("Appended columns gridsize!")
+        # also extract gridsize
+        list_gridsize = []
+        for i in range(len(self.Dat)):
+            T = self.Dat.iloc[i]["Task"]
+            list_gridsize.append(T.PlanDat["TaskGridClass"]["Gridname"])
+        self.Dat["gridsize"] = list_gridsize
+        print("Appended columns gridsize!")
 
     ################ SAVE
     def make_path_savedir_directory_notebook_for_figures(self, analysis_name):

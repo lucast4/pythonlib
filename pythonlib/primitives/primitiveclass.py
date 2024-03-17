@@ -72,6 +72,12 @@ class PrimitiveClass(object):
         self.ParamsConcrete = None
         self.Stroke = None # strokeclass representation
 
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        else:
+            return np.all(self.Stroke() == other.Stroke())
+
     def input_prim(self, ver, params, traj=None):
         """ Initialize data, represnting a single primtiive
         PARAMS:

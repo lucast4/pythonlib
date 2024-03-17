@@ -40,6 +40,11 @@ class StrokeClass(object):
             print(ver)
             assert False, "code it"
 
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        else:
+            return np.all(self.Stroke == other.Stroke)
 
     ############# STROKE FEATURES
     def extract_center(self):

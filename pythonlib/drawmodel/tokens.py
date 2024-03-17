@@ -236,7 +236,9 @@ class Tokens(object):
         if not isinstance(other, self.__class__):
             return False
         else:
-            return self.Tokens == other.Tokens
+            from pythonlib.tools.checktools import check_objects_identical
+            return check_objects_identical(self.Tokens, other.Tokens)
+            # return self.Tokens == other.Tokens
 
     def extract_locations_concrete(self, assign_to_tokens=True):
         """ Return the concrete locations (2-tuples, xy) for each
@@ -522,28 +524,38 @@ class Tokens(object):
 
             #### Context
             if i==0:
-                loc_prev = (0, "START") # tuple, so that is same type as gridloc
-                loc_prev_local = (0, "START") # tuple, so that is same type as gridloc
-                shape_prev = "START"
+                dseg["CTXT_loc_prev"] = (0, "START") # tuple, so that is same type as gridloc
+                dseg["CTXT_loc_prev_local"] = (0, "START") # tuple, so that is same type as gridloc
+                dseg["CTXT_shape_prev"] = "START"
+                if "loc_on_clust" in dseg.keys():
+                    dseg["CTXT_loconclust_prev"] = "START"
+                if "loc_off_clust" in dseg.keys():
+                    dseg["CTXT_locoffclust_prev"] = "START"
             else:
-                loc_prev = tokens[i-1]["gridloc"]
-                loc_prev_local = tokens[i-1]["gridloc_local"]
-                shape_prev = tokens[i-1]["shape"]
-            dseg["CTXT_loc_prev"] = loc_prev
-            dseg["CTXT_loc_prev_local"] = loc_prev_local
-            dseg["CTXT_shape_prev"] = shape_prev
+                dseg["CTXT_loc_prev"] = tokens[i-1]["gridloc"]
+                dseg["CTXT_loc_prev_local"] = tokens[i-1]["gridloc_local"]
+                dseg["CTXT_shape_prev"] = tokens[i-1]["shape"]
+                if "loc_on_clust" in dseg.keys():
+                    dseg["CTXT_loconclust_prev"] = tokens[i-1]["loc_on_clust"]
+                if "loc_off_clust" in dseg.keys():
+                    dseg["CTXT_locoffclust_prev"] = tokens[i-1]["loc_off_clust"]
 
             if i==len(tokens)-1:
-                loc_next = ("END", 0)
-                loc_next_local = ("END", 0)
-                shape_next = "END"
+                dseg["CTXT_loc_next"] = ("END", 0)
+                dseg["CTXT_loc_next_local"] = ("END", 0)
+                dseg["CTXT_shape_next"] = "END"
+                if "loc_on_clust" in dseg.keys():
+                    dseg["CTXT_loconclust_next"] = "END"
+                if "loc_off_clust" in dseg.keys():
+                    dseg["CTXT_locffclust_next"] = "END"
             else:
-                loc_next = tokens[i+1]["gridloc"]
-                loc_next_local = tokens[i+1]["gridloc_local"]
-                shape_next = tokens[i+1]["shape"]
-            dseg["CTXT_loc_next"] = loc_next
-            dseg["CTXT_loc_next_local"] = loc_next_local
-            dseg["CTXT_shape_next"] = shape_next
+                dseg["CTXT_loc_next"] = tokens[i+1]["gridloc"]
+                dseg["CTXT_loc_next_local"] = tokens[i+1]["gridloc_local"]
+                dseg["CTXT_shape_next"] = tokens[i+1]["shape"]
+                if "loc_on_clust" in dseg.keys():
+                    dseg["CTXT_loconclust_next"] = tokens[i+1]["loc_on_clust"]
+                if "loc_off_clust" in dseg.keys():
+                    dseg["CTXT_locoffclust_next"] = tokens[i+1]["loc_off_clust"]
 
     def print_summary(self):
         for i, tok in enumerate(self.Tokens):
@@ -589,6 +601,8 @@ class Tokens(object):
 
                 elif feature=="loc_on":
                     tok["loc_on"] = strok[0,:2]
+                elif feature=="loc_off":
+                    tok["loc_off"] = strok[-1,:2]
                 elif feature=="angle":
                     # angle of onset.
                     tok["angle"] = angle_of_stroke_segment([strok], twind=[0, 0.2])[0]

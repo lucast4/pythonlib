@@ -68,13 +68,28 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
             for d in list_obj[1:]:
                 for tc, val in getattr(d, attr).items():
                     if tc in dict_this:
-                        assert check_objects_identical(dict_this[tc], val), "how can diff datasets have overlapping trialcodes with diff values?"
+                        if not check_objects_identical(dict_this[tc], val):
+                            check_objects_identical(dict_this[tc], val, PRINT=True)
+                            print("----------------")
+                            print(tc)
+                            print(dict_this[tc])
+                            print(val)
+                            # for k in dict_this[tc].keys():
+                            #     print(dict_this[tc][k] == val.)
+                            # print(len(dict_this[tc].Tokens))
+                            # print(len(val.Tokens))
+                            for tk1, tk2 in zip(dict_this[tc].Tokens, val.Tokens):
+                                print(1, tk1)
+                                print(2, tk2)
+                                for k, v in tk1.items():
+                                    print(k, "-", tk1[k], ' .. ', tk2[k])
+                            assert False, "[Probably class object needs an __eq__() method!. how can diff datasets have overlapping trialcodes with diff values?"
                     else:
                         # append it
                         dict_this[tc] = val
             setattr(obj_new, attr, dict_this)
-            print(f"- Assigning to D.{attr} this dict (concatted, with trialcode keys, showing first 5):")
-            print(list(dict_this.items())[:5])
+            print(f"- Assigning to D.{attr} this dict (concatted, with trialcode keys, showing first 3):")
+            print(list(dict_this.items())[:3])
             # for k, v in dict_this.items():
 
     # TODO (3) Attributes which are lists, in which case take either union or intersection

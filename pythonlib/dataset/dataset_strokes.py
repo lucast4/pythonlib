@@ -513,8 +513,18 @@ class DatStrokes(object):
                 #     score = D.Dat.iloc[ind]["charclust_shape_seq_scores"][i]
                 #     DAT_BEHPRIMS[-1]["charclust_score"] = score
 
+                ############## EXTRACT KEYS FROM TOKENS BEH
+                keys_beh = ["loc_on", "angle", "loc_on_binned", "angle_binned", "center_binned", "locon_bin_in_loc",
+                            "loc_on_clust", "CTXT_loconclust_prev", "CTXT_loconclust_next",
+                            "loc_off_clust", "CTXT_locoffclust_prev", "CTXT_locoffclust_next"]
+                for k in keys_beh:
+                    if k in dseg_beh:
+                        DAT_BEHPRIMS[-1][k] = dseg_beh[k]
+
+        ############## EXTRACT KEYS FROM TOKENS_TASK
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", "ind_behstrokes"]
+        EXCLUDE += keys_beh
         for DAT in DAT_BEHPRIMS:
             for k, v in DAT["datseg"].items():
                 if k not in EXCLUDE:
@@ -550,6 +560,9 @@ class DatStrokes(object):
         # seq context
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
+
+        # Useful for neural analy
+        self.Dat["stroke_index_is_first"] = self.Dat["stroke_index"]==0
 
         # Extract motor timing. I use thie enought to make this general.
         self.motor_velocity_timing_extract()
@@ -952,7 +965,7 @@ class DatStrokes(object):
                                                                    num_angle_bins=nbins)
 
         if plot_dist_angle_distributions:
-            for si in ["stroke_index", "stroke_index_fromlast"]:
+            for si in ["stroke_index", "stroke_index_fromlast_tskstks"]:
                 # sns.displot(data=self.Dat, x="gap_to_next_angle", y="gap_to_next_dist", col=si, hue="gap_from_prev_angle_binned")
                 # sns.displot(data=self.Dat, x="gap_from_prev_angle", y="gap_from_prev_dist", col=si, hue="gap_from_prev_angle_binned")
                 sns.displot(data=self.Dat, x="gap_to_next_angle", y="gap_to_next_dist", col=si)
@@ -1309,6 +1322,14 @@ class DatStrokes(object):
         Dthis = self.Dataset.copy()
         Dthis.Dat = Dthis.Dat[Dthis.Dat["trialcode"].isin(trialcodes)].reset_index(drop=True)
         self.Dataset = Dthis
+
+    def dataset_prune_by_trialcodes(self, trialcodes):
+        """ Helper to prune both self.Dat and self.Dataset
+        MODIFIES self.Dat and self.Dataset.Dat
+        """
+        self.Dat = self.Dat[self.Dat["trialcode"].isin(trialcodes)].reset_index(drop=True)
+        # This reduces bulk, and possible issues with concatenating across sessoins.
+        self.dataset_prune_to_match_self()
 
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
@@ -3645,6 +3666,99 @@ class DatStrokes(object):
     #     # plot all shapes in order
     #     DS.plot_examples_grid(col_levels=levels)
 
+    #################################### LOCATIONS
+    def location_redefine_gridloc_locally(self, nbins=2, df=None, PLOT=False):
+        """ Redefine gridloc based on locally where the stroke onset is, within the categorical
+        gridloc.
+        PARAMS:
+        - df, optionally, to use this instead of self.Dat
+        RETURNS:
+            - appends new column gridloc_within, which holds each row's local bin (2 x 2) relative to
+            all rows that are in this gridloc
+            (Therefore, a redefined bin is conjunction of [gridloc, gridloc_within]
+        """
+        import numpy as np
+        from pythonlib.tools.nptools import bin_values_by_rank, bin_values
+        import matplotlib.pyplot as plt
+        from pythonlib.tools.pandastools import  _check_index_reseted
+
+        if False:
+            # This fails for snips
+            # 00_stroke  --  preSMA_a  --  (-0.6, 0.6)  -- (data shape:) (30, 1569, 120)
+            # Traceback (most recent call last):
+            #   File "analy_decode_script.py", line 160, in <module>
+            #     dfallpa_preprocess_vars_conjunctions_extract(DFallpa, which_level=which_level)
+            #   File "/gorilla1/code/neuralmonkey/neuralmonkey/classes/population_mult.py", line 157, in dfallpa_preprocess_vars_conjunctions_extract
+            #     ds.location_redefine_gridloc_locally(2, dflab, False)
+            #   File "/gorilla1/code/pythonlib/pythonlib/dataset/dataset_strokes.py", line 3660, in location_redefine_gridloc_locally
+            #     values = [tok["locon_bin_in_loc"] for tok in self.Dat["datseg_beh"]]
+            # TypeError: 'NoneType' object is not subscriptable
+
+            # Take it from tokens
+            # Must have already gotten it using D.
+            # self.tokens_extract_expose_variable(var_to_name = gridloc_within)
+            values = [tok["locon_bin_in_loc"] for tok in self.Dat["datseg_beh"]]
+            self.Dat["locon_bin_in_loc"] = values
+            self.Dat["gridloc_within"] = values # called it this elsewhere
+        else:
+            ######## OLD -- replace with above, which is better, it extracts in toekns in D. The blwo doesnt work
+            # all tithe time since it assumes gridloc are shared corod acorss char ahd SP and PIG.
+
+            if df is None:
+                df = self.Dat
+            colname = "gridloc_within"
+
+            if PLOT:
+                fig, ax = plt.subplots()
+
+            # to ensure the locations are passed back correctly.
+            _check_index_reseted(df)
+
+            # Iterate thru each gridloc
+            from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+            groupdict = grouping_append_and_return_inner_items(df, ["task_kind", "gridloc"])
+            idx_dat = []
+            for grp, inds in groupdict.items():
+            # list_gridloc = df["gridloc"].unique().tolist()
+            # for loc in list_gridloc:
+                # inds = df[df["gridloc"]==loc].index.tolist()
+
+                strokes = df.iloc[inds]["Stroke"]
+                stroke_ons = np.stack([S()[0, :2] for S in strokes])
+
+                # bin in x and y
+                # Better to use bin_values, so don't get weird bins if nonuniform.
+                # xbins = bin_values_by_rank(stroke_ons[:,0], nbins=nbins)
+                # ybins = bin_values_by_rank(stroke_ons[:,1], nbins=nbins)
+                xbins = bin_values(stroke_ons[:,0], nbins=nbins)
+                ybins = bin_values(stroke_ons[:,1], nbins=nbins)
+                xybins = [(x, y) for x,y in zip(xbins, ybins)]
+
+                if PLOT:
+                    sns.scatterplot(x=stroke_ons[:,0], y=stroke_ons[:,1], hue=xybins, ax=ax, alpha=0.25, marker="x")
+                    # ax.plot(stroke_ons[:,0], stroke_ons[:,1], "x", alpha=0.2, label=f"gridloc={loc}")
+
+                # store it
+                assert len(xybins)==len(inds)
+                idx_dat.extend([(i, dat) for i, dat in zip(inds, xybins)])
+
+            if PLOT:
+                ax.legend()
+                ax.set_title("stroke onsets, colored by gridloc_within")
+
+            # return to dataframe
+            idx_dat = sorted(idx_dat, key=lambda x:x[0])
+            # check that got all
+            idxs = [x[0] for x in idx_dat]
+            assert idxs == df.index.tolist()
+            vals = [x[1] for x in idx_dat]
+            df[colname] = vals
+
+            if PLOT:
+                # Show how shapes distributed across gridloc x gridloc_within
+                sns.catplot(data=df, x="gridloc_within", y="shape", col="gridloc", col_wrap=2,
+                            alpha=0.15, jitter=True)
+
     #################################### STROKES REPOSITORY
     def _stroke_shape_cluster_database_path(self, SDIR=f"{PATH_DATASET_BEH}/STROKES", 
             suffix=None, animal=None, expt=None, date=None):
@@ -4018,6 +4132,9 @@ def concat_dataset_strokes(list_DS):
     list_Datasets = []
     for ds in list_DS:
         if ds is not None:
+            # First prune ds.Dataset to have just the tcs in ds. If there are same tcs, this will throw error later when try
+            # to concat datasets
+            ds.dataset_prune_to_match_self()
             list_df.append(ds.Dat)
             list_Datasets.append(ds.Dataset)
             list_params.append(ds.Params)

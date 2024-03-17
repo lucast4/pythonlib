@@ -920,7 +920,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print(len(D.Dat))
 
     # First, quickly generate placeholder datsegs for beh, since downstream code might require it.
+    # (i.e., these are prerequisite for generating DatStrokes...).
     D.tokens_generate_replacement_quick_from_beh()
+    # # - and get touch onset binned.
+    # D.tokens_cluster_touch_onset_loc_across_all_data()
 
     # If they exist, replace shapes (in tokens) with pre-saved shape labels...
     # Note: should allow the above to run first, since this inherits those results for
@@ -1175,6 +1178,51 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     ############## OLD THINGS, delete if not using (to avoid confusion)
     if "supervision_params" in D.Dat.columns:
         del D.Dat["supervision_params"] # from drawmonkey.
+
+    ############ GOOD TOKENS STUFF!!
+    # (had this in anova params, but should actually run all the time).
+    D.tokens_append_to_dataframe_column()
+
+    # - and get touch onset binned.
+    _, fig_final = D.tokens_cluster_touch_onset_loc_across_all_data(PLOT_FINAL=True)
+    sdir = D.make_savedir_for_analysis_figures_BETTER("preprocess_general")
+    fig_final.savefig(f"{sdir}/tokens_cluster_touch_onset_loc_across_all_data.pdf")
+
+    # - and get touch offset binned.
+    _, fig_final = D.tokens_cluster_touch_offset_loc_across_all_data(PLOT_FINAL=True)
+    fig_final.savefig(f"{sdir}/tokens_cluster_touch_offset_loc_across_all_data.pdf")
+
+    # - Get sequence context for all tokens
+    for ind in range(len(D.Dat)):
+        # Beh strokes
+        Tk_behdata = D.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
+        Tk_behdata.features_extract_wrapper(["loc_on", "angle"])
+        Tk_behdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+
+        Tk_behdata = D.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
+        Tk_behdata.features_extract_wrapper(["shape_semantic"])
+
+        # Task strokes (ignore beh)
+        Tk_taskdata = D.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
+        Tk_taskdata.features_extract_wrapper(["shape_semantic"])
+        Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+
+    # (2) Compute all binned data, using beh data
+    PLOT = False
+    nbins = 3 # 2 or 3...
+    D.tokens_bin_feature_across_all_data("loc_on", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+    D.tokens_bin_feature_across_all_data("angle", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+
+    D.tokens_bin_feature_across_all_data("center", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+    D.tokens_bin_feature_across_all_data("center", "beh_using_task_data", nbins=nbins, PLOT=PLOT)
+    D.tokens_bin_feature_across_all_data("center", "task", nbins=nbins, PLOT=PLOT)
+
+    # Get locon_bin_in_loc
+    D.tokens_sequence_bin_location_within_gridloc()
+
+    # Replace loc, for char, with loc within gridloc.
+    # And then get shape_loc conjunctions
+    D.tokens_gridloc_replace_with_recomputed_loc_chars()
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
