@@ -754,7 +754,7 @@ class BehModelHolder(object):
         """
         from pythonlib.tools.pandastools import datamod_normalize_row_after_grouping, extract_with_levels_of_conjunction_vars
         from pythonlib.tools.statstools import permutationTest
-        from pythonlib.tools.pandastools import shuffle_dataset_singlevar, shuffle_dataset_singlevar_hierarchical
+        from pythonlib.tools.pandastools import shuffle_dataset_singlevar, shuffle_dataset_hierarchical
 
         # if INDEX is None:
         #     INDEX = ['character', 'block']
@@ -796,7 +796,7 @@ class BehModelHolder(object):
             if INDEX is None:
                 return shuffle_dataset_singlevar(_data, y, maintain_block_temporal_structure=False)
             else:
-                return shuffle_dataset_singlevar_hierarchical(_data, y, INDEX)
+                return shuffle_dataset_hierarchical(_data, [y], INDEX)
 
         if df is None:
             df = self.DatLong
