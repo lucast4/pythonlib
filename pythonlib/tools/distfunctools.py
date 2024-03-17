@@ -507,10 +507,13 @@ def _euclidian_unbiased(dat1, dat2):
         # get squared eucl dist.
         squared_dist_estimates.append(np.dot(d_small, d_big))
 
+        # print(inds1, inds2, inds1_big, inds2_big, np.dot(d_small, d_big))
+        # print(d_small.shape)
+
     # Convert to eucl distance
     squared_dist = np.mean(squared_dist_estimates)
     euclidian_dist = np.sign(squared_dist) * (np.abs(squared_dist)**0.5)
-
+    # print(squared_dist, euclidian_dist)
     return euclidian_dist
 
 def dist_vs_self_split_compute_agg(X, dist_func, nfold=10):
