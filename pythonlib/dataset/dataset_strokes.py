@@ -1237,7 +1237,7 @@ class DatStrokes(object):
     def dataset_extract_strokeslength_list(self, trialcode, column,
                                            if_fail="error"):
         """ Extract a list of items matching the beh strokes in this dataset(trial level)
-        in the order of the beh strokes and not missing any items.
+        in the order of the beh strokes and not missing any items, taking the data from self.Dat
         Does sanity checks to confirm correct extraction. 
         e..g, if column=="shape", then gets the list of shapes matching the beh strokes
         e.g., if column = "datseg" then gets the beh tokens for the trial holding this stroke.
@@ -1309,9 +1309,14 @@ class DatStrokes(object):
 
         print("Starting len of self.Dat:", len(self.Dat))
         trialcodes = D.Dat["trialcode"].tolist()
-        dfout = self.dataset_slice_by("trialcode", trialcodes).reset_index(drop=True)
-        self.Dat = dfout
+        # trialcodes = [tc for tc in trialcodes if tc in self.Dat["trialcode"].tolist()]
+
+        self.Dat = self.Dat[self.Dat["trialcode"].isin(trialcodes)].reset_index(drop=True)
+        #
+        # dfout = self.dataset_slice_by("trialcode", trialcodes).reset_index(drop=True)
+        # self.Dat = dfout
         print("Ending len of self.Dat:", len(self.Dat))
+
     def dataset_prune_to_match_self(self):
         """ Replaces self.Dataset with slice that
         only contains trialcodes that exist in self.Dat.
@@ -1409,11 +1414,13 @@ class DatStrokes(object):
 
         return dfslice
 
-    def dataset_slice_by(self, key, list_vals, return_index=False, df=None):
+    def dataset_slice_by(self, key, list_vals, return_index=False, df=None,
+                         assert_exactly_one_each=True):
         """ Extract slice of dataset using key-val pairs that may not yet 
         exist in self.Dat, but may be extracted by mapping back from orignal
         Dataset. First checks if this key exitss, if not then appends it as a
         new column.
+        NOTE: fails if any list_vals dont exist in df
         PARAMS:
         - key, string name
         - list_vals, list of vals, where keeps rows in dataset that are in this list
@@ -1430,7 +1437,7 @@ class DatStrokes(object):
             # Then pull it from dstaset
             self.dataset_append_column(key)
 
-        dfthis = slice_by_row_label(df, key, list_vals, assert_exactly_one_each=True)
+        dfthis = slice_by_row_label(df, key, list_vals, assert_exactly_one_each=assert_exactly_one_each)
         # dfthis = df[df[key].isin(list_vals)]
 
         if return_index:

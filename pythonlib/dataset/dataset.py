@@ -195,7 +195,6 @@ class Dataset(object):
             D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist), where rulelist is 
             list of strings.
         """
-        from pythonlib.dataset.dataset_preprocess.general import preprocessDat
 
         assert isinstance(expt, str), "if multiple expeirments, then not sure what to do for preprocess below."
         expt_orig = expt
@@ -1692,7 +1691,67 @@ class Dataset(object):
         print("x...", map_gridloc_loc_x)
         print("y...", map_gridloc_loc_y)   
 
-    def tokens_append_to_dataframe_column(self):
+    def tokens_preprocess_wrapper_good(self, PLOT=False):
+        """
+        Wrapper for preprocessing --> Given just-generated tokens (using tokens_append_to_dataframe_column) here do all
+        processing steps, e.g, derived features, like storke onset, and binned/clustered fgeatures, like onset binned.
+        :return: Modifies tokens and appends columns with "seqc_" to dataset.
+        """
+
+        # - and get touch onset binned.
+        _, fig_final = self.tokens_cluster_touch_onset_loc_across_all_data(PLOT_FINAL=True)
+        sdir = self.make_savedir_for_analysis_figures_BETTER("preprocess_general")
+        fig_final.savefig(f"{sdir}/tokens_cluster_touch_onset_loc_across_all_data.pdf")
+
+        # - and get touch offset binned.
+        _, fig_final = self.tokens_cluster_touch_offset_loc_across_all_data(PLOT_FINAL=True)
+        fig_final.savefig(f"{sdir}/tokens_cluster_touch_offset_loc_across_all_data.pdf")
+
+        # - Get sequence context for all tokens
+        for ind in range(len(self.Dat)):
+            # Beh strokes
+            Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
+            Tk_behdata.features_extract_wrapper(["loc_on", "angle"])
+            Tk_behdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+
+            Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
+            Tk_behdata.features_extract_wrapper(["shape_semantic"])
+
+            # Task strokes (ignore beh)
+            Tk_taskdata = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
+            Tk_taskdata.features_extract_wrapper(["shape_semantic"])
+            Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+
+        # (2) Compute all binned data, using beh data
+        nbins = 3 # 2 or 3...
+        self.tokens_bin_feature_across_all_data("loc_on", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+        self.tokens_bin_feature_across_all_data("angle", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+
+        self.tokens_bin_feature_across_all_data("center", "beh_using_beh_data", nbins=nbins, PLOT=PLOT)
+        self.tokens_bin_feature_across_all_data("center", "beh_using_task_data", nbins=nbins, PLOT=PLOT)
+        self.tokens_bin_feature_across_all_data("center", "task", nbins=nbins, PLOT=PLOT)
+
+        # Get locon_bin_in_loc
+        self.tokens_sequence_bin_location_within_gridloc()
+
+        # Replace loc, for char, with loc within gridloc.
+        # And then get shape_loc conjunctions
+        self.tokens_gridloc_replace_with_recomputed_loc_chars()
+
+        # (3) IMAGE PARSE
+        self.shapesemantic_classify_novel_shape()
+
+        self.taskclass_shapes_loc_configuration_assign_column()
+        # 1. specific
+        self.taskclass_shapes_loc_configuration_assign_column(version="char", shape_ver="shape_semantic", suffix="SHSEM", plot_examples=PLOT)
+        # 2. more lenient
+        self.taskclass_shapes_loc_configuration_assign_column(version="char", shape_ver="shape_semantic_cat", suffix="SHSEMCAT", plot_examples=PLOT)
+
+        # (4) LAST: Extract new seq context variables, based on variables in tokens.
+        self.seqcontext_preprocess(plot_examples=PLOT, force_run=True)
+
+
+    def tokens_append_to_dataframe_column(self, force_regenerate=False):
         """
         Extract tokens and store in self.Dat (simply "expose"). Useful for nerual stuff.
         You ned to have first extracted strokesbeh tokens --
@@ -1704,7 +1763,7 @@ class Dataset(object):
         """
 
         # Must run this first to get strokesbeh tokens
-        self.tokens_generate_replacement_from_raw_helper()
+        self.tokens_generate_replacement_from_raw_helper(force_regenerate=force_regenerate)
 
         list_Tk_beh_1 = []
         list_Tk_beh_2 = []
@@ -1851,7 +1910,7 @@ class Dataset(object):
         :return: TokensBeh adds two new columns: loc_on and loc_on_clust
         """
         from pythonlib.tools.statstools import cluster_kmeans_with_silhouette_score
-        n_clusters_min_max=[5, 26]
+        n_clusters_min_max=[6, 26]
         # Get required data from tokens.
         for ind in range(len(self.Dat)):
 
@@ -1895,7 +1954,7 @@ class Dataset(object):
         """
         from pythonlib.tools.statstools import cluster_kmeans_with_silhouette_score
 
-        n_clusters_min_max=[5, 26]
+        n_clusters_min_max=[4, 26]
         # Get required data from tokens.
         for ind in range(len(self.Dat)):
 
@@ -1998,7 +2057,7 @@ class Dataset(object):
             else:
                 assert False
 
-    def tokens_generate_replacement_from_raw_helper(self):
+    def tokens_generate_replacement_from_raw_helper(self, force_regenerate=False):
         """
         Runt his only once - replace Tokens with new version. advartnageS:
         - works for Chars, using pre-saved cluster labels.
@@ -2007,9 +2066,11 @@ class Dataset(object):
         :return:
         """
         if "charclust_shape_seq" in self.Dat.columns:
-            self.tokens_generate_replacement_from_raw(shape_sequence_col="charclust_shape_seq")
+            self.tokens_generate_replacement_from_raw(shape_sequence_col="charclust_shape_seq",
+                                                      force_regenerate=force_regenerate)
         else:
-            self.tokens_generate_replacement_from_raw(shape_sequence_col="TASK_SHAPES")
+            self.tokens_generate_replacement_from_raw(shape_sequence_col="TASK_SHAPES",
+                                                      force_regenerate=force_regenerate)
 
     def tokens_generate_replacement_quick_from_beh(self):
         """
@@ -2053,7 +2114,7 @@ class Dataset(object):
             self.TokensStrokesBeh = TokensStrokesBeh
 
     def tokens_generate_replacement_from_raw(self, shape_sequence_col="charclust_shape_seq",
-                                             skip_if_labels_not_found=False):
+                                             skip_if_labels_not_found=False, force_regenerate=False):
         """
         Generate Tokens based on actual beh strokes for each trial,
         and store in self.TokensStrokesBeh, and switch TokensVersion to
@@ -2078,7 +2139,8 @@ class Dataset(object):
         assert skip_if_labels_not_found==False, "not coded"
 
         # Only run this if Tokens are not already regenrated.
-        if (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0):
+        A = (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0)
+        if A or force_regenerate:
             TokensStrokesBeh = {} # len beh, using strokes beh
             TokensStrokesBehUsingTaskStrokes = {} # len beh, using best-aligned task strok
             TokensTask = {} # len task, using task strokes.
@@ -7592,8 +7654,8 @@ class Dataset(object):
 
         # 1) indicate for each trial whether it is using color instruction
         # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
-        # if "INSTRUCTION_COLOR" not in self.Dat.columns:
-        self.supervision_check_is_instruction_using_color_assign()
+        if "INSTRUCTION_COLOR" not in self.Dat.columns:
+            self.supervision_check_is_instruction_using_color_assign()
         # list_issup = []
         # for ind in range(len(self.Dat)):
         #     list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
@@ -8274,7 +8336,8 @@ class Dataset(object):
         idx = GD._score_beh_in_parses_find_index_match(beh, rs)
         if idx is None:
             print(idx)
-            assert False, "then there is no match..."
+            print(beh, rs)
+            assert False, "then there is no match... (run this? D.preprocessGood(params=[one_to_one_beh_task_strokes, correct_sequencing_binary_score]))"
         else:
             C = GD.ParsesGeneratedYokedChunkObjects[rs][idx]
         
@@ -9127,8 +9190,8 @@ class Dataset(object):
             print("*** Correct order: ", taskstroke_inds_correct_order)
 
         # 3) What there sequence supervision?
-        # if "supervision_stage_concise" not in self.Dat.columns:
-        self.supervision_summarize_into_tuple("concise", new_col_name = "supervision_stage_concise")
+        if "supervision_stage_concise" not in self.Dat.columns: # KEEP THIS - or else runs a lot
+            self.supervision_summarize_into_tuple("concise", new_col_name = "supervision_stage_concise")
         supervision_tuple = self.Dat.iloc[ind]["supervision_stage_concise"]
 
         # COLLECT all
@@ -9218,10 +9281,20 @@ class Dataset(object):
         assert len(shapes) == len(self.Dat.iloc[ind]["strokes_beh"])
         return shapes
 
+    def seqcontext_delete_all_columns(self):
+        """ Helper to delete all columns from self.Dat which contain string 'seqc'
+        """
+        cols_delete = [col for col in self.Dat.columns if "seqc_" in col]
+        print("Deleting these columns with seqc in name:", cols_delete)
+        self.Dat = self.Dat.drop(cols_delete, axis=1)
+
     def seqcontext_preprocess(self, plot_examples=False, force_run=False):
         """ Extract new columns into self.Dat, for each trial noting sequence 
         context inforamtion ,such as n strokes, shape of first stroke, etc
         """
+
+        # First, clear old values.
+        self.seqcontext_delete_all_columns()
 
         # if "seqc_0_shape" not in self.Dat.columns or force_run:
         from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
