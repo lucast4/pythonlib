@@ -139,6 +139,15 @@ def isin_close(a, v, atol=1e-06):
     x = [np.isclose(a, b, atol=atol) for b in v]
     return np.any(x), np.where(x)[0]
 
+def isnear(arr1, arr2):
+    """
+    Return True if arr1==arr2 elementwise, allowing for tolerance.
+    :param arr1:
+    :param arr2:
+    :return:
+    """
+    return isin_array(arr1, [arr2])
+
 def isin_array(arr, list_arr, atol=1e-06):
     """ Returns True if arr (array) is equal to at least one of arrays in list_arr
     PARAMS;

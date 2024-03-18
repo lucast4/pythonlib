@@ -406,7 +406,8 @@ def taskgroups_assign_each_probe(D, only_give_names_to_probes=True, CLASSIFY_PRO
     D.behclass_preprocess_wrapper()
 
     # 1) compute_features_each_probe
-    dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D, 
+    print("Computing features each probe")
+    dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D,
         only_do_probes=only_give_names_to_probes, CLASSIFY_PROBE_DETAILED=CLASSIFY_PROBE_DETAILED)
 
     # print(dict_probe_features)
