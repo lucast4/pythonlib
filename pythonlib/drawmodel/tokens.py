@@ -537,8 +537,10 @@ class Tokens(object):
                 dseg["CTXT_shape_prev"] = tokens[i-1]["shape"]
                 if "loc_on_clust" in dseg.keys():
                     dseg["CTXT_loconclust_prev"] = tokens[i-1]["loc_on_clust"]
+                    # assert isinstance(dseg["CTXT_loconclust_prev"], int)
                 if "loc_off_clust" in dseg.keys():
                     dseg["CTXT_locoffclust_prev"] = tokens[i-1]["loc_off_clust"]
+                    # assert isinstance(dseg["CTXT_locoffclust_prev"], int)
 
             if i==len(tokens)-1:
                 dseg["CTXT_loc_next"] = ("END", 0)
@@ -554,8 +556,13 @@ class Tokens(object):
                 dseg["CTXT_shape_next"] = tokens[i+1]["shape"]
                 if "loc_on_clust" in dseg.keys():
                     dseg["CTXT_loconclust_next"] = tokens[i+1]["loc_on_clust"]
+                    # if not isinstance(dseg["CTXT_loconclust_next"], int):
+                    #     print(dseg["CTXT_loconclust_next"])
+                    #     print(type(dseg["CTXT_loconclust_next"]))
+                    #     assert False
                 if "loc_off_clust" in dseg.keys():
                     dseg["CTXT_locoffclust_next"] = tokens[i+1]["loc_off_clust"]
+                    # assert isinstance(dseg["CTXT_locoffclust_next"], int)
 
     def print_summary(self):
         for i, tok in enumerate(self.Tokens):

@@ -274,7 +274,7 @@ def cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=
     :param n_clusters_min_max: only needed if n_clusters is None, in which case shoudl be 2-list of int,
     will try all n clusters in range of [min, max], and use the one that maximizes the silhoutte score.
     :param PLOT:
-    :return: cluster_labels, list of ints
+    :return: cluster_labels, list of strings represntations of ints
     """
     from sklearn.cluster import KMeans
 
@@ -409,8 +409,9 @@ def cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=
         else:
             fig_final = None
 
-        # List of ints
-        cluster_labels = [int(c) for c in cluster_labels]
+        # List of strings, so that these are categorical
+        # cluster_labels = [int(c) for c in cluster_labels]
+        cluster_labels = [f"{c}" for c in cluster_labels]
 
         if return_figs:
             return cluster_labels, fig, fig_final
