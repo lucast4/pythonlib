@@ -784,7 +784,8 @@ class Clusters(object):
     # self.plot_basis_strokes
 
     ################ DISTANCE MATRICES
-    def distsimmat_convert_distr(self, agg_vars, version_distance, min_n_dat = 4):
+    def distsimmat_convert_distr(self, agg_vars, version_distance, min_n_dat = 4,
+                                 accurately_estimate_diagonal=True):
         """ Generate distance matrix, where distance is computed between
         matrices, e.g., multivariate distributions, as opposted to firsrt
         averaging into a single vector for each row, and then distance
@@ -806,6 +807,12 @@ class Clusters(object):
         # Get grouping of labels
         groupdict = grouping_append_and_return_inner_items(dflab, agg_vars)
 
+        if False:
+            print(agg_vars)
+            for k, v in groupdict.items():
+                print(k, len(v))
+            assert False
+
         # Convert to list, which can then pass into distmat constructor
         list_X = []
         list_lab = []
@@ -825,7 +832,7 @@ class Clusters(object):
             # Skip all cases that have
             # coords_skip = [(i,i) for i in list_exclude]
             D = distmat_construct_wrapper(list_X, list_X, euclidian_unbiased,
-                                          accurately_estimate_diagonal=True,
+                                          accurately_estimate_diagonal=accurately_estimate_diagonal,
                                           inds_skip_rows_or_cols=list_exclude)
         else:
             print(version_distance)
@@ -1178,6 +1185,43 @@ class Clusters(object):
         assert var in label_vars
         return label_vars.index(var)
 
+    def rsa_mask_context_split_levels_of_conj_var(self, vars_context, PLOT=False,
+                                                  exclude_diagonal=True):
+        """
+        Return dict mapping between each level of vars_context (grouping var) and the
+        mask that are distance between this same level. Useful for computing "within-context"
+        scores (i.e., by taking & with mask for different effect).
+        NOTE: WILL be only upper triangular
+        :param vars_context:
+        :return: map_grp_to_mask, dict[grp]--> ma, where grp is tuple of classea dn ma is bool.
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+
+        # Get row indices for levels of conjunction var
+        dflab = self.rsa_labels_return_as_df()
+        grpdict = grouping_append_and_return_inner_items(dflab, vars_context)
+
+        # Get each mask
+        if exclude_diagonal:
+            ma_ut = self._rsa_matindex_generate_upper_triangular()
+        else:
+            ma_ut = self._rsa_matindex_generate_all_true()
+        map_grp_to_mask = {}
+        for grp, indrows in grpdict.items():
+            ma = self._rsa_matindex_convert_to_mask_rect(indrows, indrows) # same, for this grp
+            map_grp_to_mask[grp] = ma & ma_ut
+
+        if PLOT:
+            ncols = 2
+            nrows = int(np.ceil(len(map_grp_to_mask)/ncols))
+            SIZE = 5
+            fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
+            for ax, (grp, ma) in zip(axes.flatten(), map_grp_to_mask.items()):
+                self.rsa_matindex_plot_bool_mask(ma, ax)
+                ax.set_title(grp)
+
+        return map_grp_to_mask
+
 
     def rsa_mask_context_helper(self, var_effect, vars_context, diff_context_ver,
                                 diffctxt_vars_same=None, diffctxt_vars_diff=None,
@@ -1230,6 +1274,16 @@ class Clusters(object):
             assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
             ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
                 vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff)
+        elif diff_context_ver=="diff_specific_lenient":
+            # Specific combination of vars being same and diff
+            # "lenient" means that only need one of the "diff" vars to be different for this to pass criterion
+            assert isinstance(diffctxt_vars_diff, (tuple, list))
+            assert isinstance(diffctxt_vars_same, (tuple, list))
+            assert len(diffctxt_vars_diff)>0
+            assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
+            ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
+                vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff,
+                lenient_diff = True)
         else:
             print(diff_context_ver)
             assert False
@@ -1590,9 +1644,10 @@ class Clusters(object):
             labcol = self.LabelsCols[col]
             strings.append(f"{i} -- ({row},{col}) -- {labrow} -- {labcol}")
 
-        from pythonlib.tools.expttools import writeStringsToFile
-        # path = "/tmp/test.txt"
-        writeStringsToFile(savepath, strings)
+        if savepath is not None:
+            from pythonlib.tools.expttools import writeStringsToFile
+            # path = "/tmp/test.txt"
+            writeStringsToFile(savepath, strings)
 
     def rsa_matindex_plot_bool_mask(self, ma, ax=None):
         """ Plot this boolean mask
@@ -1753,7 +1808,8 @@ class Clusters(object):
 
         return fig
 
-    def rsa_matindex_same_diff_mult_var_flex(self, vars_same=None, vars_diff=None, PLOT=False):
+    def rsa_matindex_same_diff_mult_var_flex(self, vars_same=None, vars_diff=None, PLOT=False,
+                                             lenient_diff=False):
         """
         Flexibly generate bool mask that satistifes the criteria for
         each var in vars_same being same level, and each var in vars_diff
@@ -1763,6 +1819,8 @@ class Clusters(object):
 
         :param vars_same:
         :param vars_diff:
+        :param lenient_diff: bool, if True, then only need one var in vars_diff to be different for this
+        to pass criterion. Otherwise all should be diff (i.e, checks conjunction of diff vars).
         :return:
         """
 
@@ -1782,9 +1840,14 @@ class Clusters(object):
         else:
             MA, _ = self.rsa_matindex_same_diff_this_var(vars_same)
 
-        # For diff, must check each var one by one, and take negation
-        for var in vars_diff:
-            _, ma = self.rsa_matindex_same_diff_this_var([var])
+        if lenient_diff==False:
+            # For diff, must check each var one by one, and take negation
+            for var in vars_diff:
+                _, ma = self.rsa_matindex_same_diff_this_var([var])
+                MA = MA & ma
+        else:
+            # All you need is for one of the diff vars to be diff to call a cell "diff".
+            _, ma = self.rsa_matindex_same_diff_this_var(vars_diff)
             MA = MA & ma
 
         if PLOT:
@@ -1808,6 +1871,8 @@ class Clusters(object):
         variable. i.e,. A cell (i,j) is considered
         same only if the tuple (var1, var2, ...) [from list_var] is
         completely identical for the row and column (i and j).
+
+        The "diff" mask is then the complement of the "same" mask
         """
         from pythonlib.tools.distfunctools import distmat_construct_wrapper
 
