@@ -91,6 +91,40 @@ def mergeOnIndex(df1, df2):
         right_index=True, how='outer', validate='one_to_one')
     return dfout
 
+def join_dataframes_appending_columns(df1, df2, columns_of_df2_to_add_to_df1):
+    """ join dataframes that have identical indices, such that anyuc olumns of
+    df2 that dont exist in df1 will be added to those of df1.
+    MUCH faster than looping thru each col and adding.
+    PARAMS:
+    - columns_of_df2_to_add_to_df1, list of str, columns of df2. Note: it is OK if
+    columns exist in df1 (ignores them) or there are repeats in columns_of_df2_to_add_to_df1.
+
+    Guaranteed that will work, or else fails. (e.g, checks indices match)
+    RETURNS:
+    - new df, without modding inputs.
+    """
+
+    if not np.all(df1.index==df2.index):
+        print(len(df1.index))
+        print(len(df2.index))
+        print(df1.index[:10])
+        print(df2.index[:10])
+        assert False
+
+    # assert len(df1)==len(df2)
+
+    # These are required or else gets weird
+    columns_of_df2_to_add_to_df1 = list(set(columns_of_df2_to_add_to_df1))
+    columns_of_df2_to_add_to_df1 = [col for col in columns_of_df2_to_add_to_df1 if col not in df1.columns]
+
+    if len(columns_of_df2_to_add_to_df1)>0:
+        df12 = df1.join(df2.loc[:, columns_of_df2_to_add_to_df1])
+    else:
+        df12 = df1.copy()
+
+    return df12
+
+
 def merge_subset_indices_prioritizing_second(df_old, df_new, index_col=None):
     """
     Merge two dataframes, prioritizing df_new.
@@ -1619,11 +1653,20 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         groupouter_levels = df[groupouter].unique()
 
     if sort_keys:
-        groupouter_levels = sorted(groupouter_levels)
+        groupouter_levels = sort_mixed_type(groupouter_levels)
         
     groupdict = {}
     for lev in groupouter_levels:
-        dfthisgroup = df[df[groupouter]==lev]
+        try:
+            dfthisgroup = df[df[groupouter]==lev]
+        except Exception as err:
+            # probably lev is np array
+            print(type(lev))
+            print(lev)
+            print(groupouter_levels)
+            print(groupouter)
+            print(df[groupouter].unique())
+            raise err
         if groupinner=="index":
             itemsinner = dfthisgroup.index.tolist()
             assert n_min_each_conj_outer_inner==1, "doesnt work for index, each index is already uinque.."
@@ -1658,13 +1701,16 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
         groupdict[lev] = itemsinner
     return groupdict
 
-def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars):
+def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
+                                                groupouter_levels=None):
     """ Quicker version of grouping_append_and_return_inner_items
     RETURNS:
     - groupdict, grptuple:list_indices_into_df
     """
     groupdict = {}
     for grp in df.groupby(list_groupouter_grouping_vars):
+        if (groupouter_levels is not None) and (grp not in groupouter_levels):
+            continue
         groupdict[grp[0]] = grp[1].index.tolist()
     return groupdict
 
@@ -2904,7 +2950,7 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
 def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
-                          ZLIMS=None, title_size=10):
+                          ZLIMS=None, title_size=6, ncols=3):
     """
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar per
@@ -2920,8 +2966,11 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
 
     # list_row = df[varrow].unique().tolist()
     list_subplot = df[var_subplot].unique().tolist()
-    ncols = 3
-    W = 4
+    if ncols is None:
+        # Then ncols is the num suibplots
+        ncols = len(list_subplot)
+    # ncols = 3
+    W = 5
     H = 4
     nrows = int(np.ceil(len(list_subplot) / ncols))
 
@@ -2929,9 +2978,18 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
 
     if share_zlim:
         # Compute the min and max
-        df_agg = aggregGeneral(df, [varrow, varcol, var_subplot], [val_name])
-        zmin = np.min(df_agg[val_name])
-        zmax = np.max(df_agg[val_name])
+        grpdict = grouping_append_and_return_inner_items(df, [varrow, varcol, var_subplot])
+        mins = []
+        maxs = []
+        for grp, inds in grpdict.items():
+            mins.append(np.min(df.iloc[inds][val_name]))
+            maxs.append(np.max(df.iloc[inds][val_name]))
+        zmin = min(mins)
+        zmax = max(maxs)
+        # print([varrow, varcol, var_subplot])
+        # df_agg = aggregGeneral(df.loc[:, [varrow, varcol, var_subplot, val_name]], [varrow, varcol, var_subplot], [val_name])
+        # zmin = np.min(df_agg[val_name])
+        # zmax = np.max(df_agg[val_name])
         zlims = (zmin, zmax)
     else:
         zlims = (None, None)
