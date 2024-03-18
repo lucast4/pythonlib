@@ -93,13 +93,20 @@ def concatDatasets(Dlist, do_cleanup=False):
 
     Dnew = Dataset([])
 
-    # New, updates metadat.
     ct = 0
     dflist = []
     metadatlist = []
     BlockParamsDefaults = {}
     for i, D in enumerate(Dlist):
 
+        # First, any preprocessing of each dataset
+        # (1) regenerate tokens, thus removing variables that are binned across dta, which would be
+        # innacruate now that this is concatted dataset.
+        D.tokens_append_to_dataframe_column(force_regenerate=True)
+        # (2) Delete all seqc, which are made from the tokens..
+        D.seqcontext_delete_all_columns()
+
+        # New, updates metadat.
         if len(D.Metadats)>1:
             print("check that this is working.. only confied for if len is 1")
             assert False
