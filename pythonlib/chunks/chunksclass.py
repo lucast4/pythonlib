@@ -135,10 +135,9 @@ class ChunksClassList(object):
 
         # list_chunks, list_hier, list_fixed_order = find_chunks_wrapper(Task, 
         #     expt, rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
-        
-        list_chunks, list_hier, list_fixed_order = find_chunks_hier(self.Task, 
-            self.Expt, self.Rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
-            
+
+        list_chunks, list_hier, list_fixed_order = find_chunks_hier(self.Task,
+            self.Rule, use_baseline_if_dont_find=use_baseline_if_dont_find)
         if DEBUG:
             print("list_chunks", list_chunks)
             print("list_hier", list_hier)
