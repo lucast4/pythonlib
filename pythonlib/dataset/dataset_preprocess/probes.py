@@ -106,7 +106,12 @@ def _check_equidistant_from_first_stroke(ind, D):
 #          'active_chunk': <pythonlib.chunks.chunksclass.ChunksClass at 0x7f2c5f9b1cd0>,
 #          'supervision_tuple': 'off|0||0',
 #          'epoch': 'D|0'}
-
+    if False: # To get rulstring, like:
+        # ('preset-null-AnBmCk2RndFlx1', {'categ_matlab': None, 'params_matlab': None, 'params_good': 'AnBmCk2RndFlx1', 'categ': 'preset', 'subcat': 'null', 'params': 'AnBmCk2RndFlx1', 'rulestring': 'preset-null-AnBmCk2RndFlx1'})
+        try:
+            print(D.grammarparses_ruledict_rulestring_extract(ind))
+        except Exception as e:
+            pass
     taskstroke_inds_correct_order = sdict["taskstroke_inds_correct_order"]
     
     # 2) get locations of taskinds
@@ -115,9 +120,14 @@ def _check_equidistant_from_first_stroke(ind, D):
         # THen cannot compute this...
         return False
 
-    dseg = T.tokens_generate()
+    dseg = D.taskclass_tokens_extract_wrapper(ind, "task")
+    # dseg2 = T.tokens_generate()
+    # assert dseg == dseg2
     locations = [d["gridloc"] for d in dseg]
-
+    if False:
+        print("LOCATIONS:", locations)
+        print("taskstroke_inds_correct_order:", taskstroke_inds_correct_order)
+        print("sdict:", sdict)
     if len(locations)<3:
         # then cant compute
         return False
@@ -324,8 +334,13 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                         equidistant = False
                     else:
                         # all trials for this probe taskk shoudl have same seuqence.
-                        assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
-                        equidistant = list_equidistant[0]
+                        if len(set(list_equidistant))>1:
+                            # This is p ossible, e.g, for rank color (rand) where each trial is a different sequence
+                            # Give this false.
+                            equidistant = False
+                        else:
+                            assert len(set(list_equidistant))==1, "got different ones? how is that posibe..."
+                            equidistant = list_equidistant[0]
 
                     # 3) How many instances of each prim? (n)
                     _extract_n_prims(task_probe, mapper_taskname_epoch_to_taskclass)
