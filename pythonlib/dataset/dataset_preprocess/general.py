@@ -1131,6 +1131,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         x.append(D.Dat.iloc[ind]["date"][2:])
     D.Dat["date_MMDD"] = x
 
+    ############# SUPERVISION STUFF
     D.grouping_append_col(["date_MMDD", "epoch"], "date_epoch", use_strings=True, strings_compact=True)
 
     # Extract concise supervision stage
@@ -1157,6 +1158,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # fix a problem, sholdnt throw out epoch name
     D.supervision_epochs_extract_orig() 
 
+    # Add column "INSTRUCTION_COLOR"
+    D.supervision_check_is_instruction_using_color_assign()
+
+    ################### TASKGROUP STUFF
     # if taskgroup name is too long, then prune it. otherwise can lead to seaborn plotting errors...
     def F(x):
         if len(x["task_stagecategory"])>36:
@@ -1174,7 +1179,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # # Generate behclass. This is used frequenctly, so I decided to aklways do this
     # D.behclass_preprocess_wrapper(skip_if_exists=False)
-    
+
     ############## OLD THINGS, delete if not using (to avoid confusion)
     if "supervision_params" in D.Dat.columns:
         del D.Dat["supervision_params"] # from drawmonkey.
