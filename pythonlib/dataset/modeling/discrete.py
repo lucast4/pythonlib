@@ -12,7 +12,7 @@ from pythonlib.tools.exceptions import NotEnoughDataException
 ####### 
 MAP_EPOCHKIND_EPOCH = {
     "direction":["D", "U", "R", "L", "TR"],
-    "shape":["LVl1", "lVL1", "VlL1", "llV1", "ZlA1"],
+    "shape":["LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1"],
     "(AB)n":["(AB)n", "LolDR"],
     "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "llCV3"],
     "AnBmDir":["LCr2", "CLr2", "AnBmTR", "LCr1", "CLr1", "LCr3"],
@@ -65,11 +65,11 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('line-8-3', 'V-2-4', 'Lcentered-4-3'))] = "lVL1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('Lcentered-4-3', 'V-2-4', 'line-8-3'))] = "LVl1"
     grouping_map_tasksequencer_to_rule[("prot_prims_in_order", ('V-2-4', 'line-8-3', 'Lcentered-4-3'))] = "VlL1"
-    
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-9-3', 'line-9-4', 'Lcentered-6-8'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4'))] = "llV1"
-    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2'))] = "llV1"
+
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-8-4', 'V-2-4'))] = "llV1a"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-9-3', 'line-9-4', 'Lcentered-6-8'))] = "llV1b"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4'))] = "llV1c"
+    grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('line-8-3', 'line-13-13', 'line-8-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2'))] = "llV1d"
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('V2-2-2', 'V2-2-4', 'V-2-4', 'line-13-14', 'line-8-4', 'line-13-13', 'line-8-3'))] = "llV1R"
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'arcdeep-4-3'))] = "ZlA1" # diego, dirshapediego1
     grouping_map_tasksequencer_to_rule[('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'line-9-1', 'arcdeep-4-3'))] = "ZlA1" # dirshapediego1
@@ -233,7 +233,7 @@ def _get_default_grouping_map_tasksequencer_to_rule():
 ## - list_chunks, where each chunk is a list indicating a way to concat the strokes in Task.Strokes
 ## - list_hier, similar to list_chunks, but used for hierarchical permutations, without needing to concat strokes.
 ## - list_fixed_order, dict, what allowed to permute, and what not, for list_hier 
-def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None, 
+def find_chunks_hier(Task, rulestring, strokes=None, params=None,
     use_baseline_if_dont_find=False, DEBUG=False):
     """Find possible parses given this Task and rule. 
     PARAMS;
@@ -248,12 +248,12 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     tokens = Task.tokens_generate()
     list_fixed_order = None # will get fixed_order automatically if this stays NOne.
 
-    # print(objects)
-    # print(tokens)
-    # assert False
-    # NOTE: objects is just
-    # P = tokens[0]["Prim"]
-    # objects[0] = P.extract_as("shape")
+    # SAanity check that tokens match obejcts (objects is old version, so this allows the legacy code which uses
+    # objects).
+    assert len(tokens)==len(objects)
+    for i, (t, o) in enumerate(zip(tokens, objects)):
+        assert t["ind_taskstroke_orig"] == i
+        assert o[0] == t["shape"]
 
     if strokes is not None:
         from pythonlib.tools.stroketools import check_strokes_identical
@@ -285,9 +285,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         key = (ruledict["categ"], ruledict["subcat"])
         tmp = map_rule_to_notfixedorder[key] # [False, True]
 
-        # print("HERERER")
-        # print(key)
-        # assert False
         return fixed_order_for_this_hier(hier, tmp[0], tmp[1])
 
 
@@ -499,16 +496,40 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
             assert False, 'invalid rule'
 
     def _inds_by_shape(objects, shape):
-        # Return list of inds with this shape
-        return [ind for ind, obj in enumerate(objects) if shape in obj[0]] # if obj[0] contains shape substring
+        """
+        Return list of idnices (that would index objects) whose shape matches the shape input.
+        """
+        return [ind for ind, obj in enumerate(objects) if shape == obj[0]] # if obj[0] contains shape substring
     
     def _chunks_by_shape_rank(objects, shape_order):
-        # Return [indsshape1, indsshape2, ...], where each inds is list of ints
+        # Get the "rank" of each shape in objects, where the rank is the index in shape_order.
+        # Return [indsshape1, indsshape2, ...], where each inds is list of ints, holding the indexes into
+        # shape_order where the shape for that item in objects can be found.
+
         x = [_inds_by_shape(objects, shape) for shape in shape_order]
         x = [xx for xx in x if len(xx)>0] # e.g, if this shape exists for this trial.
+        # Each object must be assigned a shape, or else you have failed to include a shape in the params (shape_order)
+
+        tmp = []
+        for xx in x:
+            if len(xx)>0:
+                tmp.extend(xx)
+
+        # Either tmp is completely empty (i.e. on days where a multiple AnBm rules are at play, with diff shapes)
+        # or gets all objects.
+        if len(tmp)>0:
+            if (not len(tmp) == len(objects)) or (not max(tmp) == len(objects)-1):
+                print("objects:", objects)
+                print("shape_order:", shape_order)
+                assert False, "is this generalization taks wiht new shapes? how deal with this... add some sort of exception?"
+
         return [x]
 
     def _chunks_by_shape_chain(objects, shape_order):
+        """
+        Gets chain of shapes, e.g, if shape_order rule is A --> B --> C, then
+        from objects finds ABCAB... and so on...
+
         # takes in [['shape', {x,y}],...]
 
         # returns [
@@ -516,16 +537,33 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         # [[A1B2C],[A2B1]],
         # [[A2B1C],[A1B2]],
         # [[A2B2C],[A1B1]]]
-        x = [_inds_by_shape(objects, shape) for shape in shape_order]
-        #print("x", x)
+
+        :param objects:
+        :param shape_order:
+        :return:
+        """
+
+        x = [_inds_by_shape(objects, shape) for shape in shape_order] # List of list of ints,
+
+        # Get each possible ordering
         x_perms = _get_all_shape_ind_perms(x)
+
+        # Expand out each perm. This does no sampling or randomization.
         result = []
-        [result.append(_get_chain_for_single_x(xx)) for xx in x_perms]
+        for xx in x_perms:
+            result.append(_get_chain_for_single_x(xx)) # xx, list of list of ints
         return result
 
     # gets the chain for a single x, taking the first element of each sub-list until all are exhausted
     # @param x: list of shape_ind lists, e.g. [[0], [2], [1, 3]]
     def _get_chain_for_single_x(x):
+        """
+        E.g.
+        [[0,1],[2,3],[4]]  --> [[0, 2, 4], [1, 3]]
+        [[0,1],[2,3, 10],[]]  --> [[0, 2], [1, 3], [10]]
+        :param x:
+        :return:
+        """
         import copy
         cp = copy.deepcopy(x) # NOTE: we don't want to change the original x..
 
@@ -538,7 +576,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                     subresult.append(shape_ind)
                     shape_ind_list.remove(shape_ind) # should be unique..
             result.append(subresult)
-        #print("chain for single cp", result)
         return result
 
     # gets all permutations of sub-lists within a list, preserving first-order
@@ -549,28 +586,33 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     # -- [[1,0],[2,3],[4]],
     # -- [[1,0],[3,2],[4]]
     def _get_all_shape_ind_perms(shape_inds):
+        """
+        :param shape_inds: list of list of ints.
+        :return: different permutations of shape_inds, i.e, lsit of list of ints.
+        NOTE: Checked is working.
+        """
         import itertools
         result = []
         for l in shape_inds:
+            assert isinstance(l, (list, tuple))
             subresult = itertools.permutations(l)
             subresult_list = [list(x) for x in subresult]
             result.append(subresult_list)
-        #print("all_shape_ind_perms", [list(xx) for xx in itertools.product(*result)])
-        return [list(xx) for xx in itertools.product(*result)]
+        return [list(xx) for xx in itertools.product(*result)] # e.g., result[0] = [[0, 1], [1, 0]]
+
+    #################################################################### RUN
+    ####################################################################
 
     #### Define chunks. For now, concats are never done...
     chunks = list(range(len(objects))) # never concat strokes
-    list_chunks = [chunks] # only one way
+    # list_chunks = [chunks] # only one way
 
     #### Define hierarchies
     HOW_DEAL_FLAT="mult_chunk"
     ruledict = rules_map_rulestring_to_ruledict(rulestring)
     if ruledict["categ"]=="dir":
-    # if rule in ["left", "right", "up", "down"]:
-        # print(objects)
+        # Direction in space
         shape_order = _get_sequence_on_dir(objects, ruledict["params_good"])
-        # print(shape_order)
-        # assert False
         hier = [objects.index(x) for x in shape_order] # O(n^2), on short list tho so just go with it...
         list_hier = [hier]
         HOW_DEAL_FLAT = "single_chunk"
@@ -603,18 +645,11 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         list_hier = [hier]
 
     elif ruledict["categ"]=="ss" and ruledict["subcat"] in ["rank", "chain"]: 
-        # shape sequence, e.g., lines to circles, where the order within lines is not fixed
+        # Concrete shape sequence, e.g., lines to circles, where the order within lines is not fixed
 
         # Map from shapeorderstring (e.g, LVl1) to list of shapes
         s_order = ruledict["params_good"]
         rank_or_chain = ruledict["subcat"]
-
-        # if shape_order == 'IVL':
-        #     s_order = ('line','V','Lcentered')
-        # elif shape_order == 'LVI':
-        #     s_order = ('Lcentered','V','line')
-        # else:
-        #     assert False, 'incorrect shape_order after rule-'
         list_hier = _get_sequences_on_ordering_rule(objects, rank_or_chain, s_order)
     
     elif ruledict["categ"] == "chmult" and ruledict["subcat"] == "dirdir":
@@ -649,10 +684,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
         list_fixed_order = []
         for is_grp in list_is_grp: # list of bool
             list_fixed_order.append({0:True, 1:[this for this in is_grp]})
-
-        # print(list_hier)
-        # print(list_fixed_order)
-        # assert False
 
     elif ruledict["categ"] == "chorient" and ruledict["subcat"] == "dirdir":
         # chunk (concrete shapes, but any orietnation, such as lollies
@@ -814,20 +845,13 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
     list_hier = [clean_chunk(hier, how_to_deal_with_flat=HOW_DEAL_FLAT) for hier in list_hier] 
     
     ### Expand chunks and fixed order to match number of identified hiers
-    list_chunks = [chunks for i in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
-    # print("list_fixed_order")
-    # print(list_fixed_order)
-    # print(ruledict, hier)
+    list_chunks = [chunks for _ in range(len(list_hier))] # repeat chunks as many times as there are possible hiers
     if list_fixed_order is None:
         # Get autoamtically
         list_fixed_order = [_fixed_order_for_this_hier(ruledict, hier) for hier in list_hier]   
-    # print(list_fixed_order)
 
     # sanity check
     for hier, fo in zip(list_hier, list_fixed_order):
-        # print(hier)
-        # print(fo)
-        # print(fo[1])
         assert len(hier) == len(fo[1])
     
     if DEBUG:
@@ -893,9 +917,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
                 list_hier[i] = hier_new
                 list_fixed_order[i] = fo_new
                 # fo[1].append(lg[0][-1]) # False
-    # print(list_fixed_order)
-    # assert False
-
 
     # Sanity checks: Should always be something
     for hier in list_hier:
@@ -918,10 +939,6 @@ def find_chunks_hier(Task, expt, rulestring, strokes=None, params=None,
 
     return list_chunks, list_hier, list_fixed_order 
 
-
-# def map_epoch_rule_to_acceptable_rulestrings(list_epoch_rule):
-#     return _rules_consistent_rulestrings_extract_auto(list_epoch_rule)
-
 def rules_map_rulestring_to_ruledict(rulestring):
     """ Map from python string rule repreantation to matlab params:
     PARAMS:
@@ -935,7 +952,7 @@ def rules_map_rulestring_to_ruledict(rulestring):
          'subcat': 'chain',
          'params': 'LVl1'}
     """
-    from pythonlib.tools.stringtools import decompose_string
+    from pythonlib.tools.listtools import check_if_list1_is_ordered_subset_of_list2
 
     grouping_map_tasksequencer_to_rule = _get_default_grouping_map_tasksequencer_to_rule()
 
@@ -951,14 +968,44 @@ def rules_map_rulestring_to_ruledict(rulestring):
         for key, val in grouping_map_tasksequencer_to_rule.items():
             if val==params:
                 if FOUND:
-                    print(categ_matlab, params_matlab)
-                    print(key)
-                    print(rulestring)
-                    print(val, params)
-                    assert False, "this val is in multiple items; use category to further refine"
-                categ_matlab = key[0] # e.g., prot_prims_in_order
-                params_matlab = key[1] # e.g., ('line-8-3', 'V-2-4', 'Lcentered-4-3')
-                FOUND = True
+                    # Then this rule has alreayd been fuond. Check if you shodl uopdate...
+                    # Then take the one with the longer params, which is superset.
+
+                    # e.g.,
+                    #     print(categ_matlab, params_matlab)
+                    #     print(key)
+                        # prot_prims_in_order ('zigzagSq-1-1', 'line-8-1', 'arcdeep-4-3')
+                        # ('prot_prims_in_order', ('zigzagSq-1-1', 'line-8-1', 'line-9-1', 'arcdeep-4-3'))
+                    # Check that the new rule is same as old rule, just with slightly diff params (e.g., above, one extra shape).
+                    A = categ_matlab == "prot_prims_in_order" # I only know that this would work for this
+                    B = categ_matlab == key[0]
+                    C = check_if_list1_is_ordered_subset_of_list2(key[1], params_matlab)
+                    D = check_if_list1_is_ordered_subset_of_list2(params_matlab, key[1])
+
+                    if A and B and C and (not D):
+                        # Then use old params, it is superset of new params
+                        params_matlab = params_matlab
+                    elif A and B and (not C) and D:
+                        # Then update params
+                        params_matlab = key[1]
+                    elif A and B and C and D:
+                        # Then params are identical..
+                        params_matlab = params_matlab
+                    else:
+                        print(A, B, C, D)
+                        print("=============")
+                        print(categ_matlab, params_matlab)
+                        print(key)
+
+                        print(rulestring)
+                        print(val, params)
+                        for k, v in grouping_map_tasksequencer_to_rule.items():
+                            print("---", k, " -- ",  v)
+                        assert False, "this val is in multiple items; use category to further refine"
+                else:
+                    categ_matlab = key[0] # e.g., prot_prims_in_order
+                    params_matlab = key[1] # e.g., ('line-8-3', 'V-2-4', 'Lcentered-4-3')
+                    FOUND = True
         if not FOUND:
             for key, val in grouping_map_tasksequencer_to_rule.items():
                 print(key, val)
@@ -971,7 +1018,7 @@ def rules_map_rulestring_to_ruledict(rulestring):
         """ Standardiztaion of string representing a shape
         # Flexible, depending on the input format of the shape string
         # if input is Lcentered-4-3-0, returns the same
-        # if input is Lcentered-4-3, converts to Lcentered-4-3-0 [i.e. assuems reflecting is 0]
+        # if input is Lcentered-4-3, converts to Lcentered-4-3-0 [i.e. hackky coding of whether refl should be 0 or 1]
         # if input is Lcentered, return the same (this is abstract prim)
         # if input is Lcentered-4, then fails, as doesnt kknow what this is
         """
@@ -981,10 +1028,34 @@ def rules_map_rulestring_to_ruledict(rulestring):
             # then is liek: Lcentered-4-3, which has scale-rotation. assumes reflect is 0.
             # convert to: shape-rotation-reflect
             shape = substrings[0]
-            scale = substrings[1]
-            rot = substrings[2]
-            refl = 0
-            return f"{shape}-{scale}-{rot}-0"
+            scale = int(substrings[1])
+            rot = int(substrings[2])
+
+            # VERY HACKY - but for some shapes the reflection DOES matter. Hard code that here, for each expt, what is the actual
+            # shape reflection that was used... PRoblem: this not encoded in dragmonkey, which is fine there since on a given
+            # day only one of the two reflextions are presnt. Here it is ambiguous. ...
+            if shape in ["squiggle3", "zigzagSq"]:
+                rule = decompose_string(rulestring, "-")[2] # ['ss', 'chain', 'ZlA1']
+                if (shape, scale, rot) == ("zigzagSq", 1, 1) and rule in ["ZlA1", "llCV1", "llCV2", "llCV2FstStk",  "llCV3",
+                                                                          "llCV3b", "llCV3FstStk", "llCV3RndFlx1",
+                                                                          "llCV3RndFlx12", "llCV3RndFlx123"]:
+                    refl = 1
+                elif (shape, scale, rot) == ("squiggle3", 3, 1) and rule in ["AnBm0"]:
+                    refl = 0
+                else:
+                    print("HACKY - you should (i) find this rule in discrete._get_default_grouping_map_tasksequencer_to_rule(). Figure out which day this is. Find out for this day which sahpe was used...")
+                    print(rulestring)
+                    print(rule)
+                    print(shape, scale, rot)
+                    assert False
+            elif shape in ["L", "V", "V2", "arcdeep", "line", "Lcentered", "circle"]:
+                # Assume that for these shapes, you never use reflected version...
+                refl = 0
+            else:
+                print(shape, scale, rot)
+                assert False, "if this not potenitaly using reflection, should add it to elif.."
+
+            return f"{shape}-{scale}-{rot}-{refl}"
         elif len(substrings)==1:
             return s
         elif len(substrings)==4:
@@ -1205,7 +1276,8 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
     DICT_RULESTRINGS_CONSISTENT = {}
     for r in ["D", "U", "R", "L", "TR", "UL"]:
         DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
-    for r in ["LVl1", "lVL1", "VlL1"]:
+    for r in ["LVl1", "lVL1", "VlL1", "ZlA1"] + ["llV1a", "llV1b", "llV1c", "llV1d"]:
+        # Deterministic shape (ABC...)
         DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
     for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b", "AnBmCk2NODIR"]:
         # repeat A, repeat B, e... 
@@ -1242,7 +1314,7 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         if r not in DICT_RULESTRINGS_CONSISTENT.keys():
             print(r)
             print(DICT_RULESTRINGS_CONSISTENT)
-            assert False, "add it."
+            assert False, "add this r to keys of DICT_RULESTRINGS_CONSISTENT"
 
     x = [DICT_RULESTRINGS_CONSISTENT[r] for r in list_rules]
     if return_as_dict:
@@ -1293,8 +1365,6 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
     - list of rulestrings which are considered related to any of the input rules
     (concatnated).
     """
-    from pythonlib.tools.stringtools import decompose_string
-
 
     # # Get the consistent rulestrings for this rule
     # for rule in list_rules:
@@ -1303,7 +1373,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
 
     DICT_RELATED_RULES = {
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
-        ("LVl1", "lVL1", "VlL1", "llV1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1")),
+        ("LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1")),
         ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
         ("TR",):_get_direction_variations(["TR"]),
         ("UL",):_get_direction_variations(["UL"]),
@@ -1339,8 +1409,6 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
     for key, values in DICT_RELATED_RULES.items():
         assert isinstance(key, tuple), "you prob forgot comma in the parantheses to make this a tuple"
         assert isinstance(values, list)
-
-
 
     # 1) list of rules present in D
     # list_rules_dat = sorted(D.Dat["epoch_rule_tasksequencer"].unique().tolist())
@@ -1394,7 +1462,9 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
 def tasks_categorize_based_on_rule_mult(D):
     """
     Assign each task to a category, where cats are defined (hard coded) based on rules, 
-    e.g,,m for repeat tasks, categorize tasks based on n repeats. 
+    e.g,,m for repeat tasks, categorize tasks based on n repeats.
+    NOTE: This reflects that task (and rule) and NOT the behavior. THis means for random beh (color sup superviion), it might
+    reflect the task and
     """
     # Extract for each rule each tasks' categroyes
     from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule, rules_map_rule_to_ruledict_extract_auto
@@ -1415,6 +1485,7 @@ def tasks_categorize_based_on_rule_mult(D):
         # ALL_OUT.append(OUT)
         # ALL_LIST_COL.append(LIST_COLNAMES)
 
+        # For each trial, concat this rule (rule) onto the global rule string.
         assert len(all_combined)==len(list_vals)
         for ac, val in zip(all_combined, list_vals):
             if val is not None:
@@ -1506,6 +1577,8 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
 
     elif rd["categ"]=="ss":
         # Shape sequence.
+        # e.g., ((3, 1, 1, 0),) means for AnBmCk, you have n=3, m=1, k=1.
+        # The last 0 means no leftover items.
         from pythonlib.drawmodel.task_features import shapes_n_each_extract
 
         shapes_pool = _extract_shapes_pool(rd)
@@ -1518,6 +1591,10 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         else:
             print(shapes_pool)
             assert False
+
+        # Only keep shapes that actually exist in dataset.
+        shapes_exist = D.taskclass_shapes_extract_unique_alltrials() # List of str
+        shapes_pool = [sh for sh in shapes_pool if sh in shapes_exist]
 
         ## 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
         list_ns = []
@@ -1547,9 +1624,14 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         # Count the chunks
         if HACK:
             OUT = [None for _ in range(len(D.Dat))]
-    elif rd["rulestring"] == "preset-null-rndstr":
+    elif rd["categ"] == "preset" and rd["subcat"]=="null":
+    # elif rd["rulestring"] == "preset-null-rndstr":
         # Nothing to categorize them by. this is arbitrary pretermined sequence
         OUT = [None for _ in range(len(D.Dat))]
+    elif rd["categ"]=="dir":
+        # Direction rule.
+        # Classify each task based on the number of strokes (temporary).
+        OUT = [len(row["strokes_task"]) for _, row in D.Dat.iterrows()]
     else:
         print(rule, rd)
         assert False, "not coded"
