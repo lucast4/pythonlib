@@ -201,6 +201,8 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
         elif isinstance(val, str):
             return val
         elif isinstance(val, (float, int, ndarray)):
+            # VERY HACKY.
+
             # if val<0:
             #     # so that large negative numbers are first.
             #     # print(val, f"x{-1/val}")
@@ -225,23 +227,27 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
                  # ('test', array(0.232))]
 
             # Squash large positive numbers down.
-            if val<=0:
+            if val<0:
+                tmp = -1/val
+            elif val==0:
                 tmp = val
             else:
                 # This squashes large numbers down to <10. this is important since "10" is before "9" when sorting as string,
                 # which is not what we want.
-                tmp = np.log(val/100)
+                tmp = np.log(10 + val)
 
             # Append strings so that negative numbners come before pos.
             # Make the string long so that numbers will cluster togethre (as opopsed to being seprated by actual trings).
             if val==0:
                 # in between XXXXXXX and XXXXXXZ
-                return "XXXXXXXY"
+                strval = "XXXXXXXY"
             if val<0:
                 # so that large negative numbers are first.
-                return f"XXXXXXX{-1/tmp}"
+                strval = f"XXXXXXX{tmp:.10f}"
             else:
-                return f"XXXXXXZ{tmp}"
+                strval = f"XXXXXXZ{tmp:.10f}"
+            # print(val, " -- ", tmp, " -- ", strval)
+            return strval
             #
             # if val<0:
             #     # so that large negative numbers are first.
