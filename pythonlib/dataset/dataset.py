@@ -1732,11 +1732,14 @@ class Dataset(object):
         self.tokens_bin_feature_across_all_data("center", "task", nbins=nbins, PLOT=PLOT)
 
         # Get locon_bin_in_loc
-        self.tokens_sequence_bin_location_within_gridloc()
+        if False:
+            # This fails in lemur - not needed anwya...
+            self.tokens_sequence_bin_location_within_gridloc()
 
-        # Replace loc, for char, with loc within gridloc.
-        # And then get shape_loc conjunctions
-        self.tokens_gridloc_replace_with_recomputed_loc_chars()
+            # In lemur this is not possible, since dont have binned locations from above.
+            # Replace loc, for char, with loc within gridloc.
+            # And then get shape_loc conjunctions
+            self.tokens_gridloc_replace_with_recomputed_loc_chars()
 
         # (3) IMAGE PARSE
         self.shapesemantic_classify_novel_shape()
@@ -1840,6 +1843,8 @@ class Dataset(object):
         """
         from pythonlib.tools.pandastools import append_col_with_grp_index
         from pythonlib.tools.pandastools import grouping_print_n_samples
+
+        assert False, "NOTE: stopped doing this. isntead, use locaiton clusters"
 
         # Extract flattened tokens
         vars = ["task_kind", "gridloc", "locon_bin_in_loc"]
@@ -2023,7 +2028,7 @@ class Dataset(object):
             xs_binned = bin_values(xs, nbins=nbins)
             ys_binned = bin_values(ys, nbins=nbins)
             # Convert to list of 2-tuples
-            values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)]
+            values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)] # list of 2-typles of 2 strings.
             # values_binned = np.stack([xs_binned, ys_binned], axis=1)
         elif ndims==1:
             if "angle" in feature:
@@ -2480,7 +2485,7 @@ class Dataset(object):
         return shapes
 
     def taskfeatures_category_by(self, method="shape_repeat", params=None,
-        colname="taskfeat_cat"):
+        colname="taskfeat_cat", PRINT=False):
         """ Give each trial a label for the catgegory of its tak,
         based on specific kinds of features. often will depend just on the 
         task image.
@@ -2530,8 +2535,9 @@ class Dataset(object):
                 
                 # Collect
                 list_trial_code.append(trial_code)
-                    
-                print(ind, dict_task_category)
+
+                if PRINT:
+                    print(ind, dict_task_category)
         else:
             print(method)
             assert False
@@ -7507,7 +7513,7 @@ class Dataset(object):
         list_issup = []
         for ind in range(len(self.Dat)):
             list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
-        self.Dat["INSTRUCTION_COLOR"] = list_issup
+        self.Dat[assign_to_column] = list_issup
 
     def supervision_epochs_extract_epochkind(self):
         """ adds a column to D.Dat, which is epochkind, a category of epoch, such as
@@ -8028,6 +8034,11 @@ class Dataset(object):
         """
         # - classify each task based on which epochs it spans
 
+        # Some defaults -- not useful, but allows running this using None inputs, which I use in dataset preprocess
+        # for neural data.
+        if trial_label is None:
+            trial_label = "character"
+
         assert isinstance(merge_sets_with_only_single_epoch_name, tuple)
 
         # - For each char_seq, get its list of epochs that it is present in
@@ -8136,6 +8147,7 @@ class Dataset(object):
         # dict_rules_consistent_with_each_rule = {}
 
         list_rules_exist = self.Dat["epoch_orig"].unique().tolist()
+        list_rules_exist = [r for r in list_rules_exist if not r in ["base", "baseline"]]
 
         # For each existing rule, get ruledicts consistent with it
         dict_ruledicts_consistent_with_each_existing_rule = {}
@@ -8170,14 +8182,15 @@ class Dataset(object):
         return ruledict["rulestring"], ruledict
 
     def grammarparses_rulestrings_exist_in_dataset(self):
-        """ return list of rulestrings that exist in this dtaset
+        """ return list of rulestrings that exist in this dtaset, ignoring cases that at "baseline"
         """
         list_epoch = self.Dat["epoch_orig"].unique().tolist()
         list_rulestring = []
         for epoch in list_epoch:
-            ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]
-            rs = ruledict["rulestring"]
-            list_rulestring.append(rs)
+            if epoch not in ["base", "baseline"]:
+                ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]
+                rs = ruledict["rulestring"]
+                list_rulestring.append(rs)
         return list_rulestring
 
     # def grammar_rules_extract_rul
@@ -8448,6 +8461,16 @@ class Dataset(object):
         for rs in list_rulestring:
             res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
         return res
+
+    def grammarparses_classify_tasks_categorize_based_on_rule(self):
+        """
+        Wrapper for methods to classify each task based on something like a "syntax parse"
+        # e.g., ((3, 1, 1, 0),) means for AnBmCk, you have n=3, m=1, k=1.
+        # The last 0 means no leftover items.
+        :return: Modifes self.Dat adding new column taskcat_by_rule (flexible type, usualyl tuple of ints)
+        """
+        from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule_mult
+        tasks_categorize_based_on_rule_mult(self)
 
     def grammarparses_classify_sequence_error(self, ind, PRINT_PLOT=False):
         """

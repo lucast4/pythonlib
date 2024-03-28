@@ -29,16 +29,17 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
     - nbins, num bbins.
     - epsilon, scalar, small number to pad, to make sure get all values.
     RETIURNS:
-    - list of ints (len n).
-    - [OLD]array, (n,), will be same type as input, not int, becuase is theres nan then it must be float arary.
+    - list of len(n), with string ints, and IGN where input is nan.
+    e.g. [np.nan, 1, 2, 3] --> ['IGN', '1', '5', '8']
 
     # DBUG CODE:
-        x = np.array([1,2,3,4, np.nan, 2, 0, -2, 5])
-        x = np.random.rand(100)
+    #     x = np.random.rand(100)
         x[10:20] = np.nan
         xbinned = bin_values(x, 4)
+        print(xbinned)
         plt.figure()
-        plt.plot(x, xbinned, "ok")
+        # plt.plot(x, xbinned, "ok")
+        plt.plot(xbinned, x, "ok")
     """
 
     if np.all(np.isnan(vals_input)):
@@ -63,6 +64,10 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
         if assert_all_vals_within_bins:
             assert np.all((vals_binned>=1) & (vals_binned<=nbins))
 
+        # make it list of ints
+        # vals_out = [int(x) for x in vals_out]
+        vals_binned = vals_binned.astype(int).tolist()
+
         # for v in vals_binned:
         #     assert i
         return vals_binned
@@ -79,11 +84,16 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
         print(vals_input)
         print(inds)
         raise err
+
+    # Initialize list
     vals_out = vals_input.copy()
+    # vals_out = np.empty(len(vals_out))
+    # vals_out[~inds] = "IGN"
     vals_out[inds] = vals_to_bin_binned
 
     # make it list of ints
-    vals_out = vals_out.astype(int).tolist()
+    vals_out = [str(int(v)) if ~np.isnan(v) else "IGN" for v in vals_out]
+    # vals_out = vals_out.tolist()
 
     return vals_out
 

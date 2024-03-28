@@ -407,7 +407,18 @@ class Tokens(object):
             t["chunk_within_rank"] = o
             t["chunk_within_rank_fromlast"] = l
             t["chunk_n_in_chunk"] = n
-        
+
+            # semantic, n within chunk
+            if o==0 and o+1==n:
+                chunk_within_rank_semantic = "both_fl"
+            elif o==0:
+                chunk_within_rank_semantic = "first"
+            elif o+1==n:
+                chunk_within_rank_semantic = "last"
+            else:
+                chunk_within_rank_semantic = "middle"
+            t["chunk_within_rank_semantic"] = chunk_within_rank_semantic
+
         if return_n_in_chunk:
             return chunk_rank, chunk_within_rank, chunk_n_in_chunk
         else:

@@ -439,6 +439,9 @@ def bin_values_conditioned_on_class(df, var_bin, vars_condition, nbins,
     Bin values in <var_bin> running separtely for each class of the careogtical
     varaible <vars_condition>, and appending to a new column.
     e..g, vcc is shape, and vb is location..., then bin indepently for each shape.
+
+    NOTE: keeps throwing error in lemur: ValueError: Names should be list-like for a MultiIndex
+
     :param df:
     :param var_bin: str, name of variable to bin
     :param vars_condition: list of str.
@@ -1814,7 +1817,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
 # def plot_
 
 def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
-        save_convert_keys_to_str = False, save_as="dict", sorted_by_keys=True):
+        save_convert_keys_to_str = False, save_as="txt", sorted_by_keys=True):
     """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
     e.g., if goruping is [shape, location, size]: prints:
     ('Lcentered-3-0', (-1, -1), 'rig3_3x3_small') 58
@@ -1863,20 +1866,22 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             writeDictToYaml(outdict, savepath)
         elif save_as in ["txt", "text"]:
             # Then each is a string line, write to text
-            from .expttools import writeStringsToFile
-            lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
-            if sorted_by_keys:
-                # for l in lines[:10]:
-                #     print(l)
-                lines = sort_mixed_type(lines)
-                # print("----")
-                # for l in lines[:10]:
-                #     print(l)
-                # assert False
+            from .expttools import writeStringsToFile, writeDictToTxtFlattened
             header = "|".join(list_groupouter_grouping_vars)
-            lines = [header] + lines
+            lines = writeDictToTxtFlattened(outdict, savepath, header=header, sorted_by_keys=sorted_by_keys)
             print(lines)
-            writeStringsToFile(savepath, lines)
+            # lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
+            # if sorted_by_keys:
+            #     # for l in lines[:10]:
+            #     #     print(l)
+            #     lines = sort_mixed_type(lines)
+            #     # print("----")
+            #     # for l in lines[:10]:
+            #     #     print(l)
+            #     # assert False
+            # lines = [header] + lines
+            # print(lines)
+            # writeStringsToFile(savepath, lines)
         else:
             print(save_as)
             assert False
@@ -2472,6 +2477,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
 
         extract_with_levels_of_conjunction_vars(dfthis, var="a", vars_others=['b', 'c'], n_min=2)
     """
+
+    if isinstance(var, (tuple, list)):
+        df = append_col_with_grp_index(df, var, "_tmp")
+        var = "_tmp"
 
     _check_index_reseted(df)
 

@@ -79,7 +79,10 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
 
             GET_ANGLE = "angle_binned" in tokens_beh_using_beh[0].keys()
             GET_LOC = "loc_on" in tokens_beh_using_beh[0].keys()
-            GET_LOC_WITHIN = "locon_bin_in_loc" in tokens_beh_using_beh[0].keys()
+            GET_LOC_WITHIN = False # Since this should be replaced with cluster within ...
+            # GET_LOC_WITHIN = "locon_bin_in_loc" in tokens_beh_using_beh[0].keys()
+
+            GET_LOC_CLUST = "loc_on_clust" in tokens_beh_using_beh[0].keys()
 
             for j in range(n_strok_max):
                 if j < nstrokes_beh:
@@ -107,6 +110,10 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
                         dat[f"seqc_{j}_locon_binned"] = tok["loc_on_binned"] # sol, binned over entire page.
                     if GET_LOC_WITHIN:
                         dat[f"seqc_{j}_locon_bin_in_loc"] = tok["locon_bin_in_loc"] # sol, binned over entire page.
+                    if GET_LOC_CLUST:
+                        dat[f"seqc_{j}_loc_on_clust"] = tok["loc_on_clust"] # sol, binned over entire page.
+                        dat[f"seqc_{j}_loc_off_clust"] = tok["loc_off_clust"] # sol, binned over entire page.
+
                 else:
                     # Use same type as the actuals.
                     dat[f"seqc_{j}_shape"] = "IGN"
@@ -130,6 +137,9 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
                         dat[f"seqc_{j}_locy"] = np.nan
                     if GET_LOC_WITHIN:
                         dat[f"seqc_{j}_locon_bin_in_loc"] = ("IGN", "IGN")
+                    if GET_LOC_CLUST:
+                        dat[f"seqc_{j}_loc_on_clust"] = "IGN"
+                        dat[f"seqc_{j}_loc_off_clust"] = "IGN"
 
                 # Conjunctions
                 dat[f"seqc_{j}_loc_shape"] = (dat[f"seqc_{j}_loc"], dat[f"seqc_{j}_shape"]) # conjunction

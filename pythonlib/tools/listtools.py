@@ -3,6 +3,26 @@ from operator import itemgetter
 import numpy as np
 # import torch
 
+def check_if_list1_is_ordered_subset_of_list2(list1, list2):
+    """
+    Return True if every item in list1 is in list2, and the order of the first occurance of each
+    of those items in list2 is monoticanlyl incresaing.
+    NOTE:
+        if item occurs > 1 time in lsit2, only conisders the first occurance in list2
+    EXAMPLES:
+        check_if_list1_is_ordered_subset_of_list2([1, "test", 2,3, 10], [1, "test", 2, 3, 4, 2, 10]) --> True
+    """
+    # Check that items in list1 exist in list2, and appear in order
+    inds = [list2.index(x) if x in list2 else -1 for x in list1]
+
+    if not all([i>=0 for i in inds]):
+        # Then an item is missing from list2
+        return False
+
+    # Check that it is increasing
+    return np.all(np.diff(inds)>0)
+
+
 def stringify_list(li, return_as_str=False, separator="--"):
     """ 
     list --> list of str
@@ -181,7 +201,60 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
         elif isinstance(val, str):
             return val
         elif isinstance(val, (float, int, ndarray)):
-            return f"{val}"
+            # VERY HACKY.
+
+            # if val<0:
+            #     # so that large negative numbers are first.
+            #     # print(val, f"x{-1/val}")
+            #     return f"X{-1/val}"
+            # else:
+            #     return f"x{val}"
+            # return val
+            # e.g., li = [(-2, -1), -100.123, -100.122, -1, 0, 2, 100, -20, 0.11, 0.111, 20.1, 100000, np.nan, ('test', np.array(0.232))]
+            # --> [-100.123,
+                 # -100.122,
+                 # -20,
+                 # -1,
+                 # 0,
+                 # 20.1,
+                 # 2,
+                 # 0.111,
+                 # 0.11,
+                 # 100,
+                 # 100000,
+                 # nan,
+                 # (-2, -1),
+                 # ('test', array(0.232))]
+
+            # Squash large positive numbers down.
+            if val<0:
+                tmp = -1/val
+            elif val==0:
+                tmp = val
+            else:
+                # This squashes large numbers down to <10. this is important since "10" is before "9" when sorting as string,
+                # which is not what we want.
+                tmp = np.log(10 + val)
+
+            # Append strings so that negative numbners come before pos.
+            # Make the string long so that numbers will cluster togethre (as opopsed to being seprated by actual trings).
+            if val==0:
+                # in between XXXXXXX and XXXXXXZ
+                strval = "XXXXXXXY"
+            if val<0:
+                # so that large negative numbers are first.
+                strval = f"XXXXXXX{tmp:.10f}"
+            else:
+                strval = f"XXXXXXZ{tmp:.10f}"
+            # print(val, " -- ", tmp, " -- ", strval)
+            return strval
+            #
+            # if val<0:
+            #     # so that large negative numbers are first.
+            #     # print(val, f"x{-1/val}")
+            #     return f"X{-1/val}"
+            # else:
+            #     return f"x{val}"
         else:
             # NOTE: hash(None) is valid
             # if x is int, returns that

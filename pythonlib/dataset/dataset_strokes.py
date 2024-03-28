@@ -514,9 +514,10 @@ class DatStrokes(object):
                 #     DAT_BEHPRIMS[-1]["charclust_score"] = score
 
                 ############## EXTRACT KEYS FROM TOKENS BEH
-                keys_beh = ["loc_on", "angle", "loc_on_binned", "angle_binned", "center_binned", "locon_bin_in_loc",
+                keys_beh = ["loc_on", "angle", "loc_on_binned", "angle_binned", "center_binned",
                             "loc_on_clust", "CTXT_loconclust_prev", "CTXT_loconclust_next",
                             "loc_off_clust", "CTXT_locoffclust_prev", "CTXT_locoffclust_next"]
+                # "locon_bin_in_loc"
                 for k in keys_beh:
                     if k in dseg_beh:
                         DAT_BEHPRIMS[-1][k] = dseg_beh[k]
@@ -563,6 +564,7 @@ class DatStrokes(object):
 
         # Useful for neural analy
         self.Dat["stroke_index_is_first"] = self.Dat["stroke_index"]==0
+        self.Dat["stroke_index_is_last_tskstks"] = self.Dat["stroke_index_fromlast_tskstks"]==-1
 
         # Extract motor timing. I use thie enought to make this general.
         self.motor_velocity_timing_extract()
@@ -2389,7 +2391,8 @@ class DatStrokes(object):
 
 
     def context_chunks_assign_columns(self):
-        """ assign useful columsn related to chunk and context
+        """ assign useful columsn related to chunk and context.
+
         """
         # chunk diff from previous stroke?
         list_chunk_diff = []

@@ -24,10 +24,14 @@ rcParams.update({'figure.autolayout': True})
 def preprocess_dataset_recomputeparses(D, DEBUG=False,
                                        exclude_because_online_abort=False,
                                        ONLY_ACTUAL_RULE=True,
-                                       replace_agent_with_epoch=True):
+                                       replace_agent_with_epoch=True,
+                                       include_alternative_rules=False):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
+    PARAMS:
+    - include_alternative_rules, bool, if True, then includes all rules related to the rules in this experiment,
+    which can be time consuming and also fail if tasks are incompaible with rules which assert that tasks are...
     """
     from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_long
     from pythonlib.dataset.modeling.discrete import rules_related_rulestrings_extract_auto
@@ -40,7 +44,12 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False,
 
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
-    list_rules = rules_related_rulestrings_extract_auto(D)
+    if include_alternative_rules:
+        # Then include alternative hypotheses. This can lead to many rules. Can also fail if it is a rule that is incompatibvle
+        # with data (e.g., sequence of shapes, but this sequence doesnt include all of the sahpes in beh)
+        list_rules = rules_related_rulestrings_extract_auto(D)
+    else:
+        list_rules = D.grammarparses_rulestrings_exist_in_dataset()
     bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG,
                                              ONLY_ACTUAL_RULE=ONLY_ACTUAL_RULE)
 

@@ -106,8 +106,8 @@ class GrammarDat(object):
         
         if DEBUG:
             CL.print_summary()
-    
-        if False:        
+
+        if False:
             # Actually, is fine to be empty.
             if len(CL.ListChunksClass)==0:
                 # Then no chunks exist
@@ -127,7 +127,7 @@ class GrammarDat(object):
 
         # generate clc?
         if rulestring not in self.ChunksListClassAll.keys():
-            self.parses_generate(rulestring) 
+            self.parses_generate(rulestring)
 
         # extract parses? (and cache)
         if rulestring not in self.ParsesGenerated.keys():

@@ -82,6 +82,22 @@ def writeDictToTxt(dictdat, path):
         list_s.append(f"{key} : {val}")
     writeStringsToFile(path, list_s)
 
+def writeDictToTxtFlattened(dictdat, path, header=None,
+                            sorted_by_keys=False):
+    """
+    Each k:v pair is a row...
+    :param dictdat:
+    :param path:
+    :return: lines: list of str
+    """
+    from pythonlib.tools.listtools import sort_mixed_type
+    lines = [f"{str(k)} : {v}" for k, v in dictdat.items()]
+    if sorted_by_keys:
+        lines = sort_mixed_type(lines)
+    if header is not None:
+        lines = [header] + lines
+    writeStringsToFile(path, lines)
+    return lines
 
 def extractStrFromFname(fname, sep, pos, return_entire_filename=False):
     """ given fname like '/data2/animals/Pancho/201030/201030_164324_arc2_Pancho_3.h5'
