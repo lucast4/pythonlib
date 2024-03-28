@@ -1998,6 +1998,7 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
 
     if prune_to_values_that_exist_in_df:
         assert assert_exactly_one_each==False, "incompatible"
+        print(" prune_to_values_that_exist_in_df")
         rowvalues = [v for v in rowvalues if v in df[colname].tolist()]
 
     # the dataframe must have each value in rowvalues.
