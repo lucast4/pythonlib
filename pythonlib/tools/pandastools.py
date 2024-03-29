@@ -1705,7 +1705,7 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     return groupdict
 
 def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
-                                                groupouter_levels=None):
+                                                groupouter_levels=None, sort_keys=True):
     """ Quicker version of grouping_append_and_return_inner_items
     RETURNS:
     - groupdict, grptuple:list_indices_into_df
@@ -1715,6 +1715,12 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
         if (groupouter_levels is not None) and (grp not in groupouter_levels):
             continue
         groupdict[grp[0]] = grp[1].index.tolist()
+
+    if sort_keys:
+        keys = list(groupdict.keys())
+        keys = sort_mixed_type(keys)
+        groupdict = {k:groupdict[k] for k in keys}
+
     return groupdict
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
@@ -1743,6 +1749,11 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
 
     _check_index_reseted(df)
     assert not isinstance(groupinner, list)
+
+    if groupinner=="index" and return_df==False:
+        groupdict = grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
+                                                                groupouter_levels, sort_keys)
+        return groupdict
 
     # 1) Append new grouping variable to each row
     # while new_col_name in df.columns:
