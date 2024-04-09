@@ -528,7 +528,7 @@ def conjunctions_preprocess(D):
         return (None for _ in range(4))
 
     # Second get parses.
-    D.grammarparses_successbinary_score()
+    D.grammarparses_successbinary_score_wrapper()
     D.preprocessGood(params=["correct_sequencing_binary_score"])
 
     if len(D.Dat)==0:

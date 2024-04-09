@@ -441,7 +441,7 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
     assert False, "use preprocessGood here"
     D.Dat = D.Dat[~D.Dat["epoch"].isin(["base", "baseline"])].reset_index(drop=True)
 
-    D.grammarparses_successbinary_score()
+    D.grammarparses_successbinary_score_wrapper()
 
     # To do this analysis, you must onlyu include cases with one to one match of beh to task stroke.
     # Otherwise there is mismatch: chekcing if beh matches parses uses "first touch" whereas assigning chunk

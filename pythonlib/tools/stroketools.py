@@ -251,12 +251,22 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
             for s, sf in zip(strokes, strokes_sm):
                 for idx_pt in [0, -1]:
                     d = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
+                    duration = s[-1,2] - s[0,2]
+
+                    # Shorter duration strokes are more likely to have larger diff from filtering, so
+                    # give them a bit more leweway
+                    if duration<0.2:
+                        max_frac = 0.25
+                    elif duration<0.34:
+                        max_frac = 0.2
+                    else:
+                        max_frac = 0.18
 
                     # print("-----")
                     # print(d)
                     # print(diag)
                     # print("-----")
-                    if d/diag > 0.2:
+                    if d/diag > max_frac:
                         from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
                         print(s)
                         print(sf)

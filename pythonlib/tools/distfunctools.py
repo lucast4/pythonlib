@@ -8,7 +8,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
                               normalize_cols_range01=False, normalize_by_range=False, range_norm=None,
                               convert_to_similarity=False, similarity_method=None, DEBUG=False,
                               accurately_estimate_diagonal=False,
-                              inds_skip_rows_or_cols=None):
+                              inds_skip_rows_or_cols=None, PLOT=False):
     """ Wrapper to generate distance matrix.
     Assumes this is symetric. Only computes upper triangle copies to lower.
     PARAMS:
@@ -168,7 +168,9 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
             assert False
 
     # assert ~np.any(np.isnan(D))
-
+    if PLOT:
+        from pythonlib.tools.snstools import heatmap_mat
+        fig, ax, rgba_values = heatmap_mat(D, annotate_heatmap=False)
     return D
 
 def closest_pt_twotrajs(traj1, traj2):

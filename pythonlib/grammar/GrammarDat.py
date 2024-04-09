@@ -158,7 +158,8 @@ class GrammarDat(object):
             taskstroke_inds_beh_order = tuple(taskstroke_inds_beh_order)
         return taskstroke_inds_beh_order in parses
 
-    def _score_beh_in_parses_find_index_match(self, taskstroke_inds_beh_order, rulestring):
+    def _score_beh_in_parses_find_index_match(self, taskstroke_inds_beh_order, rulestring,
+                                              print_parses_if_fail=True):
         """ 
         returns the index of the parse for this rulestring that matches this beh,
         if it exists. otherwise returns None
@@ -169,6 +170,12 @@ class GrammarDat(object):
         if taskstroke_inds_beh_order in parses:
             return parses.index(taskstroke_inds_beh_order)
         else:
+            if print_parses_if_fail:
+                print("=== parses:")
+                for p in parses:
+                    print(p)
+                print("=== taskstroke_inds_beh_order:")
+                print(taskstroke_inds_beh_order)
             return None
 
     ################ utils

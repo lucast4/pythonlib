@@ -379,7 +379,7 @@ def extract_supervision_params(D, ind):
     if "fix_tp" in allparams.keys():
         CUESTIM_FLIP = allparams["fix_tp"]["flip_cue_image_order"]==1
     else:
-        assert int(D.Dat.iloc[ind]["date"]) < 231001
+        assert int(D.Dat.iloc[ind]["date"]) <= 231001
         CUESTIM_FLIP = False
 
     params = {

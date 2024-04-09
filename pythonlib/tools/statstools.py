@@ -269,7 +269,7 @@ def cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=
     over range of possible n_clsuters.
 
     Code taken from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-    :param X:
+    :param X: (nsamp, nfeats)
     :param n_clusters:
     :param n_clusters_min_max: only needed if n_clusters is None, in which case shoudl be 2-list of int,
     will try all n clusters in range of [min, max], and use the one that maximizes the silhoutte score.
