@@ -102,7 +102,14 @@ def concatDatasets(Dlist, do_cleanup=False):
         # First, any preprocessing of each dataset
         # (1) regenerate tokens, thus removing variables that are binned across dta, which would be
         # innacruate now that this is concatted dataset.
-        D.tokens_append_to_dataframe_column(force_regenerate=True)
+        if True:
+            # Instead of forcing regenrate, which fails for characters (since this locks tokens), just
+            # clear the keys that are those binned or clustered, as a safety
+            D.tokens_generate_replacement_clear_derived_keys()
+            force_regenerate = False
+        else:
+            force_regenerate = True
+        D.tokens_append_to_dataframe_column(force_regenerate=force_regenerate)
         # (2) Delete all seqc, which are made from the tokens..
         D.seqcontext_delete_all_columns()
 
