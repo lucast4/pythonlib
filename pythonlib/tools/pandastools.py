@@ -434,7 +434,8 @@ def getCount(df, group, colname):
 
 
 def bin_values_conditioned_on_class(df, var_bin, vars_condition, nbins,
-                                    var_bin_ndim=1, new_col_name=None):
+                                    var_bin_ndim=1, new_col_name=None,
+                                    bin_by_rank=False, value_if_grp_not_enough_data=-1):
     """
     Bin values in <var_bin> running separtely for each class of the careogtical
     varaible <vars_condition>, and appending to a new column.
@@ -448,34 +449,54 @@ def bin_values_conditioned_on_class(df, var_bin, vars_condition, nbins,
     :param nbins: int, how mnay bins
     :param var_bin_ndim: 1 or 2, n dimensions. if 2, then bins each (x,y) dimenisions indepdenly. (--> tuple of ints).
     :param new_col_name: str to name new column, or None, in which case uses <var_bin>_binned
+    :param value_if_grp_not_enough_data: if any grp only 1 datapt, then assigns this to it.
     :return: df copied, and with new column of binned values.
     """
-    from pythonlib.tools.nptools import bin_values
+    from pythonlib.tools.nptools import bin_values, bin_values_by_rank
 
     if new_col_name is None:
         new_col_name = f"{var_bin}_binned"
+    if new_col_name in df.columns:
+        df = df.drop(new_col_name, axis=1)
 
     # Define a function to apply binning to each group
     if var_bin_ndim==1:
         def bin_values_helper(group):
-            # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
-            group[new_col_name] = bin_values(group[var_bin], nbins=nbins)
+            if len(group)==1:
+                # Then not enough data. call it -1
+                group[new_col_name] = value_if_grp_not_enough_data
+            else:
+                # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
+                if bin_by_rank:
+                    group[new_col_name] = bin_values_by_rank(group[var_bin], nbins=nbins)
+                else:
+                    group[new_col_name] = bin_values(group[var_bin], nbins=nbins)
             return group
     elif var_bin_ndim==2:
         def bin_values_helper(group):
-            # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
+            if len(group)==1:
+                group[new_col_name] = value_if_grp_not_enough_data
+            else:
+                # group['A_binned'] = pd.cut(group['A'], bins=bin_edges, labels=bin_labels, include_lowest=True)
 
-            values = np.stack(group[var_bin].tolist(), axis=0)
-            assert values.shape[0]==len(group)
-            assert values.shape[1]==2
+                values = np.stack(group[var_bin].tolist(), axis=0)
+                assert values.shape[0]==len(group)
+                assert values.shape[1]==2
 
-            xs_binned = bin_values(values[:,0], nbins=nbins)
-            ys_binned = bin_values(values[:,1], nbins=nbins)
-            # Convert to list of 2-tuples
-            values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)]
+                if bin_by_rank:
+                    xs_binned = bin_values_by_rank(values[:,0], nbins=nbins)
+                    ys_binned = bin_values_by_rank(values[:,1], nbins=nbins)
+                else:
+                    xs_binned = bin_values(values[:,0], nbins=nbins)
+                    ys_binned = bin_values(values[:,1], nbins=nbins)
+                # Convert to list of 2-tuples
+                values_binned = [(x, y) for x, y in zip(xs_binned, ys_binned)]
 
-            group[new_col_name] = values_binned
+                group[new_col_name] = values_binned
             return group
+    else:
+        print(var_bin_ndim)
+        assert False
 
     # Apply binning separately for each class of B
     binned_df = df.groupby(vars_condition).apply(bin_values_helper)
@@ -2433,6 +2454,27 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
     #
     # return dfout, dict_dfthis
 
+def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
+                                                   plot_counts_heatmap_savepath=None):
+    """
+    Heloper, setting params I usualyl use for simple task of pruning df to get just tjhose levels
+    opf vars_others which have at least 2 levels of var, with <n_min_per_level> trials at least, per
+    level.
+    :param df:
+    :param var:
+    :param vars_others:
+    :return:
+    """
+    lenient_allow_data_if_has_n_levels = 2
+    dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min_across_all_levs_var=n_min_per_lev,
+                    PRINT=False, lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels, DEBUG=False,
+                    prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
+                    balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
+                    ignore_values_called_ignore=False, plot_counts_heatmap_savepath=plot_counts_heatmap_savepath,
+                                            balance_force_to_drop_which=None)
+    return dfout, dict_dfthis
+
+
 def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=None, n_min_across_all_levs_var=8,
                     PRINT=False, lenient_allow_data_if_has_n_levels=None, DEBUG=False,
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
@@ -2989,7 +3031,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     list_subplot = df[var_subplot].unique().tolist()
     if ncols is None:
         # Then ncols is the num suibplots
-        ncols = len(list_subplot)
+        ncols = max([len(list_subplot), 2]) # for axes sake
+
     # ncols = 3
     W = 5
     H = 4
