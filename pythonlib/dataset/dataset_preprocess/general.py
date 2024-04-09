@@ -473,7 +473,15 @@ def _groupingParams(D, expt):
         # Just regulare prims in grid
         # Just use defaults.
         pass
-    # elif "grammar" in expt:
+    # IGNORE - replaced this method.
+    # elif "grammar" in expt and D.animals(force_single=True)[0]=="Pancho" and int(D.dates(True)[0])>=220902 and int(D.dates(True)[0])<=220909:
+    #     # AnBm, with two shape ses switching by trail in same day.
+    #
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
+    #     traintest_reassign_method = "supervision_except_color"
+    #     mapper_auto_rename_probe_taskgroups = True
+
     elif "gram" in expt:
         # Assume that if grammar in name, it has rules.
         grouping_reassign = True
@@ -508,7 +516,8 @@ def _groupingParams(D, expt):
         print(plantime_cats)
         F = lambda x: plantime_cats[x["plan_time"]]
         D.Dat = applyFunctionToAllRows(D.Dat, F, "plan_time_cat")
-    
+
+    #### RENAME EPOCHS CORRECTLY
     if grouping_reassign:
         # Rename epochs, applying reassignment methods in order
         for i, grmeth in enumerate(grouping_reassign_methods_in_order):
@@ -578,12 +587,63 @@ def _groupingParams(D, expt):
                 # 2) get grouping.
                 grouping_vars = ["epoch", "CUE_csflipped"]
                 D.supervision_reassign_epoch_byvars(grouping_vars)
+            # SKIP THIS, since only running in anova_params
+            # elif grmeth=="syntax_AnBm_hack":
+            #     # Hacky, split epoch into <epoch>|A and <epoch>|B based on which shape set was used,
+            #     # is AnBm with two sets today.
+            #
             else:
                 print(grmeth)
                 assert False
 
-    # # fix a problem, sholdnt throw out epoch name
-    # D.supervision_epochs_extract_orig() 
+    #### SUPERVISION - get supervision stages, i.e, tuples
+    # Copied from below, used to be end of preproicess, but better to do up here since other stuff depends on this -- making sure to retain original order of opertaion.
+
+    # (1)) PARAMS THAT LOOK INTO BASE (RAW) SUPERVISION (From blockpoarams) -- i.e,, not D.Dat, and so is not history dependent.
+    # Needed for mask supervision
+    # DEFINE what is "supervision_online" for this expt (i.e., handholding).
+    D.supervision_summarize_whether_is_instruction(color_is_considered_instruction)
+    D.supervision_summarize_into_tuple(method="verbose", new_col_name = "supervision_stage_new")
+
+    # Extract concise supervision stage
+    if epoch_append_cue_stim_flip:
+        D.supervision_summarize_into_tuple(method="concise_cuestim", new_col_name="supervision_stage_concise")
+    else:
+        D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
+    D.supervision_semantic_string_append_RAW("supervision_stage_semantic")
+
+    # Add column "INSTRUCTION_COLOR"
+    D.supervision_check_is_instruction_using_color_assign()
+
+    # (2) Modify the columns of self.Dat related to epoch, and append conjunctive epoch_<> vairables.
+    # Merge epochs;
+    if len(epoch_merge_dict)>0:
+        print("MERGING EPOCHS...")
+        for epoch_new, list_epoch_old in epoch_merge_dict.items():
+            print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
+            D.supervision_epochs_merge_these(list_epoch_old, epoch_new)
+
+    # Since epoch might change...
+    D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
+
+    def F(x):
+        return (x["epoch"], x["supervision_stage_concise"])
+    D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
+
+    # fix a problem, sholdnt throw out epoch name
+    D.supervision_epochs_extract_orig()
+
+    # def F(x):
+    #     return (x["epoch"], x["supervision_stage_concise"])
+    # D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
+
+    # D.supervision_summarize_whether_is_instruction(color_is_considered_instruction)
+
+    # Soem obligatory epoch renaming functions (Do this last, or else epoch_orig wont work)
+    D.supervision_reassign_epoch_rule_by_sequence_mask_supervision() # sequence mask append suffix "|S"
+
+    ###############
+    # D.supervision_epochs_extract_orig()
     if grouping_levels is None:
         # Then you did not enter it manually. extract it
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
@@ -1077,8 +1137,12 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         probe_list.append(probe_val)
     D.Dat["probe"] = probe_list
 
-    ### DEFINE what is "supervision_online" for this expt (i.e., handholding).
-    D.supervision_summarize_whether_is_instruction(color_is_considered_instruction)
+    if False: # Doing earlier
+        ### DEFINE what is "supervision_online" for this expt (i.e., handholding).
+        D.supervision_summarize_whether_is_instruction(color_is_considered_instruction)
+
+        #### SUPERVISION - get supervision stages, i.e, tuples
+        D.supervision_summarize_into_tuple(method="verbose", new_col_name = "supervision_stage_new")
 
     ### Rename things as monkey train test depenidng on expt
     if expt in ["gridlinecircle", "chunkbyshape1", "resize1"]:
@@ -1087,9 +1151,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # Append fixed taks setds information
     D.taskclass_extract_los_info_append_col()
-
-    #### SUPERVISION - get supervision stages, i.e, tuples
-    D.supervision_summarize_into_tuple(method="verbose", new_col_name = "supervision_stage_new")
 
     # Reassign taskgroup. by default uses value in task_stagecategory.
     # i) first, do automatic detection of probe categories for each character
@@ -1134,32 +1195,36 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     ############# SUPERVISION STUFF
     D.grouping_append_col(["date_MMDD", "epoch"], "date_epoch", use_strings=True, strings_compact=True)
 
-    # Extract concise supervision stage
-    if epoch_append_cue_stim_flip:
-        D.supervision_summarize_into_tuple(method="concise_cuestim", new_col_name="supervision_stage_concise")
-    else:
-        D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
-    D.supervision_semantic_string_append("supervision_stage_semantic") 
+    if False: # Done above
+        # Extract concise supervision stage
+        if epoch_append_cue_stim_flip:
+            D.supervision_summarize_into_tuple(method="concise_cuestim", new_col_name="supervision_stage_concise")
+        else:
+            D.supervision_summarize_into_tuple(method="concise", new_col_name="supervision_stage_concise")
+        D.supervision_semantic_string_append_RAW("supervision_stage_semantic")
     
-    def F(x):
-        return (x["epoch"], x["supervision_stage_concise"])
-    D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
 
-    # Merge epochs;
-    if len(epoch_merge_dict)>0:
-        print("MERGING EPOCHS...")
-        for epoch_new, list_epoch_old in epoch_merge_dict.items():
-            print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
-            D.supervision_epochs_merge_these(list_epoch_old, epoch_new)        
-            
-    # Since epoch might change...
-    D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
+    if False:
+        def F(x):
+            return (x["epoch"], x["supervision_stage_concise"])
+        D.Dat = applyFunctionToAllRows(D.Dat, F, "epoch_superv")
 
-    # fix a problem, sholdnt throw out epoch name
-    D.supervision_epochs_extract_orig() 
+        # Merge epochs;
+        if len(epoch_merge_dict)>0:
+            print("MERGING EPOCHS...")
+            for epoch_new, list_epoch_old in epoch_merge_dict.items():
+                print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
+                D.supervision_epochs_merge_these(list_epoch_old, epoch_new)
 
-    # Add column "INSTRUCTION_COLOR"
-    D.supervision_check_is_instruction_using_color_assign()
+    if False:
+        # Since epoch might change...
+        D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
+
+        # fix a problem, sholdnt throw out epoch name
+        D.supervision_epochs_extract_orig()
+
+        # Add column "INSTRUCTION_COLOR"
+        D.supervision_check_is_instruction_using_color_assign()
 
     ################### TASKGROUP STUFF
     # if taskgroup name is too long, then prune it. otherwise can lead to seaborn plotting errors...
@@ -1184,11 +1249,20 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if "supervision_params" in D.Dat.columns:
         del D.Dat["supervision_params"] # from drawmonkey.
 
-    ############ GOOD TOKENS STUFF!!
+    ############ GOOD TOKENS STUFF!! E.g. binning motor, etc.
     # (had this in anova params, but should actually run all the time).
-    # force_regenerate, so that older binned values are reased (e.g., stroke onset), which needs
-    # if this is a new concated dataset.
-    D.tokens_append_to_dataframe_column(force_regenerate=True)
+
+    # Only force_regenerate if you havent already generated and locked toeksn (char)
+    all_locked = D.sequence_tokens_check_taskclass_locked()
+    if all_locked:
+        # usually means I have run already above, to replace tokens with char shape labels.
+        assert replace_shapes_with_clust_labels_if_exist and rename_shapes_if_cluster_labels_exist, "This is the only way this would be possible, so far..."
+        force_regenerate = False
+    else:
+        # force_regenerate, so that older binned values are erased (e.g., stroke onset), as they would
+        # be innacruate if you are concatting multiple datasets (need to rebin)
+        force_regenerate = True
+    D.tokens_append_to_dataframe_column(force_regenerate=force_regenerate)
 
     # GOOD - wrapper for all tokens-related preprocessing (e.g, binning).
     D.tokens_preprocess_wrapper_good()

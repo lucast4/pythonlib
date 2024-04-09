@@ -15,6 +15,9 @@ from .analy_dlist import mergeTwoDatasets, matchTwoDatasets
 from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_ANALYSIS_OUTCOMES_SERVER
 from pythonlib.tools.listtools import sort_mixed_type
 from pythonlib.tools.plottools import savefig
+import seaborn as sns
+from pythonlib.tools.snstools import rotateLabel
+from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
 
 base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
@@ -1757,7 +1760,7 @@ class Dataset(object):
     def tokens_append_to_dataframe_column(self, force_regenerate=False):
         """
         Extract tokens and store in self.Dat (simply "expose"). Useful for nerual stuff.
-        You ned to have first extracted strokesbeh tokens --
+        You ned to have first arleady extracted strokesbeh tokens --
         :return:
         - Appends to self.Dat (Tokens Object)
             self.Dat["Tkbeh_stkbeh"] = list_Tk_beh_1
@@ -1779,7 +1782,8 @@ class Dataset(object):
         self.Dat["Tkbeh_stktask"] = list_Tk_beh_2
         self.Dat["Tktask"] = list_Tk_task
 
-    def tokens_extract_variables_as_dataframe(self, list_var, tk_ver="beh_using_beh_data"):
+    def tokens_extract_variables_as_dataframe(self, list_var, tk_ver="beh_using_beh_data",
+                                              list_var_dataset=None):
         """
         Generate a dataframe where each row is a set of variables extracted from token.
         Useful for doing stuff with tokens.
@@ -1792,15 +1796,31 @@ class Dataset(object):
         for i, row in self.Dat.iterrows():
             Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
             for j, tok in enumerate(Tk.Tokens):
+                # print("---")
+                # print(tok["ind_behstrokes"], j)
+                # print(len(Tk.Tokens))
+                # assert len(tok["ind_behstrokes"])==1
+                # assert tok["ind_behstrokes"][0] == j, "just sanityc chekc that this old varaible makes sense"
                 res.append({
+                    "trialcode":row["trialcode"],
+                    "ind_taskstroke_orig":tok["ind_taskstroke_orig"],
                     "idx":i,
                     "idx_tok":j,
+                    "stroke_index":j,
                 })
+
+                # print(tok.keys())
+                # assert False
                 for var in list_var:
                     if var in tok.keys():
                         res[-1][var] = tok[var]
                     else:
                         res[-1][var] = row[var]
+
+                if list_var_dataset is not None:
+                    for var in list_var_dataset:
+                        res[-1][var] = row[var]
+
         df = pd.DataFrame(res)
 
         # Store the token ver
@@ -1829,9 +1849,13 @@ class Dataset(object):
         for i, row in self.Dat.iterrows():
             Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
             for j, tok in enumerate(Tk.Tokens):
-                tmp = df[(df["idx"] == i) & (df["idx_tok"] == j)][var_extract].values
-                assert len(tmp)==1
-                tok[var_name_assign] = tmp[0]
+                dfthis = df[(df["idx"] == i) & (df["idx_tok"] == j)]
+                assert len(dfthis)==1
+                # tmp = df[(df["idx"] == i) & (df["idx_tok"] == j)][var_extract].values
+                # assert len(tmp)==1
+                assert tok["ind_taskstroke_orig"] == dfthis["ind_taskstroke_orig"].values[0]
+                assert dfthis["trialcode"].values[0] == row["trialcode"]
+                tok[var_name_assign] = dfthis[var_extract].values[0]
 
     def tokens_gridloc_replace_with_recomputed_loc_chars(self, PRINT=False):
         """
@@ -2201,6 +2225,41 @@ class Dataset(object):
             self.TokensStrokesBeh = TokensStrokesBeh
             self.TokensTask = TokensTask
             self.TokensStrokesBehUsingTaskStrokes = TokensStrokesBehUsingTaskStrokes
+
+            # # Save, so that can clear derived keys that are extra from these..
+            self.TokensStrokesBeh_OriginalKeys = list(list(self.TokensStrokesBeh.values())[0].Tokens[0].keys())
+            self.TokensTask_OriginalKeys = list(list(self.TokensTask.values())[0].Tokens[0].keys())
+            self.TokensStrokesBehUsingTaskStrokes_OriginalKeys = list(list(self.TokensStrokesBehUsingTaskStrokes.values())[0].Tokens[0].keys())
+
+    def tokens_generate_replacement_clear_derived_keys(self):
+        """
+        For all Tokens in self that have been regenerated from raw, prune so they only use
+        the original keys, not the derived keys from binning or clustering data -- useful if
+        you want to concat datasets and then ensure that they only use clusters combining datasets.
+        :return: Modifies tokens (e.g., self.TokensStrokesBeh)
+        """
+
+        def _clear_keys(tokens_ver):
+            if hasattr(self, tokens_ver):
+                TokensDict = getattr(self, tokens_ver)
+                TokensKeys = getattr(self, f"{tokens_ver}_OriginalKeys")
+                dict_Tk = {}
+                for tc, Tk in TokensDict.items():
+                    # Regenreate Tk.Tokens, including only orig keys
+                    tmp = []
+                    for tok in Tk.Tokens:
+                        tmp.append({k:v for k, v in tok.items() if k in TokensKeys})
+                    Tk.Tokens = tmp
+                    # Save Tk.
+                    dict_Tk[tc] = Tk
+                setattr(self, tokens_ver, dict_Tk)
+                # self.TokensStrokesBeh = dict_Tk
+                print("Cleared tokesn to original ones, for:", tokens_ver)
+            else:
+                print("SKIPPED clearing tokesn to original ones (did not find in self), for:", tokens_ver)
+
+        for tokens_ver in ["TokensStrokesBeh", "TokensTask", "TokensStrokesBehUsingTaskStrokes"]:
+            _clear_keys(tokens_ver)
 
     def taskclass_tokens_extract_wrapper(self, ind, which_order,
                                          plot=False, return_as_tokensclass=False):
@@ -3628,7 +3687,12 @@ class Dataset(object):
                         else:
                             # Better, since goes directly to what param matters.
                             # self.Dat = self.Dat[self.Dat["superv_SEQUENCE_SUP"]=="off"] # OLD VERSION, wasnt general enbough
-                            self.Dat = self.Dat[self.Dat["supervision_online"]==False]
+                            # self.Dat = self.Dat[self.Dat["supervision_online"]==False]
+
+                            # dont throw out cases that are "solid_sequence_mask", since these are using supervision
+                            # as an actual testing epoch, not just as training.
+                            self.Dat = self.Dat[(self.Dat["supervision_online"]==False) | (self.Dat["superv_COLOR_METHOD"]=="solid_sequence_mask")]
+
                     elif p=="remove_online_abort":
                         # Remove trials with online abort
                         self.Dat = self.Dat[self.Dat["aborted"]==False]
@@ -7013,7 +7077,35 @@ class Dataset(object):
     def dat_append_col_by_grp(self, grp_by, new_col_name):
         assert False, "moved to grouping_append_col"
 
-        
+    def grouping_print_conjunctions_summary_good(self, vars, PRINT=False, n_min = None):
+        """
+        Good printing of conjuctions of vars, including sample size and indices in self.Dat
+        :param vars:
+        :return: grpdict, grplev:indices
+        """
+
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+        # Get trials under each epoch
+        out = grouping_append_and_return_inner_items(self.Dat, vars)
+
+        if PRINT:
+            print("======================= Marginals")
+            for v in vars:
+                print(v, " --- ", sort_mixed_type(self.Dat[v].unique()))
+
+            print("======================= Conjucntions keys (n trials)")
+            for k, v in out.items():
+                print(k, " -- n=", len(v))
+
+            print("======================= Conjucntions and indices")
+            for k, v in out.items():
+                print(k, v)
+
+        if n_min is not None:
+            out = {k:v for k,v in out.items() if len(v)>=n_min}
+
+        return out
+
     def grouping_print_n_samples(self, list_groupouter_grouping_vars, Nmin=0, savepath=None,
         save_as="txt"):
         """ Print n trials for each of conjucntive levels, multiple grouping vars.
@@ -7424,7 +7516,7 @@ class Dataset(object):
     ################# Supervision params
     # ie params that online guide supervision
     def supervision_extract_params(self, ind):
-        """ Extract dict of supervision params for this tryial
+        """ Extract dict of supervision params for this tryial, uses the BASE params data.
         """
         from .dataset_preprocess.supervision import extract_supervision_params
 
@@ -7505,7 +7597,10 @@ class Dataset(object):
             return False
 
     def supervision_check_is_instruction_using_color_assign(self, assign_to_column="INSTRUCTION_COLOR"):
-        """ assign_to_column, if str, then updates D.Dat[assign_to_column], otherwise does
+        """ indicate for each trial whether it is using color instruction
+        methods that would be considered instructive (and therefore warrants being called a different rule/epocj).
+        This does NOT include color cues for rules.
+        assign_to_column, if str, then updates D.Dat[assign_to_column], otherwise does
         not modify D.Dat
         """
         # 1) indicate for each trial whether it is using color instruction
@@ -7534,7 +7629,7 @@ class Dataset(object):
 
         
     def supervision_epochs_extract_orig(self):
-        """ Extracts original name (e.g, AnBmTR|0 --> AnBmTR) before appended color
+        """ Extracts original name (e.g, AnBmTR|0 --> AnBmTR) even if you have already appended color
         superv info. This is a hacky solution to the original problem of not saving these names
         RETURNS:
         - places in self.Dat["epoch_orig"]
@@ -7615,7 +7710,10 @@ class Dataset(object):
         print(self.Dat["epoch"].value_counts())
 
     def supervision_reassign_epoch_rule_by_color_instruction(self):
-
+        """
+        Replace epoch in self.DAt with <epoch>|1 if is color instruction
+        :return:
+        """
         # 1) conjunction of color and epoch
         self._supervision_reassign_epoch_rule_by_color_instruction("epoch", "epoch_color", False)
 
@@ -7638,6 +7736,37 @@ class Dataset(object):
             else:
                 return x["epoch"]
         self.Dat = applyFunctionToAllRows(self.Dat, F, "epoch")
+
+    def supervision_reassign_epoch_rule_by_sequence_mask_supervision(self):
+        """
+        Replace self.Dat["epoch"] by appending onto each rows epoch "|S" if
+        this trial is a sequence mask supervision that is using solid_sequence_mask
+        (i.e,, this i a test on purpose, not a training seuqence mask).
+        :return: modifies self.Dat["epoch"] if is supervision.
+        """
+
+        # Collect epocjh for each row
+        list_epoch = []
+        list_is_seqsup = []
+        for i, row in self.Dat.iterrows():
+
+            # Criteria for calling this sequence mask
+            a = row["INSTRUCTION_COLOR"]==False
+            b = row["superv_COLOR_METHOD"]=="solid_sequence_mask"
+            c = row["supervision_online"]==True
+            d = row["epoch"][-2:]!="|S" # dont add again, if already exists
+
+            if a & b & c & d:
+                # is superivison
+                list_epoch.append(f"{row['epoch']}|S")
+                list_is_seqsup.append(True)
+            else:
+                # Not superv, use default epoch name
+                list_epoch.append(row['epoch'])
+                list_is_seqsup.append(False)
+        self.Dat["epoch"] = list_epoch
+        self.Dat["superv_is_seq_sup"] = list_is_seqsup
+        print("Modified self.Dat[epoch]")
 
     def _supervision_reassign_epoch_rule_by_color_instruction(self, old_col_name = "epoch", 
             new_col_name="epoch_color", 
@@ -7662,6 +7791,8 @@ class Dataset(object):
         # - methods that would be considered instructive (and therefore warrants being called a different rule/epocj)
         if "INSTRUCTION_COLOR" not in self.Dat.columns:
             self.supervision_check_is_instruction_using_color_assign()
+        assert "INSTRUCTION_COLOR" in self.Dat.columns
+
         # list_issup = []
         # for ind in range(len(self.Dat)):
         #     list_issup.append(self.supervision_check_is_instruction_using_color(ind))            
@@ -7675,17 +7806,19 @@ class Dataset(object):
         print("New epochs")
         print(self.Dat[new_col_name].value_counts())
 
-    def supervision_semantic_string_append(self, colname):
-        """ Append a new column with string indicating superivison for this trial
+    def supervision_semantic_string_append_RAW(self, colname):
+        """ Append a new column with string indicating superivison for this trial,
+        on RAW supervision data.
         """
         tmp = []
         for ind in range(len(self.Dat)):
-            tmp.append(self.supervision_semantic_string_extract(ind))
+            tmp.append(self.supervision_semantic_string_extract_RAW(ind))
         self.Dat[colname] = tmp
         print("Append column to self.Dat: ", colname)
 
-    def supervision_semantic_string_extract(self, ind):
-        """ Human-readable string indicating features for supervision for this trial.
+    def supervision_semantic_string_extract_RAW(self, ind):
+        """ Human-readable string indicating features for supervision for this trial, based
+        on RAW supervision data.
         Appends features to string if they are not "off".
         RETURNS:
         - string, |-separated. if no superivison at all, then returns NONE
@@ -7810,7 +7943,7 @@ class Dataset(object):
         (and any others).
         For each trial, determine True/False whether this had online
         supervision, based on key parameters like color, sequence presentation, etc
-        --> Appends new column "supervision_online"
+        --> Appends new column self.Dat["supervision_online"]
         """
         list_issup = []
         for ind in range(len(self.Dat)):
@@ -7821,7 +7954,7 @@ class Dataset(object):
 
         # NOTE: superv_semantic coud be used insetead... Here, just making a note of that.
         if False:
-            self.supervision_semantic_string_append("superv_semantic")
+            self.supervision_semantic_string_append_RAW("superv_semantic")
             self.grouping_print_n_samples(["superv_semantic", "supervision_online"])
 
     ############## EPOCHSET stuff
@@ -8120,8 +8253,120 @@ class Dataset(object):
         """
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
+    def grammarparses_rules_epochs_superv_summarize_wrapper(self, PRINT=False):
+        """
+        GOOD - wrapper to extract for each row the key features of the epoch, which are
+        in generic terms that apply across epxeirments, refelcting, e.g, whether is
+        color_rank supevision, sequence_sup, random(preset) sequence, AnBmnCk, etc.
+        Also useufl printiing of summary of conjuicntions of these features
+        :return:
+        """
+
+        #TODO add whether is direction rule.
+
+        # (1) Extract columns
+        if "epoch_orig_rand_seq" not in self.Dat.columns:
+            self.grammarparses_rules_random_sequence()
+
+        if "epoch_is_AnBmCk" not in self.Dat.columns:
+            self.grammarparses_rules_shape_AnBmCk()
+
+        if "superv_is_seq_sup" not in self.Dat.columns:
+            self.supervision_reassign_epoch_rule_by_sequence_mask_supervision()
+
+        # Whether color is used to indicate seuqence (does NOT include color cue for rules).
+        if "INSTRUCTION_COLOR" not in self.Dat.columns:
+            self.supervision_check_is_instruction_using_color_assign()
+
+        # (2) PRint summary
+        if PRINT:
+            from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+            # Get trials under each epoch
+            vars = ["epoch_orig", "epoch", "epoch_rand", "INSTRUCTION_COLOR", "superv_is_seq_sup", "epoch_orig_rand_seq", "epoch_is_AnBmCk"]
+            grpdict = self.grouping_print_conjunctions_summary_good(vars, PRINT=True)
+
+    def grammarparses_rules_shape_AnBmCk(self):
+        """
+        For each row, appends column "epoch_is_AnBmCk", bool, indicating
+        whether is pure shape rule, without color_rank or sequence_sup
+        supervision.
+        """
+
+        # Get list of epochs that use shape rules.
+        shape_rules = self.grammarparses_rules_involving_shapes(return_as_epoch_orig=True)
+
+
+        # Include only those epochs that are also not color instruction, or seqsup.
+        if "superv_is_seq_sup" not in self.Dat.columns:
+            self.supervision_reassign_epoch_rule_by_sequence_mask_supervision()
+
+        list_AnBmCk = []
+        for i, row in self.Dat.iterrows():
+            a = row["superv_is_seq_sup"]
+            b = row["INSTRUCTION_COLOR"]
+            c = row["epoch_orig"] in shape_rules
+
+            print(i, a, b, c)
+            if (c) and (not a) and (not b):
+                # Then this is a shape rule, without supervision by color or sequence mask
+                list_AnBmCk.append(True)
+            else:
+                list_AnBmCk.append(False)
+
+        self.Dat["epoch_is_AnBmCk"] = list_AnBmCk
+        print("Appended column: self.Dat[epoch_is_AnBmCk]")
+
     ############### Sequence / GRAMMAR stuff, i.e., realted to sequence training
-    def grammarparses_rules_involving_shapes(self):
+    def grammarparses_rules_random_sequence(self, PRINT=False):
+        """
+        For each rule (epoch_orig), determine if it is using random preset sequences.
+        Has NOTHING to do with color, i.e., ignres the |1 suffix that indicates is color instruction.
+        Useful for grouping all epochs which are actually color_rank with random seuqence.
+        :return: map_epochorig_to_israndseq, dict, epoch_orig:bool (True means is random_)
+        AND appends a new column "epoch_orig_rand_seq"
+        AND appends "epoch_rand", which is iether "colrand" (if is random and color instruction,
+        or epoch otherwise
+        """
+
+        ruledict_for_each_rule = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
+
+        map_epochorig_to_israndseq = {}
+        for epoch_orig in self.Dat["epoch_orig"].unique().tolist():
+            # a = ("rnd" in epoch_orig.lower()) or ("rand" in epoch_orig.lower())
+            a = True
+            b = ruledict_for_each_rule[epoch_orig]["categ"] == "preset" and ruledict_for_each_rule[epoch_orig]["subcat"] == "null"
+            map_epochorig_to_israndseq[epoch_orig] = a & b
+
+        # Add a column
+        self.Dat["epoch_orig_rand_seq"] = [map_epochorig_to_israndseq[row["epoch_orig"]] for i, row in self.Dat.iterrows()]
+
+        # Add a column
+        list_epoch_rand = []
+        for i, row in self.Dat.iterrows():
+            if row["epoch_orig_rand_seq"]==True and row["INSTRUCTION_COLOR"]==True:
+                epoch_rand = "colrand"
+            elif row["epoch_orig_rand_seq"]==True and row["INSTRUCTION_COLOR"]==False and row["superv_COLOR_METHOD"] == "solid_sequence_mask":
+                # Random seuqence, but no color instruction. The only case this is possible (I think)
+                # is if using seuqence  mask... in which case superv_COLOR_METHOD=="solid_sequence_mask".
+                epoch_rand = "colrand"
+            elif row["epoch_orig_rand_seq"]==False and row["INSTRUCTION_COLOR"]==True:
+                # using rule, but coloring (probe)
+                epoch_rand = row["epoch"] # .e.g, AnBmCk2|1
+            elif row["epoch_orig_rand_seq"]==False and row["INSTRUCTION_COLOR"]==False:
+                # using rule, no color
+                epoch_rand = row["epoch"] # .e.g, AnBmCk2|0
+            else:
+                assert False, "how is this possible? random but no cue?"
+            list_epoch_rand.append(epoch_rand)
+        self.Dat["epoch_rand"] = list_epoch_rand
+
+        if PRINT:
+            vars = ["epoch_orig_rand_seq", "INSTRUCTION_COLOR", "epoch_rand", "epoch_orig", "epoch"]
+            grpdict = self.grouping_print_conjunctions_summary_good(vars)
+
+        return map_epochorig_to_israndseq
+
+    def grammarparses_rules_involving_shapes(self, return_as_epoch_orig=False):
         """ Return list of rulestrings of the rules that exist in dataset which
         use knowledge of shapes. i.e. those that are categ "ss"
         RETURNS:
@@ -8133,7 +8378,28 @@ class Dataset(object):
             if ruledict["categ"]=="ss":
                 # then this is shape sequence
                 list_rules_using_shapes.append(rulestr)
+
+        if return_as_epoch_orig:
+            # Convert from rulestring to epoch_orig
+            map_rulestr_ruledict = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"]
+            list_rules_using_shapes = [map_rulestr_ruledict[rs]["params"] for rs in list_rules_using_shapes]
+
         return list_rules_using_shapes
+
+    def grammarparses_rules_extract_map_rule_to_rulekind(self):
+        """
+        Get mapping (dict) from epoch_orig --> (rulecat, rulesubcat), e.g,
+        {'UL': ('dir', 'null'),
+         'llCV3FstStk': ('preset', 'null'),
+         'llCV3': ('ss', 'rankdir')}
+        :return: dict (see above)
+        """
+
+        ruledict_for_each_rule = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
+        # for epoch in self.Dat["epoch_orig"].unique():
+        #     ruledict_for_each_rule[epoch]
+        map_epochorig_to_rulekind = {epoch_orig:(ruledict["categ"],ruledict["subcat"]) for epoch_orig, ruledict in ruledict_for_each_rule.items()}
+        return map_epochorig_to_rulekind
 
     def grammarparses_rules_extract_info(self):
         """ Return dict holding infor for all rules (epochs)
@@ -8163,6 +8429,17 @@ class Dataset(object):
                 else:
                     map_rulestr_ruledict[rs] = ruledict
 
+        # ruledict_for_each_rule = {}
+        # for list_ruledicts in dict_ruledicts_consistent_with_each_existing_rule.values():
+        #     for ruledict in list_ruledicts:
+        #         rule_short = ruledict["params"] # 'llV1R',
+        #         rule = ruledict["rulestring"] # 'ss-chain-llV1R'}
+        #         if rule_short in list_rules_exist:
+        #             if rule not in ruledict_for_each_rule:
+        #                 ruledict_for_each_rule[rule] = ruledict
+        #             else:
+        #                 assert ruledict_for_each_rule[rule] == ruledict
+
         out = {
             "list_rules_exist":list_rules_exist,
             "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule,
@@ -8170,7 +8447,14 @@ class Dataset(object):
             "map_rulestr_ruledict":map_rulestr_ruledict
         }
 
-        out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
+        try:
+            out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
+        except Exception as err:
+            for k, v in out.items():
+                print(k, " -- ", v)
+            print(" ________________ ruledict_for_each_rule")
+            print(out["ruledict_for_each_rule"].keys())
+            raise err
         return out
 
     def grammarparses_ruledict_rulestring_extract(self, ind):
@@ -8348,6 +8632,7 @@ class Dataset(object):
         # get the original chunksclass for this index
         idx = GD._score_beh_in_parses_find_index_match(beh, rs)
         if idx is None:
+            print("-----------------")
             print(idx)
             print(beh, rs)
             assert False, "then there is no match... (run this? D.preprocessGood(params=[one_to_one_beh_task_strokes, correct_sequencing_binary_score]))"
@@ -8615,7 +8900,7 @@ class Dataset(object):
         # Then run grammar_successbinary_print_summary
 
 
-    def grammarparses_successbinary_score(self, print_summary=False, DEBUG=False):
+    def grammarparses_successbinary_score_wrapper(self, print_summary=False, DEBUG=False):
         """ Good, determine if beh is success based on matching any of the possible
         parses given each trial's rule.
         PARAMS:
@@ -8730,6 +9015,21 @@ class Dataset(object):
 
 
     #####################################################
+    def sequence_tokens_check_taskclass_locked(self):
+        """
+        Check if all TaskClass (self.Dat["Task"]) are locked from generating new
+        tokens, which I usualyl do if I have replaced tokens with those for
+        chars (using clust shapes) and want to block any possible use of the
+        original grid versiuon tokens.
+        :return: bool, True if all rows of self.Dat are locked.
+        """
+        all_locked = True
+        for i, row in self.Dat.iterrows():
+            if (not hasattr(row["Task"], "_TokensLocked")) or (row["Task"]._TokensLocked == False):
+                all_locked = False
+                break
+        return all_locked
+
     def sequence_tokens_clear_behclass_and_taskclass_and_lock(self):
         """ Guaranteed to completely remove any trace of extracted
         datsegs, by deleling behclass entirely, and removing
@@ -10006,6 +10306,7 @@ class Dataset(object):
 
     def strokes_onsets_offsets(self, ind):
         """
+        Get onsets and offset times of strokes.
         RETURNS:
         - onsets, list of nums, time in sec, onsets of strokes
         - offsets, list ofn ums
