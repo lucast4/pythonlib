@@ -1185,14 +1185,56 @@ class Clusters(object):
         assert var in label_vars
         return label_vars.index(var)
 
+    # def rsa_mask_context_split_levels_of_var(self, vars_context, PLOT=False,
+    #                                               exclude_diagonal=True):
+    #     """
+    #     Return dict mapping between each level of vars_context (grouping var) and the
+    #     mask that are distance between this same level. Useful for computing "within-context"
+    #     scores (i.e., by taking & with mask for different effect).
+    #     NOTE: WILL be only upper triangular
+    #     :param vars_context:
+    #     :return: map_grp_to_mask, dict[grp]--> ma, where grp is tuple of classea dn ma is bool.
+    #     """
+    #     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+    #
+    #     # Get row indices for levels of conjunction var
+    #     dflab = self.rsa_labels_return_as_df()
+    #     grpdict = grouping_append_and_return_inner_items(dflab, vars_context)
+    #
+    #     # Get each mask
+    #     if exclude_diagonal:
+    #         ma_ut = self._rsa_matindex_generate_upper_triangular()
+    #     else:
+    #         ma_ut = self._rsa_matindex_generate_all_true()
+    #     map_grp_to_mask = {}
+    #     for grp, indrows in grpdict.items():
+    #         ma = self._rsa_matindex_convert_to_mask_rect(indrows, indrows) # same, for this grp
+    #         map_grp_to_mask[grp] = ma & ma_ut
+    #
+    #     if PLOT:
+    #         ncols = 2
+    #         nrows = int(np.ceil(len(map_grp_to_mask)/ncols))
+    #         SIZE = 5
+    #         fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
+    #         for ax, (grp, ma) in zip(axes.flatten(), map_grp_to_mask.items()):
+    #             self.rsa_matindex_plot_bool_mask(ma, ax)
+    #             ax.set_title(grp)
+    #
+    #     return map_grp_to_mask
+
     def rsa_mask_context_split_levels_of_conj_var(self, vars_context, PLOT=False,
-                                                  exclude_diagonal=True):
+                                                  exclude_diagonal=True, contrast="same"):
         """
-        Return dict mapping between each level of vars_context (grouping var) and the
-        mask that are distance between this same level. Useful for computing "within-context"
-        scores (i.e., by taking & with mask for different effect).
+        Return dict mapping between each level of vars_context (grouping var) and a mast that
+        pulls out speicifc indices for each level of vars_context,
         NOTE: WILL be only upper triangular
         :param vars_context:
+        :param contrast: str. What columns to get (note: the rows are always the same, i.e, speciifc
+        to each level of vars_context). either:
+        - "same", then columns will be identical to rows. To get mask that are distance between this same level.
+        Useful for computing "within-context" scores (i.e., by taking & with mask for different effect).
+        - "diff", then columns are complement to rows (i.e, all cols which are different level from rows)_.
+        - "any", then columns are (0, 1, .... n), i.e., both same and different.
         :return: map_grp_to_mask, dict[grp]--> ma, where grp is tuple of classea dn ma is bool.
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
@@ -1208,7 +1250,17 @@ class Clusters(object):
             ma_ut = self._rsa_matindex_generate_all_true()
         map_grp_to_mask = {}
         for grp, indrows in grpdict.items():
-            ma = self._rsa_matindex_convert_to_mask_rect(indrows, indrows) # same, for this grp
+            if contrast=="same":
+                # same, for this grp
+                indcols = indrows
+            elif contrast=="diff":
+                indcols = [i for i in range(len(dflab)) if i not in indrows]
+            elif contrast=="any":
+                indcols = list(range(len(dflab)))
+            else:
+                print(contrast)
+                assert False
+            ma = self._rsa_matindex_convert_to_mask_rect(indrows, indcols) #
             map_grp_to_mask[grp] = ma & ma_ut
 
         if PLOT:
@@ -1232,7 +1284,8 @@ class Clusters(object):
         You can use this mask to then slice out data for analyses (restricting data).
         PARAMS:
         - var_effect,
-        - diff_context_ver, str, how to define diff context
+        - diff_context_ver, str, how to define diff context (NOTE: This does NOT
+        affect how "same context" is defined)
         For diff context, multiple ways.
         --- "diff_complete", for all vars in vars_context, they must be different.
         --- "diff_at_least_one", at least one var in vars_context must be diff.
@@ -1271,7 +1324,10 @@ class Clusters(object):
             assert isinstance(diffctxt_vars_diff, (tuple, list))
             assert isinstance(diffctxt_vars_same, (tuple, list))
             assert len(diffctxt_vars_diff)>0
-            assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
+            assert all([v in vars_context for v in diffctxt_vars_same])
+            assert all([v in vars_context for v in diffctxt_vars_diff])
+            # Previously this, but realized that context can be more
+            # assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
             ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
                 vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff)
         elif diff_context_ver=="diff_specific_lenient":
@@ -1280,7 +1336,10 @@ class Clusters(object):
             assert isinstance(diffctxt_vars_diff, (tuple, list))
             assert isinstance(diffctxt_vars_same, (tuple, list))
             assert len(diffctxt_vars_diff)>0
-            assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
+            assert all([v in vars_context for v in diffctxt_vars_same])
+            assert all([v in vars_context for v in diffctxt_vars_diff])
+            # Previously this, but realized that context can be more
+            # assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
             ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(
                 vars_same=diffctxt_vars_same, vars_diff=diffctxt_vars_diff,
                 lenient_diff = True)
@@ -1320,9 +1379,11 @@ class Clusters(object):
                 self.rsa_matindex_plot_bool_mask(ma, ax)
 
                 # add the mean score in this mask to title.
-                sc = np.mean(self.Xinput[ma])
-                ax.set_title(f"{tit}-mean_{sc:.2f}", color="r")
-
+                if np.sum(ma)>0:
+                    sc = np.mean(self.Xinput[ma])
+                    ax.set_title(f"{tit}-mean_{sc:.2f}", color="r")
+                else:
+                    ax.set_title(f"{tit}", color="r")
                 # also print the mask
                 self.rsa_matindex_print_mask_labels(ma, path_for_save_print_lab_each_mask)
 
