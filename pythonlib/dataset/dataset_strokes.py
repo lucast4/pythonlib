@@ -46,6 +46,11 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
     elif version=="singleprim":
         # Super clean
 
+        # check that only one stroke per task. otherwise shold not call this
+        if "FEAT_num_strokes_task" not in D.Dat.columns:
+            D.extract_beh_features(feature_list = ("num_strokes_task"))
+        assert sum(D.Dat["FEAT_num_strokes_task"]>1)==0, "do not do singleprim unless only one stroke, or it will remove many trials.."
+
         frac_touched_min = 0.6
         ft_decim_min = 0.3
         shortness_min = 0.2
@@ -1278,6 +1283,8 @@ class DatStrokes(object):
                     raise err
                 elif if_fail=="return_none":
                     return None
+                elif if_fail=="return_whatever_exists":
+                    pass
                 else:
                     print(if_fail)
                     assert False
@@ -1633,7 +1640,7 @@ class DatStrokes(object):
             overlay_beh_or_task="beh", SIZE=2):
         """
         Plot a single stroke, overlaying it on all the strokes from this trial, colored
-        and numbered.
+        and numbered, where the trial's data is extracted from self.Dataset.
         PARAMS
         - overlay_beh_or_task, str, whether to overlay the entire trial;s' beh or task.
         """
@@ -1901,19 +1908,24 @@ class DatStrokes(object):
         for i in inds:
             print("   ")
             print("=== Ind: ", i)
-            tokens = self.dataset_extract_strokeslength_list_ind_here(i, "datseg")
-            for i, tok in enumerate(tokens):
-                print(i, " -- ", tok)
-            for col in ["shape", "gridloc", "gridloc_local", "center"]:
-                print(f"==== {col}")
-                print([(tok[col]) for i, tok in enumerate(tokens)])
-            for col in ["chunk_rank", "chunk_within_rank",
+            tokens = self.dataset_extract_strokeslength_list_ind_here(i, "datseg", if_fail="return_whatever_exists")
+            for _i, tok in enumerate(tokens):
+                print(_i, " -- ", tok)
+            # for col in ["ind_taskstroke_orig", "stroke_index", "shape", "shape_semantic", "gridloc", "gridloc_local", "center",
+            #             "CTXT_loc_prev", "CTXT_shape_prev", "CTXT_loc_next", "CTXT_shape_next"]:
+            #     print(f"==== {col}")
+            #     print([(tok[col]) for i, tok in enumerate(tokens)])
+            for col in ["ind_taskstroke_orig", "stroke_index", "shape", "shape_semantic", "gridloc", "gridloc_local", "center",
+                        "CTXT_loc_prev", "CTXT_shape_prev", "CTXT_loc_next", "CTXT_shape_next", "charclust_shape_seq_scores"] + ["chunk_rank", "chunk_within_rank",
                         "chunk_within_rank_fromlast", "chunk_n_in_chunk"
-                        "chunk_diff_from_prev", "chunk_n_in_chunk_prev"]:
+                        "chunk_diff_from_prev", "chunk_n_in_chunk_prev",
+                        "syntax_concrete", "syntax_role"]:
                 if col in self.Dat.columns:
-                    vals = self.dataset_extract_strokeslength_list_ind_here(i, col)
+                    vals = self.dataset_extract_strokeslength_list_ind_here(i, col, if_fail="return_whatever_exists")
                     print(f"==== {col}")
-                    print([(v) for i, v in enumerate(vals)])
+                    print(vals)
+                    # print(i, col, vals)
+                    # assert False
 
 
     def plotshape_multshapes_egstrokes_onefig_eachshape(self, savedir, key="shape"):
