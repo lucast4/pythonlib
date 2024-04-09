@@ -8747,6 +8747,332 @@ class Dataset(object):
             res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
         return res
 
+    def grammarparses_chunk_transitions_gaps_extract(self, ind):
+        """
+        REturn info for each gap between strokes (transition), realted to chunk transitions, gap durations etc.
+        Useful for analyzing how gap duration relates to chunk transitions.
+        :return:
+        """
+
+        # Get data
+        durations, gaps = self.strokes_durations_gaps(ind)
+        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
+
+        assert len(gaps) == len(Tk.Tokens)-1
+
+        # Collect data across gaps.
+        res = [] # length num gaps
+        for i, (tok1, tok2) in enumerate(zip(Tk.Tokens[:-1], Tk.Tokens[1:])):
+            # Iterate over each gap
+
+            dat = {}
+            dat["index_trial"] = ind
+            dat["index_gap"] = i
+
+            # Transition information: shape and location
+            dat["gap_dur"] = gaps[i]
+
+            # Transition information: chunks
+            for feat in ["chunk_rank", "chunk_within_rank", "shape"]:
+                dat[f"gap_{feat}"] = (tok1[feat], tok2[feat])
+
+            res.append(dat)
+
+        return pd.DataFrame(res)
+
+
+    def grammarparses_chunk_transitions_gaps_extract_batch(self, bin_gaps=True, PLOT=True,
+                                                           plot_savedir=None):
+        """
+        Extract dataframe holding each gap, with information about that gap related to gap duration and
+        chunk trnaitions.
+        :return:
+        - self.Dat, addes columns like "chunkgap_(0, 1)_durbin" holding the bin/class for gap durations
+        that trnaiston bwetween (0,1) chunks, for that trial, usually 0,1 (string) bins for short and long
+        gap.
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+        import seaborn as sns
+
+        # And extract syntax_concrete column
+        if "syntax_concrete" not in self.Dat.columns:
+            self.grammarparses_syntax_concrete_append_column()
+
+        # This only can run if this day has shape rules
+        if len(self.grammarparses_rules_involving_shapes())>0:
+
+            # 1. Collect gaps dataframe across all trials
+            list_df = []
+            for ind in range(len(self.Dat)):
+                df = self.grammarparses_chunk_transitions_gaps_extract(ind)
+                df["syntax_concrete"] = [self.Dat.iloc[ind]["syntax_concrete"] for _ in range(len(df))]
+                df["behseq_locs"] = [self.Dat.iloc[ind]["behseq_locs"] for _ in range(len(df))]
+                df["behseq_shapes"] = [self.Dat.iloc[ind]["behseq_shapes"] for _ in range(len(df))]
+                df["epoch"] = self.Dat.iloc[ind]["epoch"]
+
+                list_df.append(df)
+            dfgaps = pd.concat(list_df).reset_index(drop=True)
+
+            # 2. Append new columns
+            dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete", "gap_chunk_rank"], "ep_sy_gcr")
+            dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete"], "epoch_syntax")
+            dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete", "behseq_shapes", "behseq_locs"], "ep_sy_sh_lo")
+            dfgaps = append_col_with_grp_index(dfgaps, ["syntax_concrete", "behseq_shapes", "behseq_locs"], "sy_sh_lo")
+            dfgaps = append_col_with_grp_index(dfgaps, ["behseq_shapes", "behseq_locs"], "sh_lo")
+            dfgaps["gap_chunk_rank_str"] = ["".join([str(xx) for xx in x]) for x in dfgaps["gap_chunk_rank"]]
+
+            # 3. Classify gaps as short or long. (Bin all gaps)
+            # NOTE: This may leave many or most rows without a bin (in which case they are bin -1) because it conditions
+            # on somethign very specific (so will fail if too much variability).
+            if bin_gaps:
+                from pythonlib.tools.pandastools import bin_values_conditioned_on_class
+                if False:
+                    # This can be very different result from conditioning on shapes and locs sequence...
+                    dfgaps = bin_values_conditioned_on_class(dfgaps, "gap_dur",  ["epoch", "syntax_concrete", "index_gap"], 2, 1, "test",
+                                                             bin_by_rank=True).reset_index(drop=True)
+                else:
+                    dfgaps = bin_values_conditioned_on_class(dfgaps, "gap_dur",  ["epoch", "syntax_concrete",
+                                                                                  "behseq_shapes", "behseq_locs", "index_gap"],
+                                                             2, 1, "gap_dur_bin", bin_by_rank=True).reset_index(drop=True)
+
+            if PLOT:
+                # Plot, showing gap durations all, coloring by if is high bin
+                fig = sns.catplot(data=dfgaps, x="index_gap", y="gap_dur", col="epoch_syntax", col_wrap=3, alpha=0.25,
+                            hue="gap_dur_bin")
+                savefig(fig, f"{plot_savedir}/gap_dur-sequences-binned-1.pdf")
+
+                fig = sns.catplot(data=dfgaps, x="index_gap", y="gap_dur", col="epoch_syntax", col_wrap=3, hue="gap_dur_bin", kind="point")
+                savefig(fig, f"{plot_savedir}/gap_dur-sequences-binned-2.pdf")
+
+                # Plots asking if gap duration during chunk-transition is larger than
+                fig = sns.catplot(data=dfgaps, x="gap_chunk_rank_str", y="gap_dur", hue="gap_dur_bin", col="epoch",
+                            col_wrap=5, alpha=0.2)
+                savefig(fig, f"{plot_savedir}/gap_dur-chunk_gaps-binned-1.pdf")
+
+                fig = sns.catplot(data=dfgaps, x="gap_chunk_rank_str", y="gap_dur", hue="gap_dur_bin", col="epoch",
+                            col_wrap=5, kind="point")
+                savefig(fig, f"{plot_savedir}/gap_dur-chunk_gaps-binned-2.pdf")
+
+                dfgaps_this, dict_dfthis = extract_with_levels_of_conjunction_vars(dfgaps, "gap_dur_bin", ["epoch", "behseq_locs", "behseq_shapes"],
+                                        n_min_across_all_levs_var=2, lenient_allow_data_if_has_n_levels=2,
+                                        prune_levels_with_low_n=True, plot_counts_heatmap_savepath=f"{plot_savedir}/epoch-behseq_locs_behseq_shapes-counts.pdf")
+                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", col="ep_sy_sh_lo", col_wrap=4, alpha=0.4,
+                            hue="gap_dur_bin")
+                savefig(fig, f"{plot_savedir}/gap_dur-sequences-binned-specific-1.pdf")
+
+
+            # Assign back to D.Dat, new columns, each indicating whether that trial's transition for a particular chunk_gap (e..g,
+            # (0,1) is high or lower than median duration.
+
+            # Only do transitions between chunks (oitherwise will fail asssertion below since ther's mult (0,0) per trial)
+            list_g = [g for g in dfgaps["gap_chunk_rank"].unique() if not g[0]==g[1]] # for (0,0) etc, is not well-defined
+
+            for g in list_g:
+                self.Dat.loc[:, f"chunkgap_{g}_durbin"] = -1 # empty
+
+            for g in list_g:
+                for binthis in dfgaps["gap_dur_bin"].unique():
+                    trials = dfgaps[(dfgaps["gap_chunk_rank"]==g) & (dfgaps["gap_dur_bin"]==binthis)]["index_trial"].tolist()
+                    assert np.all(self.Dat.loc[trials, f"chunkgap_{g}_durbin"] == -1), "this isn t possible, unless there >1 case of this per trial."
+                    self.Dat.loc[trials, f"chunkgap_{g}_durbin"] = binthis
+                print(f"chunkgap_{g}_durbin")
+
+            # Optioally, plot trials from D, colored by gap duration bin, to confirm that bin classes were correctly
+            # assigned back to D. Look for the chunk trnaistion gap having clearly separteted blue and red dots.
+            if False: # Need to rpelace by hand: taskcat_by_rule and 3,0|2,1|1,0|0,1|-1,0|-2,1|-3,0'
+                taskcat_by_rule = ((6, 0, 1, 0), 7)
+                bindur = "1"
+                inds_short = D.Dat[(D.Dat["taskcat_by_rule"]==taskcat_by_rule) & (D.Dat["behseq_locs"] == '3,0|2,1|1,0|0,1|-1,0|-2,1|-3,0') & (D.Dat["chunkgap_(0, 1)_durbin"]==bindur)].index.tolist()
+                bindur = "2"
+                inds_long = D.Dat[(D.Dat["taskcat_by_rule"]==taskcat_by_rule) & (D.Dat["behseq_locs"] == '3,0|2,1|1,0|0,1|-1,0|-2,1|-3,0') & (D.Dat["chunkgap_(0, 1)_durbin"]==bindur)].index.tolist()
+
+                gaps_short = [D.strokes_durations_gaps(i)[1] for i in inds_short]
+                gaps_long = [D.strokes_durations_gaps(i)[1] for i in inds_long]
+
+                fig, ax = plt.subplots()
+
+                for gaps in gaps_short:
+                    ax.plot(range(len(gaps)), gaps, "-ob",)
+                for gaps in gaps_long:
+                    ax.plot(range(len(gaps)), gaps, "-or",)
+
+            ####### compare epochs, diff gap durations?
+            dfgaps_this, dict_dfthis = extract_with_levels_of_conjunction_vars(dfgaps, "epoch", ["behseq_locs", "behseq_shapes"],
+                                                    n_min_across_all_levs_var=2, lenient_allow_data_if_has_n_levels=2,
+                                                    prune_levels_with_low_n=True, plot_counts_heatmap_savepath=f"{plot_savedir}/epoch_counds.pdf")
+            if len(dfgaps_this)>0:
+                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
+                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
+                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4,
+                            kind="point")
+                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-2.pdf")
+
+                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4, alpha=0.25)
+                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-1.pdf")
+                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4,
+                            kind="point")
+                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-2.pdf")
+
+        else:
+            dfgaps = None
+
+        return dfgaps
+
+    def grammarparses_syntax_role_append_to_tokens(self, PRINT=False):
+        """
+        GOOD Syntax -- assign each stroke a "syntax rule" which is a function of its epoch_orig and its
+        (e.g.) chunk and within-chunk values. e.g, for shape repeat rules, it is (chunkidx, index_within).
+        Makes sure to use the chunk index associated with shape, even if the first shape is sometimes skipped
+        (i.e., is tied to shaep).
+        :return: appends to tokens(ver, beh_using_task_data), key called "syntax_role"
+        """
+
+        ##### Extract all tokens
+        dftok = self.tokens_extract_variables_as_dataframe(["shape", "ind_taskstroke_orig", "chunk_rank",
+                                                            "chunk_within_rank"],
+                                                "beh_using_task_data", ["epoch_orig", "epoch", "syntax_concrete"])
+
+        ##### Get  map from epoch_orig to rulekind
+        # Use epoch_orig, becuase this references the origianl ruledict
+        map_epochorig_to_rulekind = self.grammarparses_rules_extract_map_rule_to_rulekind()
+
+        # For all shape rules... for this day and rule, get mapping from shape to chunk
+        # epochs_using_shape = self.grammarparses_rules_involving_shapes(return_as_epoch_orig=True)
+
+        # nchunks = dftok["chunk_rank"].max()+1
+
+        ###### Get mapping from shape to chunk index
+        # Use "epoch", beucase for Pancho when do AnBm with 2 sahpes, want the syntax role to be independent of the shape set.
+        map_shape_to_chunkidx_byepoch = {}
+        map_chunkidx_to_shape_byepoch = {}
+        for epoch in self.Dat["epoch"].unique():
+            map_shape_to_chunkidx_byepoch[epoch] = {}
+            map_chunkidx_to_shape_byepoch[epoch] = {}
+
+            # get df, sorted in increasing average chunk_rank (ie for each chunk get its average chunk rank then sort them).
+            dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank")
+            for i, shape in enumerate(dfthis.index):
+                map_shape_to_chunkidx_byepoch[epoch][shape] = i
+                map_chunkidx_to_shape_byepoch[epoch][i] = shape
+
+        ########### RUN: for each token, classify its syntax role.
+        list_role = []
+        for i, tok in dftok.iterrows():
+            epoch_orig = tok["epoch_orig"]
+            epoch = tok["epoch"]
+            if map_epochorig_to_rulekind[epoch_orig][0] == "ss":
+                # Shape sequence (ABC) or (AABBBCC) or (AnBmCk)...
+                map_shape_to_chunkidx = map_shape_to_chunkidx_byepoch[epoch]
+                chunkidx = map_shape_to_chunkidx[tok["shape"]]
+                syntax_role = (chunkidx, tok["chunk_within_rank"])
+            elif map_epochorig_to_rulekind[epoch_orig][0] == "dir":
+                # Direction rule (flat).
+                # stroke index is syntax role.
+                syntax_role = (tok["stroke_index"],)
+            elif map_epochorig_to_rulekind[epoch_orig][0] == "rowcol":
+                # rows or cols. this has hierarchical structure
+                syntax_role = (tok["chunk_rank"], tok["chunk_within_rank"])
+            elif map_epochorig_to_rulekind[epoch_orig][0] == "preset" and map_epochorig_to_rulekind[epoch_orig][1] == "null":
+                # Random seuqence (hard coded in matlab task).
+                # Stroke index is sytnax role.
+                syntax_role = (tok["stroke_index"],)
+            else:
+                print(epoch)
+                print(epoch_orig)
+                print(map_epochorig_to_rulekind)
+                print(tok)
+                assert False
+            list_role.append(syntax_role)
+        dftok["syntax_role"] = list_role
+
+        if PRINT:
+            from pythonlib.tools.pandastools import grouping_print_n_samples
+            print(["epoch_orig", "shape", "chunk_rank", "chunk_within_rank", "syntax_role"])
+            grouping_print_n_samples(dftok, ["epoch_orig", "shape", "chunk_rank", "chunk_within_rank", "syntax_role"])
+
+        # Place back into tokens
+        self.tokens_assign_dataframe_back_to_self(dftok, "syntax_role", "beh_using_task_data")
+
+        print("DOne! added key to tokens(beh_using_task_data) : syntax_role")
+
+    def grammarparses_syntax_concrete_append_column(self, PRINT=False):
+        """
+        Append column hoklding syntax (e.g.,, (1,3,2))
+        based on the epoch_orig
+        of each trial (using task, ignoring beh).
+        For trials that dont have syntax-relatd epoch orig, hacks by using
+        the syntax for the first rule in the list of rule that are
+        shape-related (this rarely mattres)
+        :return: appends column "syntax_concrete" to self.Dat, holding
+        either tuple of ints or (if no shape rules today)  or ("IGNORE")
+        (i.e, item will alwyas be tuple)
+        """
+
+        # Get mapping from epoch_orig to syntax, for each trial
+        map_epoch_orig_to_list_syntax = self.grammarparses_classify_tasks_syntax_based_on_rule()
+
+        # if map_epoch_orig_to_list_syntax is None:
+        #     self.Dat["syntax_concrete"] = "IGNORE"
+        # else:
+        # for each trial, determine what is its syntax (based on its epoch_orig)
+        list_syntax = []
+        for i in range(len(self.Dat)):
+            epoch_orig = self.Dat.iloc[i]["epoch_orig"]
+            if epoch_orig in map_epoch_orig_to_list_syntax:
+                syntax = map_epoch_orig_to_list_syntax[epoch_orig][i]
+            else:
+                # This is epoch doesnt have a syntax. Just take the first epoch, should be using this anyway
+                syntax = list(map_epoch_orig_to_list_syntax.values())[0][i]
+            list_syntax.append(syntax)
+        self.Dat["syntax_concrete"] = list_syntax
+
+        if PRINT:
+            self.grouping_print_conjunctions_summary_good(["syntax_concrete", "taskcat_by_rule"], PRINT=True)
+
+    def grammarparses_classify_tasks_syntax_based_on_rule(self):
+        """
+        Get list of syntaxes (tuples of ints), one for each trial,
+        which is concrete syntax for each rule. Returns
+        dict epoch_orig --> syntax
+        :return: dict (see above) or None (if no shapes rules exist)
+        """
+        from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule
+
+        # rs_using_shape = self.grammarparses_rules_involving_shapes()
+        # if len(rs_using_shape)==0:
+        #     return None
+        # else:
+        #     map_epoch_orig_to_list_syntax = {}
+        #     for rs in rs_using_shape:
+        #         # assert len(rs_using_shape)==1
+        #         # rs = rs_using_shape[0]
+        #         # rulestring --> epoch
+        #         epoch_orig = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"][rs]["params"]
+        #         list_syntax = tasks_categorize_based_on_rule(self, epoch_orig)
+        #         map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
+        #     return map_epoch_orig_to_list_syntax
+
+        def _tupleize(s):
+            """ Convert s to tuple, either converting list, or by containig in tuple."""
+            if isinstance(s, list):
+                return tuple(s)
+            elif isinstance(s, tuple):
+                return s
+            else:
+                return tuple([s])
+
+        map_epoch_orig_to_list_syntax = {}
+        for epoch_orig in self.Dat["epoch_orig"].unique():
+        # for rs in rs_using_shape:
+            # assert len(rs_using_shape)==1
+            # rs = rs_using_shape[0]
+            # rulestring --> epoch
+            # epoch_orig = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"][rs]["params"]
+            list_syntax = tasks_categorize_based_on_rule(self, epoch_orig)
+            list_syntax = [_tupleize(s) if not isinstance(s, tuple) else s for s in list_syntax]
+            map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
+        return map_epoch_orig_to_list_syntax
+
     def grammarparses_classify_tasks_categorize_based_on_rule(self):
         """
         Wrapper for methods to classify each task based on something like a "syntax parse"
@@ -9592,17 +9918,319 @@ class Dataset(object):
         display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_shape" for i in range(nstrokes_max)] + ["charclust_shape_seq_scores"]])
         display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_loc" for i in range(nstrokes_max)]])
 
+    def seqcontext_behorder_cluster_concrete_variation(self, SAVEDIR, LIST_VAR_BEHORDER=None, groupby="taskcat_by_rule"):
+        """
+        Classify trials based on their "concrete order", such as the specific sequence of shapes, locations, or
+        directions (location diffs).
+        First, gets all trials within each level of <groupby>, and then conputes pairwise dist mat across all trials using
+        their beh sequences in <var_behorder>, then clusters that distmat to assign each trial a label.
+        So, if <var_behorder> is "behseq_locs" and <grouby> is "taskcat_by_rule" then classifies trials with similar
+        sequence of gridlocs within each taskcat_by_rule
+        :param LIST_VAR_BEHORDER: list of variables (beh seq) to to clustering for, iterating over them
+        :param groupby:
+        e.g., FEAT_num_strokes_task
+        :param plot_savedir:
+        :return: new columns for each var_behorder in LIST_VAR_BEHORDER, called var_behorder_clust, using str ints,
+        "0", "1", ...
+        """
+        from pythonlib.tools.distfunctools import distmat_construct_wrapper
+        from neuralmonkey.analyses.state_space_good import dimredgood_pca
+        from pythonlib.tools.statstools import cluster_kmeans_with_silhouette_score
+        from pythonlib.tools.plottools import makeColors
 
-    def seqcontext_extract_shapes_in_beh_order(self, ind):
+        MIN_TRIALS = 8 # if less than this, then all call same cluster.
+        n_clusters_min_max = [2, 6] # err on side of fewer clusters, to get more trials per.
+        EPSILON = 0.005 # very small value, so if just few uniqe vals, calustering still works.
+
+        if LIST_VAR_BEHORDER is None:
+            LIST_VAR_BEHORDER = ["behseq_shapes", "behseq_locs", "behseq_locs_x", "behseq_locs_y",
+                                 "behseq_locs_diff", "behseq_locs_diff_x", "behseq_locs_diff_y"]
+
+        assert groupby in self.Dat.columns, "need to extract thi sfirst.."
+
+        def _dist(x1, x2):
+            """ Compute scalar distance between pairs of trials's sequences"""
+            assert len(x1)==len(x2)
+            if isinstance(x1[0], int) and isinstance(x2[0], int):
+                # e.g., (-1,1, 10), (1,2, 1)
+                # l2 distance
+                # return np.linalg.norm(np.asarray(x1) - np.asarray(x2))
+                return sum([np.abs(xx2 - xx1) for xx1, xx2 in zip(x1, x2)])
+            elif isinstance(x1[0], str) and isinstance(x2[0], str):
+                # e.g., ("test", "2"), ("test", "1")
+                return sum([xx2==xx1 for xx1, xx2 in zip(x1, x2)])
+            elif isinstance(x1[0], tuple) and isinstance(x1[0][0], int):
+                # e.g,     ((1,1), (1,2), (-1,-2)) vs ((1,2), (0,-2), (-1,2))
+                return sum([_dist(xx1, xx2) for xx1, xx2 in zip(x1, x2)])
+            else:
+                print(x2)
+                print(x2)
+                print(type(x1[0]))
+                print(type(x2[0]))
+                assert False, "code it"
+
+        ### First, extract sequences, keeping them as tuples, for easy distance computation.
+        # 1) shape seuqence
+        self.seqcontext_extract_shapes_in_beh_order_append_column(abbrev_string_code=False)
+
+        # 2) Location sequence
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only=None, colname="behseq_locs", abbrev_string_code=False)
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only="x", colname="behseq_locs_x", abbrev_string_code=False)
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only="y", colname="behseq_locs_y", abbrev_string_code=False)
+
+        # 3) Direction sequence (location diff)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only=None, colname="behseq_locs_diff", abbrev_string_code=False)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only="x", colname="behseq_locs_diff_x", abbrev_string_code=False)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only="y", colname="behseq_locs_diff_y", abbrev_string_code=False)
+
+        for var_behorder in LIST_VAR_BEHORDER:
+
+            plot_savedir = f"{SAVEDIR}/var_behorder={var_behorder}"
+            os.makedirs(plot_savedir, exist_ok=True)
+
+            ##### Intialize labels
+            # so that stays string. And can do sanity check after, cant have emptys.
+            self.Dat[f"{var_behorder}_clust"] = "empty"
+
+            ##### Group
+            for grplev in sorted(self.Dat[groupby].unique().tolist()):
+
+                print("Clustering, for ", grplev)
+                # First, collect all trials of a given taskcatbyrule
+                dfthis = self.Dat[self.Dat[groupby] == grplev]
+                vals = dfthis[var_behorder].tolist()
+                idxs = dfthis.index.tolist()
+
+                # Get cluster labels.
+                if len(set(vals))==1 or len(vals) < MIN_TRIALS:
+                    # Then all are same cluster
+                    cluster_labels = ["0" for _ in range(len(vals))]
+                    # If there are only a few unique cases, then just call those clusters
+                else:
+                    dmat = distmat_construct_wrapper(vals, vals, _dist, PLOT=False)
+
+                    # add very small value, so that clustering does not fail.
+                    dmat = dmat + EPSILON * np.random.rand(dmat.shape[0], dmat.shape[1])
+
+
+                    # do pca on distmat
+                    plot_pca_explained_var_path = f"{plot_savedir}/{groupby}-lev={grplev}-pca_var.pdf"
+                    plot_loadings_path = f"{plot_savedir}/{groupby}-lev={grplev}-pca_loadings.pdf"
+                    Xpcakeep, Xpca, pca = dimredgood_pca(dmat, n_components=2, plot_pca_explained_var_path=plot_pca_explained_var_path,
+                                                         plot_loadings_path=plot_loadings_path, npcs_keep_force=2)
+
+                    # Cluster distance matrix
+                    cluster_labels, fig, fig_final = cluster_kmeans_with_silhouette_score(Xpcakeep, n_clusters_min_max=n_clusters_min_max,
+                                                                          PLOT_SIL=False, PLOT_FINAL=True,
+                                                                          return_figs=True)
+                    savefig(fig_final, f"{plot_savedir}/{groupby}-lev={grplev}-clust_final.pdf")
+
+                # Sanity check that sequence matches eye test
+                if False:
+                    print(vals[0])
+                    print(idxs[0])
+                    self.grammarparses_print_plot_summarize(idxs[0])
+
+                #### PLOT RESULTS
+                pcols = makeColors(len(set(cluster_labels)))
+                ncols = 3
+                nrows = int(np.ceil(len(set(cluster_labels))/ncols))
+                SIZE = 3
+                fig, axes = plt.subplots(nrows, ncols, figsize = (ncols*(1.25*SIZE), nrows*SIZE), sharex=True, sharey=True)
+                for labget, ax in zip(sorted(set(cluster_labels)), axes.flatten()):
+                    valsthis = [vals[i] for i, lab in enumerate(cluster_labels) if lab == labget]
+                    for v in valsthis:
+                        if isinstance(v[0], int):
+                            v_jitter = np.array(v) + 0.25*np.random.rand(len(v))
+                            ax.plot(range(len(v)), v_jitter, "-o", label=labget, color=pcols[int(labget)], alpha=0.1)
+                        elif isinstance(v[0], tuple) and isinstance(v[0][0], int):
+                            # 2d plot
+                            v_jitter = np.array(v) # (npts, 2)
+                            v_jitter = v_jitter + 0.25*np.random.rand(v_jitter.shape[0], v_jitter.shape[1])
+                            ax.plot(v_jitter[:, 0], v_jitter[:,1], "-", label=labget, color="k", alpha=0.1)
+                            ax.scatter(v_jitter[:, 0], v_jitter[:,1], c=range(v_jitter.shape[0]), label=labget, alpha=0.4, cmap="plasma")
+                            for i, pt in enumerate(np.array(v)):
+                                ax.text(pt[0], pt[1], i, alpha=0.2, fontsize=15)
+                        elif isinstance(v[0], str):
+                            ax.plot(range(len(v)), v, "-o", label=labget, color=pcols[int(labget)], alpha=0.1)
+                        else:
+                            assert False
+                    # ax.plot(valsthis, "-o", label=labget, color=pcols[int(labget)])
+                    ax.set_title(f"cluster lab: {labget}")
+                    ax.set_xlabel("index in trial")
+                    ax.set_ylabel("value")
+                savefig(fig, f"{plot_savedir}/{groupby}-lev={grplev}-final_cluster_sequences.pdf")
+
+                ##### Save mapping between val and clustlab
+                map_clust_vals = {}
+                for v, c in zip(vals, cluster_labels):
+                    if c in map_clust_vals and v not in map_clust_vals[c]:
+                        map_clust_vals[c].append(v)
+                    else:
+                        map_clust_vals[c] = [v]
+                from pythonlib.tools.expttools import writeDictToTxtFlattened
+                path = f"{plot_savedir}/{groupby}-lev={grplev}-map_clust_vals.txt"
+                writeDictToTxtFlattened(map_clust_vals, path, header="clust | vals", sorted_by_keys=True)
+
+                ##### PLOT some exmaple beh trials
+                import random
+                if len(idxs)>=20:
+                    indspick = sorted(random.sample(range(len(idxs)), 20))
+                else:
+                    indspick = range(len(idxs))
+                idxs_plot = [idxs[i] for i in indspick]
+                # vals_plot = [vals[i] for i in indspick]
+                clusts_plot = [cluster_labels[i] for i in indspick]
+                fig, axes, _ = self.plotMultTrials2(idxs_plot, titles=clusts_plot)
+                savefig(fig, f"{plot_savedir}/{groupby}-lev={grplev}-example_drawings.pdf")
+
+
+                ############## SAVE LABELS
+                # print(idxs)
+                # print(cluster_labels)
+                assert np.all(self.Dat.loc[idxs, f"{var_behorder}_clust"]=="empty"), "you are overwriting... not sure why"
+                self.Dat.loc[idxs, f"{var_behorder}_clust"] = cluster_labels
+
+                plt.close("all")
+
+        ######## FINAL THINGS
+        # Sanity -- check that no empty labels.
+        assert sum(self.Dat[f"{var_behorder}_clust"] == "empty")==0, "not sure why"
+
+        # Reextract beh labels as strings (default)
+        # 1) shape seuqence
+        self.seqcontext_extract_shapes_in_beh_order_append_column(abbrev_string_code=True)
+
+        # 2) Location sequence
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only=None, colname="behseq_locs", abbrev_string_code=True)
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only="x", colname="behseq_locs_x", abbrev_string_code=True)
+        self.seqcontext_extract_locations_in_beh_order_append_column(x_or_y_only="y", colname="behseq_locs_y", abbrev_string_code=True)
+
+        # 3) Direction sequence (location diff)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only=None, colname="behseq_locs_diff", abbrev_string_code=True)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only="x", colname="behseq_locs_diff_x", abbrev_string_code=True)
+        self.seqcontext_extract_location_diffs_in_beh_order_append_column(x_or_y_only="y", colname="behseq_locs_diff_y", abbrev_string_code=True)
+
+
+    def seqcontext_extract_shapes_in_beh_order_append_column(self, colname = "behseq_shapes", abbrev_string_code=True):
+        """
+        Append column that holds the shape sequence on each trial, i.e. the actual stroke sequence,
+        each represnted as a string, like "l840|l830|l840|l830|l840|l830".
+        :param colname:
+        :return:
+        """
+        self.Dat[colname] = [self.seqcontext_extract_shapes_in_beh_order(i, abbrev_string_code) for i in range(len(self.Dat))]
+        print("Appended column do D.Dat:", colname)
+
+    def seqcontext_extract_shapes_in_beh_order(self, ind, abbrev_string_code=False):
         """ Return list of strings (shapes) drawn on this trial,
         using tokens, based on touch (not just the frist touch, but
         inlcuding all beh strokes)
+        PARAMS:
+        - abbreg_string_code, returns string like 'l840|l830|l840|l830|l840|l830'
         RETURNS:
             - shapes, tuple of strings.
         """
+
+        def _shape_string_abbreviate(sh):
+            """
+            - sh, like "line-8-4-0"
+            RETURNS:
+            - like l840, string
+            """
+            from pythonlib.tools.stringtools import decompose_string
+            tmp = decompose_string(sh)
+            assert len(tmp)==4
+            shcode = tmp[0][0] + tmp[1] + tmp[2] + tmp[3]
+            return shcode
+
         shapes = tuple([tok["shape"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")])
         assert len(shapes) == len(self.Dat.iloc[ind]["strokes_beh"])
+
+        if abbrev_string_code:
+            shapes = "|".join([_shape_string_abbreviate(sh) for sh in shapes])
+
         return shapes
+
+    def seqcontext_extract_locations_in_beh_order_append_column(self, x_or_y_only=None, colname = "behseq_locs", abbrev_string_code=True):
+        """
+        Append column that holds the shape sequence on each trial, i.e. the actual stroke sequence,
+        each represnted as a string, like "l840|l830|l840|l830|l840|l830".
+        :param colname:
+        :return:
+        """
+        self.Dat[colname] = [self.seqcontext_extract_gridloc_in_beh_order(i, abbrev_string_code, x_or_y_only=x_or_y_only) for i in range(len(self.Dat))]
+        print("Appended column do D.Dat:", colname)
+
+    def seqcontext_extract_location_diffs_in_beh_order_append_column(self, x_or_y_only=None, colname = "behseq_locs_diff", abbrev_string_code=True):
+        """
+        Append column that holds the shape sequence on each trial, i.e. the actual stroke sequence,
+        each represnted as a string, like "l840|l830|l840|l830|l840|l830".
+        :param colname:
+        :return:
+        """
+        self.Dat[colname] = [self.seqcontext_extract_gridloc_diff_in_beh_order(i, abbrev_string_code, x_or_y_only=x_or_y_only) for i in range(len(self.Dat))]
+        print("Appended column do D.Dat:", colname)
+
+    def seqcontext_extract_gridloc_diff_in_beh_order(self, ind, abbrev_string_code=False,
+                                                x_or_y_only=None):
+        """
+        Return sequence of location differences from previous stroke, in beh stroke order, with methods to simplify and/or take specific dimensions (x or y)
+        PARAMS:
+        - abbrev_string_code, bool, if True, then returns string, like
+        '2,0|1,1|0,0|-1,-1|1,-1|-2,0|-1,1' or '2|1|0|-1|1|-2|-1'
+        - x_or_y_only, eithe rNone(get both xa nd y) or x or y, in latter 2 cases get int, in former gets tuple of 2 ints.
+        """
+
+        # Get gridloc differences.
+        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
+        Tk.sequence_gridloc_direction()
+
+        if x_or_y_only=="x":
+            locations = tuple([tok["gridloc_rel_prev"][0] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")][1:])
+        elif x_or_y_only=="y":
+            locations = tuple([tok["gridloc_rel_prev"][1] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")][1:])
+        else:
+            assert x_or_y_only is None, "either x, y or None"
+            locations = tuple([tok["gridloc_rel_prev"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")][1:])
+
+        assert len(locations) == len(self.Dat.iloc[ind]["strokes_beh"]) - 1
+
+        if abbrev_string_code:
+            if x_or_y_only is None:
+                locations = "|".join([",".join([str(l) for l in loc]) for loc in locations])
+            else:
+                locations = "|".join([str(loc) for loc in locations])
+
+        return locations
+
+    def seqcontext_extract_gridloc_in_beh_order(self, ind, abbrev_string_code=False,
+                                                x_or_y_only=None):
+        """
+        Return sequence of location in beh stroke order, with methods to simplify and/or take specific dimensions (x or y)
+        PARAMS:
+        - abbrev_string_code, bool, if True, then returns string, like
+        '2,0|1,1|0,0|-1,-1|1,-1|-2,0|-1,1' or '2|1|0|-1|1|-2|-1'
+        - x_or_y_only, eithe rNone(get both xa nd y) or x or y, in latter 2 cases get int, in former gets tuple of 2 ints.
+        """
+
+        if x_or_y_only=="x":
+            locations = tuple([tok["gridloc"][0] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")])
+        elif x_or_y_only=="y":
+            locations = tuple([tok["gridloc"][1] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")])
+        else:
+            assert x_or_y_only is None, "either x, y or None"
+            locations = tuple([tok["gridloc"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")])
+
+        assert len(locations) == len(self.Dat.iloc[ind]["strokes_beh"])
+
+        if abbrev_string_code:
+            if x_or_y_only is None:
+                locations = "|".join([",".join([str(l) for l in loc]) for loc in locations])
+            else:
+                locations = "|".join([str(loc) for loc in locations])
+
+        return locations
 
     def seqcontext_delete_all_columns(self):
         """ Helper to delete all columns from self.Dat which contain string 'seqc'
@@ -10303,6 +10931,17 @@ class Dataset(object):
         self.Dat["stroke_on_locs"] = list_on
         self.Dat["stroke_off_locs"] = list_off
 
+
+    def strokes_durations_gaps(self, ind):
+        """ Return duraton of strokes and gaps for this trial
+        RETURNS:
+            - list of stroke durations, sec
+            - gap duratiosn
+        """
+        ons, offs = self.strokes_onsets_offsets(ind)
+        gap_durations = [onthis - offthis for onthis, offthis in zip(ons[1:], offs[:-1])]
+        stroke_durations = [offthis - onthis for onthis, offthis in zip(ons, offs)]
+        return stroke_durations, gap_durations
 
     def strokes_onsets_offsets(self, ind):
         """
