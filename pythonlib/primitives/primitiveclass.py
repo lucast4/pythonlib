@@ -376,6 +376,24 @@ class PrimitiveClass(object):
 
             if shcat in ["circle"]:
                 label = (shcat, scale, "XX" , "XX")
+            elif shcat in ["V2"]:
+                # is more like 90deg (not sure if it is)
+                a1 = features["angle_midpt_to_onset_arm"]
+                a2 = features["angle_midpt_to_offset_arm"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if a1==4 and a2==2:
+                    label = (shcat, scale, "UU" , "UU") # opens to top
+                else:
+                    print(features)
+                    print(a1, a2)
+                    print(self.extract_as())
+                    fig = self.plot_stroke()
+                    fig.savefig("/tmp/stroke.png")
+                    print("Check saved stroke at ", "/tmp/stroke.png")
+                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+
             elif shcat in ["V", "arcdeep", "usquare"]:
                 a1 = features["angle_midpt_to_onset_arm"]
                 a2 = features["angle_midpt_to_offset_arm"]
@@ -394,6 +412,9 @@ class PrimitiveClass(object):
                     print(features)
                     print(a1, a2)
                     print(self.extract_as())
+                    fig = self.plot_stroke()
+                    fig.savefig("/tmp/stroke.png")
+                    print("Check saved stroke at ", "/tmp/stroke.png")
                     assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
             # elif shcat in ["arcdeep"]:
             #     a1 = features["angle_midpt_to_onset"]
@@ -491,6 +512,9 @@ class PrimitiveClass(object):
             else:
                 print(shcat)
                 print(features)
+                fig = self.plot_stroke()
+                fig.savefig("/tmp/stroke.png")
+                print("Check saved stroke at ", "/tmp/stroke.png")
                 assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
         else:
             print(version)
@@ -662,5 +686,15 @@ class PrimitiveClass(object):
 
 
 
+    def plot_stroke(self):
+        """
 
+        :return:
+        """
+        import  matplotlib.pyplot as plt
 
+        fig, ax = plt.subplots()
+        ax.plot(self.Stroke()[:,0], self.Stroke()[:,1], "xk")
+        ax.plot(self.Stroke()[0,0], self.Stroke()[0,1], "or")
+
+        return fig
