@@ -9,15 +9,17 @@ import numpy as np
 from pythonlib.dataset.dataset_analy.motifs_search_unordered import find_object_groups_new
 from pythonlib.tools.exceptions import NotEnoughDataException
 
-####### 
+####### STORE ALL RULES HERE
 MAP_EPOCHKIND_EPOCH = {
-    "direction":["D", "U", "R", "L", "TR"],
-    "shape":["LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1"],
-    "(AB)n":["(AB)n", "LolDR"],
-    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "llCV3"],
-    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "LCr1", "CLr1", "LCr3"],
+    "direction":["D", "U", "R", "L", "TR", "UL"],
+    "shape":["LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "llV1R", "ZlA1"], # deterministic shape (ABC...)
+    "(AB)n":["(AB)n"], # Any direction within chunks
+    "(AB)nDir":["LolDR"], # fixed direction withoin amnd across chunks.
+    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
-    "ranksup":["rndstr", "rank"],
+    "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1",
+        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"], # External cue, either mask or color supervision
     "baseline":["base", "baseline"]
 }
 
@@ -34,7 +36,6 @@ for epochkind, list_epoch in MAP_EPOCHKIND_EPOCH.items():
         MAP_EPOCH_EPOCHKIND[f"{epoch}|0"] = epochkind
         # but a 1 means is color rank supervision
         MAP_EPOCH_EPOCHKIND[f"{epoch}|1"] = "ranksup"
-
 
 
 def _get_default_grouping_map_tasksequencer_to_rule():
@@ -266,7 +267,8 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         """Repository of params for deciding on fixed order
         for different levels of the hierarcy, depending on the
         rule. 
-        - levels: across chunks, within chunks.
+        - levels: across chunks, within chunks, where bool True means NOT fixed order
+        (ie. opposite from other represntationl scheems).
         """
 
         # NOTE: bools are NOT fixed order.
@@ -280,7 +282,8 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
             ("ch", "dirdir"): [False, False],
             ("chorient", "dirdir"): [False, False],
             ("chmult", "dirdir"): [False, False],
-            ("rand", "null"): [True, True], # random, 
+            ("rand", "null"): [True, True], # random,
+            ("rowcol", "dirdir"):[False, False],
         }
         key = (ruledict["categ"], ruledict["subcat"])
         tmp = map_rule_to_notfixedorder[key] # [False, True]
@@ -609,6 +612,9 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
 
     #### Define hierarchies
     HOW_DEAL_FLAT="mult_chunk"
+    # - how_to_deal_with_flat, str, how to deal with cases like chunk = [0,1,2].
+    # --- "single_chunk" --> [[0,1,2]]
+    # --- "mult_chunk" --> [[0], [1], [2]]
     ruledict = rules_map_rulestring_to_ruledict(rulestring)
     if ruledict["categ"]=="dir":
         # Direction in space
@@ -753,6 +759,37 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
             # hier_reordered = [x["inds_taskstrokes"] for x in locations]
             list_hier_reordered.append(hier_reordered)
         list_hier = list_hier_reordered
+
+    elif ruledict["categ"] == "rowcol" and ruledict["subcat"] == "dirdir":
+        # rows or cols, and fixed direction within and across rows/cols.
+        # "typewriter" rule.
+
+        # Extract params
+        assert len(ruledict["params_good"])
+        kind, dir_across, dir_within = ruledict["params_good"]
+
+        # 1. Represent task as list of ints, either x or y locaiton
+        if kind=="rows":
+            dim_loc = 1
+        elif kind=="cols":
+            dim_loc = 0
+        else:
+            print(kind)
+            assert False
+        locations = [t["gridloc"][dim_loc] for t in tokens] # list of ints
+
+        # 2. Group (into hier) so that items with same location are in same group
+        locations_exist = sorted(list(set(locations)))
+        hier = []
+        for loc in locations_exist:
+            hier.append([t["ind_taskstroke_orig"] for t in tokens if t["gridloc"][dim_loc]==loc])
+        # e.g.,, [[[4, 5], [2, 3], [0, 1]]]
+
+        # 2nd, reorder, first across, then within chunks
+        assert Task.tokens_generate() == tokens
+        hier = direction_this_hier(Task, hier, dir_across, "across_chunks")
+        hier = direction_this_hier(Task, hier, dir_within, "within_chunks")
+        list_hier = [hier]
 
     elif ruledict["categ"] == "alternation":
         assert False, "FILL THIS IN"
@@ -963,10 +1000,15 @@ def rules_map_rulestring_to_ruledict(rulestring):
     subcat = substrings[1]
     params = substrings[2]
 
-    def _find_params_matlab(params):
+    def _find_params_matlab(epoch_orig):
+        """
+        Return specific params that are relatd to this epoch_orig
+        :param params: string, i.e, the epoch_orig
+        :return:
+        """
         FOUND = False
         for key, val in grouping_map_tasksequencer_to_rule.items():
-            if val==params:
+            if val==epoch_orig:
                 if FOUND:
                     # Then this rule has alreayd been fuond. Check if you shodl uopdate...
                     # Then take the one with the longer params, which is superset.
@@ -996,20 +1038,24 @@ def rules_map_rulestring_to_ruledict(rulestring):
                         print("=============")
                         print(categ_matlab, params_matlab)
                         print(key)
-
                         print(rulestring)
-                        print(val, params)
+                        print(val, epoch_orig)
                         for k, v in grouping_map_tasksequencer_to_rule.items():
                             print("---", k, " -- ",  v)
                         assert False, "this val is in multiple items; use category to further refine"
                 else:
+                    if len(key)!=2:
+                        print(key)
+                        print(epoch_orig)
+                        assert False, "are you missing params? code it so that dont mistakenly fale negative miss params"
                     categ_matlab = key[0] # e.g., prot_prims_in_order
                     params_matlab = key[1] # e.g., ('line-8-3', 'V-2-4', 'Lcentered-4-3')
                     FOUND = True
+
         if not FOUND:
             for key, val in grouping_map_tasksequencer_to_rule.items():
                 print(key, val)
-            print(params)
+            print(epoch_orig)
             print(rulestring)
             assert FOUND, "did not find this val"
         return categ_matlab, params_matlab
@@ -1182,7 +1228,36 @@ def rules_map_rulestring_to_ruledict(rulestring):
             assert False, 'code it'
 
         params_good = [list_shapes_in_order, direction_across]
+    elif categ=="rowcol" and subcat=="dirdir":
+        # Rows (or cols) where the direction within and across rows are fixed.
 
+        categ_matlab, params_matlab = _find_params_matlab(params)
+        # e.g, rows_direction ('down', 'right'), where 'down' is across and 'right' is within
+
+        # Which kind of chunking is this?
+        if categ_matlab=="rows_direction":
+            kind = "rows"
+        elif categ_matlab=="cols_direction":
+            kind = "cols"
+        else:
+            print(params)
+            print(params_matlab)
+            print(categ_matlab)
+            assert False, "is this rows, cols, etc? (Check dragmonkey to be sure)"
+
+        # What are the directions?
+        assert len(params_matlab)==2
+        for p in params_matlab:
+            assert isinstance(p, str)
+        dir_across = params_matlab[0]
+        dir_within = params_matlab[1]
+
+        # Populate params
+        params_good = [
+            kind, # e.g,, "rows", "cols"
+            dir_across, # dir_across (e.g,, down)
+            dir_within, # dir_within
+        ]
     elif categ=="dir":
         # Directions using string keys, no need to look at matlab params
         categ_matlab = None
@@ -1203,6 +1278,9 @@ def rules_map_rulestring_to_ruledict(rulestring):
         params_good = params
     else:
         print(categ, subcat)
+        print(params)
+        categ_matlab, params_matlab = _find_params_matlab(params)
+        print(categ_matlab, params_matlab)
         assert False, "code it"
 
     # # 3) Clean up the shapes
@@ -1215,14 +1293,19 @@ def rules_map_rulestring_to_ruledict(rulestring):
 
     # 3) return as params.
     out = {
-        "categ_matlab":categ_matlab,
-        "params_matlab":params_matlab,
-        "params_good":params_good,
-        "categ":categ,
-        "subcat":subcat,
-        "params":params,
-        "rulestring":rulestring}
+        "categ_matlab":categ_matlab, # not important - copying the matlab params
+        "params_matlab":params_matlab, # not important - copying the matlab params
+        "params_good":params_good, # IMPORTANT --> this is interpreted downstream to parse tasks. Tuple of params.
+        "categ":categ, # rulestring[0]
+        "subcat":subcat, # rulestring[1]
+        "params":params, # rulestring[2]
+        "rulestring":rulestring,
+    }
 
+    if False:
+        print("Mapped this rulestring to this ruledict...")
+        print("  ", rulestring)
+        print("  ", out)
     return out
 
 def _get_rank_and_chain_variations(list_shape_orders):
@@ -1231,6 +1314,11 @@ def _get_rank_and_chain_variations(list_shape_orders):
         list_shape_orders_rankchain.append(f"ss-rank-{order}")
         list_shape_orders_rankchain.append(f"ss-chain-{order}")
     return list_shape_orders_rankchain
+def _get_rank_variations(list_shape_orders):
+    list_shape_orders_rank = []
+    for order in list_shape_orders:
+        list_shape_orders_rank.append(f"ss-rank-{order}")
+    return list_shape_orders_rank
 def _get_rankdir_variations(list_shape_orders):
     list_shape_orders_rankchain = []
     for order in list_shape_orders:
@@ -1248,6 +1336,47 @@ def _get_chunk_dir2_variations(list_rule):
     aka. chunk_mask in matlab.
     """
     return [f"ch-dir2-{x}" for x in list_rule]
+
+# Pre-extract all the rules consistent.
+DICT_RULESTRINGS_CONSISTENT = {}
+for r in MAP_EPOCHKIND_EPOCH["direction"]:
+    # Direction
+    DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
+# for r in ["LVl1", "llV1R", "lVL1", "VlL1", "ZlA1"] + ["llV1a", "llV1b", "llV1c", "llV1d"]:
+for r in MAP_EPOCHKIND_EPOCH["shape"]:
+    # Deterministic shape (ABC...)
+    # DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
+    DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_variations([r]) # No need for "chain", this just is never used. if use, then bugs.
+for r in MAP_EPOCHKIND_EPOCH["AnBm"]:
+# for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b", "AnBmCk2NODIR"]:```
+    # AnBmCk (can do any order within A...)
+    # repeat A, repeat B, e...
+    DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
+for r in MAP_EPOCHKIND_EPOCH["(AB)n"]:
+# for r in ["(AB)n"]:
+    # "lolli"
+    DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
+for r in MAP_EPOCHKIND_EPOCH["(AB)nDir"]:
+# for r in ["LolDR"]:
+    # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
+    # order across lollis (direction) and appending extra prims (any order)
+    DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
+for r in MAP_EPOCHKIND_EPOCH["AnBmDir"]:
+# for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "llCV1", "llCV2", "llCV3", "llCV3b"]:
+    # AnBmCk (fixed direction order within A...)
+    # e.g., gridlinecircle3, lines to circles, and within lines is to right.
+    DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
+for r in MAP_EPOCHKIND_EPOCH["ranksup"]:
+# for r in ["rndstr", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1",
+#     "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"]:
+    # Each task has a defined sequence in its matlab code (tasksequencer).
+    # e..g, rndstr was this, where a random sequence was sampled for eash task.
+    # I.e. only a single specific sequence
+    DICT_RULESTRINGS_CONSISTENT[r] = [f"preset-null-{r}"]
+for r in MAP_EPOCHKIND_EPOCH["rowcol"]:
+    # Rows/cols, where the direction within and acreoss rows (or cols) is fixed. e.g,, do roww
+    # where within is left, and across is down.
+    DICT_RULESTRINGS_CONSISTENT[r] = [f"rowcol-dirdir-{r}"]
 
 def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_as_dict=False):
     """ 
@@ -1273,33 +1402,6 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
     """
     assert isinstance(list_rules, list)
 
-    DICT_RULESTRINGS_CONSISTENT = {}
-    for r in ["D", "U", "R", "L", "TR", "UL"]:
-        DICT_RULESTRINGS_CONSISTENT[r] = _get_direction_variations([r])
-    for r in ["LVl1", "lVL1", "VlL1", "ZlA1"] + ["llV1a", "llV1b", "llV1c", "llV1d"]:
-        # Deterministic shape (ABC...)
-        DICT_RULESTRINGS_CONSISTENT[r] = _get_rank_and_chain_variations([r])
-    for r in ["AnBm2", "AnBm1a", "AnBmHV", "AnBm1b", "AnBmCk2NODIR"]:
-        # repeat A, repeat B, e... 
-        # Can do any order within A...
-        DICT_RULESTRINGS_CONSISTENT[r] = [f"ss-rank-{r}"]
-    for r in ["(AB)n"]:
-        DICT_RULESTRINGS_CONSISTENT[r] = _get_chunk_dir2_variations([r])
-    for r in ["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "llCV1", "llCV2", "llCV3", "llCV3b"]:
-        # e.g., gridlinecircle3, lines to circles, and within lines is to right.
-        DICT_RULESTRINGS_CONSISTENT[r] = _get_rankdir_variations([r])
-    for r in ["LolDR"]:
-        # e.g., gridlinecircle3, lollis, with fixed order (defined by hand), and fixed
-        # order across lollis (direction) and appending extra prims (any order)
-        DICT_RULESTRINGS_CONSISTENT[r] = [f"chmult-dirdir-{r}"]
-    for r in ["rndstr", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1", 
-        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"]:
-        # Each task has a defined sequence in its matlab code (tasksequencer).
-        # e..g, rndstr was this, where a random sequence was sampled for eash task.
-        # I.e. only a single specific sequence
-        DICT_RULESTRINGS_CONSISTENT[r] = [f"preset-null-{r}"]
-
-
     # print(DICT_RULESTRINGS_CONSISTENT[r])
     # assert False
     
@@ -1324,22 +1426,37 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
 
 
 
-def rules_map_rule_to_ruledict_extract_auto(D):
+def rules_map_rule_to_ruledict_extract_auto(D, include_alternative_rules=False):
     """for each related to the the data in this D, get its ruledict
     RETURNS:
-    - dicst, rule --> ruledict
+    - dicst, rule (epoch_orig) --> ruledict, where rule is single string like "llV1", not the rulestring.
+    Ensures this is the uqniue ruledict for this rule, otherwise fals.
     """
-  
+
     list_rulestring = rules_related_rulestrings_extract_auto(D)
+    # RUNS INTO INFINITE RECURSION
+    # # - get rules autoamticlaly.
+    # if include_alternative_rules:
+    #     # Then include alternative hypotheses. This can lead to many rules. Can also fail if it is a rule that is incompatibvle
+    #     # with data (e.g., sequence of shapes, but this sequence doesnt include all of the sahpes in beh)
+    #     list_rulestring = rules_related_rulestrings_extract_auto(D)
+    # else:
+    #     list_rulestring = D.grammarparses_rulestrings_exist_in_dataset()
 
     map_rule_to_ruledict = {}
     for rs in list_rulestring:
         rule_dict = rules_map_rulestring_to_ruledict(rs)
         rule = rule_dict["params"]
-        map_rule_to_ruledict[rule] = rule_dict
-        
-    return map_rule_to_ruledict
+        if rule in map_rule_to_ruledict:
+            assert rule_dict == map_rule_to_ruledict[rule] # probably like "ss-chain-lVL1" and "ss-rank-lVL1" for lVL1
+        else:
+            map_rule_to_ruledict[rule] = rule_dict
+    #
+    if not include_alternative_rules:
+        # Prune to just epochs
+        map_rule_to_ruledict = {epoch_orig:ruledict for epoch_orig, ruledict in map_rule_to_ruledict.items() if epoch_orig in D.Dat["epoch_orig"].unique().tolist()}
 
+    return map_rule_to_ruledict
 
 def rules_related_rulestrings_extract_auto(D):
     """ Helper to try to extract all relevant rules, based on:
@@ -1371,12 +1488,21 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
     #     DICT_RELATED_RULES[rule]
     # assert False
 
+    # TODO: replace all of this with auto getting for each key in MAP_EPOCHKIND_EPOCH, similar to waht is done elsewhere.
+    # PROBLEM here is that I run all this, and then I prune to just the rules within the dataset -- unecesary.
+
+    # assert False, "usualyl dont use this, unless ua ctualyl want ALL the alterantive rules within a rule kind. To do this, see what I do in _rules_consistent_rulestrings_extract_auto and replace the below. I already started with MAP_EPOCHKIND_EPOCH['shape'] for example."
+
     DICT_RELATED_RULES = {
+        tuple(MAP_EPOCHKIND_EPOCH["rowcol"]):[f"rowcol-dirdir-{s}" for s in MAP_EPOCHKIND_EPOCH["rowcol"]],
         # ("LVl1", "lVL1", "VlL1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1")),
-        ("LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1")),
-        ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
-        ("TR",):_get_direction_variations(["TR"]),
-        ("UL",):_get_direction_variations(["UL"]),
+        # tuple(MAP_EPOCHKIND_EPOCH["shape"]):_get_rank_and_chain_variations(MAP_EPOCHKIND_EPOCH["shape"]), # PROBLEM: ambiguous which rule to use... so stop doing this.
+        tuple(MAP_EPOCHKIND_EPOCH["shape"]):_get_rank_variations(MAP_EPOCHKIND_EPOCH["shape"]),
+        # ("LVl1", "llV1R", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1"):_get_rank_and_chain_variations(("LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "ZlA1")),
+        # ("D", "U", "R", "L"):_get_direction_variations(["D", "U", "R", "L"]),
+        # ("TR",):_get_direction_variations(["TR"]),
+        # ("UL",):_get_direction_variations(["UL"]),
+        tuple(MAP_EPOCHKIND_EPOCH["direction"]):_get_direction_variations(MAP_EPOCHKIND_EPOCH["direction"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
@@ -1623,11 +1749,26 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
     elif rd["categ"] == "ch":
         # Count the chunks
         if HACK:
-            OUT = [None for _ in range(len(D.Dat))]
+            # NOt yet coded.
+            # OUT = [None for _ in range(len(D.Dat))]
+            OUT = ["IGNORE" for _ in range(len(D.Dat))]
+
+    elif rd["categ"] == "rowcol" and rd["subcat"]=="dirdir":
+        # Count the number of items in each grouping, from 1st to last.
+        # e.g,, if 3 rows with n items 2,1,3, then is (2,1,3)
+        rs = rd["rulestring"]
+        for i in range(len(D.Dat)):
+            gd = D.grammarparses_grammardict_return(i, False)
+            # assert len(gd.ChunksListClassAll)==1, "assumes there is only one model, which there should be"
+            # rs = "rowcol-dirdir-rowsDR"
+            assert len(gd.ChunksListClassAll[rs].ListChunksClass)==1, "assumes there is only one hier, which there should be"
+            hier = gd.ChunksListClassAll[rs].ListChunksClass[0].Hier # [[4, 5], [2, 3], [0, 1]]
+            OUT.append(tuple([len(h) for h in hier])) # e.g, (2,2,2)
     elif rd["categ"] == "preset" and rd["subcat"]=="null":
     # elif rd["rulestring"] == "preset-null-rndstr":
         # Nothing to categorize them by. this is arbitrary pretermined sequence
-        OUT = [None for _ in range(len(D.Dat))]
+        # OUT = [None for _ in range(len(D.Dat))]
+        OUT = ["IGNORE" for _ in range(len(D.Dat))]
     elif rd["categ"]=="dir":
         # Direction rule.
         # Classify each task based on the number of strokes (temporary).
@@ -1635,5 +1776,8 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
     else:
         print(rule, rd)
         assert False, "not coded"
+
+    for o in OUT:
+        assert o is not None
 
     return OUT

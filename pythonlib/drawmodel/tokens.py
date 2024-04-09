@@ -425,6 +425,51 @@ class Tokens(object):
             return chunk_rank, chunk_within_rank
 
 
+    def sequence_gridloc_direction(self, GRIDLOC_VER = "gridloc"):
+        """ Get each item's griodloc locatio minus previous item's, with first item in seuqence hvaing (IGN, IGN).
+        Appends a new key in self.Tokens["gridloc_rel_prev"], which is 2-tuple of gridloc distance from
+        previous item.
+        """
+
+        # GRIDLOC_VER = "gridloc_local" # better, since considers just the grid of this task.
+        tokens = self.Tokens
+
+        grid_ver = "on_grid"
+        for dseg in tokens:
+            if dseg[GRIDLOC_VER] == ("IGN",) or dseg[GRIDLOC_VER] == ("IGN", "IGN"):
+                grid_ver = "on_rel"
+
+        def _location(i):
+            if grid_ver == "on_grid":
+                xloc, yloc = tokens[i][GRIDLOC_VER]
+            elif grid_ver == "on_rel":
+                xloc = "IGN"
+                yloc = "IGN"
+            else:
+                assert False
+            return xloc, yloc
+
+        def _posdiffs(i, j):
+            # return xdiff, ydiff,
+            # in grid units, from i --> j
+            if grid_ver == "on_grid":
+                pos1 = _location(i)
+                pos2 = _location(j)
+                return pos2[0]-pos1[0], pos2[1] - pos1[1]
+            elif grid_ver == "on_rel":
+                return ("IGN", "IGN")
+            else:
+                assert False
+
+        def _gridloc_rel_prev(i):
+            if i==0:
+                return (0, "START")
+            else:
+                return _posdiffs(i-1, i)
+
+        for i, dseg in enumerate(tokens):
+            dseg["gridloc_rel_prev"] = _gridloc_rel_prev(i)
+
     def sequence_context_relations_calc(self):
         """ Get each item's sequence context, entering as new features
         for each tok.
@@ -456,7 +501,7 @@ class Tokens(object):
 
         def _posdiffs(i, j):
             # return xdiff, ydiff, 
-            # in grid units.
+            # in grid units, from i --> j
             if grid_ver == "on_grid":
                 pos1 = _location(i)
                 pos2 = _location(j)
