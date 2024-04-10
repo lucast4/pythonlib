@@ -1732,10 +1732,18 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
     - groupdict, grptuple:list_indices_into_df
     """
     groupdict = {}
-    for grp in df.groupby(list_groupouter_grouping_vars):
-        if (groupouter_levels is not None) and (grp not in groupouter_levels):
-            continue
-        groupdict[grp[0]] = grp[1].index.tolist()
+    try:
+        for grp in df.groupby(list_groupouter_grouping_vars):
+            if (groupouter_levels is not None) and (grp not in groupouter_levels):
+                continue
+            groupdict[grp[0]] = grp[1].index.tolist()
+    except Exception as err:
+        print(list_groupouter_grouping_vars)
+        print(len(df))
+        # print(grp)
+        for g in list_groupouter_grouping_vars:
+            print(df[g].unique())
+        raise err
 
     if sort_keys:
         keys = list(groupdict.keys())
@@ -1743,6 +1751,21 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
         groupdict = {k:groupdict[k] for k in keys}
 
     return groupdict
+
+def stringify_values(df):
+    """
+    Convert any values that are tuples or lists into strings, with
+    separator | nbetween items.
+    Useful for grouping, seaborn, and other plotting stuff, which can
+    often throw error in these cases.
+    :param df:
+    :return: copy of df, with modifications descrtibed above,.
+    """
+    from pythonlib.tools.listtools import stringify_list
+    df_str = df.copy()
+    for k in df_str.columns:
+        df_str[k] = [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in df_str[k].values.tolist()]
+    return df_str
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
     groupinner="index", groupouter_levels=None, new_col_name="grp",
@@ -2824,6 +2847,9 @@ def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
     NOTE: confirmed doesnt mod input. and works correctly, including "index" correctly mapping
     to original data.
     """
+
+    # Stringify, or else will fail groupby step
+    df = stringify_values(df)
 
     # For each group of var, shuffle the othervar
     list_grp = []
