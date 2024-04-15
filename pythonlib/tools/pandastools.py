@@ -1228,7 +1228,7 @@ def pivot_table(df, index, columns, values, aggfunc = "mean", flatten_col_names=
     Take a long-form datagrame, and convert into a wide form. 
     PARAMS:
     - index, list of str, defining a grouping variable. Each level of this variable will be a
-    new row in the output dataframe. 
+    new row in the output dataframe.
     - columns, list of str or str, a grouping variable. each level of this variable will define a
     new column in output dataframe. (generally keep this length 1, easy to understand. if len >1, then will be hierarchical 
     columns)
@@ -2803,6 +2803,42 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
             return True, levels_passing
         else:
             return False, levels_passing
+
+def sort_by_two_columns_separate_keys(df, col1, col2, key2=None):
+    """
+    Sort hierarhccyalyl by two colummn, and allow passing in key for the second column.
+    REturns copy
+    for each
+    :param df:
+    :param col1:
+    :param col2:
+    :param key2:
+    :return:
+    """
+
+    # NOT using this, since it fails the groupby step (as there it then groups again by the variable before keying)
+    # if key1 is not None:
+    #     def _key1(series1):
+    #         # print(series1)
+    #         # print([key1(x) for x in series1])
+    #         # assert False
+    #         return [key1(x) for x in series1]
+    # else:
+    #     _key1 = None
+
+    if key2 is not None:
+        def _key2(series2):
+            return [key2(x) for x in series2]
+    else:
+        _key2 = None
+
+    def custom_score_sort(x):
+        return x.sort_values(by=col2, key=_key2)
+
+    # Sort the DataFrame by 'Age' column and apply custom sorting on 'Score' column'
+    df = df.sort_values(col1, key=None).groupby(col1, group_keys=False).apply(custom_score_sort).reset_index(drop=True)
+
+    return df
 
 
 def sort_rows_by_trialcode(dfthis):
