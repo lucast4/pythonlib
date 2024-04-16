@@ -31,7 +31,7 @@ def stringify_list(li, return_as_str=False, separator="--"):
     if isinstance(li, (tuple, list)):
         out = []
         for x in li:
-            if isinstance(x, list):
+            if isinstance(x, (tuple, list)):
                 out.extend(stringify_list(x))
     #         elif isinstance(x, np.ndarray):
     #             from pythonlib.tools.nptools import stringify
@@ -42,6 +42,7 @@ def stringify_list(li, return_as_str=False, separator="--"):
         # is not list...
         out = [str(li)]
     if return_as_str:
+        assert isinstance(out, (list, tuple))
         return f"{separator}".join(out)
     else:
         return out

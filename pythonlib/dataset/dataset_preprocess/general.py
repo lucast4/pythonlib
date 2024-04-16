@@ -1249,6 +1249,9 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if "supervision_params" in D.Dat.columns:
         del D.Dat["supervision_params"] # from drawmonkey.
 
+    # Always good to extract n strokes per task
+    D.extract_beh_features(feature_list=["num_strokes_task"])
+
     ############ GOOD TOKENS STUFF!! E.g. binning motor, etc.
     # (had this in anova params, but should actually run all the time).
 

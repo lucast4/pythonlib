@@ -6932,43 +6932,45 @@ class Dataset(object):
         """
         from pythonlib.drawmodel.features import strokesAngleOverall, strokeCircularity, strokeDistances
         feature_list_names = []
+        import warnings
 
         # Otheriwse shows unecesary waribng: PerformanceWarning: DataFrame is highly fragmented.
         # This is usually the result of calling `frame.insert` many times, which has poor performance.
         # Consider joining all columns at once using pd.concat(axis=1) instead. To get a de-fragmented frame, use `newframe = frame.copy()`
         # https://stackoverflow.com/questions/68292862/performancewarning-dataframe-is-highly-fragmented-this-is-usually-the-result-o
-        from warnings import simplefilter
-        simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+            # from warnings import simplefilter
+            # simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
-        # get overall angle for each task
-        for f in feature_list:
-            if not isinstance(f, str):
-                # Then should be function handle
-                x = [f(strokes) for strokes in self.Dat["strokes_beh"].values]
-            else:
-                if f=="angle_overall":
-                    x = [strokesAngleOverall(strokes) for strokes in self.Dat["strokes_beh"].values]
-                elif f=="num_strokes_beh":
-                    x = [len(strokes) for strokes in self.Dat["strokes_beh"].values]
-                elif f=="num_strokes_task":
-                    # number of strokes in ground truth task
-                    x = [len(strokes) for strokes in self.Dat["strokes_task"].values]
-                elif f=="circ":
-                    x= [np.mean(strokeCircularity(strokes)) for strokes in self.Dat["strokes_beh"].values]
-                elif f=="dist":
-                    x = [np.mean(strokeDistances(strokes)) for strokes in self.Dat["strokes_beh"].values]
-                elif f=="hdoffline":
-                    x = self.score_visual_distance(return_vals=True)
+            # get overall angle for each task
+            for f in feature_list:
+                if not isinstance(f, str):
+                    # Then should be function handle
+                    x = [f(strokes) for strokes in self.Dat["strokes_beh"].values]
                 else:
-                    print(f)
-                    assert False
+                    if f=="angle_overall":
+                        x = [strokesAngleOverall(strokes) for strokes in self.Dat["strokes_beh"].values]
+                    elif f=="num_strokes_beh":
+                        x = [len(strokes) for strokes in self.Dat["strokes_beh"].values]
+                    elif f=="num_strokes_task":
+                        # number of strokes in ground truth task
+                        x = [len(strokes) for strokes in self.Dat["strokes_task"].values]
+                    elif f=="circ":
+                        x= [np.mean(strokeCircularity(strokes)) for strokes in self.Dat["strokes_beh"].values]
+                    elif f=="dist":
+                        x = [np.mean(strokeDistances(strokes)) for strokes in self.Dat["strokes_beh"].values]
+                    elif f=="hdoffline":
+                        x = self.score_visual_distance(return_vals=True)
+                    else:
+                        print(f)
+                        assert False
 
-            print(f"Num nan/total, for {f}")
-            print(sum(np.isnan(x)), "/", len(x))
-            # self.Dat[f"FEAT_{f}"] = x
-            self.Dat[f"FEAT_{f}"] = x
-            feature_list_names.append(f"FEAT_{f}")
-
+                print(f"Num nan/total, for {f}")
+                print(sum(np.isnan(x)), "/", len(x))
+                # self.Dat[f"FEAT_{f}"] = x
+                self.Dat[f"FEAT_{f}"] = x
+                feature_list_names.append(f"FEAT_{f}")
 
         print("Added these features:")
         print(feature_list_names)
@@ -7094,6 +7096,7 @@ class Dataset(object):
                 print(v, " --- ", sort_mixed_type(self.Dat[v].unique()))
 
             print("======================= Conjucntions keys (n trials)")
+            print("-- Vars:", vars)
             for k, v in out.items():
                 print(k, " -- n=", len(v))
 
@@ -8022,6 +8025,57 @@ class Dataset(object):
                 map_epochset_trialcode = self.epochset_extract_wrapper(version, exclude_leftover=True)
                 self.assign_insert_value_using_trialcode_key("epochset", map_epochset_trialcode)
 
+    def epochset_extract_matching_motor_wrapper(self, HACK=True):
+        """
+        Extract epochsets (Eacha  diff column) in each case only haveing two possible
+        sets, either yes or no, indicating matched motor beh across epochs within the set.
+        Useful, eg., if want to find AnBmCk rule + AnBmCk with colrank + AnBmCk with seqsup, each
+        case having matched motor beh across those 3 epochs, with motor beh defined by the actual
+        shape and loc sequence in bahvior.
+        :return: Adds two columns to self.Dat:
+        -- "epochset_shape" and "epochset_loc"
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+
+        # First, add column defining motor beh for each trial
+        self.seqcontext_extract_locations_in_beh_order_append_column(colname="behseq_locs")
+        self.seqcontext_extract_shapes_in_beh_order_append_column(colname="behseq_shapes")
+        self.Dat = append_col_with_grp_index(self.Dat, ["behseq_shapes", "behseq_locs"], "behseq_shapes_locs")
+
+        def _prune_to_single_epoch_orig(list_epoch_orig):
+            """ list_epoch_orig --> list of a single peoch_orig,
+            by taking the one with most datapts.
+            """
+            # if multiple, then take the one with more trials.
+            idx = int(np.argmax([sum(self.Dat["epoch_orig"]==epoch_orig) for epoch_orig in list_epoch_orig]))
+            list_epoch_orig = [list_epoch_orig[idx]]
+            return list_epoch_orig
+
+        #### Get epochsets for speicifc comparisongs
+        # - Shapes
+        list_epoch_orig = self.grammarparses_rules_involving_shapes(True)
+        if len(list_epoch_orig)>1:
+            if HACK:
+                list_epoch_orig = _prune_to_single_epoch_orig(list_epoch_orig)
+            else:
+                print(list_epoch_orig)
+                assert False, "sholud probably scrap this entire meothd.."
+        self.epochset_extract_common_epoch_sets("behseq_shapes_locs", "epoch_orig",
+                                                epochset_col_name="epochset_shape", epochset_desired=list_epoch_orig)
+        print("Added column: self.Dat[epochset_shape]")
+
+        # Direction
+        list_epoch_orig = self.grammarparses_rules_involving_direction(True)
+        if len(list_epoch_orig)>1:
+            if HACK:
+                list_epoch_orig = _prune_to_single_epoch_orig(list_epoch_orig)
+            else:
+                print(list_epoch_orig)
+                assert False, "sholud probably scrap this entire meothd.."
+        self.epochset_extract_common_epoch_sets("behseq_shapes_locs", "epoch_orig",
+                                                epochset_col_name="epochset_dir", epochset_desired=list_epoch_orig)
+        print("Added column: self.Dat[epochset_shape]")
+
     def epochset_extract_wrapper(self, version, params=None, epoch_label="epoch",
         exclude_leftover=False, mutate=False, merge_sets_with_only_single_epoch=True,
         only_keep_epochsets_containing_all_epochs=False):
@@ -8147,7 +8201,8 @@ class Dataset(object):
         merge_sets_with_only_single_epoch=False,
         merge_sets_with_only_single_epoch_name = tuple(["LEFTOVER"]),
         only_keep_epochsets_containing_all_epochs = False,
-        append_prefix=None):
+        append_prefix=None,
+        epochset_desired = None, epochset_desired_name_for_leftover = tuple(["LEFTOVER"])):
         """
         Find groups of trials that share some feature (e.g., same character) and also occur across multiple
         epochs. Group the trials that occur across the exact same epochs. e..g, this finds tasks that 
@@ -8164,8 +8219,12 @@ class Dataset(object):
         the rest calls them <merge_sets_with_only_single_epoch_name>
         - append_prefix, either None (ignores) or str, in which case appends this string to 
         start of each epochset. e.g., (epoch1, epoch2) --> (append_prefix, epoch1, epoch2).
+        - epochset_desired, either None (ignore) or list of str (e.g, ['llCV3|0', 'llCV3|0|S']) which is an
+        epochset that you are looking for. Then there will only be 2 epochsets: ['llCV3|0', 'llCV3|0|S'] (all cases that
+        whose epochset inlcudes this epochset, e.g, ('UL', 'llCV3|0', 'llCV3|0|S') would be included), and
+        <epochset_desired_name_for_leftover> for all other trials. IN other words, get epochsets with at laest these
+        epochs, and possibly more.
         """
-        # - classify each task based on which epochs it spans
 
         # Some defaults -- not useful, but allows running this using None inputs, which I use in dataset preprocess
         # for neural data.
@@ -8179,6 +8238,23 @@ class Dataset(object):
             n_min_each_conj_outer_inner=n_min_each_conj_outer_inner, take_top_n_inner=n_max_epochs)
         # - make the epoch set hashable, and sorted
         groupdict = {charseq:tuple(sorted(epoch_set)) for charseq, epoch_set in groupdict.items()}
+
+        ####### Looking for speicifc epochset?
+        if epochset_desired is not None:
+            epochset_desired = tuple(sorted(epochset_desired)) # imprtant
+            # list_includes_desired_epochs = []
+            groupdict_new = {}
+            for charseq, epochset in groupdict.items():
+                epochset_contains_desired_epochs = all([e in epochset for e in epochset_desired])
+                # list_includes_desired_epochs.append(epochset_contains_desired_epochs)
+
+                # print(epochset, " ---- ", epochset_contains_desired_epochs)
+
+                if epochset_contains_desired_epochs:
+                    groupdict_new[charseq] = epochset_desired
+                else:
+                    groupdict_new[charseq] = epochset_desired_name_for_leftover
+            groupdict = groupdict_new
 
         if PRINT:
             list_epochsets_unique = sorted(set([x for x in list(groupdict.values())]))
@@ -8253,7 +8329,7 @@ class Dataset(object):
         """
         return sorted(self.Dat[self.Dat["probe"]==1]["block"].unique().tolist())
 
-    def grammarparses_rules_epochs_superv_summarize_wrapper(self, PRINT=False):
+    def grammarparses_rules_epochs_superv_summarize_wrapper(self, PRINT=False, include_epochset=False):
         """
         GOOD - wrapper to extract for each row the key features of the epoch, which are
         in generic terms that apply across epxeirments, refelcting, e.g, whether is
@@ -8271,6 +8347,9 @@ class Dataset(object):
         if "epoch_is_AnBmCk" not in self.Dat.columns:
             self.grammarparses_rules_shape_AnBmCk()
 
+        if "epoch_is_DIR" not in self.Dat.columns:
+            self.grammarparses_rules_direction()
+
         if "superv_is_seq_sup" not in self.Dat.columns:
             self.supervision_reassign_epoch_rule_by_sequence_mask_supervision()
 
@@ -8282,19 +8361,43 @@ class Dataset(object):
         if PRINT:
             from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
             # Get trials under each epoch
-            vars = ["epoch_orig", "epoch", "epoch_rand", "INSTRUCTION_COLOR", "superv_is_seq_sup", "epoch_orig_rand_seq", "epoch_is_AnBmCk"]
+            vars = ["epoch_orig", "epoch", "epoch_rand", "INSTRUCTION_COLOR", "superv_is_seq_sup", "epoch_orig_rand_seq", "epoch_is_AnBmCk", "epoch_is_DIR"]
+            if include_epochset:
+                vars = ["epochset"] + vars
             grpdict = self.grouping_print_conjunctions_summary_good(vars, PRINT=True)
+
+    def grammarparses_rules_direction(self):
+        """
+        For each row, appends column "epoch_is_DIR", bool, indicating
+        whether is pure direction rule. NOTEL This onlyu looks at epoch_orig, and so
+        it would be called True even if it is color_rank or sequence_sup (probe tasks
+        designed with same motor).
+        """
+
+        # Get list of epochs that use shape rules.
+        rules = self.grammarparses_rules_involving_direction(return_as_epoch_orig=True)
+
+        list_DIR = []
+        for i, row in self.Dat.iterrows():
+            if row["epoch_orig"] in rules:
+                # Then this is a dir rule, without supervision by color or sequence mask
+                list_DIR.append(True)
+            else:
+                list_DIR.append(False)
+
+        self.Dat["epoch_is_DIR"] = list_DIR
+        print("Appended column: self.Dat[epoch_is_DIR]")
 
     def grammarparses_rules_shape_AnBmCk(self):
         """
         For each row, appends column "epoch_is_AnBmCk", bool, indicating
-        whether is pure shape rule, without color_rank or sequence_sup
-        supervision.
+        whether is pure shape rule. NOTEL This onlyu looks at epoch_orig, and so
+        it would be called True even if it is color_rank or sequence_sup (probe tasks
+        designed with same motor).
         """
 
         # Get list of epochs that use shape rules.
         shape_rules = self.grammarparses_rules_involving_shapes(return_as_epoch_orig=True)
-
 
         # Include only those epochs that are also not color instruction, or seqsup.
         if "superv_is_seq_sup" not in self.Dat.columns:
@@ -8306,8 +8409,8 @@ class Dataset(object):
             b = row["INSTRUCTION_COLOR"]
             c = row["epoch_orig"] in shape_rules
 
-            print(i, a, b, c)
-            if (c) and (not a) and (not b):
+            # if (c) and (not a) and (not b): # STOPPED also checking that it is not colrank or seqsup
+            if (c):
                 # Then this is a shape rule, without supervision by color or sequence mask
                 list_AnBmCk.append(True)
             else:
@@ -8324,7 +8427,7 @@ class Dataset(object):
         Useful for grouping all epochs which are actually color_rank with random seuqence.
         :return: map_epochorig_to_israndseq, dict, epoch_orig:bool (True means is random_)
         AND appends a new column "epoch_orig_rand_seq"
-        AND appends "epoch_rand", which is iether "colrand" (if is random and color instruction,
+        AND appends "epoch_rand", which is iether "presetrand" (if is random instruction,
         or epoch otherwise
         """
 
@@ -8344,11 +8447,11 @@ class Dataset(object):
         list_epoch_rand = []
         for i, row in self.Dat.iterrows():
             if row["epoch_orig_rand_seq"]==True and row["INSTRUCTION_COLOR"]==True:
-                epoch_rand = "colrand"
+                epoch_rand = "presetrand"
             elif row["epoch_orig_rand_seq"]==True and row["INSTRUCTION_COLOR"]==False and row["superv_COLOR_METHOD"] == "solid_sequence_mask":
                 # Random seuqence, but no color instruction. The only case this is possible (I think)
                 # is if using seuqence  mask... in which case superv_COLOR_METHOD=="solid_sequence_mask".
-                epoch_rand = "colrand"
+                epoch_rand = "presetrand"
             elif row["epoch_orig_rand_seq"]==False and row["INSTRUCTION_COLOR"]==True:
                 # using rule, but coloring (probe)
                 epoch_rand = row["epoch"] # .e.g, AnBmCk2|1
@@ -8365,6 +8468,25 @@ class Dataset(object):
             grpdict = self.grouping_print_conjunctions_summary_good(vars)
 
         return map_epochorig_to_israndseq
+
+    def grammarparses_rules_involving_direction(self, return_as_epoch_orig=False):
+        """ Return list of rulestrings of the rules that exist in dataset which
+        use knowledge of location/direction
+        RETURNS:
+            - list_rules_using_shapes, list of rulestrings. can be empty.
+        """
+        map_rulestr_ruledict = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"]
+        list_rules = []
+        for rulestr, ruledict in map_rulestr_ruledict.items():
+            if ruledict["categ"]=="dir":
+                list_rules.append(rulestr)
+
+        if return_as_epoch_orig:
+            # Convert from rulestring to epoch_orig
+            map_rulestr_ruledict = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"]
+            list_rules = [map_rulestr_ruledict[rs]["params"] for rs in list_rules]
+
+        return list_rules
 
     def grammarparses_rules_involving_shapes(self, return_as_epoch_orig=False):
         """ Return list of rulestrings of the rules that exist in dataset which
@@ -8918,6 +9040,45 @@ class Dataset(object):
 
         return dfgaps
 
+    def grammarparses_syntax_epochset_quick_classify_same_diff_motor(self):
+        """
+        Quick reclassificying of epochsets to just reflect whether the motor beahvior across
+        epochs (in the set) is same or different.
+
+        Quick and dirty, becuase this shold relaly be done in the initial extraction of
+        epochsets.
+
+        Does it by taking epochsets which are tuplke and first item is "same" --> same motor.
+        All others will be called "diff".
+        E.g., for the following, the firrst 2 are "diff" motor and the last is "same".
+        "(same_stroke_0, UL, llCV3)"
+        "(char, UL, llCV3)"
+        "(same, UL, llCV3)"
+
+        :return:
+        assert column: self.Dat["epochset_diff_motor"]
+        """
+
+        # classify if epochset starts with "char"
+        # New column "epochset_diff_beh_across_epochs"
+        diff_beh_across_epochs = []
+        for i, row in self.Dat.iterrows():
+            if isinstance(row["epochset"], tuple) and row["epochset"][0]=="same":
+                diff_beh_across_epochs.append(False)
+            elif isinstance(row["epochset"], tuple):
+                diff_beh_across_epochs.append(True)
+            # if isinstance(row["epochset"], tuple) and row["epochset"][0]=="char":
+            #     diff_beh_across_epochs.append(True)
+            # elif isinstance(row["epochset"], tuple) and row["epochset"][0]=="same_stroke_0":
+            #     # Diff after first stroke. keep
+            #     diff_beh_across_epochs.append(True)
+            elif not isinstance(row["epochset"], tuple):
+                diff_beh_across_epochs.append(True)
+            else:
+                print(row["epochset"])
+                assert False, "is this same or diff motor?"
+        self.Dat["epochset_diff_motor"] = diff_beh_across_epochs
+
     def grammarparses_syntax_role_append_to_tokens(self, PRINT=False):
         """
         GOOD Syntax -- assign each stroke a "syntax rule" which is a function of its epoch_orig and its
@@ -8950,7 +9111,7 @@ class Dataset(object):
             map_chunkidx_to_shape_byepoch[epoch] = {}
 
             # get df, sorted in increasing average chunk_rank (ie for each chunk get its average chunk rank then sort them).
-            dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank")
+            dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank").reset_index(drop=True)
             for i, shape in enumerate(dfthis.index):
                 map_shape_to_chunkidx_byepoch[epoch][shape] = i
                 map_chunkidx_to_shape_byepoch[epoch][i] = shape
@@ -8976,6 +9137,9 @@ class Dataset(object):
                 # Random seuqence (hard coded in matlab task).
                 # Stroke index is sytnax role.
                 syntax_role = (tok["stroke_index"],)
+            elif map_epochorig_to_rulekind[epoch_orig][0] == "ch" and map_epochorig_to_rulekind[epoch_orig][1] == "dir2":
+                # (AB)n, with any direction within chunks.
+                syntax_role = (tok["chunk_rank"], tok["chunk_within_rank"])
             else:
                 print(epoch)
                 print(epoch_orig)
@@ -9918,7 +10082,10 @@ class Dataset(object):
         display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_shape" for i in range(nstrokes_max)] + ["charclust_shape_seq_scores"]])
         display(self.Dat.loc[inds, ["trialcode"] + [f"seqc_{i}_loc" for i in range(nstrokes_max)]])
 
-    def seqcontext_behorder_cluster_concrete_variation(self, SAVEDIR, LIST_VAR_BEHORDER=None, groupby="taskcat_by_rule"):
+    def seqcontext_behseq_cluster_concrete_variation(self, SAVEDIR, LIST_VAR_BEHORDER=None,
+                                                     # groupby="taskcat_by_rule",
+                                                     groupby="FEAT_num_strokes_task", # 4/11/24 - this is better since it generalizes across syntax stuff.
+                                                     DEBUG=False):
         """
         Classify trials based on their "concrete order", such as the specific sequence of shapes, locations, or
         directions (location diffs).
@@ -9932,6 +10099,8 @@ class Dataset(object):
         :param plot_savedir:
         :return: new columns for each var_behorder in LIST_VAR_BEHORDER, called var_behorder_clust, using str ints,
         "0", "1", ...
+
+        # e..g, "behseq_shapes_clust", "behseq_locs_clust"
         """
         from pythonlib.tools.distfunctools import distmat_construct_wrapper
         from neuralmonkey.analyses.state_space_good import dimredgood_pca
@@ -9939,12 +10108,41 @@ class Dataset(object):
         from pythonlib.tools.plottools import makeColors
 
         MIN_TRIALS = 8 # if less than this, then all call same cluster.
-        n_clusters_min_max = [2, 6] # err on side of fewer clusters, to get more trials per.
         EPSILON = 0.005 # very small value, so if just few uniqe vals, calustering still works.
 
+        def _decide_n_clust(dfthis, var_behorder):
+            if False:
+                # Old, too often got 2 when should force more
+                n_clusters_min_max = [2, 6] # err on side of fewer clusters, to get more trials per.
+            else:
+                # Force to get more clusters...
+
+                # - get tabulation of counts
+                x = dfthis[var_behorder].value_counts().reset_index()
+
+                # - n clust
+                max_n_clust = int(np.min([
+                    len(x), # cannot have more clusts than the num unique items
+                    len(dfthis)/10, # shoot for at least 10 trials per clust.
+                    20, # a manually defined hard cap
+                ]))
+                max_n_clust = np.max([2, max_n_clust]) # or else fails sillhoute.
+
+                min_n_clust = int(np.max([
+                    3, # silhoutte score will fail if 1. make 3 to get more.
+                    len(dfthis)/20, # if have lots of data, then force partitioning into clusters
+                ]))
+                min_n_clust = np.min([min_n_clust, max_n_clust])
+                if DEBUG:
+                    print("Ntot, nunique:", len(dfthis), len(x))
+                # print(x)
+                n_clusters_min_max = [min_n_clust, max_n_clust]
+            return n_clusters_min_max
+
         if LIST_VAR_BEHORDER is None:
-            LIST_VAR_BEHORDER = ["behseq_shapes", "behseq_locs", "behseq_locs_x", "behseq_locs_y",
-                                 "behseq_locs_diff", "behseq_locs_diff_x", "behseq_locs_diff_y"]
+            LIST_VAR_BEHORDER = ["behseq_shapes", "behseq_locs", "behseq_locs_diff"]
+                                 # "behseq_locs_diff_x", "behseq_locs_diff_y"]
+                                 # "behseq_locs_x", "behseq_locs_y", #  (is too slow).
 
         assert groupby in self.Dat.columns, "need to extract thi sfirst.."
 
@@ -9954,8 +10152,8 @@ class Dataset(object):
             if isinstance(x1[0], int) and isinstance(x2[0], int):
                 # e.g., (-1,1, 10), (1,2, 1)
                 # l2 distance
-                # return np.linalg.norm(np.asarray(x1) - np.asarray(x2))
-                return sum([np.abs(xx2 - xx1) for xx1, xx2 in zip(x1, x2)])
+                return np.linalg.norm(np.asarray(x1) - np.asarray(x2))
+                # return sum([np.abs(xx2 - xx1) for xx1, xx2 in zip(x1, x2)])
             elif isinstance(x1[0], str) and isinstance(x2[0], str):
                 # e.g., ("test", "2"), ("test", "1")
                 return sum([xx2==xx1 for xx1, xx2 in zip(x1, x2)])
@@ -10001,6 +10199,8 @@ class Dataset(object):
                 vals = dfthis[var_behorder].tolist()
                 idxs = dfthis.index.tolist()
 
+                n_clusters_min_max = _decide_n_clust(dfthis, var_behorder)
+                print(var_behorder, ".. Using this min/max n clusters: ", n_clusters_min_max)
                 # Get cluster labels.
                 if len(set(vals))==1 or len(vals) < MIN_TRIALS:
                     # Then all are same cluster
