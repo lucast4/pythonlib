@@ -673,5 +673,11 @@ class Tokens(object):
                     print(feature)
                     assert False, "code it"
 
-
+    def data_extract_raw(self):
+        """ Return as list of dicts, excluding any
+        custom classes
+        """
+        tokens = self.Tokens
+        tokens = [{k:v for k, v in tok.items() if not k=="Prim"} for tok in tokens]
+        return tokens
 

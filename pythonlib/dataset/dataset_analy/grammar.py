@@ -374,7 +374,7 @@ def plot_binned_by_time(D, sdir):
     for sess in list_sess:
         dfthissess = Dc.Dat[Dc.Dat["session"]==sess].reset_index(drop=True)
         # sort by trial
-        dfthissess = dfthissess.sort_values(by="trial")
+        dfthissess = dfthissess.sort_values(by="trial").reset_index(drop=True)
         for nbins in [2,4,8]:
             vals = dfthissess["trial"].tolist()
             timebins = bin_values(vals, nbins)
@@ -423,7 +423,7 @@ def plot_trial_by_trial(D, sdir):
             dfthissess = dfthis[dfthis["session"]==sess].reset_index(drop=True)
 
             # sort by trial
-            dfthissess = dfthissess.sort_values(by="trial")
+            dfthissess = dfthissess.sort_values(by="trial").reset_index(drop=True)
             
             list_dfwindows = []
             for i_center in range(n, len(dfthissess)-n):

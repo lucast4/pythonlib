@@ -1265,7 +1265,7 @@ class DatStrokes(object):
             return None
         else:
             # get all rows matching this datsate index, sorted by beh stroke index
-            df = self.Dat.iloc[inds].sort_values("stroke_index")
+            df = self.Dat.iloc[inds].sort_values("stroke_index").reset_index(drop=True)
             
             # sanity check that got all beh strokes, in order from 0.
             try:
@@ -3807,7 +3807,7 @@ class DatStrokes(object):
         plot_each_shape=True, best_n_by_dist=15):
         """
         Save strokes (np arrays) for each shape, after taking the mean. Useful
-        clustering analyses.
+        clustering analyses.`
         PARAMS:
         - best_n_by_dist, int, how many fo the top trials to take for computing
         mean stroke (top, by sim to task)
@@ -3834,7 +3834,7 @@ class DatStrokes(object):
             fig.savefig(f"{sdir}/mean_stroke_each_shape.pdf")
         else:
             # sort by name of prim
-            dfdat = dfdat.sort_values("shape")
+            dfdat = dfdat.sort_values("shape").reset_index(drop=True)
             list_strok = dfdat["strok"].tolist()
             list_shape = dfdat["shape"].tolist()
             # centerize task strokes, otherwise they are in space

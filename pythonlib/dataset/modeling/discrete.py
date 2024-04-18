@@ -23,6 +23,15 @@ MAP_EPOCHKIND_EPOCH = {
     "baseline":["base", "baseline"]
 }
 
+# Inverse
+MAP_EPOCH_EPOCHKIND = {}
+for k, v in MAP_EPOCHKIND_EPOCH.items():
+    for epoch in v:
+        if epoch not in MAP_EPOCH_EPOCHKIND:
+            MAP_EPOCH_EPOCHKIND[epoch] = k
+        else:
+            assert MAP_EPOCH_EPOCHKIND[epoch] == k
+
 RULES_IGNORE = ["base", "baseline"] # rules to ignore. assumed that other rules int he same day will
 # bring in all the rules.
 

@@ -529,7 +529,7 @@ class MultBehModelHandler(object):
                 print(D.identifier_string(), ' -- ', mclass)
 
                 # sort dataframe by a column
-                dfthis = D.Dat.sort_values(col)
+                dfthis = D.Dat.sort_values(col).reset_index(drop=True)
                 inds_sorted_best2worst = dfthis.index.tolist()
                 alignments = dfthis[col].tolist()
                 
