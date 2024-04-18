@@ -3173,7 +3173,10 @@ def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
                                            plot_text=True,
-                                           alpha=0.8, SIZE=3, shareaxes=False, plot_error_bars=True):
+                                           alpha=0.8, SIZE=3, shareaxes=False,
+                                           plot_error_bars=True,
+                                           map_subplot_var_to_new_subplot_var=None,
+                                           ):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -3186,6 +3189,14 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     - var_value, str, column, whose values/sdcore to plot.
     - var_datapt, str, categorical col, each lev is separate datapt. (note: will assert that max 1 datapt per).
     - ignore_if_sum_values, this useful to exclude any
+    - map_subplot_var_to_new_subplot_var, dict that helps you remap the subplot variable to a new set of variables.
+    e.g,, keys that dont exist will be grouped in "LEFTOVER". e.g., if var_subplot is "bregion" and you want to have
+    three subplots, one preSMA_a, one preSMA_p, and one with all the others, then do this (along with var_subplot="bregion")
+        map_subplot_var_to_new_subplot_var = {
+        "preSMA_a":"preSMA_a",
+        "preSMA_p":"preSMA_p",
+            }
+
     EXAMPLE:
     - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
     separate subplot for each epoch_orig...
@@ -3207,6 +3218,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
     nmin = 1
     if isinstance(var_subplot, list):
+        assert map_subplot_var_to_new_subplot_var is None, "the subplot var name will change and thus fail."
         dfthis = append_col_with_grp_index(dfthis, var_subplot, "_var_subplot", strings_compact=True)
         var_subplot = "_var_subplot"
     elif var_subplot is None:
@@ -3214,6 +3226,15 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         dfthis = dfthis.copy()
         dfthis["dummy45"] = "dummy"
         var_subplot = "dummy45"
+
+    if map_subplot_var_to_new_subplot_var is not None:
+        def F(x):
+            if x[var_subplot] in map_subplot_var_to_new_subplot_var:
+                return map_subplot_var_to_new_subplot_var[x[var_subplot]]
+            else:
+                return "LEFTOVER"
+        dfthis = applyFunctionToAllRows(dfthis, F, "_var_subplot")
+        var_subplot = "_var_subplot"
 
     list_lev = dfthis[var_subplot].unique().tolist()
     list_datapt = dfthis[var_datapt].unique().tolist()
@@ -3288,7 +3309,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         ax.axhline(0, color="k", alpha=0.25)
         ax.axvline(0, color="k", alpha=0.25)
 
-    if shareaxes:
+    if shareaxes and len(list_xs)>0:
         MIN = min(list_xs + list_ys)
         MAX = max(list_xs + list_ys)
         # print(MIN, MAX)
