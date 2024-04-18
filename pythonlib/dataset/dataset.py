@@ -9110,9 +9110,17 @@ class Dataset(object):
             map_shape_to_chunkidx_byepoch[epoch] = {}
             map_chunkidx_to_shape_byepoch[epoch] = {}
 
+            ### FOr some reason, this worked and then started failing...
             # get df, sorted in increasing average chunk_rank (ie for each chunk get its average chunk rank then sort them).
-            dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank").reset_index(drop=True)
-            for i, shape in enumerate(dfthis.index):
+            # dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank").reset_index(drop=True)
+            # for i, shape in enumerate(dfthis.index):
+            #     map_shape_to_chunkidx_byepoch[epoch][shape] = i
+            #     map_chunkidx_to_shape_byepoch[epoch][i] = shape
+
+            # if not isinstance(dfthis.index.tolist()[0], str):
+            #     dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank").reset_index(drop=False)
+            dfthis = dftok[dftok["epoch"] == epoch][["shape", "chunk_rank"]].groupby(["shape"]).mean().sort_values("chunk_rank").reset_index(drop=False)
+            for i, shape in enumerate(dfthis["shape"]):
                 map_shape_to_chunkidx_byepoch[epoch][shape] = i
                 map_chunkidx_to_shape_byepoch[epoch][i] = shape
 
@@ -9124,7 +9132,14 @@ class Dataset(object):
             if map_epochorig_to_rulekind[epoch_orig][0] == "ss":
                 # Shape sequence (ABC) or (AABBBCC) or (AnBmCk)...
                 map_shape_to_chunkidx = map_shape_to_chunkidx_byepoch[epoch]
-                chunkidx = map_shape_to_chunkidx[tok["shape"]]
+                try:
+                    chunkidx = map_shape_to_chunkidx[tok["shape"]]
+                except Exception as err:
+                    print(map_shape_to_chunkidx)
+                    print(tok["shape"])
+                    print(dftok)
+                    print(dfthis)
+                    raise err
                 syntax_role = (chunkidx, tok["chunk_within_rank"])
             elif map_epochorig_to_rulekind[epoch_orig][0] == "dir":
                 # Direction rule (flat).
