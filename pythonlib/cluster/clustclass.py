@@ -1225,48 +1225,91 @@ class Clusters(object):
     def rsa_mask_context_split_levels_of_conj_var(self, vars_context, PLOT=False,
                                                   exclude_diagonal=True, contrast="same"):
         """
+        [TESTED CAREFULLY - done]
         Return dict mapping between each level of vars_context (grouping var) and a mast that
-        pulls out speicifc indices for each level of vars_context,
+        pulls out speicifc indices for each level of vars_context, which have a user-inputed "contrast",
+        such as "same".
         NOTE: WILL be only upper triangular
         :param vars_context:
         :param contrast: str. What columns to get (note: the rows are always the same, i.e, speciifc
         to each level of vars_context). either:
         - "same", then columns will be identical to rows. To get mask that are distance between this same level.
         Useful for computing "within-context" scores (i.e., by taking & with mask for different effect).
-        - "diff", then columns are complement to rows (i.e, all cols which are different level from rows)_.
-        - "any", then columns are (0, 1, .... n), i.e., both same and different.
+        - "diff", then gets pairs such that one of the column or row is the level.
+        - "any", then is sum of same and diff -- i.e, at least one of the row or col must be the level.
         :return: map_grp_to_mask, dict[grp]--> ma, where grp is tuple of classea dn ma is bool.
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
 
-        # Get row indices for levels of conjunction var
-        dflab = self.rsa_labels_return_as_df()
-        grpdict = grouping_append_and_return_inner_items(dflab, vars_context)
-
-        # Get each mask
-        if exclude_diagonal:
-            ma_ut = self._rsa_matindex_generate_upper_triangular()
+        if contrast == "any":
+            # This is just sum of diff and same.
+            map_grp_to_mask_SAME = self.rsa_mask_context_split_levels_of_conj_var(vars_context, PLOT, exclude_diagonal, "same")
+            map_grp_to_mask_DIFF = self.rsa_mask_context_split_levels_of_conj_var(vars_context, PLOT, exclude_diagonal, "diff")
+            assert map_grp_to_mask_DIFF.keys() == map_grp_to_mask_SAME.keys()
+            map_grp_to_mask = {}
+            for grp in map_grp_to_mask_SAME.keys():
+                assert not np.any(map_grp_to_mask_SAME[grp] & map_grp_to_mask_DIFF[grp])
+                map_grp_to_mask[grp] = map_grp_to_mask_DIFF[grp] | map_grp_to_mask_SAME[grp]
         else:
-            ma_ut = self._rsa_matindex_generate_all_true()
-        map_grp_to_mask = {}
-        for grp, indrows in grpdict.items():
-            if contrast=="same":
-                # same, for this grp
-                indcols = indrows
-            elif contrast=="diff":
-                indcols = [i for i in range(len(dflab)) if i not in indrows]
-            elif contrast=="any":
-                indcols = list(range(len(dflab)))
+            # Get row indices for levels of conjunction var
+            dflab = self.rsa_labels_return_as_df()
+            grpdict = grouping_append_and_return_inner_items(dflab, vars_context)
+
+            # Get each mask
+            if exclude_diagonal:
+                ma_ut = self._rsa_matindex_generate_upper_triangular()
             else:
-                print(contrast)
-                assert False
-            ma = self._rsa_matindex_convert_to_mask_rect(indrows, indcols) #
-            map_grp_to_mask[grp] = ma & ma_ut
+                ma_ut = self._rsa_matindex_generate_all_true()
+            map_grp_to_mask = {}
+            for grp, indrows in grpdict.items():
+                if contrast=="same":
+                    # same, for this grp
+                    indcols = indrows
+                    ma = self._rsa_matindex_convert_to_mask_rect(indrows, indcols) #
+                elif contrast=="diff":
+
+                    # One of the pair must be in this level, the other must not.
+                    indothers = [i for i in range(len(dflab)) if i not in indrows]
+
+                    # get cases where row is this level, but column is not
+                    ma1 = self._rsa_matindex_convert_to_mask_rect(indrows, indothers) #
+
+                    # cases where col is this level, but row is not.
+                    ma2 = self._rsa_matindex_convert_to_mask_rect(indothers, indrows) #
+
+                    # either one or the other.
+                    ma = ma1 | ma2
+                # elif contrast=="any":
+                #
+                #     # same, for this grp
+                #     indcols = indrows
+                #     ma_same = self._rsa_matindex_convert_to_mask_rect(indrows, indcols) #
+                #
+                #     # One of the pair must be in this level, the other must not.
+                #     indothers = [i for i in range(len(dflab)) if i not in indrows]
+                #
+                #     # get cases where row is this level, but column is not
+                #     ma1 = self._rsa_matindex_convert_to_mask_rect(indrows, indothers) #
+                #
+                #     # cases where col is this level, but row is not.
+                #     ma2 = self._rsa_matindex_convert_to_mask_rect(indothers, indrows) #
+                #
+                #     # either one or the other.
+                #     ma_diff = ma1 | ma2
+                #
+                #     # COmbine
+                #     assert not np.any(ma_same & ma_diff)
+                #     ma = ma_same | ma_diff
+                #
+                else:
+                    print(contrast)
+                    assert False
+                map_grp_to_mask[grp] = ma & ma_ut
 
         if PLOT:
             ncols = 2
             nrows = int(np.ceil(len(map_grp_to_mask)/ncols))
-            SIZE = 5
+            SIZE = 7
             fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
             for ax, (grp, ma) in zip(axes.flatten(), map_grp_to_mask.items()):
                 self.rsa_matindex_plot_bool_mask(ma, ax)
@@ -1320,7 +1363,7 @@ class Clusters(object):
             ma_context_diff = self.rsa_matindex_mask_if_any_var_is_diff(vars_context)
         elif diff_context_ver=="diff_specific":
             # Specific combination of vars being same and diff
-            # ALL vars must be same or diff individually.
+            # ALL vars must be same or diff individually -- i.e,. same for all vars in "same" and diff for all in "diff"
             assert isinstance(diffctxt_vars_diff, (tuple, list))
             assert isinstance(diffctxt_vars_same, (tuple, list))
             assert len(diffctxt_vars_diff)>0
@@ -1333,6 +1376,7 @@ class Clusters(object):
         elif diff_context_ver=="diff_specific_lenient":
             # Specific combination of vars being same and diff
             # "lenient" means that only need one of the "diff" vars to be different for this to pass criterion
+            # -- i.e,. same for all vars in "same" and diff for just one var in "diff"
             assert isinstance(diffctxt_vars_diff, (tuple, list))
             assert isinstance(diffctxt_vars_same, (tuple, list))
             assert len(diffctxt_vars_diff)>0
