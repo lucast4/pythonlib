@@ -605,7 +605,11 @@ class Tokens(object):
                 if "loc_on_clust" in dseg.keys():
                     dseg["CTXT_loconclust_next"] = "END"
                 if "loc_off_clust" in dseg.keys():
-                    dseg["CTXT_locffclust_next"] = "END"
+                    dseg["CTXT_locoffclust_next"] = "END"
+                # else:
+                #     print(dseg.keys())
+                #     assert False
+
             else:
                 dseg["CTXT_loc_next"] = tokens[i+1]["gridloc"]
                 dseg["CTXT_loc_next_local"] = tokens[i+1]["gridloc_local"]
@@ -619,6 +623,9 @@ class Tokens(object):
                 if "loc_off_clust" in dseg.keys():
                     dseg["CTXT_locoffclust_next"] = tokens[i+1]["loc_off_clust"]
                     # assert isinstance(dseg["CTXT_locoffclust_next"], int)
+                # else:
+                #     assert False
+                # assert False
 
     def print_summary(self):
         for i, tok in enumerate(self.Tokens):
