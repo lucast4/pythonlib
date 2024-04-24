@@ -173,7 +173,7 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
                 return sum([_convert_to_num(valval) for valval in val])
             elif isinstance(val, str):
                 return hash(val)
-            elif isinstance(val, (float, int, ndarray)):
+            elif isinstance(val, (float, int, ndarray, np.generic)):
                 return val
             else:
                 # NOTE: hash(None) is valid
@@ -183,7 +183,7 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
     def _is_list_of_comparable_types(mylist):
         # Reutnr True if all itesm in _x are type in <comparable_types>.
         # i./.e, is a one-level
-        comparable_types = (str, float, int, ndarray)
+        comparable_types = (str, float, int, ndarray, np.generic)
         if DEBUG:
             print([type(this) for this in mylist])
         return all([isinstance(this, comparable_types) for this in mylist])
@@ -201,8 +201,11 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
                 return _convert_to_sortable([_convert_to_sortable(valval) for valval in val])
         elif isinstance(val, str):
             return val
-        elif isinstance(val, (float, int, ndarray)):
+        elif isinstance(val, (float, int, ndarray, np.generic)):
             # VERY HACKY.
+
+            if isinstance(val, (ndarray, np.generic)):
+                val = float(val)
 
             # if val<0:
             #     # so that large negative numbers are first.
@@ -291,7 +294,7 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
                 out = (2, [_convert_to_sortable(val) for val in x])
         elif isinstance(x, str):
             out = (0, _convert_to_sortable(x))
-        elif isinstance(x, (float, int, ndarray)):
+        elif isinstance(x, (float, int, ndarray, np.generic)):
             out = (1, _convert_to_sortable(x))
         elif isinstance(x, dict):
             if False:
