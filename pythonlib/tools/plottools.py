@@ -364,7 +364,8 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
                          color="k", textcolor="r", alpha=0.05,
                          plot_text_over_examples=False, return_inds_text=False,
                          SIZE=7, overlay_mean=False,
-                         text_to_plot = None, overlay_ci=True):
+                         text_to_plot = None, overlay_ci=True, plot_scatter=True,
+                         mean_markersize = 10, mean_alpha=0.9):
     """ 
     GOOD - scatter plot of X, taking oclumns of X as vectors.
     PARAMSL
@@ -380,7 +381,7 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
     # assert labels is None, "not codede, use plotScatterOverlay"
     if dims_to_take is None:
         dims_to_take = [0,1]
-    assert len(dims_to_take)==2
+    assert len(dims_to_take)==2 or len(dims_to_take)==3
 
     Xfit = X[:,dims_to_take]
 
@@ -390,15 +391,35 @@ def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
     else:
         fig = None
     ALPHA = Xfit.shape[0]/500
-    ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+
+    if plot_scatter:
+        if len(dims_to_take)==2:
+            ax.plot(Xfit[:,0], Xfit[:,1], "o", color=color, alpha=alpha)
+        elif len(dims_to_take)==3:
+            ax.plot(Xfit[:,0], Xfit[:,1], Xfit[:,2], "o", color=color, alpha=alpha)
+        else:
+            print(dims_to_take)
+            print(Xfit.shape)
+            assert False
     # ax.plot(Xfit[:,0], Xfit[:,1], "x", color=color, alpha=alpha)
 
     if overlay_mean:
-        xmean = np.mean(Xfit[:,0])
-        ymean = np.mean(Xfit[:,1])
-        ax.plot(xmean, ymean, 's', color=color, markersize=10)
-        if overlay_ci:
-            confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
+        if len(dims_to_take)==2:
+            xmean = np.mean(Xfit[:,0])
+            ymean = np.mean(Xfit[:,1])
+            ax.plot(xmean, ymean, 's', color=color, markersize=mean_markersize, alpha=mean_alpha)
+            if overlay_ci:
+                confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
+        elif len(dims_to_take)==3:
+            xmean = np.mean(Xfit[:,0])
+            ymean = np.mean(Xfit[:,1])
+            zmean = np.mean(Xfit[:,2])
+            ax.plot(xmean, ymean, zmean, 's', color=color, markersize=mean_markersize, alpha=mean_alpha)
+            # if overlay_ci:
+            #     confidence_ellipse(Xfit[:,0], Xfit[:,1], ax, n_std=2, edgecolor = color)
+        else:
+            print(dims_to_take)
+            assert False
 
     # === pick out random indices, highlight them in the plot, and plot them
     if plot_text_over_examples and text_to_plot is None:
@@ -426,7 +447,8 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
     downsample_auto=True, ax=None, SIZE=8, overlay_mean=False,
     ncols_separate = 4, plot_text_over_examples=False, text_to_plot=None,
                        map_lev_to_color=None, color_type="discr",
-                        overlay_ci=True):
+                        overlay_ci=True, plot_scatter=True,
+                       mean_markersize=10, mean_alpha=0.9):
     """ overlay multiple datasets on top of each other
     or separate.
     - X, array shape NxD.
@@ -482,7 +504,8 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
                                                  overlay_mean=overlay_mean, overlay_ci=overlay_ci,
                                                  plot_text_over_examples=plot_text_over_examples,
                                                  text_to_plot = text_to_plot_this,
-                                                 SIZE=SIZE)
+                                                 SIZE=SIZE, plot_scatter=plot_scatter,
+                                                 mean_markersize=mean_markersize, mean_alpha=mean_alpha)
                 if i==0:
                     # initiate a plot
                     fig = _fig
@@ -497,6 +520,7 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             if len(map_lev_to_color.keys())<50:
                 legend_add_manual(ax, map_lev_to_color.keys(), map_lev_to_color.values(), 0.2)
         elif color_type=="cont":
+            assert len(dimsplot)==2
             xs = X[:, dimsplot[0]]
             ys = X[:, dimsplot[1]]
             sns.scatterplot(x=xs.squeeze(), y=ys.squeeze(), hue=labels, alpha=0.8, ax=ax)
@@ -531,10 +555,10 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
             if ver=="separate":
                 # Then genreate a background of all pts first.
                 _plotScatterXreduced(X, dimsplot, ax=ax,
-                                     color="k", textcolor="k", alpha=alpha/5)
+                                     color="k", textcolor="k", alpha=alpha/5, plot_scatter=plot_scatter)
             _plotScatterXreduced(Xthis, dimsplot, ax=ax,
                                  color=pcols[i], textcolor=pcols[i], alpha=alpha, overlay_mean=overlay_mean,
-                                 plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this)
+                                 plot_text_over_examples=plot_text_over_examples, text_to_plot = text_to_plot_this, plot_scatter=plot_scatter)
             ax.set_title(f"label: {l}")
 
         return fig, axes
