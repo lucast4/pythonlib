@@ -519,18 +519,23 @@ class DatStrokes(object):
                 #     DAT_BEHPRIMS[-1]["charclust_score"] = score
 
                 ############## EXTRACT KEYS FROM TOKENS BEH
-                keys_beh = ["loc_on", "angle", "loc_on_binned", "angle_binned", "center_binned",
-                            "loc_on_clust", "CTXT_loconclust_prev", "CTXT_loconclust_next",
+                keys_beh_mandatory = []
+                assert len(keys_beh_mandatory)==0, "otherwise fails when load char, since uses dummy version of tokens first.."
+                keys_beh_optional = ["loc_on", "angle", "loc_on_binned", "angle_binned", "center_binned"] + ["loc_on_clust", "CTXT_loconclust_prev", "CTXT_loconclust_next",
                             "loc_off_clust", "CTXT_locoffclust_prev", "CTXT_locoffclust_next"]
-                # "locon_bin_in_loc"
-                for k in keys_beh:
+                keys_gotten = []
+                for k in keys_beh_mandatory:
+                    DAT_BEHPRIMS[-1][k] = dseg_beh[k]
+                    keys_gotten.append(k)
+                for k in keys_beh_optional:
                     if k in dseg_beh:
                         DAT_BEHPRIMS[-1][k] = dseg_beh[k]
+                        keys_gotten.append(k)
 
         ############## EXTRACT KEYS FROM TOKENS_TASK
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
         EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", "ind_behstrokes"]
-        EXCLUDE += keys_beh
+        EXCLUDE += keys_gotten
         for DAT in DAT_BEHPRIMS:
             for k, v in DAT["datseg"].items():
                 if k not in EXCLUDE:
@@ -1915,11 +1920,12 @@ class DatStrokes(object):
             #             "CTXT_loc_prev", "CTXT_shape_prev", "CTXT_loc_next", "CTXT_shape_next"]:
             #     print(f"==== {col}")
             #     print([(tok[col]) for i, tok in enumerate(tokens)])
-            for col in ["ind_taskstroke_orig", "stroke_index", "shape", "shape_semantic", "gridloc", "gridloc_local", "center",
-                        "CTXT_loc_prev", "CTXT_shape_prev", "CTXT_loc_next", "CTXT_shape_next", "charclust_shape_seq_scores"] + ["chunk_rank", "chunk_within_rank",
+            for col in (["ind_taskstroke_orig", "stroke_index", "shape", "shape_semantic", "gridloc", "gridloc_local", "center",
+                        "CTXT_loc_prev", "CTXT_shape_prev", "CTXT_loc_next", "CTXT_shape_next", "charclust_shape_seq_scores"] +
+                        ["chunk_rank", "chunk_within_rank",
                         "chunk_within_rank_fromlast", "chunk_n_in_chunk"
                         "chunk_diff_from_prev", "chunk_n_in_chunk_prev",
-                        "syntax_concrete", "syntax_role"]:
+                        "syntax_concrete", "syntax_role"]):
                 if col in self.Dat.columns:
                     vals = self.dataset_extract_strokeslength_list_ind_here(i, col, if_fail="return_whatever_exists")
                     print(f"==== {col}")
