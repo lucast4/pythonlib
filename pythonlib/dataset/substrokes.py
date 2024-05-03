@@ -112,7 +112,8 @@ def database_shape_segmentation_get(animal):
             "line-8-4-0": [(0.64, 0.93)],
             "Lcentered-4-1-0":[(0.33, 0.69)],
             # "arcdeep-4-2-0":[(0.25, 0.55), (0.6, 0.94)],
-            "arcdeep-4-2-0":[(0.25, 0.55), (0.57, 0.94)],
+            # "arcdeep-4-2-0":[(0.25, 0.55), (0.57, 0.94)],
+            "arcdeep-4-2-0":[(0.25, 0.94)],
 
             "V-2-3-0":[(0.39, 0.65)],
 
@@ -129,7 +130,7 @@ def database_shape_segmentation_get(animal):
             "V-2-4-0":[(0.42, 0.65)],
 
             "arcdeep-4-4-0":[(0.5, 0.84)],
-            "Lcentered-4-2-0":[(0.3, 0.55)],
+            "Lcentered-4-2-0":[(0.3, 0.69)],
 
             "usquare-1-3-0":[(0.27, 0.53)],
 
@@ -483,7 +484,8 @@ def pipeline_wrapper(D, dosave=True):
     Dsubs.Dat["strokes_beh"] = df_rows_substrokes["substrokes"]
 
     # Clean up the new dataset
-    Dsubs.cleanup_wrapper("no_pruning_strokes")
+    # Dsubs.cleanup_wrapper("no_pruning_strokes")
+    Dsubs.cleanup_wrapper("substrokes")
     Dsubs.extract_beh_features()
     # Check that did not throw anything out
     # NOTE, later code will confirm that n strokes for each trial are aligned too.
@@ -661,11 +663,19 @@ def features_motor_extract_and_bin(DS, plot_save_dir=None):
                                  save_as="text", sorted_by_keys=True)
 
         # Plot joint distributions of features
-        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape_idxwithin", height=3.5)
+        # fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape_idxwithin", height=3.5)
+        # savefig(fig, f"{plot_save_dir}/substroke_features-color_shape_idx.pdf")
+        # fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape", height=3.5)
+        # savefig(fig, f"{plot_save_dir}/substroke_features-color_shape.pdf")
+        # fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="dist_angle", height=3.5)
+        # savefig(fig, f"{plot_save_dir}/substroke_features-color_bin.pdf")
+
+        # REmove "circ_signed_binned" as it is now a string.
+        fig = sns.pairplot(data=DS.Dat, vars=["distcum", "velocity", "angle"], hue="shape_idxwithin", height=3.5)
         savefig(fig, f"{plot_save_dir}/substroke_features-color_shape_idx.pdf")
-        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="shape", height=3.5)
+        fig = sns.pairplot(data=DS.Dat, vars=["distcum", "velocity", "angle"], hue="shape", height=3.5)
         savefig(fig, f"{plot_save_dir}/substroke_features-color_shape.pdf")
-        fig = sns.pairplot(data=DS.Dat, vars=["circ_signed_binned", "distcum", "velocity", "angle"], hue="dist_angle", height=3.5)
+        fig = sns.pairplot(data=DS.Dat, vars=["distcum", "velocity", "angle"], hue="dist_angle", height=3.5)
         savefig(fig, f"{plot_save_dir}/substroke_features-color_bin.pdf")
 
         plt.close("all")

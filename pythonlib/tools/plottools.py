@@ -218,24 +218,45 @@ def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
         col2 = np.array(col2)
     return (pos*(col2-col1) + col1)[:3]
 
-def map_continuous_var_to_color_range(values, valmin=None, valmax=None):
+def map_continuous_var_to_color_range(values, valmin=None, valmax=None,
+                                      kind = "diverge", custom_cmap = "rocket"):
     """
     Returns rgba values for each item in values.
+    PARAMS:
+    - values, array/list of scalar values
+    - valmin, the left-most color int he cmap will be mapped to this value.
+    if None, then uses the min in values.
+    - valmax, see above.
+
     """
     from matplotlib.colors import Normalize
+    if kind == "diverge":
+        # middle is black..
+        cmap = sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True)
+    elif kind == "circular":
+        # perceptually unifrom
+        cmap = sns.color_palette("husl", as_cmap=True)
+    elif kind == "sequential":
+        # purple --> white
+        cmap = sns.color_palette("rocket", as_cmap=True)
+    elif kind == "custom":
+        cmap = sns.color_palette(custom_cmap, as_cmap=True)
+    else:
+        print(kind)
+        assert False
 
-    cmap = sns.color_palette("rocket", as_cmap=True)
-    cmap = sns.color_palette("rocket", as_cmap=True)
-    # cmap = sns.color_palette
-    cmap = sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True)
+    # What values to anchor at?
     if valmin is None:
         valmin = min(values)
     if valmax is None:
         valmax = max(values)
 
-    # Normalize data
+    # Normalize data (valmin -->0) (valmax --> 1)
     norm = Normalize(vmin=valmin, vmax=valmax)
+
+    # Convert values to colors
     rgba_values = cmap(norm(values))
+
     return rgba_values
 
 def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', edgecolor='none', **kwargs):

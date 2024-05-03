@@ -208,6 +208,7 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
 
     if values is None:
         # use dummy
+        df = df.copy()
         df["_dummy"] = 1
         values = ["_dummy"]
         DELETE_DUMMY = True
@@ -1014,6 +1015,7 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     # If col2 is None, then give a dummy varaible, so that this code runs
     if col2 is None:
         # then is really a 1d plot
+        df = df.copy()
         df["dummy"] = 0
         col2="dummy"
 
@@ -1846,6 +1848,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         assert isinstance(vars_others, (list, tuple))
         df = append_col_with_grp_index(df, vars_others, "dummy", use_strings=False)
     else:
+        df = df.copy()
         df["dummy"] = 0
     list_dummy = sort_mixed_type(df["dummy"].unique().tolist())
 
@@ -2478,7 +2481,8 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
     # return dfout, dict_dfthis
 
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
-                                                   plot_counts_heatmap_savepath=None):
+                                                   plot_counts_heatmap_savepath=None,
+                                                    lenient_allow_data_if_has_n_levels=2):
     """
     Heloper, setting params I usualyl use for simple task of pruning df to get just tjhose levels
     opf vars_others which have at least 2 levels of var, with <n_min_per_level> trials at least, per
@@ -2488,7 +2492,7 @@ def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_p
     :param vars_others:
     :return:
     """
-    lenient_allow_data_if_has_n_levels = 2
+    # lenient_allow_data_if_has_n_levels = 2
     dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min_across_all_levs_var=n_min_per_lev,
                     PRINT=False, lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels, DEBUG=False,
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
@@ -2563,7 +2567,10 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     if len(df)==0:
         return pd.DataFrame([]), {}
 
-    assert n_min_across_all_levs_var is not None, "not coded. just make this one"
+    if n_min_across_all_levs_var is None:
+        # assume you mean to be fully leneint
+        n_min_across_all_levs_var = 1
+        # assert n_min_across_all_levs_var is not None, "not coded. just make this one"
 
     if DEBUG:
         PRINT = True
@@ -3078,12 +3085,14 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           ZLIMS=None, title_size=6, ncols=3):
     """
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
-    given by those vars. Does aggregation to generate one scalar per
+    given by those vars. Does aggregation to generate one scalar perc
     cell, if needed.
     :param df:
     :param varcol:
     :param varrow:
     :param var_subplot:
+    :param ZLIMS: overwrite the zmin and max independently, 2-tuple, an item use None to 
+    use the auto value. e.g,., (0., None) means fiz min to 0, but use auto for max.
     :return:
     """
 
@@ -3116,13 +3125,19 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         # df_agg = aggregGeneral(df.loc[:, [varrow, varcol, var_subplot, val_name]], [varrow, varcol, var_subplot], [val_name])
         # zmin = np.min(df_agg[val_name])
         # zmax = np.max(df_agg[val_name])
-        zlims = (zmin, zmax)
+        zlims = [zmin, zmax]
     else:
-        zlims = (None, None)
+        zlims = [None, None]
 
     if ZLIMS is not None:
-        zlims = ZLIMS
-
+        # each item in ZLIM replaces independently
+        if ZLIMS[0] is not None:
+            zlims[0] = ZLIMS[0]
+        if ZLIMS[1] is not None:
+            zlims[1] = ZLIMS[1]
+        # zlims = ZLIMS
+    zlims = tuple(zlims)
+    
     # zlims = (-0.2, 0.2)
     # diverge=True
     DictSubplotsDf ={}
@@ -3213,8 +3228,10 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     assert not x_lev_manip==y_lev_manip
 
     list_manip = [x_lev_manip, y_lev_manip]
-    assert x_lev_manip in dfthis[var_manip].tolist()
-    assert y_lev_manip in dfthis[var_manip].tolist()
+    if (x_lev_manip not in dfthis[var_manip].tolist()) or (y_lev_manip not in dfthis[var_manip].tolist()):
+        return None, None
+    # assert x_lev_manip in dfthis[var_manip].tolist()
+    # assert y_lev_manip in dfthis[var_manip].tolist()
 
     nmin = 1
     if isinstance(var_subplot, list):

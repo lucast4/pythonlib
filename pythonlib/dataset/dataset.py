@@ -2119,7 +2119,14 @@ class Dataset(object):
             tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
             shape_seq = [tok["shape"] for tok in tokens_beh_old]
             strokes = self.Dat.iloc[ind]["strokes_beh"]
-            assert len(strokes)==len(shape_seq)
+            if not len(strokes)==len(shape_seq):
+                # Keep the tokens that match the strokes..
+                print(len(strokes))
+                print(tokens_beh_old)
+                for tok in tokens_beh_old:
+                    print("----")
+                    print(tok)
+                assert False, "did you prune data? eg substrokes? fix this"
 
             # (2) Strokes beh, what locations to call each beh stroke
             if self.taskclass_get_grid_ver(ind)=="on_grid":
@@ -2166,6 +2173,9 @@ class Dataset(object):
         from pythonlib.drawmodel.tokens import Tokens
 
         assert skip_if_labels_not_found==False, "not coded"
+
+        if not hasattr(self, "TokensVersion"):
+            self.TokensVersion = "taskclass"
 
         # Only run this if Tokens are not already regenrated.
         A = (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0)
@@ -2937,7 +2947,15 @@ class Dataset(object):
         -- _cleanup_preprocess_each_time_load_dataset
         """
 
-        if ver == "no_pruning_strokes":
+        if ver == "substrokes":
+            # Since _cleanup_preprocess_each_time_load_dataset fails, becuase
+            # the old toeksn will not match teh new strokes, which may be pruned..
+            # just skip that step for now
+            self._cleanup(remove_dot_strokes=False, remove_online_abort=False,
+                          remove_bad_strokes=False, smooth_strokes=False)
+            self._check_consistency()
+            # self._cleanup_preprocess_each_time_load_dataset()
+        elif ver == "no_pruning_strokes":
             # Do everything, except no pruning of strokes.
             self._cleanup(remove_dot_strokes=False, remove_online_abort=False,
                           remove_bad_strokes=False, smooth_strokes=False)

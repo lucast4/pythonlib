@@ -24,7 +24,7 @@ elif MACHINE == "lemur":
 	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = f"{HOME}/mnt/Freiwald/ltian/recordings"
 	PATH_DATA_NEURAL_PREPROCESSED = "/lemur2/lucas/neural_preprocess"
-	PATH_DATA_BEHAVIOR_RAW = None
+	PATH_DATA_BEHAVIOR_RAW = f"{HOME}/mnt/Freiwald_kgupta/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER = f"{HOME}/mnt/Freiwald_kgupta/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER2 = f"{HOME}/mnt/Freiwald/ltian/backup/gorilla/gorilla1/animals"
 	PATH_ANALYSIS_OUTCOMES = "/lemur2/lucas/analyses"
