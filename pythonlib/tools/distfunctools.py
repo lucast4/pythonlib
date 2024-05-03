@@ -67,6 +67,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
             for j, v2 in enumerate(vals2):
                 if j>=i:
                     if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):
+                        # assert False
                         d = np.nan
                     else:
                         if accurately_estimate_diagonal and i==j:

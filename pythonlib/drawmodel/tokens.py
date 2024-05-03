@@ -206,6 +206,7 @@ def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None
             "center": Prims[i].Stroke.extract_center(), # in pixels
             "gridloc": gridlocs[i] if gridlocs is not None else ("IGN", "IGN"),
             "gridloc_local": gridlocs_local[i] if gridlocs_local is not None else ("IGN", "IGN"),
+            "stroke_index":i
             })
 
     Tk = Tokens(datsegs, version="beh")
@@ -411,13 +412,39 @@ class Tokens(object):
             # semantic, n within chunk
             if o==0 and o+1==n:
                 chunk_within_rank_semantic = "both_fl"
+                chunk_within_rank_semantic_v2 = "both_fl"
             elif o==0:
                 chunk_within_rank_semantic = "first"
+                chunk_within_rank_semantic_v2 = "first"
             elif o+1==n:
                 chunk_within_rank_semantic = "last"
+                chunk_within_rank_semantic_v2 = "last"
             else:
                 chunk_within_rank_semantic = "middle"
+                chunk_within_rank_semantic_v2 = f"{o}"
+
+            if chunk_within_rank_semantic == "both_fl":
+                # A unique state
+                chunk_within_rank_semantic_v3 = -9
+            elif chunk_within_rank_semantic == "first":
+                chunk_within_rank_semantic_v3 = 0
+            elif chunk_within_rank_semantic == "last":
+                chunk_within_rank_semantic_v3 = 99
+            elif o == 1:
+                # 2nd stroke wins
+                chunk_within_rank_semantic_v3 = 1
+            elif l == -2:
+                chunk_within_rank_semantic_v3 = 98
+            else:
+                # Middle strokes
+                chunk_within_rank_semantic_v3 = 50
+
             t["chunk_within_rank_semantic"] = chunk_within_rank_semantic
+            t["chunk_within_rank_semantic_v2"] = chunk_within_rank_semantic_v2
+            t["chunk_within_rank_semantic_v3"] = chunk_within_rank_semantic_v3
+
+            # Semantic, v2
+
 
         if return_n_in_chunk:
             return chunk_rank, chunk_within_rank, chunk_n_in_chunk

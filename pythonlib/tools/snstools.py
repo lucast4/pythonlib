@@ -440,6 +440,13 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         z = np.max(np.abs([z1, z2]))
         z1 = -z
         z2 = z
+    # Make sure z1 is less than z2
+    if z1>z2:
+        print(z1, z2)
+        assert False, "how is this possible.."
+    else:
+        # Make sure z1 is less than z2
+        z1 = np.min([z2-0.001, z1])
 
     if diverge:
         # center at 0, and use diverging palletee
@@ -461,8 +468,12 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     from matplotlib.colors import Normalize
     # Normalize data
     norm = Normalize(vmin=z1, vmax=z2)
-    rgba_values = cmap(norm(df))
-
+    try:
+        rgba_values = cmap(norm(df))
+    except Exception as err:
+        print(df)
+        print(len(df))
+        raise err
 
     if len(list_cat_1)<200:
         # otherwise is too slow, too much text.
