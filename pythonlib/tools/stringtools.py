@@ -21,3 +21,28 @@ def decompose_string(s, sep="-"):
     for i1, i2 in zip(inds[:-1], inds[1:]):
         substrings.append(s[i1+1:i2])
     return substrings
+
+def trialcode_to_tuple(tc):
+    """
+    PARAMS:
+    - tc, any type, but a valid tc is yyyy-mm-dd
+    Return eitehr (int, int, int) or None otherwise (all ways in which this can faiL)
+    """
+    from pythonlib.tools.stringtools import decompose_string
+    
+    if not isinstance(tc, str):
+        return None 
+    
+    tmp = decompose_string(tc)
+    
+    if not len(tmp)==3:
+        return None
+    else:
+        a, b, c = tmp
+        # if (not str(int(a))==a) or (not str(int(b))==b) or (not str(int(c))==c):
+        #     return None
+        try:
+            return (int(a), int(b), int(c))
+        except ValueError:
+            # usualyl becuase a b or c are not numbers
+            return None

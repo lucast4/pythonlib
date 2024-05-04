@@ -142,8 +142,18 @@ def concatDatasets(Dlist, do_cleanup=False):
 
     ######### DATA THAT YOU NEED TO MERGE ACROSS DATASETS
     from pythonlib.tools.classtools import concat_objects_attributes_flexible
-    concat_objects_attributes_flexible(Dnew, Dlist)
-    #
+    must_return_tokens = False
+    for _D in Dlist:
+        if hasattr(_D, "TokensStrokesBeh") and len(_D.TokensStrokesBeh)>0:
+            must_return_tokens = True
+    
+    list_attr_identical_and_concat = concat_objects_attributes_flexible(Dnew, Dlist)
+
+    # Sanity check that concatted these things correctly.
+    if must_return_tokens:
+        for key in ["TokensStrokesBeh", "TokensStrokesBehUsingTaskStrokes", "TokensTask"]:
+            assert key in list_attr_identical_and_concat, "check within concat_objects_attributes_flexible.. why failed to find these?"
+
     # # (1) Attributes that start with captial, or _<capital>, and are string type --> they must be
     # # identical across input objects. Will inherit that value.
     # list_attr_identical = attributes_get_capitalized_or_underscore_capitalized(Dlist[0])

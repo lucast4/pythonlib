@@ -25,6 +25,9 @@ def preprocess_dataset(D, doplots=False):
 
     D = D.copy()
     D.Dat = D.Dat[D.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+    
+    if len(D.Dat)==0:
+        return None, None
 
     D.preprocessGood(params=["beh_strokes_at_least_one"])
 
@@ -44,7 +47,8 @@ def preprocess_dataset(D, doplots=False):
     #############################
     if doplots:
 
-
+        from pythonlib.tools.pandastools import stringify_values
+        
         # Sequential context of strokes
         savedir = f"{SAVEDIR}/stroke_sequential_contexts"
         os.makedirs(savedir, exist_ok=True)
@@ -81,14 +85,16 @@ def preprocess_dataset(D, doplots=False):
 
         #### Plot score/rew vs. location config.
         savedir = f"{SAVEDIR}/locationconfig"
+        DF = stringify_values(D.Dat)
+
         # D.taskclass_shapes_loc_configuration_assign_column()
         os.makedirs(savedir, exist_ok=True)
         for y in ["beh_multiplier", "rew_total"]:
-            fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
+            fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
             rotateLabel(fig)
             savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
 
-            fig = sns.catplot(data=D.Dat, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
+            fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
             rotateLabel(fig)
             savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
 

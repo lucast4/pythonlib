@@ -1273,6 +1273,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     # () Note that preprocess done
     D._analy_preprocess_done=True
 
+    assert hasattr(D, "TokensStrokesBeh") and D.TokensStrokesBeh is not None, "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
+
     return D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
 

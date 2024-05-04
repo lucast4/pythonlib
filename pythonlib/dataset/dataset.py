@@ -66,6 +66,7 @@ def load_dataset_daily_helper(animal, date, rename_shapes_if_cluster_labels_exis
         print("Loading this dataset", animal, expt, date)
         D = load_dataset_notdaily_helper(animal, expt, rulelist=[date],
                                          rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+        assert hasattr(D, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."    
         return D
 
 def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=False,
@@ -98,6 +99,8 @@ def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=Fa
     D = Dataset([])
     D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist,
                           rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+    assert hasattr(D, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
+    
     if return_rulelist:
         return D, rulelist
     else:
@@ -245,6 +248,8 @@ class Dataset(object):
             # 2/4/23 - Now run preprocess whenever load.
             GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = self._cleanup_preprocess_each_time_load_dataset(
                 rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+            
+        assert hasattr(self, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
 
         # self._analy_preprocess_done = False
         # self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt)
@@ -2146,8 +2151,8 @@ class Dataset(object):
             assert Tk is not None
             TokensStrokesBeh[tc] = Tk
 
-            # Switch so that always uses these tokens
-            self.TokensStrokesBeh = TokensStrokesBeh
+        # Switch so that always uses these tokens
+        self.TokensStrokesBeh = TokensStrokesBeh
 
     def tokens_generate_replacement_from_raw(self, shape_sequence_col="charclust_shape_seq",
                                              skip_if_labels_not_found=False, force_regenerate=False):
@@ -2178,7 +2183,8 @@ class Dataset(object):
             self.TokensVersion = "taskclass"
 
         # Only run this if Tokens are not already regenrated.
-        A = (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0)
+        
+        A = (not self.TokensVersion=="regenerated_from_raw") or (len(self.TokensStrokesBeh)==0) or (len(self.TokensTask)==0) or (len(self.TokensStrokesBehUsingTaskStrokes)==0) or (self.TokensStrokesBeh is None) or (self.TokensTask is None) or (self.TokensStrokesBehUsingTaskStrokes is None)
         if A or force_regenerate:
             TokensStrokesBeh = {} # len beh, using strokes beh
             TokensStrokesBehUsingTaskStrokes = {} # len beh, using best-aligned task strok
@@ -2231,7 +2237,15 @@ class Dataset(object):
                     TokensStrokesBehUsingTaskStrokes[tc] = TokensStrokesBeh[tc]
 
             # Switch so that always uses these tokens
+            # MAKE sure that if "regenerated_from_raw", then these three tokens must not be empty
             self.TokensVersion = "regenerated_from_raw"
+            assert TokensStrokesBeh is not None
+            assert TokensTask is not None
+            assert TokensStrokesBehUsingTaskStrokes is not None
+            assert len(TokensStrokesBeh)>0
+            assert len(TokensTask)>0
+            assert len(TokensStrokesBehUsingTaskStrokes)>0
+            
             self.TokensStrokesBeh = TokensStrokesBeh
             self.TokensTask = TokensTask
             self.TokensStrokesBehUsingTaskStrokes = TokensStrokesBehUsingTaskStrokes
@@ -2263,13 +2277,15 @@ class Dataset(object):
                     # Save Tk.
                     dict_Tk[tc] = Tk
                 setattr(self, tokens_ver, dict_Tk)
-                # self.TokensStrokesBeh = dict_Tk
                 print("Cleared tokesn to original ones, for:", tokens_ver)
             else:
                 print("SKIPPED clearing tokesn to original ones (did not find in self), for:", tokens_ver)
 
         for tokens_ver in ["TokensStrokesBeh", "TokensTask", "TokensStrokesBehUsingTaskStrokes"]:
             _clear_keys(tokens_ver)
+        assert self.TokensStrokesBeh is not None
+        assert self.TokensTask is not None
+        assert self.TokensStrokesBehUsingTaskStrokes is not None
 
     def taskclass_tokens_extract_wrapper(self, ind, which_order,
                                          plot=False, return_as_tokensclass=False):
@@ -2295,15 +2311,21 @@ class Dataset(object):
             tc = self.Dat.iloc[ind]["trialcode"]
             if which_order=="beh_using_beh_data":
                 # Beh length, beh strokes
-                assert self.TokensStrokesBeh is not None, "run tokens_generate_replacement_from_strokesbeh()"
+                assert self.TokensStrokesBeh is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensStrokesBeh[tc]
                 assert Tk is not None
             elif which_order == "beh_using_task_data":
                 # beh lenght, task strokes (DEFAULT)
-                assert self.TokensStrokesBehUsingTaskStrokes is not None, "run tokens_generate_replacement_from_strokesbeh()"
-                Tk = self.TokensStrokesBehUsingTaskStrokes[tc]
+                try:
+                    Tk = self.TokensStrokesBehUsingTaskStrokes[tc]
+                except Exception as err:
+                    print(self.TokensStrokesBehUsingTaskStrokes)
+                    print(self.TokensStrokesBeh)
+                    print(self.TokensTask)
+                    print("run tokens_generate_replacement_from_raw_helper(). Was this messed up when concatting?")
+                    raise err
             elif which_order == "task":
-                assert self.TokensTask is not None, "run tokens_generate_replacement_from_strokesbeh()"
+                assert self.TokensTask is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensTask[tc]
             else:
                 print(which_order)
@@ -2925,6 +2947,7 @@ class Dataset(object):
                                                     rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
 
         # print("1.5 dfafasf", self.TokensVersion)
+        assert hasattr(self, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."    
 
         return GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES
 
@@ -7167,10 +7190,6 @@ class Dataset(object):
         PARAMS;
         - reset_tokens, then resets the tokens in TaskClass, if they exist
         """
-        # if hasattr(self, "TokensVersion"):
-        #     print("8 dfafasf", self.TokensVersion)
-        # else:
-        #     print("8 dfafasf", "DoeSNT EXIXT")
 
         if not hasattr(self, "TokensVersion"):
             # Just the default ...

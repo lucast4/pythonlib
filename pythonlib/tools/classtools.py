@@ -19,7 +19,8 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
     Must have obj.Dat be a dataframe with "trialcode" as column. Will check that
     keys present across obj has identical values.
     RETURNS:
-    - None (modifies obj_new)
+    - list_attr_identical_and_concat, list of str that are attributes that were concatted across obj in list_obj.
+    (NOTE: (modifies obj_new))
     """
     from pythonlib.tools.checktools import check_objects_identical
     import copy
@@ -53,15 +54,16 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
 
         def _is_trialcode(x, Dthis):
             """ return True if is string and is like yyyyyy-{}-{}"""
-            return x in Dthis.Dat["trialcode"].tolist()
-
+            from pythonlib.tools.stringtools import trialcode_to_tuple
+            return trialcode_to_tuple(x) is not None
+        
         list_attr_identical = attributes_get_capitalized_or_underscore_capitalized(list_obj[0])
         list_attr_identical_and_concat = []
         for attr in list_attr_identical:
             obj = getattr(list_obj[0], attr)
             if isinstance(obj, dict) and len(obj)>0 and _is_trialcode(list(obj.keys())[0], list_obj[0]):
                 list_attr_identical_and_concat.append(attr)
-        print("These attributes are dicts, which will concat:", list_attr_identical_and_concat)
+        print("These attributes are dicts with keys that are trialcodes, which will concat:", list_attr_identical_and_concat)
 
         for attr in list_attr_identical_and_concat:
             dict_this = copy.copy(getattr(list_obj[0], attr))
@@ -93,4 +95,6 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
             # for k, v in dict_this.items():
 
     # TODO (3) Attributes which are lists, in which case take either union or intersection
+
+    return list_attr_identical_and_concat
 
