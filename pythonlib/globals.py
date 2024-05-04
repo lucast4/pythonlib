@@ -65,7 +65,8 @@ elif MACHINE == "ltbonobo":
 	# PATH_DATASET_BEH = "/home/kgg/Desktop/analyses/database"
 	PATH_DATASET_BEH = "/home/kgg/mnt/Freiwald/kgupta/analyses/database"
 	PATH_KS_RAW = "/home/kgg/mnt/Freiwald/kgupta/neural_data"
-	PATH_CODE = f"/home/kgg/Desktop/code"	
+	PATH_CODE = f"/home/kgg/Desktop/code"
+	PATH_SAVE_CLUSTERFIX = "/home/kgg/Desktop/eyetracking_analyses"	# for using clusterfix and saving the necessary .mat/.csv files, specify a directory (see neuralmonkey/classes/session.py)
 elif MACHINE=="Lucass-MacBook-Air.local":
 	HOME = "/Users/lucastian"
 	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
