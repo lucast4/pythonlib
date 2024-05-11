@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from pythonlib.tools.pandastools import applyFunctionToAllRows
+from pythonlib.tools.snstools import rotateLabel
 import os
 import seaborn as sns
 
@@ -18,9 +19,13 @@ def preprocess_dataset(D, PLOT=True):
 
     SAVEDIR = D.make_savedir_for_analysis_figures("singleprims")
     D.taskclass_gridsize_assign_column()
+    D.seqcontext_preprocess()
+
+    assert "seqc_0_shape" in D.Dat.columns
 
     from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
+    assert "seqc_0_shape" in D.Dat.columns
 
     if PLOT:
         ### PLOt drawings of all conjucntions
@@ -45,6 +50,7 @@ def preprocess_dataset(D, PLOT=True):
         # animal = D.animals()[0]
         conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="singleprim")
         plt.close("all")
+        assert "seqc_0_shape" in D.Dat.columns
 
         ### Plot scores (beh)
         sdir = f"{SAVEDIR}/beh_eval_scores"
@@ -53,21 +59,75 @@ def preprocess_dataset(D, PLOT=True):
         list_block = D.Dat["block"].unique().tolist()
         for bk in list_block:
             df = D.Dat[(D.Dat["block"]==bk)]
-            if len(df)>15:
-                for yval in ["rew_total", "beh_multiplier"]:
 
+            from pythonlib.tools.pandastools import stringify_values
+            df = stringify_values(df)
+
+            if len(df)>15:
+                assert "seqc_0_shape" in df.columns
+
+                for yval in ["rew_total", "beh_multiplier", "aborted"]:
+
+                    if yval=="aborted":
+                        hue = None
+                    else:
+                        hue = "aborted"
                     print("Plotting for (block, yval): ", bk, yval)
 
-                    fig = sns.catplot(data=df, x="gridsize", y=yval, hue="aborted", row="session", aspect=3, height=2, jitter=True, alpha=0.2)
-                    savefig(fig, f"{sdir}/block_{bk}-yval_{yval}-1.pdf")
+                    for x in ["gridsize", "seqc_0_shape", "seqc_0_loc"]:
+                        fig = sns.catplot(data=df, x=x, y=yval, hue=hue, row="session", aspect=3, height=2, jitter=True, alpha=0.2)
+                        rotateLabel(fig)
+                        savefig(fig, f"{sdir}/block_{bk}-x={x}-yval={yval}-1.pdf")
 
-                    fig = sns.catplot(data=df, x="gridsize", y=yval, hue="aborted", row="session", aspect=3, height=2, kind="bar")
-                    savefig(fig, f"{sdir}/block_{bk}-yval_{yval}-2.pdf")      
+                        fig = sns.catplot(data=df, x=x, y=yval, hue=hue, row="session", aspect=3, height=2, kind="bar")
+                        rotateLabel(fig)
+                        savefig(fig, f"{sdir}/block_{bk}-x={x}-yval={yval}-2.pdf")
 
-                fig = sns.catplot(data=df, x="gridsize", y="aborted", row="session", aspect=3, height=2, kind="bar")
-                savefig(fig, f"{sdir}/block_{bk}-aborted.pdf")      
+                    # fig = sns.catplot(data=df, x="gridsize", y=yval, hue="aborted", row="session", aspect=3, height=2, kind="bar")
+                    # rotateLabel(fig)
+                    # savefig(fig, f"{sdir}/block_{bk}-yval_{yval}-2.pdf")      
+
+                    # fig = sns.catplot(data=df, x="seqc_0_shape", y=yval, hue="gridsize", row="session", aspect=3, height=2, kind="bar")
+                    # rotateLabel(fig)
+                    # savefig(fig, f"{sdir}/block_{bk}-shape_size-yval_{yval}-2.pdf")      
+
+                    try:
+                        fig = sns.catplot(data=df, x="seqc_0_shape", y=yval, hue="seqc_0_loc", row="session", aspect=3, height=2, kind="bar")
+                        rotateLabel(fig)
+                        savefig(fig, f"{sdir}/block_{bk}-shape_loc-yval={yval}.pdf")      
+                    except Exception as err:
+                        # Hack
+                        pass
+
+                # fig = sns.catplot(data=df, x="gridsize", y="aborted", row="session", aspect=3, height=2, kind="bar")
+                # rotateLabel(fig)
+                # savefig(fig, f"{sdir}/block_{bk}-gridsize_aborted.pdf")      
+                    try:
+                        fig = sns.catplot(data=df, x="seqc_0_shape", y=yval, hue="gridsize", row="session", 
+                                        aspect=3, height=2, kind="bar")
+                        rotateLabel(fig)
+                        savefig(fig, f"{sdir}/block_{bk}-shape_size-yval={yval}.pdf")      
+                    except Exception as err:
+                        pass
+
+                    try:
+                        fig = sns.catplot(data=df, x="seqc_0_loc", y=yval, hue="gridsize", row="session", 
+                                        aspect=3, height=2, kind="bar")
+                        rotateLabel(fig)
+                        savefig(fig, f"{sdir}/block_{bk}-loc_size-yval={yval}.pdf")      
+                    except Exception as err:
+                        pass
                 
-                plt.close("all")
+                # try:
+                #     fig = sns.catplot(data=df, x="seqc_0_shape", y="aborted", hue="seqc_0_loc", row="session", 
+                #                     aspect=3, height=2, kind="bar")
+                #     rotateLabel(fig)
+                #     savefig(fig, f"{sdir}/block_{bk}-shape_loc_aborted.pdf")      
+                # except Exception as err:
+                #     # Hack
+                #     pass
+                
+                    plt.close("all")
 
     return DS, SAVEDIR
 

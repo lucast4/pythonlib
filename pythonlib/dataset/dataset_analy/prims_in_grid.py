@@ -20,197 +20,178 @@ from pythonlib.tools.snstools import rotateLabel
 def preprocess_dataset(D, doplots=False):
 
     from pythonlib.dataset.dataset_strokes import DatStrokes
-    SAVEDIR = D.make_savedir_for_analysis_figures("prims_in_grid")
     # USE tHIS!!!
 
-    D = D.copy()
-    D.Dat = D.Dat[D.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+    DS, SAVEDIR = None, None
+
+    Dorig = D
     
-    if len(D.Dat)==0:
-        return None, None
+    for task_kind in ["prims_on_grid", "prims_single"]:
+        print("RUNNING prims_in_grid.py, this task_kind:",  task_kind)
 
-    D.preprocessGood(params=["beh_strokes_at_least_one"])
-
-    # Determine if aborts were befaucs sequence error...
-    D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
-    D.grammarparsesmatlab_score_wrapper_append()
-    assert len(D.Dat)>0
-
-    # get DatStrokes
-    DS = DatStrokes(D)
-
-    D.seqcontext_preprocess()
-    D.taskclass_shapes_loc_configuration_assign_column()
- 
-    # Some params and metadat to save
-
-    #############################
-    if doplots:
-
-        from pythonlib.tools.pandastools import stringify_values
+        D = Dorig.copy()
+        D.Dat = D.Dat[D.Dat["task_kind"] == task_kind].reset_index(drop=True)
         
-        # Sequential context of strokes
-        savedir = f"{SAVEDIR}/stroke_sequential_contexts"
-        os.makedirs(savedir, exist_ok=True)
-        plot_sequential_context_strokes(DS, savedir)
+        # if len(D.Dat)==0:
+        #     return None, None
 
+        D.preprocessGood(params=["beh_strokes_at_least_one"])
 
-        # SAVE the conjunctions of shape and loc that were gotten
-        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
-        D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+        if len(D.Dat)<10:
+            print("Skipping... not enough data")
+            continue
 
-        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch.txt"
-        D.grouping_print_n_samples(["aborted", "epoch", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+        _tmp = D.make_savedir_for_analysis_figures_BETTER("prims_in_grid")
+        SAVEDIR = f"{_tmp}/{task_kind}"
+        os.makedirs(SAVEDIR, exist_ok=True)
+        # SAVEDIR = D.make_savedir_for_analysis_figures("prims_in_grid")
 
-        path = f"{SAVEDIR}/shape_loc_grouping-by_character.txt"
-        D.grouping_print_n_samples(["aborted", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+        # Determine if aborts were befaucs sequence error...
+        D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
+        D.grammarparsesmatlab_score_wrapper_append()
+        assert len(D.Dat)>0
 
-        path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_character.txt"
-        D.grouping_print_n_samples(["aborted", "epoch", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+        # get DatStrokes
+        DS = DatStrokes(D)
 
-        path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
-        D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
+        D.seqcontext_preprocess()
+        D.taskclass_shapes_loc_configuration_assign_column()
+    
+        # Some params and metadat to save
 
-        ####### rew as function of n strokes in task
-        savedir = f"{SAVEDIR}/rew_vs_nstrokestask"
-        os.makedirs(savedir, exist_ok=True)
-        list_blocks = D.Dat["block"].unique().tolist()
-        D.Dat["aborted_int"] = np.array(D.Dat["aborted"], dtype=int) # or else plot will error.
-        for block in list_blocks:
-            dfthis = D.Dat[D.Dat["block"]==block]
-            if len(dfthis)>20:
-                fig = sns.pairplot(data=dfthis, vars=["beh_multiplier", "rew_total", "aborted_int"], 
-                             hue="seqc_nstrokes_task", plot_kws={"alpha":0.4}, height=3, aspect=1.5)
-                savefig(fig, f"{savedir}/rew_vs_nstrokestask-bk_{block}.pdf")        
+        #############################
+        if doplots:
 
-        #### Plot score/rew vs. location config.
-        savedir = f"{SAVEDIR}/locationconfig"
-        DF = stringify_values(D.Dat)
-
-        # D.taskclass_shapes_loc_configuration_assign_column()
-        os.makedirs(savedir, exist_ok=True)
-        for y in ["beh_multiplier", "rew_total"]:
-            fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
-            rotateLabel(fig)
-            savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
-
-            fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
-            rotateLabel(fig)
-            savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
-
-        ######## LOOK FOR CONJUCNTIONS
-        if False:
-            # obsolete...
-            D.taskclass_shapes_loc_configuration_assign_column()
-            from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
-            LIST_VAR = [
-                "seqc_3_loc_shape", # same n strokes, just diff sequence
-                "seqc_3_loc_shape", # same stim entirely
-                "seqc_3_loc_shape", # same loc config
-                "seqc_3_loc_shape", # same shape config
-
-                "seqc_2_loc_shape",
-                "seqc_2_loc_shape",
-                "seqc_2_loc_shape",
-                "seqc_2_loc_shape",
-
-                "seqc_1_loc_shape",
-                "seqc_1_loc_shape",
-                "seqc_1_loc_shape",
-                "seqc_1_loc_shape",
-
-                "seqc_nstrokes_beh", # diff  n strokes
-                "seqc_nstrokes_beh",
-                "seqc_nstrokes_beh",
-                ]
-            LIST_VARS_CONJUNCTION = [
-                ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
-                ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-                ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-                ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-
-                ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-                ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-                ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-                ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
-
-                ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
-                ["taskconfig_shploc", "seqc_0_loc_shape"],
-                ["taskconfig_loc", "seqc_0_loc_shape"],
-                ["taskconfig_shp", "seqc_0_loc_shape"],
-
-                ["seqc_0_loc_shape"], # diff n strokes.
-                ["seqc_0_loc_shape", "seqc_1_loc_shape"],
-                ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
-            ]           
-            for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
-                sdir = f"{SAVEDIR}/list_seqc_conjunctions"
-                os.makedirs(sdir, exist_ok=True)
-                path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
-                vars_others = ["aborted"] + vars_others
-                D.grouping_conjunctions_print_variables_save(var, vars_others, path)
-        else:
-            from neuralmonkey.metadat.analy.anova_params import conjunctions_print_plot_all
-            # which_level="trial"
-            # ANALY_VER = "seqcontext"
-            # animal = D.animals()[0]
-            conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="seqcontext")
-            plt.close("all")
-
-        # Pltoi cause of abort
-        LIST_OUTCOMES = [
-            ["online_abort_but_sequence_correct_so_far", "online_abort_but_sequence_correct_complete"],
-            ["sequence_incorrect_online_abort"]
-        ]
-        LIST_OUTCOMES_CODE = [
-            "grammarcorrect",
-            "grammarwrong"
-        ]
-
-        # sUCCESSES shoudl always use all trials
-        Dthis = D.copy()
-        Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-        if len(Dthis.Dat)>0:
-            DSthis = DatStrokes(Dthis)
-            savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
+            from pythonlib.tools.pandastools import stringify_values
+            
+            # Sequential context of strokes
+            savedir = f"{SAVEDIR}/stroke_sequential_contexts"
             os.makedirs(savedir, exist_ok=True)
-            dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-            dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-            
-            # Plto fraction of cases aborted
-            sdir = f"{savedir}/cause_of_abort_frac_of_success"
-            os.makedirs(sdir, exist_ok=True)
-            
-            from pythonlib.tools.snstools import heatmap
-            from pythonlib.tools.pandastools import convert_to_2d_dataframe
+            plot_sequential_context_strokes(DS, savedir)
 
-            assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
-            assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
 
-            dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
-            dfheat_ntrials = dfheat_abort + dfheat_succ
+            # SAVE the conjunctions of shape and loc that were gotten
+            path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_block.txt"
+            D.grouping_print_n_samples(["aborted", "epoch", "block", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-            fig = heatmap(dfheat_abort_frac)[0]
-            savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+            path = f"{SAVEDIR}/shape_loc_grouping-by_epoch.txt"
+            D.grouping_print_n_samples(["aborted", "epoch", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-            fig = heatmap(dfheat_ntrials)[0]
-            savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+            path = f"{SAVEDIR}/shape_loc_grouping-by_character.txt"
+            D.grouping_print_n_samples(["aborted", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
 
-            for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
-                Dthis = D.copy()
-                Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
-                Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+            path = f"{SAVEDIR}/shape_loc_grouping-by_epoch_character.txt"
+            D.grouping_print_n_samples(["aborted", "epoch", "character", "seqc_0_loc", "seqc_0_shape"], savepath=path, save_as="txt")    
+
+            path = f"{SAVEDIR}/shape_loc_grouping-by_shape_loc.txt"
+            D.grouping_print_n_samples(["aborted", "seqc_0_loc", "seqc_0_shape", "epoch", "block"], savepath=path, save_as="txt")    
+
+            ####### rew as function of n strokes in task
+            savedir = f"{SAVEDIR}/rew_vs_nstrokestask"
+            os.makedirs(savedir, exist_ok=True)
+            list_blocks = D.Dat["block"].unique().tolist()
+            D.Dat["aborted_int"] = np.array(D.Dat["aborted"], dtype=int) # or else plot will error.
+            for block in list_blocks:
+                dfthis = D.Dat[D.Dat["block"]==block]
+                if len(dfthis)>20:
+                    fig = sns.pairplot(data=dfthis, vars=["beh_multiplier", "rew_total", "aborted_int"], 
+                                hue="seqc_nstrokes_task", plot_kws={"alpha":0.4}, height=3, aspect=1.5)
+                    savefig(fig, f"{savedir}/rew_vs_nstrokestask-bk_{block}.pdf")        
+
+            #### Plot score/rew vs. location config.
+            savedir = f"{SAVEDIR}/locationconfig"
+            DF = stringify_values(D.Dat)
+
+            # D.taskclass_shapes_loc_configuration_assign_column()
+            os.makedirs(savedir, exist_ok=True)
+            for y in ["beh_multiplier", "rew_total"]:
+                fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, jitter=True, alpha=0.4, aspect=1.5)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-1.pdf")        
+
+                fig = sns.catplot(data=DF, x="taskconfig_loc", y=y, kind="point", aspect=1.5)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/{y}-vs-taskconfig_loc-2.pdf")        
+
+            ######## LOOK FOR CONJUCNTIONS
+            if False:
+                # obsolete...
+                D.taskclass_shapes_loc_configuration_assign_column()
+                from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
+                LIST_VAR = [
+                    "seqc_3_loc_shape", # same n strokes, just diff sequence
+                    "seqc_3_loc_shape", # same stim entirely
+                    "seqc_3_loc_shape", # same loc config
+                    "seqc_3_loc_shape", # same shape config
+
+                    "seqc_2_loc_shape",
+                    "seqc_2_loc_shape",
+                    "seqc_2_loc_shape",
+                    "seqc_2_loc_shape",
+
+                    "seqc_1_loc_shape",
+                    "seqc_1_loc_shape",
+                    "seqc_1_loc_shape",
+                    "seqc_1_loc_shape",
+
+                    "seqc_nstrokes_beh", # diff  n strokes
+                    "seqc_nstrokes_beh",
+                    "seqc_nstrokes_beh",
+                    ]
+                LIST_VARS_CONJUNCTION = [
+                    ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"], 
+                    ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+                    ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+                    ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+
+                    ["seqc_nstrokes_beh", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                    ["taskconfig_shploc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                    ["taskconfig_loc", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+                    ["taskconfig_shp", "seqc_0_loc_shape", "seqc_1_loc_shape"], 
+
+                    ["seqc_nstrokes_beh", "seqc_0_loc_shape"],
+                    ["taskconfig_shploc", "seqc_0_loc_shape"],
+                    ["taskconfig_loc", "seqc_0_loc_shape"],
+                    ["taskconfig_shp", "seqc_0_loc_shape"],
+
+                    ["seqc_0_loc_shape"], # diff n strokes.
+                    ["seqc_0_loc_shape", "seqc_1_loc_shape"],
+                    ["seqc_0_loc_shape", "seqc_1_loc_shape", "seqc_2_loc_shape"],
+                ]           
+                for var, vars_others in zip(LIST_VAR, LIST_VARS_CONJUNCTION):
+                    sdir = f"{SAVEDIR}/list_seqc_conjunctions"
+                    os.makedirs(sdir, exist_ok=True)
+                    path = f"{sdir}/{var}|vs|{'-'.join(vars_others)}.txt"    
+                    vars_others = ["aborted"] + vars_others
+                    D.grouping_conjunctions_print_variables_save(var, vars_others, path)
+            else:
+                from neuralmonkey.metadat.analy.anova_params import conjunctions_print_plot_all
+                # which_level="trial"
+                # ANALY_VER = "seqcontext"
+                # animal = D.animals()[0]
+                conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="seqcontext")
+                plt.close("all")
+
+            # Pltoi cause of abort
+            LIST_OUTCOMES = [
+                ["online_abort_but_sequence_correct_so_far", "online_abort_but_sequence_correct_complete"],
+                ["sequence_incorrect_online_abort"]
+            ]
+            LIST_OUTCOMES_CODE = [
+                "grammarcorrect",
+                "grammarwrong"
+            ]
+
+            # sUCCESSES shoudl always use all trials
+            Dthis = D.copy()
+            Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+            if len(Dthis.Dat)>0:
                 DSthis = DatStrokes(Dthis)
-
-                savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+                savedir = f"{SAVEDIR}/ABORTS-ALLDATA"
                 os.makedirs(savedir, exist_ok=True)
-
                 dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-                if dfabort is None:
-                    # no data
-                    continue
-                # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-         
+                dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+                
                 # Plto fraction of cases aborted
                 sdir = f"{savedir}/cause_of_abort_frac_of_success"
                 os.makedirs(sdir, exist_ok=True)
@@ -218,20 +199,8 @@ def preprocess_dataset(D, doplots=False):
                 from pythonlib.tools.snstools import heatmap
                 from pythonlib.tools.pandastools import convert_to_2d_dataframe
 
-                fig = heatmap(dfheat_abort)[0]
-                savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
-
-                if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
-                    # Is probably becusae lack any trials of some shape for one of them, liek this:
-                    # ['line-8-3-0', 'line-8-4-0']
-                    # ['V-2-4-0', 'line-8-3-0', 'line-8-4-0']
-                    # - just skip for now.
-                    if False:
-                        print(dfheat_abort.index.tolist())
-                        print(dfheat_succ.index.tolist())
-                        assert False
-                    else:
-                        continue
+                assert dfheat_abort.columns.tolist() == dfheat_succ.columns.tolist()
+                assert dfheat_abort.index.tolist() == dfheat_succ.index.tolist()
 
                 dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
                 dfheat_ntrials = dfheat_abort + dfheat_succ
@@ -242,9 +211,54 @@ def preprocess_dataset(D, doplots=False):
                 fig = heatmap(dfheat_ntrials)[0]
                 savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
 
-        plotscore_all(DS, SAVEDIR)
-        plotdrawings_all(DS, SAVEDIR)
+                for OUTCOMES, OUTCOMES_CODE in zip(LIST_OUTCOMES, LIST_OUTCOMES_CODE):
+                    Dthis = D.copy()
+                    Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+                    Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
+                    DSthis = DatStrokes(Dthis)
 
+                    savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+                    os.makedirs(savedir, exist_ok=True)
+
+                    dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
+                    if dfabort is None:
+                        # no data
+                        continue
+                    # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+            
+                    # Plto fraction of cases aborted
+                    sdir = f"{savedir}/cause_of_abort_frac_of_success"
+                    os.makedirs(sdir, exist_ok=True)
+                    
+                    from pythonlib.tools.snstools import heatmap
+                    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+
+                    fig = heatmap(dfheat_abort)[0]
+                    savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
+
+                    if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
+                        # Is probably becusae lack any trials of some shape for one of them, liek this:
+                        # ['line-8-3-0', 'line-8-4-0']
+                        # ['V-2-4-0', 'line-8-3-0', 'line-8-4-0']
+                        # - just skip for now.
+                        if False:
+                            print(dfheat_abort.index.tolist())
+                            print(dfheat_succ.index.tolist())
+                            assert False
+                        else:
+                            continue
+
+                    dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
+                    dfheat_ntrials = dfheat_abort + dfheat_succ
+
+                    fig = heatmap(dfheat_abort_frac)[0]
+                    savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+
+                    fig = heatmap(dfheat_ntrials)[0]
+                    savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+
+            plotscore_all(DS, SAVEDIR)
+            plotdrawings_all(DS, SAVEDIR)
 
     return DS, SAVEDIR
 
@@ -346,6 +360,7 @@ def plotscore_all(DS, SAVEDIR):
     import os 
     import seaborn as sns
     from pythonlib.tools.pandastools import convert_to_2d_dataframe
+    from pythonlib.tools.pandastools import stringify_values
 
 
     # Compute similarity for all data
@@ -364,7 +379,8 @@ def plotscore_all(DS, SAVEDIR):
         dfthis = DS.Dat[DS.Dat["task_kind"]==tk]
         savedir = f"{SAVEDIR}/beh_task_dist_scores/taskkind_{tk}"
         os.makedirs(savedir, exist_ok=True)
-
+        dfthis = stringify_values(dfthis)
+        
         # Make plots
         fig = sns.catplot(data=dfthis, x="shape_oriented", y="dist_beh_task_strok", aspect=2.5, row="gridloc")
         rotateLabel(fig)
