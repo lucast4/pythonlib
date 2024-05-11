@@ -492,6 +492,9 @@ def _groupingParams(D, expt):
         color_is_considered_instruction = True
         replace_shapes_with_clust_labels_if_exist=True
         pass
+    elif expt[:4] == "prim":
+        # Single prims, e.g., primdiego1
+        pass
     else:
         # pass, just use defaults
         print(expt)
