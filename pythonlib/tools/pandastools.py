@@ -3082,7 +3082,8 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
 def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
-                          ZLIMS=None, title_size=6, ncols=3):
+                          ZLIMS=None, title_size=6, ncols=3,
+                        row_values= None, col_values=None):
     """
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
@@ -3149,7 +3150,9 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                                 "mean",
                                 val_name,
                                 ax=ax, annotate_heatmap=annotate_heatmap,
-                                diverge=diverge, zlims=zlims, norm_method=norm_method)
+                                diverge=diverge, zlims=zlims, norm_method=norm_method,
+            list_cat_1 = row_values, list_cat_2=col_values
+        )
         ax.set_title(lev_subplot, color="r", fontsize=title_size)
         DictSubplotsDf[lev_subplot] = df2d
 

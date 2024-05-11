@@ -20,6 +20,7 @@ if MACHINE == "lucast4-MS-7B98":
 	PATH_MATLAB = "/gorilla1/programs/MATLAB/R2021a/bin/matlab"
 elif MACHINE == "lemur":
 	HOME = "/home/lucas"
+	PATH_DRAGMONKEY = f"{HOME}/code/dragmonkey" # monkeylogic task
 	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
 	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = f"{HOME}/mnt/Freiwald/ltian/recordings"

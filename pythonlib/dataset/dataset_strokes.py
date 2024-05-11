@@ -49,8 +49,13 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # check that only one stroke per task. otherwise shold not call this
         if "FEAT_num_strokes_task" not in D.Dat.columns:
             D.extract_beh_features(feature_list = ("num_strokes_task"))
-        assert sum(D.Dat["FEAT_num_strokes_task"]>1)==0, "do not do singleprim unless only one stroke, or it will remove many trials.."
-
+            
+        if False: # Sometimes you want to run this and allow pruning to just SP trials. That's fine
+            assert sum(D.Dat["FEAT_num_strokes_task"]>1)==0, "do not do singleprim unless only one stroke, or it will remove many trials.."
+        else:
+            # need to do this, or else downstream filtering gets weird.
+            D.Dat = D.Dat[D.Dat["FEAT_num_strokes_task"]==1].reset_index(drop=True)
+        
         frac_touched_min = 0.6
         ft_decim_min = 0.3
         shortness_min = 0.2

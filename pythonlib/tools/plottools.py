@@ -141,11 +141,12 @@ def color_make_pallete_categories(df, category_name, cmap="turbo"):
     return pallete
 
 
-def legend_add_manual(ax, labels, colors, alpha=0.4):
+def legend_add_manual(ax, labels, colors, alpha=0.4, loc="upper right"):
     """ Manually add a legend
     PARAMS:
     - labels, list of str
     - colors, list of color, to match labels
+    - loc, "best" is adaptive but slow.
     """
     import matplotlib.patches as mpatches
     handles = []
@@ -160,7 +161,7 @@ def legend_add_manual(ax, labels, colors, alpha=0.4):
     for lab, col in zip(labels, colors):
         this = mpatches.Patch(color=col, label=lab, alpha=alpha)
         handles.append(this)
-    ax.legend(handles=handles, framealpha=alpha, fontsize=8, loc="upper right") # default loc ("best") is slow for large amonts of data.
+    ax.legend(handles=handles, framealpha=alpha, fontsize=8, loc=loc) # default loc ("best") is slow for large amonts of data.
 
 
 def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):

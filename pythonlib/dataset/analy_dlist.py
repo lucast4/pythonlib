@@ -86,10 +86,15 @@ def concatDatasets(Dlist, do_cleanup=False):
     Main goal is to concatenate D.Dat. WIll attempt to keep track of 
     Metadats, but have not confirmed that this is reliable yet.
     NOTE: Currently only does Dat correclt.y doesnt do metadat, etc.
+    
+    NOTE: does not modify input Dlist
     """
     from .dataset import Dataset
     # from pythonlib.dataset.dataset import Dataset
     from pythonlib.tools.checktools import check_objects_identical
+
+    # First make copy
+    Dlist = [D.copy() for D in Dlist]
 
     Dnew = Dataset([])
 

@@ -414,7 +414,10 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR, column_binary_success=
         sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch_superv", ax=ax, 
                        alpha = 0.75)
         smwin = 20
-        dfthis_rolling = dfthis.rolling(window=smwin, center=True).mean()
+
+        cols_keep = ["trial", column_binary_success] # Filter, or else the mean() will throw error.
+        dfthis_rolling = dfthis[cols_keep].rolling(window=smwin, center=True).mean()
+
         # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
         sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
         blockver = "block"
