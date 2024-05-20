@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pythonlib.tools.plottools import savefig
+from pythonlib.tools.listtools import sort_mixed_type
 
 def debug_eyeball_distance_metric_goodness(D):
     """ Script to comapre distnaces by eye to what loloks good. Iterates over distance metrics,
@@ -233,7 +234,7 @@ def _plot_microstim_effect(DS, savedir):
                                                                   n_min_across_all_levs_var=1)
 
     # Get names of stim epochs.
-    stim_epochs = sorted(dfthis["microstim_epoch_code"].unique().tolist())
+    stim_epochs = sort_mixed_type(dfthis["microstim_epoch_code"].unique().tolist())
     stim_epochs_on = [e for e in stim_epochs if not e=="off"]
 
     sdir = f"{savedir}/epoch_effects_charlevel"
@@ -475,7 +476,7 @@ def _plot_location_shape_index_distributions(DS, savedir):
 
         # Separate supblots for each level of (shape) or (stroke_index)
         for var_subplot in ["clust_sim_max_colname", "stroke_index"]:
-            list_lev = sorted(dfthis[var_subplot].unique())
+            list_lev = sort_mixed_type(dfthis[var_subplot].unique())
             SIZE = 3
             var = "beh_center"
             ncols = 4

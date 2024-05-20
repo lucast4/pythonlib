@@ -22,7 +22,7 @@ from pythonlib.globals import PATH_DATASET_BEH
 from pythonlib.tools.plottools import savefig
 import seaborn as sns
 from pythonlib.tools.pandastools import append_col_with_grp_index
-
+from pythonlib.tools.listtools import sort_mixed_type
 def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
     """ helper to apply correct prprocessing, given
     different objectives. This I usually place within
@@ -3963,7 +3963,7 @@ class DatStrokes(object):
             list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
         elif which_shapes=="all_basis" or which_shapes is None:
             # use all within the basis set
-            list_shape_basis = sorted(dfbasis["shape"].unique().tolist())
+            list_shape_basis = sort_mixed_type(dfbasis["shape"].unique().tolist())
             list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
         elif which_shapes=="hand_enter":
             assert hand_entered_shapes is not None

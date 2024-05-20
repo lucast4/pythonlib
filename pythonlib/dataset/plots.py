@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from ..drawmodel.strokePlots import plotDatStrokes
 from pythonlib.tools.pandastools import applyFunctionToAllRows
+from pythonlib.tools.listtools import sort_mixed_type
 
 def plot_dat_grid_inputrowscols(df, strokes_ver="strokes_beh", max_n_per_grid=None,
     col_labels = None, row_labels=None, strokes_by_order=False, plotfuncbeh=None, 
@@ -104,7 +105,7 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
                 trialcode_list = None
         else:
             if levels is None:
-                levels = sorted(dfthis[group].unique().tolist())
+                levels = sort_mixed_type(dfthis[group].unique().tolist())
             # only keep dataset that is in these levels
             dfthis = filterPandas(dfthis, {group:levels}) # make a copy, otherwise some rows will not have anything
             map_ = {lev:i for i, lev in enumerate(levels)}
@@ -130,9 +131,9 @@ def _plot_beh_grid_flexible_helper(dfthis, row_group, col_group="trial", row_lev
 
     if sort_colvar:
         if col_levels is None:
-            col_levels = sorted(dfthis[col_group].unique().tolist())
+            col_levels = sort_mixed_type(dfthis[col_group].unique().tolist())
         else:
-            col_levels = sorted(col_levels)
+            col_levels = sort_mixed_type(col_levels)
 
     dfthis, row_labels, trialcode_list_1 = _assign_row_col_inds(dfthis, row_group, row_levels, "row", col_group)
     dfthis, col_labels, trialcode_list_2 = _assign_row_col_inds(dfthis, col_group, col_levels, "col", row_group)
@@ -205,7 +206,7 @@ def plot_beh_grid_grouping_vs_task(df, row_variable, tasklist, row_levels=None, 
         df_this = pd.concat([df_0, df_sample])
 
     # get levels for rows
-    row_levels = sorted(dfthis[row_variable].unique().tolist())
+    row_levels = sort_mixed_type(dfthis[row_variable].unique().tolist())
     # print("row levels:")
     # print(row_levels)
     assert len(row_levels)<40, "40+ row levesls, are you sure"

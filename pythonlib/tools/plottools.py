@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from pythonlib.tools.listtools import sort_mixed_type
 
 def radar_plot(ax, thetas, values, color="k", fill=True):
     """ polar radar plot 
@@ -133,7 +133,7 @@ def color_make_pallete_categories(df, category_name, cmap="turbo"):
     key is level in this categgory
     val is (4,) np array, rgba
     """
-    levels = sorted(df[category_name].unique().tolist())
+    levels = sort_mixed_type(df[category_name].unique().tolist())
     cols_arrays = makeColors(len(levels), cmap=cmap)
     pallete = {}
     for lev, col in zip(levels, cols_arrays):

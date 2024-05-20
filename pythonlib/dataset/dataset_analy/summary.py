@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import os
-
+from pythonlib.tools.listtools import sort_mixed_type
 
 def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     """
@@ -116,7 +116,8 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     else:
         datethis = rulelist[0]
         assert len(rulelist)==1, "if daily, then this must be a single date"
-        SDIR_MAIN = f"{PATH_DATA_BEHAVIOR_RAW}/{animal}/{datethis}/figures/dataset/{expt}"
+        # SDIR_MAIN = f"{PATH_DATA_BEHAVIOR_RAW}/{animal}/{datethis}/figures/dataset/{expt}" # stop this, since the raw beh directory can vary.
+        SDIR_MAIN = f"{PATH_ANALYSIS_OUTCOMES}/main/simple_summary_daily/{animal}-{D.dates(True)[0]}-{expt}"
     # SDIR_MAIN = f"{base_dir}/analyses/main/simple_summary/{animal}-{expt}-{'_'.join(rulelist)}"
     os.makedirs(SDIR_MAIN, exist_ok=True)
     SAVEDIR_FIGS = f"{SDIR_MAIN}/FIGS/drawfigs"
@@ -240,7 +241,7 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
         # TODO: split by set category, and features.
         # get list of unique tasks
         df = D.filterPandas({"monkey_train_or_test":["test"]}, "dataframe")
-        tasklist = sorted(df["character"].unique())
+        tasklist = sort_mixed_type(df["character"].unique())
         if len(tasklist)>50:
             print(len(tasklist))
             assert False, "break it up into multiple plots"

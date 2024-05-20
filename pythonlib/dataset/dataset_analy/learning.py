@@ -17,6 +17,8 @@ import pandas as pd
 from pythonlib.tools.expttools import checkIfDirExistsAndHasFiles
 from pythonlib.tools.plottools import savefig
 from matplotlib import rcParams
+from pythonlib.tools.listtools import sort_mixed_type
+
 rcParams.update({'figure.autolayout': True})
 
 def preprocess_dataset(D, remove_repeated_trials=True):
@@ -252,8 +254,8 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
 
     # 1) Print summary and save it (perforamnce, as function of hierarhcal params)
     N_MIN = 5 # skip printing for cases with fewer trials
-    list_taskgroups = sorted(dfthis["taskgroup"].unique())
-    list_epochsuperv = sorted(dfthis["epoch_superv"].unique())
+    list_taskgroups = sort_mixed_type(dfthis["taskgroup"].unique())
+    list_epochsuperv = sort_mixed_type(dfthis["epoch_superv"].unique())
     list_textstrings = [] # for saving
     for i, blockset in enumerate(list_blockset):
         s = f"Blockset #{i}: [{_blocks_to_str(blockset)}]"

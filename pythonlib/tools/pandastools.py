@@ -1121,7 +1121,7 @@ def expand_categorical_variable_to_binary_variables(df, var_categorical,
 
     if False:
         # Old version, using for-loop so is very slow.
-        list_levels = sorted(df[var_categorical].unique().tolist())
+        list_levels = sort_mixed_type(df[var_categorical].unique().tolist())
 
         if index_vars is None:
             # Then get all columns that exist
@@ -1152,7 +1152,7 @@ def expand_categorical_variable_to_binary_variables(df, var_categorical,
     else:
         dftmp = pd.get_dummies(df, prefix="", prefix_sep="", columns=[var_categorical])
         id_vars = [c for c in df.columns if not c==var_categorical]
-        list_levels = sorted(df[var_categorical].unique().tolist())
+        list_levels = sort_mixed_type(df[var_categorical].unique().tolist())
         df_binary = pd.melt(dftmp, id_vars = id_vars, value_vars=list_levels, var_name=var_categorical)
 
     # NOTES: couple other approeaches I tried which difnt work well.
