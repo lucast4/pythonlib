@@ -42,6 +42,7 @@ def check_objects_identical(obj1, obj2, PRINT=False):
     elif isinstance(obj1, (np.ndarray, np.generic)):
         # if np.isempty(obj1) and np.isempty(obj2):
         #     pass
+
         if np.all(np.isnan(obj1)) and np.all(np.isnan(obj2)):
             pass
         elif not obj1.shape == obj2.shape:
@@ -53,6 +54,9 @@ def check_objects_identical(obj1, obj2, PRINT=False):
             return False
         else:
             pass
+    elif isinstance(obj1, float):
+        if not np.all(np.isclose(obj1, obj2)):
+            return False
     elif isinstance(obj1, (int, str, float)):
         if not obj1==obj2:
             if PRINT:
