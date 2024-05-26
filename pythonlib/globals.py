@@ -34,7 +34,7 @@ elif MACHINE == "lemur":
 	PATH_MATLAB = "/usr/local/MATLAB/R2021a/bin/matlab"
 	PATH_KS_RAW = f"{HOME}/mnt/Freiwald_kgupta/kgupta/neural_data"
 	PATH_CODE = f"{HOME}/code"
-	PATH_SAVE_CLUSTERFIX = "IGNOREFORNOW"
+	PATH_SAVE_CLUSTERFIX = f"{PATH_DATASET_BEH}/eyetracking_analyses"
 elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan" or MACHINE == "kggs-macbook.lan.rockefeller.edu":
 	PATH_DRAWMONKEY_DIR = "/Users/kdu/Desktop/rockefeller/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/Users/kdu/data2/animals"
