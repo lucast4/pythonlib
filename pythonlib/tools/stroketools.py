@@ -1898,11 +1898,12 @@ def angle_of_stroke_segment(strokes, twind=[0, 0.2]):
     """
     from pythonlib.tools.vectools import get_angle
 
-    tdiff = strokes[0][1,2] - strokes[0][0,2]
-    if tdiff>=1:
-        print("did you enter task strokes?")
-        print(strokes)
-        assert False
+    if False: # no need -- should allow doing this with task strokes too (psychometric)
+        tdiff = strokes[0][1,2] - strokes[0][0,2]
+        if tdiff>=1:
+            print("did you enter task strokes?")
+            print(strokes)
+            assert False
 
     strokes_sliced = sliceStrokes(strokes, twind, time_is_relative_each_onset=True)
 
@@ -1941,6 +1942,10 @@ def sliceStrokes(strokes, twind, retain_n_strokes=False,
         dim_time = 2
         # assume last col is time.
         inds = (traj[:, dim_time]>=twind[0]) & (traj[:, dim_time]<=twind[1])
+        if len(inds)==0:
+            print(traj)
+            print(twind)
+            assert False, "twind is wrong time base. maybe you confused whether this is task (0,1,2..) or beh (seconds) strokes?"
         return traj[inds, :]
 
     strokes_out = [_slice(s) for s in strokes]
@@ -2054,3 +2059,81 @@ def strokes_make_all_pts_positive(strokes):
         s[:,[0,1]] = s[:,[0,1]] - ptmin
 
     return strokes
+
+def strokes_to_hash_unique(strokes, nhash = 6, centerize=False, align_to_onset=False):
+    """Helper to convert strokes to a unique hash number, which takes into acocunt onseta nd offest
+    pts for eacch stroke. Is generalyl very good at distinguishing strokes, e.g., same semantic label, but
+    diff psychometric rotration, etc.
+    :param strokes: _description_
+    :param nhash: n digits in hash. Usually I have 6 for fixed and 10 for random tasks
+    :param include_taskstrings: _description_, defaults to True
+    :param include_taskcat_only: _description_, defaults to False
+    :return: _description_
+    """
+
+    if centerize:
+        strokes = strokes_centerize(strokes)
+
+    strokes = [s[:,:2] for s in strokes]
+
+    # Collect each x,y coordinate, and flatten it into vals.
+    vals = []
+    # for S in self.Strokes:
+    #     vals.extend(S[0])
+    #     vals.extend(S[-1])
+    for S in strokes:
+        for SS in S:
+            vals.extend(SS)
+            # vals.extend(SS[1])
+    # print(np.diff(vals))
+    # tmp = np.sum(np.diff(vals))
+    # vals = np.asarray(vals)
+
+    vals = np.asarray(vals)
+    # vals = vals+MIN # so that is positive. taking abs along not good enough, since suffers if task is symmetric.
+
+    # Take product of sum of first and second halves.
+    # NOTE: checked that np.product is bad - it blows up.
+    # do this splitting thing so that takes into account sequence.
+    tmp1 = np.sum(vals[0::4])
+    tmp2 = np.sum(vals[1::4])
+    tmp3 = np.sum(vals[2::4])
+    tmp4 = np.sum(vals[3::4])
+
+    # rescale to 1
+    # otherwise some really large, some small.
+    # divie by 10 to make sure they are quite large.
+    tmp1 = tmp1/np.max([np.floor(tmp1)/10, 1])
+    tmp2 = tmp2/np.max([np.floor(tmp2)/10, 1])
+    tmp3 = tmp3/np.max([np.floor(tmp3)/10, 1])
+    tmp4 = tmp4/np.max([np.floor(tmp4)/10, 1])
+
+
+    # tmp1 = 1+tmp1-np.floor(tmp1)
+    # tmp2 = 1+tmp2-np.floor(tmp2)
+    # tmp3 = 1+tmp3-np.floor(tmp3)
+    # print(tmp1, tmp2, tmp3, tmp4)
+    # assert False
+
+    # tmp1 = np.sum(vals)
+    # tmp = np.sum(vals)
+
+    # Take only digits after decimal pt.
+    if True:
+        tmp = tmp1*tmp2*tmp3*tmp4
+        # print(tmp)
+        tmp = tmp-np.floor(tmp)
+        tmp = str(tmp)
+        # print(tmp)
+        # assert False
+    else:
+        # This doesnt work well, all tmps end up lookgin the same. 
+        tmp = np.log(np.abs(tmp1)) + np.log(np.abs(tmp2)) + np.log(np.abs(tmp3))
+        print(tmp)
+        tmp = str(tmp)
+        ind = tmp.find(".")
+        tmp = tmp[:ind] + tmp[ind+1:]
+    _hash = tmp[2:nhash+2]
+
+    return _hash
+    

@@ -96,6 +96,7 @@ def get_angle(v):
     in domain [0, 2pi)"""
     a = angle_between([1,0], v)
 #     print(a)
+    assert np.sum(v**2)>0, "cannot compute angle -- length of vector is 0..."
     if v[1]<0:
         a = 2*pi-a
     return a

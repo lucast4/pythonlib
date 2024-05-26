@@ -848,6 +848,9 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True,
     for x in grp:
         assert not isinstance(x, (list, tuple)), "leads to errors. you prob want to flatten grp"
 
+    # if isinstance(grp, tuple):
+    #     grp = list(grp)
+
     # add a column, which is grp index
     def F(x):
         tmp = [x[g] for g in grp]
@@ -900,6 +903,33 @@ def append_col_after_applying_to_group(df, groupby, cols_to_use, F, newcol):
 
     return df
 
+def append_col_with_index_of_level_after_grouping(df, grpvars, column, newcolumn):
+    """ 
+    Number each class of <column> after first grouping by levels of <grpvars>, and in increasing
+    order after sorting. E..g, if you want to give each unqiue character an interger label, but first
+    grouping characters by epoch...
+    PARAMS:
+    - grpvars: list of str --> first goruping step.
+    - column: str, the column whose labels will be sorted and convberted to integer classes.
+    - newcolumn: str, stores results here.
+    """
+
+    df = df.copy()
+
+    _check_index_reseted(df)
+
+    n_in = len(df)
+    groupdict = grouping_append_and_return_inner_items_good(df, grpvars)
+    list_df = []
+    for _, indices in groupdict.items():
+        dfthis = df.iloc[indices].reset_index(drop=True)
+        append_col_with_index_of_level(dfthis, column, newcolumn)
+        list_df.append(dfthis)
+    dfout = pd.concat(list_df).reset_index(drop=True)   
+
+    assert len(df)==n_in
+
+    return dfout
 
 def append_col_with_index_of_level(df, column, newcolumn):
     """ 
@@ -933,7 +963,8 @@ def append_col_with_index_of_level(df, column, newcolumn):
 
 def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
-    e.g, if groupby has 2 levels (A and B), then this gives all rows with level A an index.
+    ie each row is a different index!
+    e.g, if groupby has 2 levels (A and B), then this gives all rows with level A unqiue indices 0, 1,2 ...
     e.g.. like trial numbers for a given condition/task.
     - randomize, then will randomize the indices (only within trails with same level of groupby)
     """
@@ -947,6 +978,8 @@ def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron",
     #     return x
         
     # dfthis = dfthis.groupby("character").apply(F)
+
+    df = df.copy()
 
     def F(x):
         # assign in chron order
@@ -1571,8 +1604,7 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
         # sns.swarmplot(ax=ax, x=x, y=y)
         ax.axhline(0, color="k", alpha=0.5)
         sns.stripplot(ax=ax, x=x, y=y, jitter=True, alpha=0.7, order=list_lev_plot)
-        sns.pointplot(ax=ax, x=x, y=y, jitter=True, alpha=0.7, order=list_lev_plot,
-            linestyles="", color="k")
+        sns.pointplot(ax=ax, x=x, y=y, order=list_lev_plot, linestyles="", color="k")
         # sns.histplot(ax=ax, x=x, y=y, alpha=0.7, order=list_lev_plot)
         plotmod_pvalues(ax, range(len(list_lev_plot)), pvals_plot)
         ax.set_ylabel(f"{y_var} minus {lev_default_contrast}")
@@ -1843,6 +1875,12 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     rRETURNS:s
     - fig
     """
+
+    df = df.copy()
+
+    if isinstance(var1, (tuple, list)):
+        df = append_col_with_grp_index(df, var1, "dummy_var", use_strings=False)
+        var1 = "dummy_var"
 
     if vars_others is not None:
         assert isinstance(vars_others, (list, tuple))
@@ -3351,3 +3389,50 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
             ax.set_ylim(MIN, MAX)
 
     return dfres, fig
+
+
+def find_unique_values_with_indices(df, col, tolerance = 1e-3,
+        append_column_with_unique_values_colname=None):
+    """Return each unique value of col (numerical) as key to dict,
+    with values being the indicies into df whose values of col 
+    are np.isclose() to this value. 
+
+    NOTE: is similar to append_col_with_index_of_level_after_grouping(), except
+    here works with continuous values.
+
+    :param df: _description_
+    :param col: _description_
+    :param append_column_with_unique_values_colname: either None (ingnore)
+    or str, adds this column using the unique values.
+    """
+
+    series = df[col]
+    unique_values = []
+    indices = []
+    
+    map_index_to_value = {}
+    for i, value in enumerate(df[col].values):
+        found = False
+        for j, unique_value in enumerate(unique_values):
+            if np.isclose(value, unique_value, atol=tolerance):
+                indices[j].append(i)
+                found = True
+                map_index_to_value[i] = unique_value
+                break
+        if not found:
+            unique_values.append(value)
+            indices.append([i])
+            map_index_to_value[i] = value
+
+    if append_column_with_unique_values_colname is not None:
+        values = [map_index_to_value[i] for i in range(len(df))]
+        df[append_column_with_unique_values_colname] = values
+    
+    return unique_values, indices, map_index_to_value
+
+    # # Find unique values and their indices for each column
+    # unique_values, indices = find_unique_with_indices(df[col], tolerance)
+    # unique_indices[col] = list(zip(unique_values, indices))
+
+    # print("Unique values and their indices:")
+    # print(unique_indices)

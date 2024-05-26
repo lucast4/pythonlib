@@ -5,7 +5,7 @@ specifically for tasks in monkeylogic
 import numpy as np
 from pythonlib.tools.stroketools import fakeTimesteps
 from pythonlib.chunks.chunks import chunk_strokes, chunks2parses
-
+import sys
 class TaskClass(object):
     """ Holds a single task object.
     """
@@ -190,64 +190,67 @@ class TaskClass(object):
         if strokes is None:
             strokes = self.Strokes
 
-        # Collect each x,y coordinate, and flatten it into vals.
-        vals = []
-        # for S in self.Strokes:
-        #     vals.extend(S[0])
-        #     vals.extend(S[-1])
-        for S in strokes:
-            for SS in S:
-                vals.extend(SS)
-                # vals.extend(SS[1])
-        # print(np.diff(vals))
-        # tmp = np.sum(np.diff(vals))
+        from pythonlib.tools.stroketools import strokes_to_hash_unique
+        _hash = strokes_to_hash_unique(strokes, nhash)
+
+        # # Collect each x,y coordinate, and flatten it into vals.
+        # vals = []
+        # # for S in self.Strokes:
+        # #     vals.extend(S[0])
+        # #     vals.extend(S[-1])
+        # for S in strokes:
+        #     for SS in S:
+        #         vals.extend(SS)
+        #         # vals.extend(SS[1])
+        # # print(np.diff(vals))
+        # # tmp = np.sum(np.diff(vals))
+        # # vals = np.asarray(vals)
+
         # vals = np.asarray(vals)
+        # # vals = vals+MIN # so that is positive. taking abs along not good enough, since suffers if task is symmetric.
 
-        vals = np.asarray(vals)
-        # vals = vals+MIN # so that is positive. taking abs along not good enough, since suffers if task is symmetric.
+        # # Take product of sum of first and second halves.
+        # # NOTE: checked that np.product is bad - it blows up.
+        # # do this splitting thing so that takes into account sequence.
+        # tmp1 = np.sum(vals[0::4])
+        # tmp2 = np.sum(vals[1::4])
+        # tmp3 = np.sum(vals[2::4])
+        # tmp4 = np.sum(vals[3::4])
 
-        # Take product of sum of first and second halves.
-        # NOTE: checked that np.product is bad - it blows up.
-        # do this splitting thing so that takes into account sequence.
-        tmp1 = np.sum(vals[0::4])
-        tmp2 = np.sum(vals[1::4])
-        tmp3 = np.sum(vals[2::4])
-        tmp4 = np.sum(vals[3::4])
-
-        # rescale to 1
-        # otherwise some really large, some small.
-        # divie by 10 to make sure they are quite large.
-        tmp1 = tmp1/np.max([np.floor(tmp1)/10, 1])
-        tmp2 = tmp2/np.max([np.floor(tmp2)/10, 1])
-        tmp3 = tmp3/np.max([np.floor(tmp3)/10, 1])
-        tmp4 = tmp4/np.max([np.floor(tmp4)/10, 1])
+        # # rescale to 1
+        # # otherwise some really large, some small.
+        # # divie by 10 to make sure they are quite large.
+        # tmp1 = tmp1/np.max([np.floor(tmp1)/10, 1])
+        # tmp2 = tmp2/np.max([np.floor(tmp2)/10, 1])
+        # tmp3 = tmp3/np.max([np.floor(tmp3)/10, 1])
+        # tmp4 = tmp4/np.max([np.floor(tmp4)/10, 1])
 
 
-        # tmp1 = 1+tmp1-np.floor(tmp1)
-        # tmp2 = 1+tmp2-np.floor(tmp2)
-        # tmp3 = 1+tmp3-np.floor(tmp3)
-        # print(tmp1, tmp2, tmp3, tmp4)
-        # assert False
+        # # tmp1 = 1+tmp1-np.floor(tmp1)
+        # # tmp2 = 1+tmp2-np.floor(tmp2)
+        # # tmp3 = 1+tmp3-np.floor(tmp3)
+        # # print(tmp1, tmp2, tmp3, tmp4)
+        # # assert False
 
-        # tmp1 = np.sum(vals)
-        # tmp = np.sum(vals)
+        # # tmp1 = np.sum(vals)
+        # # tmp = np.sum(vals)
 
-        # Take only digits after decimal pt.
-        if True:
-            tmp = tmp1*tmp2*tmp3*tmp4
-            # print(tmp)
-            tmp = tmp-np.floor(tmp)
-            tmp = str(tmp)
-            # print(tmp)
-            # assert False
-        else:
-            # This doesnt work well, all tmps end up lookgin the same. 
-            tmp = np.log(np.abs(tmp1)) + np.log(np.abs(tmp2)) + np.log(np.abs(tmp3))
-            print(tmp)
-            tmp = str(tmp)
-            ind = tmp.find(".")
-            tmp = tmp[:ind] + tmp[ind+1:]
-        _hash = tmp[2:nhash+2]
+        # # Take only digits after decimal pt.
+        # if True:
+        #     tmp = tmp1*tmp2*tmp3*tmp4
+        #     # print(tmp)
+        #     tmp = tmp-np.floor(tmp)
+        #     tmp = str(tmp)
+        #     # print(tmp)
+        #     # assert False
+        # else:
+        #     # This doesnt work well, all tmps end up lookgin the same. 
+        #     tmp = np.log(np.abs(tmp1)) + np.log(np.abs(tmp2)) + np.log(np.abs(tmp3))
+        #     print(tmp)
+        #     tmp = str(tmp)
+        #     ind = tmp.find(".")
+        #     tmp = tmp[:ind] + tmp[ind+1:]
+        # _hash = tmp[2:nhash+2]
 
         # Compose the task name
         taskcat = self.info_name_this_task_category()
@@ -592,48 +595,53 @@ class TaskClass(object):
             return None
 
         # --- TaskNew exists...
-        program = self.get_tasknew()["Task"]["program"]
-        if True:
-            # use recursive function
-            program_list = self._program_line_dict2list(program)
-            if isinstance(program_list[0][0], list):
-                # program = [subprog1, subprog2]
-                # subprog = [['line', array(0.), array(0.), array(0.), array(1.2), array(1.2), 'trs'], ['line', array(1.5), array(0.), array(1.57079633), array(1.54285714), array(1.54285714), 'trs'], ['line', array(1.5), array(1.5), array(3.14159265), array(1.2), array(1.2), 'trs'], ['line', array(-1.5), array(1.5), array(0.), array(1.42857143), array(1.42857143), 'trs']]
-                # good
-                pass
-            else:
-                # program is actually a subprogram...
-                # convert it to program..
-                program_list = [program_list]
+        if (isinstance(self.get_tasknew()["Info"], dict)) and ("MorphParams" in self.get_tasknew()["Info"]):
+            # Then this is morphed, it will not have program
+            self.Program = None
         else:
-            # OLD, 
-            # convert to nested lists.
-            nlev1 = len(program)
-            program_list = []
-            for i in range(nlev1):
-                idx = f"{i+1}"
-                if doprint:
-                    print("subprog:", idx)
-                subprog = program[idx]
-                nlev2 = len(subprog)
-                
-                # print(subprog)
-                # assert False
-                # Convert subprogram to list
-                subprog_list = []
-                for ii in range(nlev2):
-                    idx = f"{ii+1}"
+            # print(self.get_tasknew()["Task"].keys())
+            program = self.get_tasknew()["Task"]["program"]
+            if True:
+                # use recursive function
+                program_list = self._program_line_dict2list(program)
+                if isinstance(program_list[0][0], list):
+                    # program = [subprog1, subprog2]
+                    # subprog = [['line', array(0.), array(0.), array(0.), array(1.2), array(1.2), 'trs'], ['line', array(1.5), array(0.), array(1.57079633), array(1.54285714), array(1.54285714), 'trs'], ['line', array(1.5), array(1.5), array(3.14159265), array(1.2), array(1.2), 'trs'], ['line', array(-1.5), array(1.5), array(0.), array(1.42857143), array(1.42857143), 'trs']]
+                    # good
+                    pass
+                else:
+                    # program is actually a subprogram...
+                    # convert it to program..
+                    program_list = [program_list]
+            else:
+                # OLD, 
+                # convert to nested lists.
+                nlev1 = len(program)
+                program_list = []
+                for i in range(nlev1):
+                    idx = f"{i+1}"
                     if doprint:
-                        print("-- line:", idx)
-                    line = subprog[idx]
-                    line_list = self._program_line_dict2list(line)
-                    if doprint:
-                        print(line_list)
-                    subprog_list.append(line_list)
+                        print("subprog:", idx)
+                    subprog = program[idx]
+                    nlev2 = len(subprog)
                     
-                program_list.append(subprog_list)
-        
-        self.Program = program_list
+                    # print(subprog)
+                    # assert False
+                    # Convert subprogram to list
+                    subprog_list = []
+                    for ii in range(nlev2):
+                        idx = f"{ii+1}"
+                        if doprint:
+                            print("-- line:", idx)
+                        line = subprog[idx]
+                        line_list = self._program_line_dict2list(line)
+                        if doprint:
+                            print(line_list)
+                        subprog_list.append(line_list)
+                        
+                    program_list.append(subprog_list)
+            
+            self.Program = program_list
 
     def program_get_line(self, ind_subprog, ind_line):
         """ returns line from extracted Program (self.Program)
@@ -1558,23 +1566,40 @@ class TaskClass(object):
         # store
         self.PlanDat = dat
 
+        # NOVEL PRIMS
         # If any novel prims, assign them hash (unique shape)
         dict_novel_prims = self.planclass_inputed_plan_extract_novelprims()
+        from pythonlib.tools.listtools import stringify_list
+
+        if False: # This doesnt work, since you need to run this inputing all tasks for the day. 
+            # strategy, check that all hash unique. if so, then just use index...
+            map_hashnum_indprim = {}
+            for indprim, params in dict_novel_prims.items():
+                list_subprims, list_subrels = params[0], params[1]
+                hashnum = hash(tuple(stringify_list(list_subprims) + stringify_list(list_subrels)))
+                if hashnum in map_hashnum_indprim:
+                    map_hashnum_indprim[hashnum].append(indprim)
+                else:
+                    map_hashnum_indprim[hashnum] = [indprim]
+            
+            # Then, give each unique prim its unqiue index
+            map_indprim_indnovel = {}
+            for inovel, (hashnum, indprims) in enumerate(map_hashnum_indprim.items()):
+                for iprim in indprims:
+                    map_indprim_indnovel[iprim] = inovel
+
         for indprim, params in dict_novel_prims.items():
-            from pythonlib.tools.listtools import stringify_list
             list_subprims, list_subrels = params[0], params[1]
             hashnum = hash(tuple(stringify_list(list_subprims) + stringify_list(list_subrels)))
-            shapenew = f"novelprim-{hashnum}"
+            hashnum += sys.maxsize + 1 # To make it positive (important, to avoid dash between novelprim and hash, which will be parsed incorrectly when doign novelprim-x-x-x)
+            assert hashnum>=0
 
-            # print(dat["ShapesAfterConcat"])
-            # print(indprim)
-            # print(shapenew)
-            # assert False, 'shoudl insert here?'
+            shapenew = f"novelprim{hashnum}"
+
             assert dat["ShapesAfterConcat"][indprim][:9]=="novelprim"
             dat["ShapesAfterConcat"][indprim] = shapenew
 
-
-        # Genreate prims
+        # GENERATE PRIMS
         # for i, (shapenew, prim, loc) in enumerate(zip(dat["ShapesAfterConcat"], dat["Prims"], dat["CentersActual"])):
         #     shape = prim[0]
 

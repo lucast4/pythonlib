@@ -660,7 +660,8 @@ class Tokens(object):
             print(tok)
 
     ########################### FEATURES
-    def features_extract_wrapper(self, features_get = None, shape_semantic_regenerate_from_stroke=False):
+    def features_extract_wrapper(self, features_get = None, shape_semantic_regenerate_from_stroke=False,
+                                 angle_twind = (0, 0.2)):
         """
         WRapper to generate features for each token,
         which are appended to tokens. Where
@@ -681,20 +682,36 @@ class Tokens(object):
             strok = tok["Prim"].Stroke()
             for feature in features_get:
                 if feature=="shape_semantic":
-                    if shape_semantic_regenerate_from_stroke:
-                        # Then force rgenerate from raw stroke
-                        tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
-                    else:
-                        # First, try to get mapping between shap string and semantic.
-                        if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
-                            tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
-                        else:
-                            # If that fails, then try to compute it. But this will often fail for CHAR, since
-                            # these strokes are not task-strokes, so are irregular.
-                            tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
 
-                    tmp = deconstruct_filename(tok["shape_semantic"])
-                    tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
+                    # First, shape_semantic is defined only if there is no tforms extra rotation
+
+                    # assert "tforms_extra_exist" in tok.keys(), "needs this to know whether is novel prim. see Dataset.tokens_preprocess_wrapper_good()"
+                    if "tforms_extra_exist" in tok.keys() and tok["tforms_extra_exist"]:
+                        # Then ignore, since this is not base prim.
+                        tok["shape_semantic"] = "NOVEL-X-X-X"
+                        tok["shape_semantic_cat"] = "NOVEL-X-X-X"
+                    else:
+
+                        # #TODO:
+                        # # get this: TaskClass.PlanDat, and from this get whether did extra
+                        # # tform, as PlanDat.ParamsSpatialExtra.tforms_each_prim. If did, then
+                        # # don't try to get shape semantic (doesnt exist). 
+                        # assert False
+
+                        if shape_semantic_regenerate_from_stroke:
+                            # Then force rgenerate from raw stroke
+                            tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                        else:
+                            # First, try to get mapping between shap string and semantic.
+                            if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
+                                tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
+                            else:
+                                # If that fails, then try to compute it. But this will often fail for CHAR, since
+                                # these strokes are not task-strokes, so are irregular.
+                                tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+
+                        tmp = deconstruct_filename(tok["shape_semantic"])
+                        tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
 
                 elif feature=="loc_on":
                     tok["loc_on"] = strok[0,:2]
@@ -702,7 +719,7 @@ class Tokens(object):
                     tok["loc_off"] = strok[-1,:2]
                 elif feature=="angle":
                     # angle of onset.
-                    tok["angle"] = angle_of_stroke_segment([strok], twind=[0, 0.2])[0]
+                    tok["angle"] = angle_of_stroke_segment([strok], twind=angle_twind)[0]
                 else:
                     print(feature)
                     assert False, "code it"

@@ -77,6 +77,18 @@ def _groupingParams(D, expt):
     # shape labels to load, then ignores this and uses default (i.,e taskclass tokens).
     replace_shapes_with_clust_labels_if_exist=False
 
+    # For cases where the code auto decides to rename "shape" in Tokens (does so by checking that there are
+    # novel prims, based on the existence of extra tforms in plandat), how to rename the prim (i.e. sh-x-x-x)?
+    # - "default" means
+    # use measured features, like angle and scale. But this may not be unique across shapes. 
+    # - "hash" gives a 9-digit hash, which should be unqiue.
+    reclassify_shape_using_stroke_version = "default"
+
+    # Sometimes you have grid tasks, but thye are not well-aligned to grid (at their cetners) (e,.g,
+    # algined to stroke onets). Here, tell code that you expect all strokes to eb on grid, and it will 
+    # force a grid assignemnet by proxibimyty.
+    tokens_gridloc_snap_to_grid = False
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -462,7 +474,23 @@ def _groupingParams(D, expt):
     #     map_ttl_region = {
     #         3:"TTL3",
     #         4:"TTL4",
-    #     }
+    #     } 
+    
+    elif ("primdiego1f" in expt) or ("primpancho1f" in expt):
+        # Novel prims, wnat to rename shapes using hash.
+        # (ROTATIONS)
+        reclassify_shape_using_stroke_version = "hash"
+        
+    elif expt in ["primsingridrand8"]:
+    # Novel prims, wnat to rename shapes using hash.
+        # (ROTATIONS)
+        reclassify_shape_using_stroke_version = "hash"
+    
+    elif ("primdiego1h" in expt) or ("primpancho1h" in expt):
+        # Novel prims, morphing subsements (structured morphs)
+        tokens_gridloc_snap_to_grid = True
+        reclassify_shape_using_stroke_version = True # since these have the incvorrect "name" based on
+        # one of the base prims used in the morph (as a hack).
 
     elif "priminvar" in expt:
         # e.g., priminvar5
@@ -505,6 +533,13 @@ def _groupingParams(D, expt):
     if "color_instruction" not in grouping_reassign_methods_in_order:
         # grouping_reassign = Tr
         grouping_reassign_methods_in_order.append("color_instruction")
+
+    ################## Generate behclass. 
+    # This is used frequenctly, so I decided to aklways do this
+    D.behclass_preprocess_wrapper(skip_if_exists=False, 
+                            reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version, 
+                            tokens_gridloc_snap_to_grid = tokens_gridloc_snap_to_grid)
+
 
     ############### OPTIONAL:
     # Filter dataframe
@@ -656,7 +691,7 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip, \
         color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist
 
-def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, 
+def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, #
         mapper_character_to_category=None, append_probe_status=True,
         what_use_for_default = "task_stagecategory"):
     """ Reassign values to D.Dat["taskgroup"], which represent meaningful group[s of
@@ -961,9 +996,6 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     if expt=="neuralprep4":
         print("First day (210427) need to take session 5. Second day take all. ..")
         assert False
-
-    # Generate behclass. This is used frequenctly, so I decided to aklways do this
-    D.behclass_preprocess_wrapper(skip_if_exists=False)
 
     # (2) Extract new derived varaibles
     # -- Plan time

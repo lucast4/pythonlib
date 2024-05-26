@@ -296,6 +296,9 @@ class PrimitiveClass(object):
         becuase somtimes you have extra transfomrs that chagne how this
         is actually angled, etc. Here solves this problem by replacing the
         scale and angle with actual measured, based on stroke.'
+
+        NOTE: this tries to be invariant to the direction of stroke, since this is a task stroke.
+
         PARAMS:
         - exclude_scale, if True, then returns 3 items, else 4.
         RETURNS:
@@ -305,54 +308,8 @@ class PrimitiveClass(object):
         same on. and/or reflections.
         """
         from pythonlib.tools.vectools import get_angle, bin_angle_by_direction
-
-        # shcat = self.extract_as()[1] # e.g, ('line-11-1-0', 'line', 11, 1, 0, 0.0, -0.614)
-        #
-        # # a marker of scale and angle.
-        # S = self.Stroke
-        # cen = S.extract_center()
-        #
-        # # define the endpoint1 to be that more on the lower-left.
-        # # loc1 = S.Stroke[0, :2]
-        # # loc2 = S.Stroke[-1, :2]
-        #
-        # # make sure loc1 is the one towards the bottom left
-        # if np.sum(S.Stroke[0, :2]-cen) > np.sum(S.Stroke[-1, :2]-cen): # np.sum() does project onto (1,1).
-        #     loc1 = S.Stroke[-1, :2]
-        #     loc2 = S.Stroke[0, :2]
-        # else:
-        #     loc1 = S.Stroke[0, :2]
-        #     loc2 = S.Stroke[-1, :2]
-        # # midpoint
-        # npts = S.Stroke.shape[0]
-        # loc3 = S.Stroke[int(np.floor(npts/2)), :2]
-        #
-        # if False:
-        #     # Old version (before 2/26,24) which failed to disambig L that have same nedpoints but diff orientation
-        #     # - center --> onset
-        #     vec1 = loc1 - cen # vec from cen to onset.
-        #     angle1 = np.round(get_angle(vec1), decimals=1)
-        #     # angle_bin = bin_angle_by_direction([get_angle(vec)], num_angle_bins=16)[0] # bin the angle
-        #
-        #     # - center --> offset
-        #     vec2 = loc2 - cen # vec from cen to onset.
-        #     angle2 = np.round(get_angle(vec2), decimals=1)
-        #
-        #     # - center --> midpoint of curve (useful to disambiguate L that have same endpoint but diff orientatoin)
-        #     vec3 = loc3 - cen
-        #     angle3 = np.round(get_angle(vec3), decimals=1)
-        # else:
-        #     vec1 = loc1 - loc3 # vec from midpt to onset.
-        #     angle1 = np.round(get_angle(vec1), decimals=1)
-        #
-        #     vec2 = loc2 - loc3 # vec from midpt to offset.
-        #     angle2 = np.round(get_angle(vec2), decimals=1)
-        #
-        # # scale
-        # vec = loc1 - cen # vec from cen to onset.
-        # scale = np.round(np.linalg.norm(vec), decimals=0)
         from math import pi
-        features = self._label_stroke_features()
+        features = self._label_stroke_features() 
 
         def _vec_to_angle_bin(vec):
             a = get_angle(vec)
@@ -360,7 +317,31 @@ class PrimitiveClass(object):
             return a_binned
 
         # return as tuple
-        if version=="default":
+        if version=="hash":
+            # This gets a unique string for each stroke, based on motor features, that is more unique thatn the
+            # default. HJere takes the features from defualt, and adds also a unique hash based on the strokes
+            # pts
+            # This is useful if down the line you will define shape features -e.g , psychometric, novel prims
+            from pythonlib.tools.stroketools import strokes_to_hash_unique
+            
+            # Default features
+            shcat = features["shape_cat"]
+            scale = int(10*features["scale"]) # need this to be whole number.
+            angle1 = int(100*features["angle_midpt_to_onset"])
+            angle2 = int(100*features["angle_midpt_to_offset"])
+
+            # Hash
+            # - First center the stroke
+            # Hash shouldnt be larger than 6, since then gets to numerical imprecision. 4 is fine.
+            hashnum = strokes_to_hash_unique([self.Stroke()], 4, centerize=True, align_to_onset=False)
+
+            # label = (shcat, str(hashnum)[:3], str(hashnum)[3:6], str(hashnum)[6:])
+            # label = (shcat, str(scale), str(angle1)+str(angle2), str(hashnum)[:2], str(hashnum)[2:4], str(hashnum)[4:])
+            
+            # label = (shcat, f"{scale:.1f}", f"{angle1:.1f}{angle2:.1f}", hashnum)
+            label = (shcat, scale, f"{angle1}{angle2}", hashnum)
+
+        elif version=="default":
             # Use the actual numerical values to label this shape.
             shcat = features["shape_cat"]
             scale = features["scale"]
