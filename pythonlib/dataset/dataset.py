@@ -1487,6 +1487,14 @@ class Dataset(object):
         TT = T.Params["input_params"]
         return TT
 
+    def taskclass_extract_planclass(self, ind):
+        """
+        Return Task.Plan, custom matlab class, here
+        is a dict.
+        """
+        T = self.Dat.iloc[ind]["Task"]
+        return T.PlanDat
+
     def taskclass_extract_objectclass(self, ind):
         """ Return the Objectclass for this trial ind
         """
@@ -1704,6 +1712,10 @@ class Dataset(object):
         Wrapper for preprocessing --> Given just-generated tokens (using tokens_append_to_dataframe_column) here do all
         processing steps, e.g, derived features, like storke onset, and binned/clustered fgeatures, like onset binned.
         :return: Modifies tokens and appends columns with "seqc_" to dataset.
+
+        NOTE: for extracting semantic shape, this calls it "NOVEL" for any trial that has an extra tform in ML2
+        Plan class, which means it doesnt have well-defined shape. Problem is this currently checks entire trial, so if any
+        single prim is rotated, then this might call all of them NOVEL. Solution: incorporate code to detect "tforms_each_prim"
         """
 
         # - and get touch onset binned.
@@ -1716,17 +1728,38 @@ class Dataset(object):
         fig_final.savefig(f"{sdir}/tokens_cluster_touch_offset_loc_across_all_data.pdf")
 
         # - Get sequence context for all tokens
-        for ind in range(len(self.Dat)):
+        for ind in range(len(self.Dat)):    
+            # Determine if any shapes were transformed rotations
+            prims_extra_params = self.taskclass_extract_prims_extra_params_tforms(ind)
+            if len(prims_extra_params[0])>0 and "tforms_each_prim" in prims_extra_params[0].keys():
+                print(prims_extra_params)
+                print(prims_extra_params[0]["tforms_each_prim"])
+                assert False, "add code to apply the below step (assigning shape semantic to be NOVEL) to only the specific prims that were tformed, using the information in tforms_each_prim"
+            tforms_extra_exist = self.taskclass_check_prims_extra_params_tforms_exist_single(ind)
+
             # Beh strokes
             Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
             Tk_behdata.features_extract_wrapper(["loc_on", "angle"])
             Tk_behdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
 
-            Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
-            Tk_behdata.features_extract_wrapper(["shape_semantic"])
+            Tk_behtaskdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
+            # append extra tforms (e.g.,  novel prims).
+
+            # assert len(Tk_behtaskdata.Tokens)==len(tforms_extra)
+            # for tk, tf in zip(Tk_behtaskdata.Tokens, tforms_extra):
+            #     tk["tforms_extra"] = tf
+            for tk in Tk_behtaskdata.Tokens:
+                tk["tforms_extra_exist"] = tforms_extra_exist
+            Tk_behtaskdata.features_extract_wrapper(["shape_semantic"])
 
             # Task strokes (ignore beh)
             Tk_taskdata = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
+            # append extra tforms (e.g.,  novel prims).
+            # assert len(Tk_taskdata.Tokens)==len(tforms_extra)
+            # for tk, tf in zip(Tk_taskdata.Tokens, tforms_extra):
+            #     tk["tforms_extra"] = tf
+            for tk in Tk_taskdata.Tokens:
+                tk["tforms_extra_exist"] = tforms_extra_exist
             Tk_taskdata.features_extract_wrapper(["shape_semantic"])
             Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
 
@@ -1832,6 +1865,20 @@ class Dataset(object):
         df["token_ver"] = tk_ver
 
         return df
+
+    def tokens_assign_dataframe_back_to_self_mult(self, df, list_var_extract=None, tk_ver="beh_using_beh_data"):
+        """Helper to assign multiple or all (if list_var_extract is None) variables back to tokens
+        :param df: _description_
+        :param list_var_extract: _description_, defaults to None
+        :param tk_ver: _description_, defaults to "beh_using_beh_data"
+        """
+        if list_var_extract is None:
+            # Take all vars
+            list_var_extract = [var for var in df.columns if var not in ["trialcode", "ind_taskstroke_orig",
+                                                                         "idx", "idx_tok", "stroke_index"]]
+        for var_extract in list_var_extract:
+            print("Returning this var to tokens...:", var_extract)
+            self.tokens_assign_dataframe_back_to_self(df, var_extract, tk_ver)
 
     def tokens_assign_dataframe_back_to_self(self, df, var_extract, tk_ver="beh_using_beh_data",
                                              var_name_assign=None):
@@ -2549,6 +2596,40 @@ class Dataset(object):
 
         return sorted(list(set(shapes)))
 
+    def taskclass_extract_prims_extra_params_tforms(self, ind):
+        """
+        Return dict holding extra params applied to prims, including tforms,
+        and rotations (e.g., novel prims)
+        RETURNS:
+        - prims_extra_params, list of dicts, not sure why it is list of dicts and not just
+        dict. len(prims_extra_params) is not necesarily the len strokes.
+        --- prims_extra_params[0]["tforms] -->
+            [['th', array(0.67319843)]]
+            (For a case with 2 strokes, got that)
+        """
+        P = self.taskclass_extract_planclass(ind)
+        if "PrimsExtraParams" not in P.keys():
+            prims_extra_params = []
+        else:
+            prims_extra_params = P["PrimsExtraParams"]
+        
+        # if len(tforms)>0:
+        #     nstrokes = len(self.Dat.iloc[ind]["strokes_beh"])
+        #     if not len(tforms)==nstrokes:
+        #         print(tforms)
+        #         print(len(tforms), nstrokes)
+        #         assert False
+        
+        return prims_extra_params
+
+    def taskclass_check_prims_extra_params_tforms_exist_single(self, ind):
+        """ check if, for this trial, if additiaonl tforms to prims in matlab code. 
+        if so, then cannot represnt them as line-10-0-1... etc.
+        """
+        # tforms = self.taskclass_extract_prims_extra_params_tforms(ind)
+        T = self.Dat.iloc[ind]["Task"]
+        return T.check_prims_extra_params_exist()
+    
     def taskclass_check_prims_extra_params_tforms_exist(self):
         """ check if, out of all trials, any of them applyh
         additiaonl tforms to prims in matlab code. if so, then
@@ -2559,8 +2640,9 @@ class Dataset(object):
         if not hasattr(self, "_TaskclassCheckPrimsExtraParams"):
             self._TaskclassCheckPrimsExtraParams=False
             for ind in range(len(self.Dat)):
-                T = self.Dat.iloc[ind]["Task"]
-                if T.check_prims_extra_params_exist():
+                if self.taskclass_check_prims_extra_params_tforms_exist_single(ind):
+                # T = self.Dat.iloc[ind]["Task"]
+                # if T.check_prims_extra_params_exist():
                     self._TaskclassCheckPrimsExtraParams=True
                     break
         return self._TaskclassCheckPrimsExtraParams
@@ -6810,6 +6892,8 @@ class Dataset(object):
                 window_time = 0.2
             elif self.animals(True)[0]=="Pancho":
                 window_time = 0.1
+            elif self.animals(True)[0]=="Luca":
+                window_time = 0.12
             else:
                 assert False
 
@@ -7182,13 +7266,17 @@ class Dataset(object):
             take_top_n_inner=take_top_n_inner)
 
     ################# EXTRACT DATA AS OTHER CLASSES
-    def behclass_preprocess_wrapper(self, reset_tokens=True, skip_if_exists=True):
+    def behclass_preprocess_wrapper(self, reset_tokens=True, skip_if_exists=True,
+                                    reclassify_shape_using_stroke_version="default",
+                                    tokens_gridloc_snap_to_grid=False):
         """ Wrapper of general preprocess steps for entire datset. SKIPS if it detects
         that BehClass already extracted.
         Also skips if the self.TokensVersion is "regenerated_from_raw", which means all tokens, shapes
         etc will never use BehClass...
         PARAMS;
         - reset_tokens, then resets the tokens in TaskClass, if they exist
+
+        NOTE: This is the ONLY place that tokens are extracted initially.
         """
 
         if not hasattr(self, "TokensVersion"):
@@ -7207,7 +7295,9 @@ class Dataset(object):
                 pass
             else:
                 # generate
-                self._behclass_generate_alltrials(reset_tokens=reset_tokens)
+                self._behclass_generate_alltrials(reset_tokens=reset_tokens,
+                                                  reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                                  tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
 
                 # Prune cases where beh did not match any task strokes.
                 # NOTE: added here 2/21/24, used to be in dataset_strokes.py (_prepare_dataset)
@@ -7246,18 +7336,25 @@ class Dataset(object):
         Beh = BehaviorClass(params, "dataset", reset_tokens=reset_tokens)
         return Beh
 
-    def _behclass_generate_alltrials(self, reset_tokens=False):
+    def _behclass_generate_alltrials(self, reset_tokens=False,
+                                     reclassify_shape_using_stroke_version="default",
+                                     tokens_gridloc_snap_to_grid=False):
         """ Generate list of behClass objects, one for each trial,
         and stores as part of self.
         RETURNS:
         - self.Dat["BehClass"], list of beh class iunstance.
+
+        NOTE: This is the ONLY place that tokens are extracted initially.
+
         """
         ListBeh = [self.behclass_generate(i, reset_tokens=reset_tokens) for i in range(len(self.Dat))]
         self.Dat["BehClass"] = ListBeh 
         
         try:
             self._behclass_alignsim_compute()
-            self._behclass_tokens_extract_datsegs(use_global_grid=True)         
+            self._behclass_tokens_extract_datsegs(use_global_grid=True,
+                                                  reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                                  tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)         
         except Exception as err:
             # dont exit with partial behclass
             del self.Dat["BehClass"]
@@ -7268,13 +7365,17 @@ class Dataset(object):
 
 
     def _behclass_tokens_extract_datsegs(self, use_global_grid=True,
-                                         ind=None):
+                                         ind=None,
+                                         reclassify_shape_using_stroke_version="default",
+                                         tokens_gridloc_snap_to_grid=False):
         """ Extract, single time, all task datsegs toekns.
         PARAMS:
         - use_global_grid, bool, if True, then gets gridx and gridx across
         all tasks in this dataset. otherwise uses the grid specific to each
         task.
         - ind, either None (gets all) or a single trial.
+
+        NOTE: This is the ONLY place that tokens are extracted when dataset is constructed.
         """
 
         if use_global_grid:
@@ -7291,13 +7392,17 @@ class Dataset(object):
             for i in range(len(self.Dat)):
                 Beh = self.Dat.iloc[i]["BehClass"]
                 Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
-                                             reclassify_shape_using_stroke=reclassify_shape_using_stroke)
+                                             reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+                                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
                 if i%200==0:
                     print(i, "_behclass_tokens_extract_datsegs")
         else:
             Beh = self.Dat.iloc[ind]["BehClass"]
             Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
-                                         reclassify_shape_using_stroke=reclassify_shape_using_stroke)
+                                         reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+                                         reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                         tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
 
     def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
@@ -10037,8 +10142,6 @@ class Dataset(object):
         if ploton:
             Beh = self.Dat.iloc[ind]["BehClass"]
             datsegs = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", plot=False)
-            # Beh.alignsim_extract_datsegs()
-            # # datsegs = Beh.Alignsim_Datsegs
             for x in datsegs:
                 print(x)
             Beh.alignsim_plot_summary()
@@ -10392,7 +10495,10 @@ class Dataset(object):
             """
             from pythonlib.tools.stringtools import decompose_string
             tmp = decompose_string(sh)
-            assert len(tmp)==4
+            if not len(tmp)==4:
+                print(sh)
+                print(tmp)
+                assert False
             shcode = tmp[0][0] + tmp[1] + tmp[2] + tmp[3]
             return shcode
 
@@ -10522,7 +10628,7 @@ class Dataset(object):
         return self.make_savedir_for_analysis_figures(analysis_name, date_first=True)
 
     def make_savedir_for_analysis_figures(self, analysis_name, date_first=False):
-        from pythonlib.globals import PATH_ANALYSIS_OUTCOMES, PATH_DATA_BEHAVIOR_RAW
+        from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
         # animal = self.animals()
         # expt = self.expts()
         # rulelist = self.rules()
@@ -11808,7 +11914,7 @@ class Dataset(object):
 
         # what are rows
         if row_levels is None:
-            row_levels = sorted(df[row_variable].unique().tolist())
+            row_levels = sort_mixed_type(df[row_variable].unique().tolist())
 
         # To number from 0, 1, ... for within each row level, iterate over them
         # and each time reset their index, then save the index.

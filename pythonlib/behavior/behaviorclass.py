@@ -478,7 +478,8 @@ class BehaviorClass(object):
 
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
-            include_scale=True, input_grid_xy=None, reclassify_shape_using_stroke=False):
+            include_scale=True, input_grid_xy=None, reclassify_shape_using_stroke=False,
+            reclassify_shape_using_stroke_version = "default", tokens_gridloc_snap_to_grid=False):
         """
         [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
@@ -498,6 +499,8 @@ class BehaviorClass(object):
         - self.Alignsim_Datsegs_BehLength, legnth of beh stroke, where each index is corresponds to
         its same index in beh. This means can have a tasktrokes used multipe times. THis is based on
         indepednetly matching each beh stroke to its best-matching task stroke.
+
+        NOTE: This is the ONLY place that Task.tokens_generate is run.
         """
         import copy
 
@@ -546,7 +549,9 @@ class BehaviorClass(object):
         Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
             assert_computed=False,
             include_scale=include_scale, input_grid_xy=input_grid_xy,
-                             reclassify_shape_using_stroke=reclassify_shape_using_stroke) # generate the defualt order
+                             reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid) # generate the defualt order
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted

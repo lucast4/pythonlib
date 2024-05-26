@@ -14,7 +14,7 @@ from pythonlib.tools.snstools import rotateLabel
 
 def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
         microstim_version=False, prune_strokes=False,
-        VARS_CONTEXT=None):
+        VARS_CONTEXT=None, lenient_preprocess=False):
     """
     [GOOD}]
     GAPSTROKES -- analysis of gaps and strokes...
@@ -25,21 +25,29 @@ def gapstrokes_preprocess_extract_strokes_gaps(D, params_preprocess=None,
     """
     SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("motortiming_gapstrokes")
 
-    if False: # I dont think the below holds. its just for grammarchunks_preprocess_and_plot
-        # To do this analysis, you must onlyu include cases with one to one match of beh to task stroke.
-        # Otherwise there is mismatch: chekcing if beh matches parses uses "first touch" whereas assigning chunk
-        # to beh stroke must to for each beh stroke, regardless of whether is first touch.
-        # D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
-        D.preprocessGood(params=["one_to_one_beh_task_strokes"])
+    if False:
+        if False: # I dont think the below holds. its just for grammarchunks_preprocess_and_plot
+            # To do this analysis, you must onlyu include cases with one to one match of beh to task stroke.
+            # Otherwise there is mismatch: chekcing if beh matches parses uses "first touch" whereas assigning chunk
+            # to beh stroke must to for each beh stroke, regardless of whether is first touch.
+            # D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
+            D.preprocessGood(params=["one_to_one_beh_task_strokes"])
+        else:
+            D.preprocessGood(params=["one_to_one_beh_task_strokes_allow_unfinished"])
+
+        if params_preprocess is not None:
+            D.preprocessGood(params=params_preprocess)
+
+        # Generate DatStrokes
+        from pythonlib.dataset.dataset_strokes import DatStrokes
+        DS = DatStrokes(D)
     else:
-        D.preprocessGood(params=["one_to_one_beh_task_strokes_allow_unfinished"])
-
-    if params_preprocess is not None:
-        D.preprocessGood(params=params_preprocess)
-
-    # Generate DatStrokes
-    from pythonlib.dataset.dataset_strokes import DatStrokes
-    DS = DatStrokes(D)
+        from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
+        if lenient_preprocess:
+            DS = preprocess_dataset_to_datstrokes(D, "all_no_clean")
+            prune_strokes = False
+        else:
+            DS = preprocess_dataset_to_datstrokes(D, "clean_one_to_one")
 
     # Condition for gapstrokes analyses.
     DS = _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=microstim_version,

@@ -482,7 +482,7 @@ def _groupingParams(D, expt):
         reclassify_shape_using_stroke_version = "hash"
         
     elif expt in ["primsingridrand8"]:
-    # Novel prims, wnat to rename shapes using hash.
+        # Novel prims, wnat to rename shapes using hash.
         # (ROTATIONS)
         reclassify_shape_using_stroke_version = "hash"
     

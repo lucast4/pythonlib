@@ -23,6 +23,7 @@ from pythonlib.tools.plottools import savefig
 import seaborn as sns
 from pythonlib.tools.pandastools import append_col_with_grp_index
 from pythonlib.tools.listtools import sort_mixed_type
+
 def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
     """ helper to apply correct prprocessing, given
     different objectives. This I usually place within
@@ -42,6 +43,49 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # e.g., for novel single prims..
         D.preprocessGood(params=["no_supervision", "remove_online_abort"])
         DS = DatStrokes(D)
+    
+    elif version=="singleprim_psycho":
+        # single prims, but for psycho wheihc means (i) aloows if mulitpel strokes and (ii) more lenient overall,
+        # to allow failures, etc, which often happen for novel shapes
+        
+        remove_online_abort = False
+        frac_touched_min = 0.05
+        ft_decim_min = 0.1
+        shortness_min = 0.1
+
+        min_stroke_length = 50
+        min_stroke_dur = 0.1
+        # beh_task_dist_too_large = 80 
+
+        # check that only one stroke per task. otherwise shold not call this
+        if "FEAT_num_strokes_task" not in D.Dat.columns:
+            D.extract_beh_features(feature_list = ("num_strokes_task"))
+            D.Dat = D.Dat[D.Dat["FEAT_num_strokes_task"]==1].reset_index(drop=True)
+        
+        D.preprocessGood(params=["beh_strokes_at_least_one",
+                                 "no_supervision"],
+                        #  frac_touched_min=frac_touched_min,
+                        #  ft_decim_min=ft_decim_min,
+                        #  shortness_min = shortness_min
+                         )
+        if remove_online_abort:
+            D.preprocessGood(params=["remove_online_abort"])
+
+        DS = DatStrokes(D)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "stroke_too_quick"]
+        params = {
+            "min_stroke_length":min_stroke_length,
+            "min_stroke_dur":min_stroke_dur
+        }
+        DS.distgood_compute_beh_task_strok_distances()
+        n1 = len(DS.Dat)
+        DS.clean_preprocess_data(methods=methods, params=params)
+        # DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
+        n2 = len(DS.Dat)
+        assert n2/n1>0.75, "why removed so much data?"
+
 
     elif version=="singleprim":
         # Super clean
@@ -1991,6 +2035,7 @@ class DatStrokes(object):
             df = applyFunctionToAllRows(df, F, "strokes_beh").copy()        
         else:
             df = df.copy()
+
         figbeh, figtask = plotwrapper_draw_grid_rows_cols(df, rowvar, colvar, 
             n_examples_per_sublot=n_examples_per_sublot, sort_colvar=True, plot_task=plot_task)
         return figbeh, figtask
@@ -2002,6 +2047,17 @@ class DatStrokes(object):
         PARAMS:
         - othervar, string, column in self.Dat (caregorical)
         """
+
+        if plot_task:
+            # NEed to extract strokes beh and task
+            list_strokes_task = self.extract_strokes("list_list_arrays", ver_behtask="task_aligned_single_strok")
+            self.Dat["strokes_task"] = list_strokes_task
+
+        if False:
+            if (len(self.Dat[rowvar].unique()) * len(self.Dat[colvar].unique()))>200:
+                print((len(self.Dat[rowvar].unique()) * len(self.Dat[colvar].unique())))
+                assert False, "this will take very long itme ot plot..."
+
         df = self.Dat
         figbeh, figtask = self._plotshape_row_col_vs_othervar(df, rowvar, colvar, n_examples_per_sublot,
             plot_task)
@@ -2505,7 +2561,7 @@ class DatStrokes(object):
 
         return map_shape_to_shapesemantic
     
-    def shapesemantic_classify_novel_shapes_prims(self, PRINT_RESULTS=True):
+    def shapesemantic_classify_novel_shapes_prims_OBSOLETE(self, PRINT_RESULTS=True):
         """
         For each row, determine whether its shape is novel or learned, based on this animals' prim set
         RETURNS:

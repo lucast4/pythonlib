@@ -866,10 +866,10 @@ class TaskClass(object):
         if not self.compare_on_same_grid(TaskOther):
             return False
 
-        datseg1 = self.tokens_generate()
+        datseg1 = self.tokens_generate(assert_computed=True)
         locations1 = sorted(set([d["gridloc"] for d in datseg1]))
 
-        datseg2 = TaskOther.tokens_generate()
+        datseg2 = TaskOther.tokens_generate(assert_computed=True)
         locations2 = sorted(set([d["gridloc"] for d in datseg2]))
 
         return locations1 == locations2
@@ -1240,7 +1240,9 @@ class TaskClass(object):
     def tokens_generate(self, params = None, inds_taskstrokes=None, 
         track_order=True, hack_is_gridlinecircle=False, assert_computed=True,
         include_scale=False, input_grid_xy=None, return_as_tokensclass=False,
-                        reclassify_shape_using_stroke=False):
+                        reclassify_shape_using_stroke=False,
+                        reclassify_shape_using_stroke_version="default",
+                        tokens_gridloc_snap_to_grid=False):
         """ [CONFIRMED - this is the ONLY place where self._DatSegs is accessed (across
         all code files).
         Wrapper to eitehr create new or to return cached. see
@@ -1278,7 +1280,9 @@ class TaskClass(object):
             datsegs = self._tokens_generate(params, inds_taskstrokes, track_order, 
                 hack_is_gridlinecircle=hack_is_gridlinecircle, 
                 include_scale=include_scale, input_grid_xy=input_grid_xy,
-                                            reclassify_shape_using_stroke=reclassify_shape_using_stroke)
+                                            reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+                                            reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                            tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
             self._DatSegs = datsegs
             tokens = self._DatSegs
 
@@ -1314,7 +1318,7 @@ class TaskClass(object):
         import copy
 
         # Shallow copy is good enough, becuase you just want to avoid replacing the
-        datsegs_new = self.tokens_generate()
+        datsegs_new = self.tokens_generate(assert_computed=True)
         # datsegs_new = [copy.copy(d) for d in self._DatSegs]
         datsegs_new = [datsegs_new[i] for i in inds_taskstrokes]
         return self._tokens_generate_relations(datsegs_new)
@@ -1339,7 +1343,9 @@ class TaskClass(object):
 
     def _tokens_generate(self, params = None, inds_taskstrokes=None, 
             track_order=True, hack_is_gridlinecircle=False, include_scale=True,
-            input_grid_xy = None, reclassify_shape_using_stroke=False):
+            input_grid_xy = None, reclassify_shape_using_stroke=False,
+            reclassify_shape_using_stroke_version="default",
+            tokens_gridloc_snap_to_grid=False):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
         generates and caches. To reorder, see tokens_reorder]
@@ -1358,6 +1364,8 @@ class TaskClass(object):
         - input_grid_xy, either None (extracts grid params for this task auto), or a 
         list of two arrays [gridx, gridy] where each array is sorted (incresaing) scalar coordinates
         for each grid location.
+        - tokens_gridloc_snap_to_grid, bool, if True, then assigns each stroke to a grid location even
+        if it doesnt perfectly match, by "snapping" to it, with some sanityc checks that is is close.
         RETURNS:
         - datsegs, list of dicts, each a token.
         """
@@ -1507,7 +1515,8 @@ class TaskClass(object):
             # return string
             if reclassify_shape_using_stroke:
                 sh = Prims[i].label_classify_prim_using_stroke(return_as_string=True,
-                                               shape_rename_perfblockey_decimals_to_defaults=shape_rename_perfblockey_decimals_to_defaults)
+                                               shape_rename_perfblockey_decimals_to_defaults=shape_rename_perfblockey_decimals_to_defaults,
+                                               version=reclassify_shape_using_stroke_version)
 
                 return sh
             else:
@@ -1555,36 +1564,85 @@ class TaskClass(object):
                     # print("---", i, xloc, yloc)
                     
                     if not isin_close(xloc, xgrid, atol=ATOL)[0] or not isin_close(yloc, ygrid, atol=ATOL)[0]:
-                        # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
-                        # leads to the x y locations off-grid. Look into the original Relations struct to get the 
-                        # grid loc.
-                        a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
-                        b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim"] # meaning: is relation rel sketchpad.
-                        c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho"] # ones where this fails. add to this list.
-                        d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # only coded for this so far.
-                        e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 # only coded for this so far.
-                        if not d or not e:
-                            print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2])
-                            print(*self.PlanDat["Rels"])
-                            assert False, "are these grid units or continuos? if grid, then use them for the cetner.. if not, then use Relations, not RelsBeforeRescaleToGrid?"
-                        if self.PlanDat["RelsBeforeRescaleToGrid"][i][0]=="translate_xy" and a and b and c and d and e:
-                            # Then is actually on grid!
-                            xind = 0
-                            yind = 0
-                             # 'RelsBeforeRescaleToGrid': [['translate_xy',
-                             #   array(0.),
-                             #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
-                        else:
-                            # not sure why failed...
-                            print(self.PlanDat["RelsBeforeRescaleToGrid"])
-                            self.plotStrokes()
-                            print("---")
-                            print(prms, xgrid, ygrid)
-                            print(isin_close(prms["x"], xgrid, atol=ATOL))
-                            print("---")
-                            print(self.PlanDat["RelsBeforeRescaleToGrid"])
-                            assert False, "prob just need to input it."
+                        # Option 1 -- you state that this day everythign must be "snapped" to grid. Will then snap to closest grid location.
+                        # snap_to_grid = True
 
+                        if tokens_gridloc_snap_to_grid:
+                            def _snap_to_grid(loc, grid):
+                                """
+                                - loc, scalar value
+                                - grid, array of values (e.g., [0,1,2] represnting x coord.)
+                                """
+                                _diffs = np.abs(grid - loc)
+                                _ind = np.argmin(_diffs)
+
+                                # Sanity check that this is actually close to that grid location
+                                assert _diffs[_ind] < 0.8, "is kind of far - are you sure you want to snap it?"
+                                if len(grid)>1:
+                                    if not _diffs[_ind]/sorted(_diffs)[1]<0.65:
+                                        print(_diffs)
+                                        print(_ind)
+                                        print(_diffs[_ind], " --- ", sorted(_diffs))
+                                        assert False, "loc is relatively not that close to the grid.."
+                                return _ind 
+
+                            try:
+                                _xind = _snap_to_grid(xloc, xgrid)
+                                _yind = _snap_to_grid(yloc, ygrid)
+                            except Exception as err:
+                                print(xloc, xgrid)
+                                print(yloc, ygrid)
+                                raise err
+
+                            xind = int(_xind) - int((nhor-1)/2)
+                            yind = int(_yind) - int((nver-1)/2)
+
+                        else:
+                            # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
+                            # leads to the x y locations off-grid. Look into the original Relations struct to get the 
+                            # grid loc.
+                            a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
+                            b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim", "center_prim_sketchpad"] # meaning: is relation rel sketchpad.
+                            c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho", "onset_diego"] # ones where this fails. add to this list.
+                            d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # i.e., (0,0), which means center of page. only coded for this so far, since this was written fro Pancho, and all prims were at center. Assuming this allows me to hard code xind = yind = 0 below.
+                            e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 
+
+                            if c:
+                                if True:
+                                    # Then has no defined gridloc, since is alinged to stroke onset. I previsoly forced it to (0,0) wjhen was doing tasks with all at center,
+                                    # but ing eneral this is not right. So now just wait to define later in Dataset (5/16/24)
+                                    xind = yind = "IGN"
+                                    grid_ver = "on_rel"
+                                else:
+                                    # Old version, where I forced it to be at (0,0), based on one day's expts with Pancho.
+                                    if not d or not e:
+                                        print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2])
+                                        print(*self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2])
+                                        print(*self.PlanDat["Rels"])
+                                        print("THIS IS IT? center before shift to pancho/diego onset...?", self.PlanDat["CentersAfterConcat"])
+                                        print(a,b,c,d,e)
+                                        print("xgrid, ygrid:", xgrid, ygrid)
+                                        print("THSI TASK: xgrid, ygrid:", xgrid_thistask, ygrid_thistask)
+                                        # print(self.get_grid_xy())
+                                        # print(self._get_grid_ver_manual(xgrid, ygrid, ))
+                                        assert False, "are these grid units or continuos? if grid, then use them for the cetner.. if not, then use Relations, not RelsBeforeRescaleToGrid?"
+                                    if self.PlanDat["RelsBeforeRescaleToGrid"][i][0]=="translate_xy" and a and b and c and d and e:
+                                        # Then is actually on grid! And it is at center (based on d and e being true).
+                                        xind = 0
+                                        yind = 0
+                                        # 'RelsBeforeRescaleToGrid': [['translate_xy',
+                                        #   array(0.),
+                                        #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
+                            else:
+                                # not sure why failed...
+                                print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                                self.plotStrokes()
+                                print("---")
+                                print(prms, xgrid, ygrid)
+                                print(isin_close(prms["x"], xgrid, atol=ATOL))
+                                print("---")
+                                print(self.PlanDat["RelsBeforeRescaleToGrid"])
+                                assert False, "prob just need to input it."
                     else:
                         # Good, got grid locations.
                         xind = int(isin_close(xloc, xgrid, atol=ATOL)[1][0]) - int((nhor-1)/2)
