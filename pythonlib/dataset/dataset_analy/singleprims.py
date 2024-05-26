@@ -13,25 +13,26 @@ import seaborn as sns
 def preprocess_dataset(D, PLOT=True):
     """
     """
+    from pythonlib.dataset.dataset_strokes import DatStrokes
 
     # D = D.copy()
     # D.Dat = D.Dat[D.Dat["task_kind"] == "prims_single"].reset_index(drop=True)
 
+    assert "seqc_0_shape" in D.Dat.columns
+
     SAVEDIR = D.make_savedir_for_analysis_figures("singleprims")
     D.taskclass_gridsize_assign_column()
     D.seqcontext_preprocess()
+    D.sketchpad_fixation_append_as_string()
 
-    assert "seqc_0_shape" in D.Dat.columns
-
-    from pythonlib.dataset.dataset_strokes import DatStrokes
     DS = DatStrokes(D)
-    assert "seqc_0_shape" in D.Dat.columns
+    DS.dataset_append_column("epoch") 
+    DS.dataset_append_column("origin_string") 
 
     if PLOT:
         ### PLOt drawings of all conjucntions
         plot_drawings_grid_conjunctions(DS, SAVEDIR)
         # DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_to_extract_stroke_variations_in_single_subplot="gridsize", n_examples=1);
-
 
         # Plot (row, col, location in suplot) = (size, shape, loc)
         sdir = f"{SAVEDIR}/shape_size_loc_drawings"
@@ -51,6 +52,28 @@ def preprocess_dataset(D, PLOT=True):
         conjunctions_print_plot_all([D], SAVEDIR, ANALY_VER="singleprim")
         plt.close("all")
         assert "seqc_0_shape" in D.Dat.columns
+
+        # PLOT COnjunctions... (this fails if incluyde in conjunctions_print_plot_all, becuase it doenst have loc on clust.)
+        from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+        sdir = f"{SAVEDIR}/conjunctions_2"
+        os.makedirs(sdir, exist_ok=True)
+        for task_kind in ["prims_single", "prims_on_grid"]:
+            dfthis = DS.Dat[DS.Dat["task_kind"]==task_kind].reset_index(drop=True)
+
+            if len(dfthis)>5:
+                # If variation in fixation onset location and loc_on_clust(align to touch onset)
+                fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1=("shape", "gridloc"), var2="origin_string", vars_others=["stroke_index"])
+                path = f"{sdir}/STROKELEVEL-conjunctions_shape_gridloc_origin_string-task_kind_{task_kind}.pdf"
+                savefig(fig, path)
+
+                fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1=("shape", "loc_on_clust"), var2="origin_string", vars_others=["stroke_index"])
+                path = f"{sdir}/STROKELEVEL-conjunctions_shape_loc_on_clust_origin_string-task_kind_{task_kind}.pdf"
+                savefig(fig, path)
+
+                fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, var1="loc_on_clust", var2="shape", vars_others=["stroke_index", "origin_string"])
+                path = f"{sdir}/STROKELEVEL-conjunctions_loc_on_clust-shape-origin_string-task_kind_{task_kind}.pdf"
+                savefig(fig, path)
+        plt.close("all")
 
         ### Plot scores (beh)
         sdir = f"{SAVEDIR}/beh_eval_scores"
@@ -133,7 +156,12 @@ def preprocess_dataset(D, PLOT=True):
 
 
 def plot_drawings_grid_conjunctions(DS, SAVEDIR):
-    
+    """ Plot drawings in grid.
+
+    :param DS: _description_
+    :param SAVEDIR: _description_
+    """
+
     # pull out strokes into a column called "strokes"
     list_stroke = []
     for ind in range(len(DS.Dat)):
@@ -144,47 +172,104 @@ def plot_drawings_grid_conjunctions(DS, SAVEDIR):
     sdir = f"{SAVEDIR}/drawings_grid_conjunctions"
     os.makedirs(sdir, exist_ok=True)
     niter = 3
-    for i in range(niter):
-        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
-        path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
-        savefig(fig, path)
 
-        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
-        path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
-        savefig(fig, path)
 
-        fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
-        path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
-        savefig(fig, path)
+    # for i in range(niter):
+    #     fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
+    #     path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
+    #     savefig(fig, path)
 
-        plt.close("all")
+    #     fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
+    #     path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
+    #     savefig(fig, path)
+
+    #     fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
+    #     path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
+    #     savefig(fig, path)
+
+    #     if "loc_on_clust" in DS.Dat.columns:
+    #         fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="loc_on_clust", colvar="shape", n_examples_per_sublot=3)
+    #         path = f"{sdir}/loc_on_clust-vs-shape-{i}.pdf"
+    #         savefig(fig, path)
+
+    #     plt.close("all")
     
     # SEPARATE for each epoch
     DS.dataset_append_column("epoch") 
     list_epoch = DS.Dat["epoch"].unique().tolist()
+    # for ep in list_epoch:
+    #     ds = DS.copy()
+    #     ds.Dat = ds.Dat[ds.Dat["epoch"]==ep]
+
+    #     if len(ds.Dat)>8:
+    #         sdir = f"{SAVEDIR}/drawings_grid_conjunctions/epoch_{ep}"
+    #         os.makedirs(sdir, exist_ok=True)
+
+    #         niter = 3
+    #         for i in range(niter):
+
+    #             print("singleprims.plot_drawings_grid_conjunctions()", ep, i)
+
+    #             fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
+    #             path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
+    #             savefig(fig, path)
+
+    #             fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
+    #             path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
+    #             savefig(fig, path)
+
+    #             fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
+    #             path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
+    #             savefig(fig, path)
+
+    #             if "loc_on_clust" in DS.Dat.columns:
+    #                 fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="loc_on_clust", colvar="shape", n_examples_per_sublot=3)
+    #                 path = f"{sdir}/loc_on_clust-vs-shape-{i}.pdf"
+    #                 savefig(fig, path)
+
+    #             plt.close("all")    
+
+    # Separate for each fixation onset location
+    niter = 3
+    list_origin_string = DS.Dat["origin_string"].unique().tolist()
     for ep in list_epoch:
-        ds = DS.copy()
-        ds.Dat = ds.Dat[ds.Dat["epoch"]==ep]
+        for origin_string in list_origin_string:
+            ds = DS.copy()
+            ds.Dat = ds.Dat[
+                (ds.Dat["epoch"]==ep) & (ds.Dat["origin_string"]==origin_string)
+                ].reset_index(drop=True)
 
-        if len(ds.Dat)>8:
-            sdir = f"{SAVEDIR}/drawings_grid_conjunctions/epoch_{ep}"
-            os.makedirs(sdir, exist_ok=True)
+            if len(ds.Dat)>8:
+                sdir = f"{SAVEDIR}/drawings_grid_conjunctions/epoch={ep}--origin_string={origin_string}"
+                os.makedirs(sdir, exist_ok=True)
 
-            niter = 3
-            for i in range(niter):
+                for i in range(niter):
 
-                print("singleprims.plot_drawings_grid_conjunctions()", ep, i)
+                    print("singleprims.plot_drawings_grid_conjunctions()", ep, i)
 
-                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
-                path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
-                savefig(fig, path)
+                    fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="shape", n_examples_per_sublot=3)
+                    path = f"{sdir}/gridsize-vs-shape-{i}.pdf"
+                    savefig(fig, path)
 
-                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
-                path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
-                savefig(fig, path)
+                    fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridloc", colvar="shape", n_examples_per_sublot=3)
+                    path = f"{sdir}/gridloc-vs-shape-{i}.pdf"
+                    savefig(fig, path)
 
-                fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
-                path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
-                savefig(fig, path)
+                    fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="gridsize", colvar="gridloc", n_examples_per_sublot=3)
+                    path = f"{sdir}/gridsize-vs-gridloc-{i}.pdf"
+                    savefig(fig, path)
 
-                plt.close("all")
+                    if "loc_on_clust" in DS.Dat.columns:
+                        fig, _ = ds.plotshape_row_col_vs_othervar(rowvar="loc_on_clust", colvar="shape", n_examples_per_sublot=3)
+                        path = f"{sdir}/loc_on_clust-vs-shape-{i}.pdf"
+                        savefig(fig, path)
+
+                    plt.close("all")    
+
+    sdir = f"{SAVEDIR}/drawings_grid_conjunctions/all_epoch-origin_string"
+    os.makedirs(sdir, exist_ok=True)
+    if len(list_origin_string)>0:
+        for i in range(niter):
+            fig, _ = DS.plotshape_row_col_vs_othervar(rowvar="loc_on_clust", colvar="origin_string", n_examples_per_sublot=5)
+            path = f"{sdir}/loc_on_clust-vs-origin_string-{i}.pdf"
+            savefig(fig, path)

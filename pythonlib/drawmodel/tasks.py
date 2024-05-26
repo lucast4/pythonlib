@@ -1571,7 +1571,8 @@ class TaskClass(object):
         dict_novel_prims = self.planclass_inputed_plan_extract_novelprims()
         from pythonlib.tools.listtools import stringify_list
 
-        if False: # This doesnt work, since you need to run this inputing all tasks for the day. 
+        if False: # I tried this, but never implemented, since I realied this
+            #  doesnt work, since you need to run this inputing all tasks for the day. 
             # strategy, check that all hash unique. if so, then just use index...
             map_hashnum_indprim = {}
             for indprim, params in dict_novel_prims.items():

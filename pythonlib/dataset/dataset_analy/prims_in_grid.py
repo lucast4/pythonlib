@@ -215,47 +215,49 @@ def preprocess_dataset(D, doplots=False):
                     Dthis = D.copy()
                     Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"] == "prims_on_grid"].reset_index(drop=True)
                     Dthis.Dat = Dthis.Dat[Dthis.Dat["grammar_score_string"].isin(OUTCOMES)].reset_index(drop=True) 
-                    DSthis = DatStrokes(Dthis)
 
-                    savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
-                    os.makedirs(savedir, exist_ok=True)
+                    if len(Dthis.Dat)>5:
+                        DSthis = DatStrokes(Dthis)
 
-                    dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
-                    if dfabort is None:
-                        # no data
-                        continue
-                    # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
-            
-                    # Plto fraction of cases aborted
-                    sdir = f"{savedir}/cause_of_abort_frac_of_success"
-                    os.makedirs(sdir, exist_ok=True)
-                    
-                    from pythonlib.tools.snstools import heatmap
-                    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+                        savedir = f"{SAVEDIR}/ABORTS-{OUTCOMES_CODE}"
+                        os.makedirs(savedir, exist_ok=True)
 
-                    fig = heatmap(dfheat_abort)[0]
-                    savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
-
-                    if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
-                        # Is probably becusae lack any trials of some shape for one of them, liek this:
-                        # ['line-8-3-0', 'line-8-4-0']
-                        # ['V-2-4-0', 'line-8-3-0', 'line-8-4-0']
-                        # - just skip for now.
-                        if False:
-                            print(dfheat_abort.index.tolist())
-                            print(dfheat_succ.index.tolist())
-                            assert False
-                        else:
+                        dfabort, dfheat_abort = plot_abort_cause(Dthis, DSthis, savedir, "abort") 
+                        if dfabort is None:
+                            # no data
                             continue
+                        # dfsucc, dfheat_succ = plot_abort_cause(Dthis, DSthis, savedir, "success")
+                
+                        # Plto fraction of cases aborted
+                        sdir = f"{savedir}/cause_of_abort_frac_of_success"
+                        os.makedirs(sdir, exist_ok=True)
+                        
+                        from pythonlib.tools.snstools import heatmap
+                        from pythonlib.tools.pandastools import convert_to_2d_dataframe
 
-                    dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
-                    dfheat_ntrials = dfheat_abort + dfheat_succ
+                        fig = heatmap(dfheat_abort)[0]
+                        savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
 
-                    fig = heatmap(dfheat_abort_frac)[0]
-                    savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+                        if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
+                            # Is probably becusae lack any trials of some shape for one of them, liek this:
+                            # ['line-8-3-0', 'line-8-4-0']
+                            # ['V-2-4-0', 'line-8-3-0', 'line-8-4-0']
+                            # - just skip for now.
+                            if False:
+                                print(dfheat_abort.index.tolist())
+                                print(dfheat_succ.index.tolist())
+                                assert False
+                            else:
+                                continue
 
-                    fig = heatmap(dfheat_ntrials)[0]
-                    savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+                        dfheat_abort_frac = dfheat_abort / (dfheat_succ + dfheat_abort)
+                        dfheat_ntrials = dfheat_abort + dfheat_succ
+
+                        fig = heatmap(dfheat_abort_frac)[0]
+                        savefig(fig, f"{sdir}/heatmap-frac_abort.pdf")
+
+                        fig = heatmap(dfheat_ntrials)[0]
+                        savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
 
             plotscore_all(DS, SAVEDIR)
             plotdrawings_all(DS, SAVEDIR)
