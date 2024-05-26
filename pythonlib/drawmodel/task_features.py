@@ -19,7 +19,7 @@ def shapes_n_each_extract(Task, list_shapes, shape_key="shapeabstract"):
     - n_left_over, int, how many shapes in Task were not detected?
     """
 
-    tokens = Task.tokens_generate()
+    tokens = Task.tokens_generate(assert_computed=True)
     shapes = [t[shape_key] for t in tokens]
     
     # ignore order. just count how many A, B, C, ... etc
@@ -146,7 +146,7 @@ def shapes_has_separated_cases_of_shape(Task, shape_same=None, list_shape_diff=N
     # shape_key = "shape"
     # dist_ver = "concrete"
 
-    Tok = Task.tokens_generate(return_as_tokensclass=True)
+    Tok = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
     Tok.extract_locations_concrete() # get the concrete locatons.
 
     locs = np.array([Tok.feature_location(i, ver=dist_ver) for i in range(len(Tok.Tokens))])

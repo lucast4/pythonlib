@@ -255,7 +255,7 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
     if params is None:
         params = {}
     objects = Task.Shapes
-    tokens = Task.tokens_generate()
+    tokens = Task.tokens_generate(assert_computed=True)
     list_fixed_order = None # will get fixed_order automatically if this stays NOne.
 
     # SAanity check that tokens match obejcts (objects is old version, so this allows the legacy code which uses
@@ -313,7 +313,7 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         PROBLEM: doesn't deal with ties. always returns a single solution.
         """
 
-        tokens = Task.tokens_generate()
+        tokens = Task.tokens_generate(assert_computed=True)
 
         # concatenate each chunk into a temporary object, with mean positions
         def _convert_tok_to_orderitem(tok):
@@ -795,7 +795,7 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         # e.g.,, [[[4, 5], [2, 3], [0, 1]]]
 
         # 2nd, reorder, first across, then within chunks
-        assert Task.tokens_generate() == tokens
+        assert Task.tokens_generate(assert_computed=True) == tokens
         hier = direction_this_hier(Task, hier, dir_across, "across_chunks")
         hier = direction_this_hier(Task, hier, dir_within, "within_chunks")
         list_hier = [hier]
@@ -1694,7 +1694,7 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         list_n = []
         for ind in range(len(D.Dat)):
             Task = D.Dat.iloc[ind]["Task"]
-            tokens = Task.tokens_generate()
+            tokens = Task.tokens_generate(assert_computed=True)
             list_groups, left_over = find_object_groups_new(Task, paramsthis)
 
             # 1) Get all hierarchices, holding hcyunks constaint. Append extra prims.

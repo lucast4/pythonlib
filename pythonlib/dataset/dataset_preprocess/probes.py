@@ -351,7 +351,7 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                     for task_train in tasks_this_epoch:
                         Task = _extract_taskclass_from_taskname(task_train, 
                             mapper_taskname_epoch_to_taskclass)
-                        tokens = Task.tokens_generate()
+                        tokens = Task.tokens_generate(assert_computed=True)
                         sl_this = [(t["shape"], t["gridloc"]) for t in tokens]
                         list_shape_loc_in_train.extend(sl_this)
                     list_shape_loc_in_train = set(list_shape_loc_in_train)
@@ -359,7 +359,7 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                     # for each probe, check if any of its items are in that list
                     TaskProbe = _extract_taskclass_from_taskname(task_probe, 
                         mapper_taskname_epoch_to_taskclass)
-                    tokens = TaskProbe.tokens_generate()
+                    tokens = TaskProbe.tokens_generate(assert_computed=True)
                     sl_this = [(t["shape"], t["gridloc"]) for t in tokens]
                     novel_location_shape_combo = any([x not in list_shape_loc_in_train 
                         for x in sl_this])        
@@ -370,7 +370,7 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                     for task_train in tasks_this_epoch:
                         Task = _extract_taskclass_from_taskname(task_train, 
                             mapper_taskname_epoch_to_taskclass)
-                        tokens = Task.tokens_generate()
+                        tokens = Task.tokens_generate(assert_computed=True)
                         n_tok = len(tokens)
                         list_nstrok_in_train.append(n_tok)
                     list_nstrok_in_train = set(list_nstrok_in_train)
@@ -378,7 +378,7 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                     # for each probe, check if any of its items are in that list
                     TaskProbe = _extract_taskclass_from_taskname(task_probe, 
                         mapper_taskname_epoch_to_taskclass)
-                    tokens = TaskProbe.tokens_generate()
+                    tokens = TaskProbe.tokens_generate(assert_computed=True)
                     n_tok = len(tokens)
                     try:
                         more_n_strokes = n_tok > max(list_nstrok_in_train)
