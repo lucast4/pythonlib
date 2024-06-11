@@ -48,10 +48,11 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # single prims, but for psycho wheihc means (i) aloows if mulitpel strokes and (ii) more lenient overall,
         # to allow failures, etc, which often happen for novel shapes
         
-        remove_online_abort = False
-        frac_touched_min = 0.05
-        ft_decim_min = 0.1
-        shortness_min = 0.1
+        # remove_online_abort = False
+        remove_online_abort = True # Switched to True, so that doesnt lead to incorrect interpretation of distcum, etc.
+        # frac_touched_min = 0.05
+        # ft_decim_min = 0.1
+        # shortness_min = 0.1
 
         min_stroke_length = 50
         min_stroke_dur = 0.1
@@ -128,7 +129,7 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         assert n2/n1>0.75, "why removed so much data?"
 
 
-    elif version=="clean_one_to_one":
+    elif version in ["primsingrid", "clean_one_to_one"]:
         # One to one beh to task strokes, good for everything except chars.
         # Clean means remove outlier strokes, too short, or visual distance.
 
@@ -1138,7 +1139,7 @@ class DatStrokes(object):
                 print("HACKY (extract_strokes) for task, taking entire task")
                 return np.concatenate(strokes_task, axis=0)
                 # return strokes_task[0]
-            elif ver_behtask=="task_aligned_single_strok":
+            elif ver_behtask in ["task", "task_aligned_single_strok"]:
                 # Return the best matching single taskstroke
                 # This is using the datseg alignment (so considers alginment of
                 # entire set of task and beh strokes)
@@ -1644,9 +1645,9 @@ class DatStrokes(object):
             # Then all a separate axis.
             if ax is None:
                 nrows = int(np.ceil(len(list_strok)/ncols))
-                assert nrows<=10
+                assert nrows * ncols < 100
                 fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, 
-                    figsize=(ncols*size_per_sublot, nrows*size_per_sublot))
+                    figsize=(ncols*size_per_sublot, nrows*size_per_sublot), squeeze=False)
                 axes = axes.flatten()
             else:
                 assert len(ax)==len(list_strok)
@@ -2011,6 +2012,9 @@ class DatStrokes(object):
         PARAMS;
         """
 
+        if ver_behtask == "task":
+            ver_behtask = "task_aligned_single_strok"
+            
         key_to_extract_stroke_variations_in_single_subplot = None
 
         return self.plotshape_multshapes_egstrokes_grouped_in_subplots(None, key_subplots,
@@ -2090,7 +2094,8 @@ class DatStrokes(object):
         key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
         n_examples = 2, color_by=None, ver_behtask=None,
         filtdict = None, ncols=5, SIZE=4,
-        levels_subplots=None):
+        levels_subplots=None,
+        method_if_not_enough_examples="prune_subset"):
     # def plot_egstrokes_grouped_in_subplots(self, task_kind=None, 
     #     key_subplots="shape_oriented",
     #     key_to_extract_stroke_variations_in_single_subplot = "gridloc", 
@@ -2129,6 +2134,8 @@ class DatStrokes(object):
         if task_kind is not None:
             # assert "task_kind" not in F.keys()
             filtdict["task_kind"] = [task_kind]
+        
+            assert "shape" not in task_kind, "typo"
 
         # One plot for each level
         if levels_subplots is None:
@@ -2154,7 +2161,6 @@ class DatStrokes(object):
                 # 1) get all unique values for a given key
                 def bad(x):
                     # Return True is this value is a nan
-                    print(x)
                     if isinstance(x, (tuple, list, str)):
                         return False
                     else:
@@ -2163,7 +2169,7 @@ class DatStrokes(object):
                 vals_vary = [v for v in vals_vary if not bad(v)]
                 list_inds, _ = extract_trials_spanning_variable(self.Dat, 
                     key_to_extract_stroke_variations_in_single_subplot, vals_vary, 
-                    n_examples, filtdict)
+                    n_examples, filtdict, method_if_not_enough_examples=method_if_not_enough_examples)
 
             # 3) pull out these examples and plot
             list_inds = [i for i in list_inds if i is not None]
@@ -3695,66 +3701,6 @@ class DatStrokes(object):
                 return "middle"
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname=newcolname)
 
-    # ################################# FIRST TOUCH
-    # def firsttouch_extract_plot(self):
-    #     ## Positions of first touch for each stroke
-
-    #     assert False, "just copied from notebook. have not checked if working../"
-
-    #     def F(x):
-    #         return x["strok"][0][:2]
-            
-    #     DS.Dat = applyFunctionToAllRows(DS.Dat, F, 'pt_first_touch')
-
-
-    #     # keep only specific location and size
-    #     print(DS.Dat["gridloc"].value_counts())
-    #     print(DS.Dat["gridsize"].value_counts())
-
-    #     gloc = (0,0)
-    #     dfthis = DS.Dat[DS.Dat["gridloc"]==gloc]
-
-    #     gsize = "rig3_3x3_small"
-    #     dfthis = dfthis[dfthis["gridsize"]==gsize]
-
-    #     print("N= ", len(dfthis))
-
-    #     # CONFIRM SAME LOC AND SIZE
-    #     print(dfthis["gridloc"].value_counts())
-    #     print(dfthis["gridsize"].value_counts())
-
-    #     ##### Organize them into "sets" based on expected location of first touch.
-
-    #     from pythonlib.tools.pandastools import grouping_get_inner_items, extract_trials_spanning_variable
-    #     from pythonlib.tools.plottools import subplot_helper
-
-
-    #     n = 15
-    #     outdict, levels = extract_trials_spanning_variable(dfthis, "shape_oriented", n_examples=n, return_as_dict=True,
-    #                                                       method_if_not_enough_examples = "prune_subset")
-
-    #     getax, figholder, nplots = subplot_helper(5, 10, len(outdict), SIZE=4)
-
-    #     for i, (shape, list_inds) in enumerate(outdict.items()):
-    #         ax = getax(i)
-            
-    #         # get all pts
-    #         pts = DS.Dat.iloc[list_inds]["pt_first_touch"]
-            
-    #         for pt in pts:
-    #             ax.plot(pt[0], pt[1], 'x');
-            
-    #         # plot the task
-    #         strok_task = DS.extract_strokes(inds=[list_inds[0]], ver_behtask ="task")[0]
-    #         ax.plot(strok_task[:,0], strok_task[:,1], '-.k')
-            
-            
-    #         ax.grid()
-    #         ax.set_title(shape)
-
-    #     # plot all shapes in order
-    #     DS.plot_examples_grid(col_levels=levels)
-
     #################################### LOCATIONS
     def location_redefine_gridloc_locally(self, nbins=2, df=None, PLOT=False):
         """ Redefine gridloc based on locally where the stroke onset is, within the categorical
@@ -4027,16 +3973,27 @@ class DatStrokes(object):
         elif which_shapes=="Pancho":
             # Those in panchos... load it and get the shapes
             _, _, list_shape_basis = self.stroke_shape_cluster_database_load_helper("Pancho")
+        elif isinstance(which_shapes, list):
+            # List of string, each a shape name
+            for sh in which_shapes:
+                assert isinstance(sh, str)
+            list_shape_basis = which_shapes
         else:
             assert False
         print("Basis set of strokes:", list_shape_basis)
-        dfbasis = slice_by_row_label(dfbasis, "shape", list_shape_basis)
+
+        for sh in list_shape_basis:
+            print(dfbasis["shape"])
+            if sh not in dfbasis["shape"].tolist():
+                print("shape doesnt exist in basis set:", sh)
+                assert False
+        dfbasis = slice_by_row_label(dfbasis, "shape", list_shape_basis, assert_exactly_one_each=True)
         list_strok_basis = dfbasis["strok"].values.tolist()
 
         # Plto some examples for sanity check
         if plot_examples:
             # self.plot_multiple_strok(list_strok[:4])
-            self.plot_multiple_strok(list_strok_basis)
+            self.plot_multiple_strok(list_strok_basis, overlay=False, titles=list_shape_basis)
 
         # print(list_shape_basis)
         # assert False

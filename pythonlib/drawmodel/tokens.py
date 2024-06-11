@@ -3,7 +3,7 @@ Can be used for either beh or task ordered tokens
 """
 
 import numpy as np
-
+import matplotlib.pyplot as plt
 # (1) Get database for each aniaml
 # from pythonlib.dataset.dataset_strokes import DatStrokes
 # DS = DatStrokes()
@@ -661,7 +661,7 @@ class Tokens(object):
 
     ########################### FEATURES
     def features_extract_wrapper(self, features_get = None, shape_semantic_regenerate_from_stroke=False,
-                                 angle_twind = (0, 0.2)):
+                                 angle_twind = (0, 0.2), label_as_novel_if_shape_semantic_fails=False):
         """
         WRapper to generate features for each token,
         which are appended to tokens. Where
@@ -669,15 +669,22 @@ class Tokens(object):
         Goal is to consoldiate all methods for doing so into here.
         Methods may be from:
             taskgeneral, taskmodel, prim, stroketools, features, ds
+        PARAMS:
+        - label_as_novel_if_shape_semantic_fails, bool if True, then useful for
+        days with novel prims, where wnat to try to label semantic, but if that fails, then
+        call is novel. 
         :return: Addpends to self.Tokens
         NOTE: THis is the ONLY place shape_semantic is computed
         """
         from pythonlib.tools.stroketools import angle_of_stroke_segment
         from pythonlib.tools.expttools import deconstruct_filename
+        from pythonlib.tools.exceptions import NotEnoughDataException
 
         if features_get is None:
             features_get = ["shape_semantic", "loc_on", "angle"]
 
+        n_fails = 0
+        n_tot = 0
         for tok in self.Tokens:
             strok = tok["Prim"].Stroke()
             for feature in features_get:
@@ -689,30 +696,44 @@ class Tokens(object):
                     if "tforms_extra_exist" in tok.keys() and tok["tforms_extra_exist"]:
                         # Then ignore, since this is not base prim.
                         tok["shape_semantic"] = "NOVEL-X-X-X"
-                        tok["shape_semantic_cat"] = "NOVEL-X-X-X"
+                        tok["shape_semantic_cat"] = "NOVEL"
                     else:
 
-                        # #TODO:
-                        # # get this: TaskClass.PlanDat, and from this get whether did extra
-                        # # tform, as PlanDat.ParamsSpatialExtra.tforms_each_prim. If did, then
-                        # # don't try to get shape semantic (doesnt exist). 
-                        # assert False
+                        try:
+                            # #TODO:
+                            # # get this: TaskClass.PlanDat, and from this get whether did extra
+                            # # tform, as PlanDat.ParamsSpatialExtra.tforms_each_prim. If did, then
+                            # # don't try to get shape semantic (doesnt exist). 
+                            # assert False
 
-                        if shape_semantic_regenerate_from_stroke:
-                            # Then force rgenerate from raw stroke
-                            tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
-                        else:
-                            # First, try to get mapping between shap string and semantic.
-                            if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
-                                tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
-                            else:
-                                # If that fails, then try to compute it. But this will often fail for CHAR, since
-                                # these strokes are not task-strokes, so are irregular.
+                            if shape_semantic_regenerate_from_stroke:
+                                # Then force rgenerate from raw stroke
                                 tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                            else:
+                                # First, try to get mapping between shap string and semantic.
+                                if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
+                                    tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
+                                else:
+                                    # If that fails, then try to compute it. But this will often fail for CHAR, since
+                                    # these strokes are not task-strokes, so are irregular.
+                                    tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
 
-                        tmp = deconstruct_filename(tok["shape_semantic"])
-                        tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
-
+                            tmp = deconstruct_filename(tok["shape_semantic"])
+                            tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
+                        except NotEnoughDataException as err:
+                            # Failed... how deal with this.
+                            if label_as_novel_if_shape_semantic_fails:
+                                tok["shape_semantic"] = "NOVEL-X-X-X"
+                                tok["shape_semantic_cat"] = "NOVEL"
+                                n_fails+=1
+                                # close the diagnostic plot that is made in label_classify_prim_using_stroke_semantic
+                                plt.close("all")
+                            else:
+                                print("...Failed at determining shape_semantic for this tok:", tok)
+                                raise err                               
+                        except Exception as err:
+                            print("...Failed at determining shape_semantic for this tok:", tok)
+                            raise err                               
                 elif feature=="loc_on":
                     tok["loc_on"] = strok[0,:2]
                 elif feature=="loc_off":
@@ -723,6 +744,13 @@ class Tokens(object):
                 else:
                     print(feature)
                     assert False, "code it"
+            n_tot +=1
+
+        if False: # This doesnt makes ense. it needs to be counting across all Tokens, not just all tokens with this Token.
+            MAX_FRAC_FAIL = 0.1
+            if n_fails/n_tot>MAX_FRAC_FAIL:
+                print(n_fails, n_tot)
+                assert False, "Maybe you expect this many novel prims to fail getting shape semantic? If so, comment this out."
 
     def data_extract_raw(self):
         """ Return as list of dicts, excluding any

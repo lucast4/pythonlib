@@ -19,7 +19,7 @@ from pythonlib.tools.snstools import rotateLabel
 
 def preprocess_dataset(D, doplots=False):
 
-    from pythonlib.dataset.dataset_strokes import DatStrokes
+    from pythonlib.dataset.dataset_strokes import DatStrokes, preprocess_dataset_to_datstrokes
     # USE tHIS!!!
 
     DS, SAVEDIR = None, None
@@ -52,7 +52,7 @@ def preprocess_dataset(D, doplots=False):
         assert len(D.Dat)>0
 
         # get DatStrokes
-        DS = DatStrokes(D)
+        DS = preprocess_dataset_to_datstrokes(D, "primsingrid")
 
         D.seqcontext_preprocess()
         D.taskclass_shapes_loc_configuration_assign_column()
@@ -61,9 +61,14 @@ def preprocess_dataset(D, doplots=False):
 
         #############################
         if doplots:
-
             from pythonlib.tools.pandastools import stringify_values
+
             
+            # Spatial locaiton biases, quick scatter plots
+            savedir = f"{SAVEDIR}/location_sequence_bias"
+            os.makedirs(savedir, exist_ok=True)
+            plot_location_sequence_bias_spatial(D, savedir)
+
             # Sequential context of strokes
             savedir = f"{SAVEDIR}/stroke_sequential_contexts"
             os.makedirs(savedir, exist_ok=True)
@@ -237,6 +242,7 @@ def preprocess_dataset(D, doplots=False):
 
                         fig = heatmap(dfheat_abort)[0]
                         savefig(fig, f"{sdir}/heatmap-dfheat_abort.pdf")
+                        plt.close("all")
 
                         if not dfheat_abort.index.tolist() == dfheat_succ.index.tolist():
                             # Is probably becusae lack any trials of some shape for one of them, liek this:
@@ -258,6 +264,7 @@ def preprocess_dataset(D, doplots=False):
 
                         fig = heatmap(dfheat_ntrials)[0]
                         savefig(fig, f"{sdir}/heatmap-ntrials_total.pdf")
+                        plt.close("all")
 
             plotscore_all(DS, SAVEDIR)
             plotdrawings_all(DS, SAVEDIR)
@@ -498,6 +505,7 @@ def plotdrawings_all(DS, SAVEDIR, n_examples = 3):
         inds = DS.Dat[DS.Dat["shape_oriented"]==shape].index.tolist()
         inds = sorted(random.sample(inds, nplot))
         DS.plot_beh_and_aligned_task_strokes(inds, True)
+    plt.close("all")
 
 def plot_sequential_context_strokes(DS, savedir):
     """ plot conjucjitions that exist for conv and divergents seuqneces
@@ -537,6 +545,117 @@ def plot_sequential_context_strokes(DS, savedir):
         list_epoch = DS.Dat["epoch"].unique().tolist()
         if len(list_epoch)>0:
             for epoch in list_epoch:
-                df = DS.Dat[DS.Dat["epoch"]==epoch]
+                df = DS.Dat[DS.Dat["epoch"]==epoch].reset_index(drop=True)
                 suffix = f"epoch_{epoch}"
                 plot_context(df, VER, savedir, suffix)
+
+        plt.close("all")
+
+def plot_location_sequence_bias_spatial(D, savedir):
+    """
+    Plot scatterplots showing the location of first, second, third, ... strokes, separately for
+    each taskconfig_loc (which captures also the variation in n strokes). 
+
+    E.g., how strongly is there bias to do one location first, then another second, etc?
+
+    """
+
+
+    D.seqcontext_preprocess()
+    D.extract_beh_features()
+    D.taskclass_shapes_loc_configuration_assign_column()
+
+    # One color for each stroke index
+    from pythonlib.tools.plottools import makeColors, legend_add_manual
+    pcols = makeColors(3)
+
+    # Other params
+    SIZE=3
+    ncols = 4
+
+    ### For every location config x seqc_0_shape, make a spatial plot of the onset locations
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpdict = grouping_append_and_return_inner_items_good(D.Dat, ["taskconfig_loc", "seqc_0_shape"])
+    nrows = int(np.ceil(len(grpdict)/ncols))
+    fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*SIZE, nrows*SIZE))
+
+    _legend_done = False
+    for ax, (grp, inds) in zip(axes.flatten(), grpdict.items()):
+        ax.set_title(grp, fontsize=8)
+        df = D.Dat.iloc[inds]
+
+        for loc in df["seqc_0_loc"]:
+            jitter = 0.5*(np.random.rand(2)-0.5)
+
+            ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "o", alpha=0.2, color=pcols[0])
+        
+        for loc in df["seqc_1_loc"]:
+            if not loc[0] == "IGN":
+                jitter = 0.5*(np.random.rand(2)-0.5)
+
+                ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "s", alpha=0.2, color=pcols[1])
+        
+        for loc in df["seqc_2_loc"]:
+            if not loc[0] == "IGN":
+                jitter = 0.5*(np.random.rand(2)-0.5)
+
+                ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "d", alpha=0.2, color=pcols[2])
+        
+        # which locations exist?
+        tcl = grp[0]
+        for _loc in tcl:
+            ax.plot(_loc[0], _loc[1], "xr", alpha=1)
+        
+        # add a legend for the colors
+        if not _legend_done:
+            legend_add_manual(ax, ["stroke 0","stroke 1","stroke 2"], pcols)
+            _legend_done = True
+
+        plt.close("all")
+
+    savefig(fig, f"{savedir}/stroke_location-each-taskconfig_seqc0shape.pdf")
+
+    ### Same, but for every taskconfig_location (regardless of seqc_0_shape)
+    list_taskconfig_loc = D.Dat["taskconfig_loc"].unique().tolist()
+    nrows = int(np.ceil(len(list_taskconfig_loc)/ncols))
+    fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, figsize=(ncols*SIZE, nrows*SIZE))
+    _legend_done = False
+    for tcl, ax in zip(list_taskconfig_loc, axes.flatten()):
+        ax.set_title(tcl, fontsize=8)
+        df = D.Dat[D.Dat["taskconfig_loc"] == tcl]
+
+        for loc in df["seqc_0_loc"]:
+            jitter = 0.5*(np.random.rand(2)-0.5)
+
+            ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "o", alpha=0.15, color=pcols[0])
+        
+        for loc in df["seqc_1_loc"]:
+            if not loc[0] == "IGN":
+                jitter = 0.5*(np.random.rand(2)-0.5)
+
+                ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "s", alpha=0.15, color=pcols[1])
+        
+        for loc in df["seqc_2_loc"]:
+            if not loc[0] == "IGN":
+                jitter = 0.5*(np.random.rand(2)-0.5)
+
+                ax.plot(loc[0]+jitter[0], loc[1]+jitter[1], "d", alpha=0.15, color=pcols[2])
+        
+        # which locations exist?
+        for _loc in tcl:
+            ax.plot(_loc[0], _loc[1], "xr", alpha=1)    
+
+        # add a legend for the colors
+        if not _legend_done:
+            legend_add_manual(ax, ["stroke 0","stroke 1","stroke 2"], pcols)
+            _legend_done = True
+
+        plt.close("all")
+
+    savefig(fig, f"{savedir}/stroke_location-each-taskconfig.pdf")
+
+    # ANother methjjod, this is prob better.
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap, stringify_values
+    df = stringify_values(D.Dat)
+    fig = grouping_plot_n_samples_conjunction_heatmap(df, "seqc_0_loc", "taskconfig_shp", ["taskconfig_loc"])    
+    savefig(fig, f"{savedir}/seqc_0_loc-vs-taskconfig_shp.pdf")

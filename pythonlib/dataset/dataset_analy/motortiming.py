@@ -461,6 +461,7 @@ def grammarchunks_preprocess_and_plot(D, PLOT=True, SAVEDIR=None):
 
     # Generate DatStrokes
     from pythonlib.dataset.dataset_strokes import DatStrokes
+    assert False, "use preprocess_dataset_to_datstrokes to clean properly"
     DS = DatStrokes(D)
 
     ############### PREPROCESS

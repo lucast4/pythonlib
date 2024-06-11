@@ -240,6 +240,10 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
                 # which is not what we want.
                 tmp = np.log(10 + val)
 
+            # Then convert to 9.999[]
+            if tmp>10:
+                tmp = 9.99 + np.log(10)/1000
+
             # Append strings so that negative numbners come before pos.
             # Make the string long so that numbers will cluster togethre (as opopsed to being seprated by actual trings).
             if val==0:

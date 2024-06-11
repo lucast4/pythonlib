@@ -372,12 +372,24 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
         auto_interpolate_if_needed = False
 
     ####################################### distance computations.
+    from pythonlib.tools.stroketools import strokeDistances, strokes_bounding_box_dimensions
+
     if ver=="hausdorff":
         from pythonlib.tools.distfunctools import modHausdorffDistance
         if ONLY_RETURN_PROCESSED_STROKES:
             strok1_processed, strok2_processed = strok1, strok2
         else:
             dist = modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver)
+    elif ver =="hausdorff_norm_dist":
+        # normalize by dividing by stroke length.. helps if you dont want to penalize larger strokes.
+        from pythonlib.tools.distfunctools import modHausdorffDistance
+        if ONLY_RETURN_PROCESSED_STROKES:
+            strok1_processed, strok2_processed = strok1, strok2
+        else:
+            dist = modHausdorffDistance(strok1, strok2, asymmetric_ver=asymmetric_ver)
+            _, _, size = strokes_bounding_box_dimensions([strok1, strok2])
+            # size = max(strokeDistances([strok1, strok2])) # GOod, works, but takes long time.
+            dist = dist/size
     elif ver =="hausdorff_max":
         from pythonlib.tools.distfunctools import modHausdorffDistance
         if ONLY_RETURN_PROCESSED_STROKES:

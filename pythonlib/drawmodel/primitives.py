@@ -732,7 +732,7 @@ def prog2pxl(p, WHdraw = 2*XYLIM, WH=128, smoothing=0):
         plt.imshow(I) will be same orientation as input p.
         NOTE: there will be inherent smoothing due to downsampling/interp.
         """
-        
+        import cairo
         # 1) create canvas
         # WH = 128
 

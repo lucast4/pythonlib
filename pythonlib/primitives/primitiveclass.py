@@ -290,7 +290,7 @@ class PrimitiveClass(object):
 
     def label_classify_prim_using_stroke(self, return_as_string=False,
                                          shape_rename_perfblockey_decimals_to_defaults=False,
-                                         version="default", exclude_scale=False):
+                                         version="default", exclude_scale=False, cluster_by_sim_idx=None):
         """ To classify this prim, qwhich usualy would be
         liek line-10-0-1, but this doesnt generaklkly work,
         becuase somtimes you have extra transfomrs that chagne how this
@@ -307,6 +307,7 @@ class PrimitiveClass(object):
         NOTE: reason to have angles to both on and off is to deal with possible cases of
         same on. and/or reflections.
         """
+        from pythonlib.tools.exceptions import NotEnoughDataException
         from pythonlib.tools.vectools import get_angle, bin_angle_by_direction
         from math import pi
         features = self._label_stroke_features() 
@@ -317,7 +318,15 @@ class PrimitiveClass(object):
             return a_binned
 
         # return as tuple
-        if version=="hash":
+        if version=="cluster_by_sim":
+            # Then you pass in the name directly, becuase this is based on clustering using the entire dataset.
+            assert isinstance(cluster_by_sim_idx, int)
+
+            shcat = features["shape_cat"]
+
+            label = (shcat, cluster_by_sim_idx, cluster_by_sim_idx, cluster_by_sim_idx)
+
+        elif version=="hash":
             # This gets a unique string for each stroke, based on motor features, that is more unique thatn the
             # default. HJere takes the features from defualt, and adds also a unique hash based on the strokes
             # pts
@@ -355,6 +364,18 @@ class PrimitiveClass(object):
             scale = features["scale"]
             # scale = "X" # ignore
 
+            def _raise_error(a1, a2):
+                print(shcat)
+                print(features)
+                print(a1, a2)
+                print(self.extract_as())
+                fig = self.plot_stroke()
+                fig.savefig("/tmp/stroke.png")
+                print("Check saved stroke at ", "/tmp/stroke.png")
+                print("for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'")
+                raise NotEnoughDataException
+                # assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+
             if shcat in ["circle"]:
                 label = (shcat, scale, "XX" , "XX")
             elif shcat in ["V2"]:
@@ -366,14 +387,10 @@ class PrimitiveClass(object):
 
                 if a1==4 and a2==2:
                     label = (shcat, scale, "UU" , "UU") # opens to top
+                elif a1==6 and a2==8:
+                    label = (shcat, scale, "DD" , "DD") #
                 else:
-                    print(features)
-                    print(a1, a2)
-                    print(self.extract_as())
-                    fig = self.plot_stroke()
-                    fig.savefig("/tmp/stroke.png")
-                    print("Check saved stroke at ", "/tmp/stroke.png")
-                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                    _raise_error(a1, a2)
 
             elif shcat in ["V", "arcdeep", "usquare"]:
                 a1 = features["angle_midpt_to_onset_arm"]
@@ -390,13 +407,7 @@ class PrimitiveClass(object):
                 elif a1==1 and a2==1:
                     label = (shcat, scale, "RR" , "RR") # opens to top
                 else:
-                    print(features)
-                    print(a1, a2)
-                    print(self.extract_as())
-                    fig = self.plot_stroke()
-                    fig.savefig("/tmp/stroke.png")
-                    print("Check saved stroke at ", "/tmp/stroke.png")
-                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                    _raise_error(a1, a2)
             # elif shcat in ["arcdeep"]:
             #     a1 = features["angle_midpt_to_onset"]
             #     a2 = features["angle_midpt_to_offset"]
@@ -439,10 +450,7 @@ class PrimitiveClass(object):
                 elif a1==5 and a2==7:
                     label = (shcat, scale, "DL" , "DL") #
                 else:
-                    print(features)
-                    print(a1, a2)
-                    print(self.extract_as())
-                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                    _raise_error(a1, a2)
             elif shcat in ["Lzigzag", "squiggle3", "Lzigzag1", "zigzagSq"]:
                 a1 = features["angle_midpt_to_onset"]
                 a2 = features["angle_midpt_to_offset"]
@@ -459,10 +467,7 @@ class PrimitiveClass(object):
                 elif a1 in [1, 8] and a2==4:
                     label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
                 else:
-                    print(features)
-                    print(a1, a2)
-                    print(self.extract_as())
-                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                    _raise_error(a1, a2)
             elif shcat in ["line"]:
                 a1 = features["angle_midpt_to_onset"]
                 a2 = features["angle_midpt_to_offset"]
@@ -480,10 +485,7 @@ class PrimitiveClass(object):
                     label = (shcat, scale, "UU" , "UU") # direction of line, in top hemisphere
 
                 else:
-                    print(features)
-                    print(a1, a2)
-                    print(self.extract_as())
-                    assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                    _raise_error(a1, a2)
             elif "novelprim" in shcat:
                 shcat = features["shape_cat"]
                 scale = features["scale"]
@@ -491,12 +493,7 @@ class PrimitiveClass(object):
                 angle2 = features["angle_midpt_to_offset"]
                 label = (shcat, scale, angle1, angle2)
             else:
-                print(shcat)
-                print(features)
-                fig = self.plot_stroke()
-                fig.savefig("/tmp/stroke.png")
-                print("Check saved stroke at ", "/tmp/stroke.png")
-                assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
+                _raise_error(None, None)
         else:
             print(version)
             assert False, "code it"

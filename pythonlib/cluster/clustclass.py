@@ -445,6 +445,8 @@ class Clusters(object):
             self._hier_clust_label_axis(cg, "row")
         except Exception as err:
             cg = None
+            print("ERROR")
+            print(err)
 
         return cg
 

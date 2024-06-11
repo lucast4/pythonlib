@@ -1486,6 +1486,17 @@ class Dataset(object):
         T = self.Dat.iloc[ind]["Task"]
         TT = T.Params["input_params"]
         return TT
+    
+    def taskclass_extract_low_level_plan(self, ind):
+        """ REturn the plan inoputed to generate this task, i.e,, 
+        {prim, rel, prim, rel..} in matlab
+        """
+
+        # Find the plan
+        T = self.Dat.iloc[ind]["Task"]
+        Tt = T.extract_monkeylogic_ml2_task()
+        plan = Tt.planclass_inputed_plan_extract(0)
+        return plan
 
     def taskclass_extract_planclass(self, ind):
         """
@@ -1707,7 +1718,7 @@ class Dataset(object):
         print("x...", map_gridloc_loc_x)
         print("y...", map_gridloc_loc_y)   
 
-    def tokens_preprocess_wrapper_good(self, PLOT=False):
+    def tokens_preprocess_wrapper_good(self, PLOT=False, label_as_novel_if_shape_semantic_fails=False):
         """
         Wrapper for preprocessing --> Given just-generated tokens (using tokens_append_to_dataframe_column) here do all
         processing steps, e.g, derived features, like storke onset, and binned/clustered fgeatures, like onset binned.
@@ -1731,10 +1742,16 @@ class Dataset(object):
         for ind in range(len(self.Dat)):    
             # Determine if any shapes were transformed rotations
             prims_extra_params = self.taskclass_extract_prims_extra_params_tforms(ind)
-            if len(prims_extra_params[0])>0 and "tforms_each_prim" in prims_extra_params[0].keys():
-                print(prims_extra_params)
-                print(prims_extra_params[0]["tforms_each_prim"])
-                assert False, "add code to apply the below step (assigning shape semantic to be NOVEL) to only the specific prims that were tformed, using the information in tforms_each_prim"
+            if False: # Ignroe this for now -- this raises err for novel motif char flex, which I doint care about, since those are actually single prims uisng multple strokes.
+                # SHOULD: check that this is PIG, and then those are the cases where I actully care about trakcing this.
+                try:
+                    if (prims_extra_params is not None) and (len(prims_extra_params)>0) and "tforms_each_prim" in prims_extra_params.keys():
+                        print(prims_extra_params)
+                        print(prims_extra_params[0]["tforms_each_prim"])
+                        assert False, "add code to apply the below step (assigning shape semantic to be NOVEL) to only the specific prims that were tformed, using the information in tforms_each_prim"
+                except Exception as err:
+                    print("HERE", prims_extra_params)
+                    raise err
             tforms_extra_exist = self.taskclass_check_prims_extra_params_tforms_exist_single(ind)
 
             # Beh strokes
@@ -1750,7 +1767,7 @@ class Dataset(object):
             #     tk["tforms_extra"] = tf
             for tk in Tk_behtaskdata.Tokens:
                 tk["tforms_extra_exist"] = tforms_extra_exist
-            Tk_behtaskdata.features_extract_wrapper(["shape_semantic"])
+            Tk_behtaskdata.features_extract_wrapper(["shape_semantic"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
             # Task strokes (ignore beh)
             Tk_taskdata = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
@@ -1760,7 +1777,7 @@ class Dataset(object):
             #     tk["tforms_extra"] = tf
             for tk in Tk_taskdata.Tokens:
                 tk["tforms_extra_exist"] = tforms_extra_exist
-            Tk_taskdata.features_extract_wrapper(["shape_semantic"])
+            Tk_taskdata.features_extract_wrapper(["shape_semantic"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
             Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
 
         # (2) Compute all binned data, using beh data
@@ -1830,6 +1847,9 @@ class Dataset(object):
         tokens. if not find, then looks in self.Dat
         :return: dataframe
         """
+
+        assert isinstance(list_var, (list, tuple))
+        
         res = []
         for i, row in self.Dat.iterrows():
             Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
@@ -2383,6 +2403,8 @@ class Dataset(object):
             else:
                 return Tk.Tokens
         elif self.TokensVersion == "taskclass":
+            # Original, default, etc...
+            # if not self.behclass_check_if_tokens_extracted():
             self.behclass_preprocess_wrapper()
 
             # mapper from taskstrokeinds to beh
@@ -2588,7 +2610,7 @@ class Dataset(object):
 
     def taskclass_shapes_extract_unique_alltrials(self):
         """ REturn list of (sorted) shapes across all trial sin dataset,
-        unqiue.
+        unqiue. 
         """
         shapes = []
         for ind in range(len(self.Dat)):
@@ -2601,26 +2623,32 @@ class Dataset(object):
         Return dict holding extra params applied to prims, including tforms,
         and rotations (e.g., novel prims)
         RETURNS:
-        - prims_extra_params, list of dicts, not sure why it is list of dicts and not just
-        dict. len(prims_extra_params) is not necesarily the len strokes.
-        --- prims_extra_params[0]["tforms] -->
-            [['th', array(0.67319843)]]
-            (For a case with 2 strokes, got that)
+        - prims_extra_params, dict
+            {'tforms': {},
+            'tforms_each_prim_p': [{},
+                [['th', array(-0.16839016)],
+                ['sx', array(1.01434708)],
+                ['sy', array(1.01434708)]],
+                {}]
+            }        
         """
-        P = self.taskclass_extract_planclass(ind)
-        if "PrimsExtraParams" not in P.keys():
-            prims_extra_params = []
-        else:
-            prims_extra_params = P["PrimsExtraParams"]
+        T = self.Dat.iloc[ind]["Task"]
+        return T.extra_tform_params_extract()
+    
+        # P = self.taskclass_extract_planclass(ind)
+        # if "PrimsExtraParams" not in P.keys():
+        #     prims_extra_params = []
+        # else:
+        #     prims_extra_params = P["PrimsExtraParams"]
         
-        # if len(tforms)>0:
-        #     nstrokes = len(self.Dat.iloc[ind]["strokes_beh"])
-        #     if not len(tforms)==nstrokes:
-        #         print(tforms)
-        #         print(len(tforms), nstrokes)
-        #         assert False
+        # # if len(tforms)>0:
+        # #     nstrokes = len(self.Dat.iloc[ind]["strokes_beh"])
+        # #     if not len(tforms)==nstrokes:
+        # #         print(tforms)
+        # #         print(len(tforms), nstrokes)
+        # #         assert False
         
-        return prims_extra_params
+        # return prims_extra_params
 
     def taskclass_check_prims_extra_params_tforms_exist_single(self, ind):
         """ check if, for this trial, if additiaonl tforms to prims in matlab code. 
@@ -2873,6 +2901,298 @@ class Dataset(object):
         return out
 
     ############### SHAPE SEMANTIC (e.g., novel shape)
+    def shapesemantic_cluster_taskclass_strokes_to_rename_shapes(self, THRESH_DIST = 0.96):
+        """
+        Label strokes using the ground truth shape image pixels.
+        Does this by centering task stroke. 
+        Diff sizes will be call different shapes, and so wuold if the pts are slightly off.
+        Assign each stroke a cluster index (0,1,2,..) where strokes within cluster are identical 
+        in image pixel distance (hausdorff_max_max).
+
+        NOTE: this is useful for novel shapes, is better than hash, which runs into numerical 
+        impresision errors.
+        
+        PARAMS:
+        - THRESH_DIST, minim sim score, above which pairs are called the same sahep. Empriicalyl, 
+        0.95 is similar, but 0.92 is not (Pancho, 240523, novel prims)
+        RETURNS:
+        - Appends to "task" tokens column shape_clust_idx, which is index (0,1,2,..) that is globally
+        indexing unique shapes across entire dataset.
+        - map_datidx_to_clust_idxs, dict: stroke index after flatten:clust idx
+        - list_list_clustidx, list of list of idx, matching D.Dat structure.
+        """
+        
+        from pythonlib.drawmodel.strokedists import distStrokWrapperMult
+        from pythonlib.dataset.dataset_strokes import DatStrokes
+
+        CLUSTER_MERGE_METHOD = "intersect"
+
+        savedir_preprocess = self.make_savedir_for_analysis_figures_BETTER("preprocess_general")
+        savedir_preprocess = f"{savedir_preprocess}/cluster_strokes_to_rename_shapes"
+        os.makedirs(savedir_preprocess, exist_ok=True)
+
+        # Extract all stroke tokens
+        if False: # cant do this if tokens not defined yet
+            token_ver = "task"
+            DF = self.tokens_extract_variables_as_dataframe(["shape", "Prim"], token_ver)
+            strokes = [p.Stroke() for p in DF["Prim"]]
+        else:
+            # Extract strokes here
+            LIST_STROKES_TASK = self.Dat["strokes_task"].values.tolist()
+            strokes = []
+            map_idx_to_orig_trial_stroke = {}
+            map_orig_trial_stroke_to_idx = {}
+            idx = 0
+            for i, _strokes in enumerate(LIST_STROKES_TASK):
+                for j, _strok in enumerate(_strokes):
+                    strokes.append(_strok)
+                    map_idx_to_orig_trial_stroke[idx] = (i, j)
+                    map_orig_trial_stroke_to_idx[(i, j)] = idx
+                    idx+=1
+
+        # Get pairwise distances between each stroke.
+        # simmat = distStrokWrapperMult(strokes, strokes, distancever="hausdorff", align_to_center=True, ploton=True)
+        simmat = distStrokWrapperMult(strokes, strokes, distancever="hausdorff_norm_dist", align_to_center=True, ploton=True)
+        # simmat = distStrokWrapperMult(strokes, strokes, distancever="hausdorff_max", align_to_center=True, ploton=True)
+        # simmat = distStrokWrapperMult(strokes, strokes, distancever="hausdorff_max", align_to_onset=True, ploton=True)
+
+        # Plot histogram of similarityies
+        fig, axes = plt.subplots(1,2, figsize=(10,5))
+
+        ax = axes.flatten()[0]
+        ax.hist(simmat.reshape(-1), bins=100)
+        ax.axvline(THRESH_DIST)
+        ax.set_xlabel("all pairwise similairities (vline=thresh)")
+
+        ax = axes.flatten()[1]
+        ax.hist(simmat.reshape(-1), bins=200)
+        ax.set_xlim([0.9, 1])
+        ax.set_title("zooming in")
+        ax.axvline(THRESH_DIST)
+
+        savefig(fig, f"{savedir_preprocess}/pairwise_sims_histogram.pdf")
+
+        # # Cluster them
+        # n = len(strokes)
+        # list_clusters = []
+        # for idx_stroke in range(n):
+        #     inds = np.argwhere(simmat[idx_stroke, :]>THRESH_DIST)[:,0].tolist()
+        #     assert idx_stroke in inds
+
+        #     # Look for the cluster holding this
+        #     _found = False
+
+        #     # 1. Check if clusters already added
+        #     for cl in list_clusters:
+                
+        #         if CLUSTER_MERGE_METHOD=="intersect":
+        #             # Method 1: if these clusters intersect, then merge
+        #             if any([i in cl for i in inds]):
+        #                 # they intersect. merge them
+        #                 for i in inds:
+        #                     if i not in cl:
+        #                         print(f"[Clustering shapes] Adding index {i} to cluster {cl} (means that there was partial intersection...):")
+        #                         cl.append(i)
+        #                 _found = True
+        #                 break
+        #         elif CLUSTER_MERGE_METHOD=="identity":
+        #             # Method 2: must match the cluster exaclty. if not then add it to end,
+        #             # and becuase of this, it will fail sanity check later.
+        #             if cl == inds:
+        #                 # inds have already been added
+        #                 _found = True
+        #                 break
+        #         else:
+        #             print(CLUSTER_MERGE_METHOD)
+        #             assert False
+
+        #     if not _found:
+        #         # Then add it
+        #         list_clusters.append(inds)
+
+        # Cluster them
+        # This method adds strokes one by one if the stroke's matches are in a cluster,
+        # in a greedy fasion. This is guaranteed to add each stroke to one and only one cluster.
+        n = len(strokes)
+        list_clusters = []
+        for idx_stroke in range(n):
+            inds = np.argwhere(simmat[idx_stroke, :]>THRESH_DIST)[:,0].tolist()
+            assert idx_stroke in inds
+
+            # Look for the cluster holding this
+            _found = False
+            for cl in list_clusters:
+                if any([i in cl for i in inds]):
+                    # they intersect. Add this stroke to this cluster
+                    cl.append(idx_stroke)
+                    _found = True
+                    break
+            if not _found:
+                # Then add it
+                list_clusters.append([idx_stroke])
+
+        # Sanity check - every ind is in one and only one cluster.
+        tmp = []
+        for cl in list_clusters:
+            tmp.extend(cl)
+        tmp = sorted(tmp)
+        if not sorted(tmp) == list(range(len(strokes))):
+            if THRESH_DIST < 0.99 and CLUSTER_MERGE_METHOD=="identity":
+                # Then try again, this time using 0.99
+                # This is becuase if less, then it is techncialyl possible for an index to be
+                # in multiple shape groups (a simialr to b simiar to c, but a not to c)
+                # You must confirm in preprocess_general plots that shape groups are distinct.
+                print("** FAILED, so trying shapesemantic_cluster_taskclass_strokes_to_rename_shapes() again, using THRESH:", 0.99)
+                return self.shapesemantic_cluster_taskclass_strokes_to_rename_shapes(THRESH_DIST = 0.99)
+            else:
+                # Throw error
+                print("THRESH_DIST:", THRESH_DIST)
+                print(len(tmp))
+                print(len(strokes))
+                print(tmp)
+                for i, val in enumerate(tmp):
+                    if i!=val:
+                        print("First index that doesnt match:", i, val)
+                        break
+                assert False
+
+        # Now assign each index (stroke) to its cluster
+        map_datidx_to_clust_idxs = {}
+        map_cluster_to_inds = {}
+        for idx_clust, inds_in_clust in enumerate(list_clusters):
+            map_cluster_to_inds[idx_clust] = inds_in_clust
+            for ind in inds_in_clust:
+                map_datidx_to_clust_idxs[ind] = idx_clust
+
+        ########## MORE SANITY CHECKS
+        if False: # doesnt make much sense
+            # Sanity checks
+            n_same = np.sum(simmat>0.99)
+            n_tot = simmat.shape[0]*simmat.shape[1]
+
+            # Expect, usually, much more that are identical, vs. those same...
+            nclose = np.sum((simmat>0.9) & (simmat<0.99))
+            nidentical = np.sum((simmat>0.99))
+            assert nidentical>nclose
+            assert nclose/nidentical<0.1
+
+            # Usulaly, expeect not that many shapoes.
+            n_shapes = len(map_cluster_to_inds)
+            assert n_shapes<150, "weird, I usually dont have so many unique shapes..."   
+
+        ########### PLOTS
+
+        if False: # This fails, since DatStrokes looks for  beh token,which isnt readyu
+            # Plot diagnostic, each cluster, plot 20 example shapes (task).
+            # Finally, plot each class, showing examples
+            DS = DatStrokes(self)
+            # Use this to check that no clusters have different actual tasks.
+            figholder = DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_subplots="shape", n_examples=20, ver_behtask="task")
+            for i, (fig, axes) in enumerate(figholder):
+                savefig(fig, f"{savedir_preprocess}/taskimage_examples_each_shape_cluster-sub{i}.pdf")
+
+        # Assign back to tokens
+        if False: # Fails, since tokens are not yet exist.
+            assert len(map_datidx_to_clust_idxs) == len(DF)
+            DF["shape_clust_idx"] = [map_datidx_to_clust_idxs[i] for i in range(len(DF))]
+            self.tokens_assign_dataframe_back_to_self_mult(DF, ["shape_clust_idx"], tk_ver=token_ver)
+
+            # Extract list of list of inds
+            list_list_clustidx = []
+            for ind in range(len(self.Dat)):
+                tokens = self.taskclass_tokens_extract_wrapper(ind, token_ver)
+                list_list_clustidx.append([tk["shape_clust_idx"] for tk in tokens])
+                for j, tk in enumerate(tokens):
+                    assert j==tk["ind_taskstroke_orig"], "just sanity check"
+        else:
+            # Extract list of idxs for each row of D.Dat
+            list_list_clustidx = []
+            for i, _strokes in enumerate(LIST_STROKES_TASK):
+                list_clust_idx = []
+                for j, _strok in enumerate(_strokes):
+                    idx_flat = map_orig_trial_stroke_to_idx[(i, j)]
+                    idx_shape_clust = map_datidx_to_clust_idxs[idx_flat]
+                    list_clust_idx.append(idx_shape_clust)
+                list_list_clustidx.append(list_clust_idx)
+
+        return map_datidx_to_clust_idxs, list_list_clustidx
+
+    def shapesemantic_taskclass_map_between_shape_and_shape_orig(self):
+        """
+        REturn dict mapping between shape, as is currently named, and original shape,
+        which is like circle-4-2-3, whch can be different when you have chajged the
+        name due to novel shapes
+        """
+
+        token_ver = "task"
+        df = self.tokens_extract_variables_as_dataframe(["shape", "Prim"], token_ver)
+
+        # Extract the original shape, which should have been overwritten in rprepovessing, but is useufl as a category
+        # to anchor the variations.
+        list_shape_orig = []
+        map_shape_to_shape_orig = {}
+        map_shape_orig_to_shape = {}
+        for shape, P in zip(df["shape"], df["Prim"]):
+            map_shape_to_shape_orig[shape] = P.shape_oriented()
+            map_shape_orig_to_shape[P.shape_oriented()] = shape
+
+        return map_shape_to_shape_orig, map_shape_orig_to_shape
+
+    def shapesemantic_taskclass_cont_morph_extract_params(self, ind):
+        """ Get params for this trial realted to it as cotniuoisn morph, which is
+        an interpolation between two other tasks, e..,g, some frac interpolation, or
+        morph between line (first half) and V (second half)
+        RETURNS:
+        - info_base_prims, lsit of 2 dicts, one for each base prim, e.g.,
+        [{'los': ('singleprims', 113, 11), 'shape': ('V', 2, 2, 0)},
+            {'los': ('singleprims', 113, 10), 'shape': ('arcdeep', 4, 2, 0)}]
+        OR None, if this trial was not a morph.
+        """
+
+        Tt = self.taskclass_extract_ml2(ind)
+
+        if len(Tt.get_tasknew()["Info"])>0 and "MorphSavedInfo" in Tt.get_tasknew()["Info"].keys():
+            MorphSavedInfo = Tt.get_tasknew()["Info"]["MorphSavedInfo"]
+
+            # This is a morph between two base prims. For each of the base prims, get info
+            info_base_prims = []
+
+            for idx in [1,2]:
+
+                # LOS
+                los_ver = MorphSavedInfo[f"{idx}"]["Task_info"]["load_old_set_ver"]
+                los_num = int(MorphSavedInfo[f"{idx}"]["Task_info"]["load_old_set_setnum"])
+                los_ind = int(MorphSavedInfo[f"{idx}"]["Task_info"]["load_old_set_indthis"])
+                los = (los_ver, los_num, los_ind)
+
+                # (sh, lev, rot, refl)
+                assert len(MorphSavedInfo["1"]["Objects"]["Features_Active"]["prot_shape"])==1, "assuming only one object per task"
+
+                sh = (MorphSavedInfo[f"{idx}"]["Objects"]["Features_Active"]["prot_shape"]["1"], 
+                int(MorphSavedInfo[f"{idx}"]["Objects"]["Features_Active"]["prot_level"]["1"]), 
+                int(MorphSavedInfo[f"{idx}"]["Objects"]["Features_Active"]["prot_rot"]["1"]), 
+                int(MorphSavedInfo[f"{idx}"]["Objects"]["Features_Active"]["prot_refl"]["1"]))
+
+                # Params for the morph
+                frac = Tt.get_tasknew()["Info"]["MorphParams"]["2"][0][0]
+                flip_task1 = int(Tt.get_tasknew()["Info"]["MorphParams"]["3"])==1
+                flip_task2 = int(Tt.get_tasknew()["Info"]["MorphParams"]["4"])==1
+                frac_func = Tt.get_tasknew()["Info"]["MorphParams"]["5"]
+
+                # Combine
+                info_base_prims.append({
+                    "los":los,
+                    "shape":sh,
+                    "frac":frac,
+                    "flip_task1":flip_task1, 
+                    "flip_task2":flip_task2,
+                    "frac_func":frac_func
+                })
+        else:
+            info_base_prims = None
+
+        return info_base_prims
+        
     def shapesemantic_classify_novel_shape(self, DS=None):
         """
         Append columns idnicating wehther shapes are novel, eacjh stroke
@@ -3557,6 +3877,7 @@ class Dataset(object):
         """
 
         ###### remove strokes that are empty or just one dot
+        dist_min = 5 # This should be greater than 0, becuaes of numerical imprecision, even dot can be >0...
         if remove_dot_strokes:
             strokeslist = self.Dat["strokes_beh"].values
             for i, strokes in enumerate(strokeslist):
@@ -3566,7 +3887,7 @@ class Dataset(object):
                 # Second, remove dist=0 strokes
                 from pythonlib.drawmodel.features import strokeDistances
                 list_d = strokeDistances(strokes)
-                strokes = [s for s,d in zip(strokes, list_d) if d>0]
+                strokes = [s for s,d in zip(strokes, list_d) if d>dist_min]
 
                 strokeslist[i] = strokes
             self.Dat["strokes_beh"] = strokeslist
@@ -7347,9 +7668,9 @@ class Dataset(object):
         NOTE: This is the ONLY place that tokens are extracted initially.
 
         """
+        print("Extracting Behclass for each trial, may take a while...")
         ListBeh = [self.behclass_generate(i, reset_tokens=reset_tokens) for i in range(len(self.Dat))]
         self.Dat["BehClass"] = ListBeh 
-        
         try:
             self._behclass_alignsim_compute()
             self._behclass_tokens_extract_datsegs(use_global_grid=True,
@@ -7357,7 +7678,8 @@ class Dataset(object):
                                                   tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)         
         except Exception as err:
             # dont exit with partial behclass
-            del self.Dat["BehClass"]
+            if "BehClass" in self.Dat.columns:
+                del self.Dat["BehClass"]
             raise err
 
         print("stored in self.Dat[BehClass]")
@@ -7376,7 +7698,9 @@ class Dataset(object):
         - ind, either None (gets all) or a single trial.
 
         NOTE: This is the ONLY place that tokens are extracted when dataset is constructed.
-        """
+        """ 
+
+        assert ind is None, "dont dot his."
 
         if use_global_grid:
             input_grid_xy = self.taskclass_get_grid_xy_over_all_tasks()
@@ -7384,25 +7708,45 @@ class Dataset(object):
             input_grid_xy = None
 
         # if extra tforms exist, then shapes need to use the actuals trokes to be redefined.
-        reclassify_shape_using_stroke = self.taskclass_check_prims_extra_params_tforms_exist()
-
-        if ind is None:
-            print("Running D._behclass_tokens_extract_datsegs")
-            # if expt==""
-            for i in range(len(self.Dat)):
-                Beh = self.Dat.iloc[i]["BehClass"]
-                Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
-                                             reclassify_shape_using_stroke=reclassify_shape_using_stroke,
-                                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
-                                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
-                if i%200==0:
-                    print(i, "_behclass_tokens_extract_datsegs")
+        extra_tforms_exist = self.taskclass_check_prims_extra_params_tforms_exist()
+        if (not reclassify_shape_using_stroke_version=="default") or extra_tforms_exist:
+            # Then you either signalled you want to reclassify (ie not default) or you must because extra tforms exist.
+            reclassify_shape_using_stroke = True
         else:
-            Beh = self.Dat.iloc[ind]["BehClass"]
+            reclassify_shape_using_stroke = False
+
+        # Autoatmically determine shape names based on clustering sgtropkes? Useful for novel prims.        
+        if reclassify_shape_using_stroke_version=="cluster_by_sim":
+            print("Clustering shapes to label them (strings)")
+            _, list_list_clustidx = self.shapesemantic_cluster_taskclass_strokes_to_rename_shapes()
+            assert len(list_list_clustidx)==len(self.Dat)
+
+        # if ind is None:
+        print("Running D._behclass_tokens_extract_datsegs")
+        # if expt==""
+        for i in range(len(self.Dat)):
+            Beh = self.Dat.iloc[i]["BehClass"]
+
+            if reclassify_shape_using_stroke_version=="cluster_by_sim":
+                list_cluster_by_sim_idx = list_list_clustidx[i]
+            else:
+                list_cluster_by_sim_idx = None
+
             Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
-                                         reclassify_shape_using_stroke=reclassify_shape_using_stroke,
-                                         reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
-                                         tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
+                                            reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+                                            reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+                                            tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid, 
+                                            list_cluster_by_sim_idx=list_cluster_by_sim_idx)
+            if i%200==0:
+                print(i, "_behclass_tokens_extract_datsegs")
+        # else:
+        #     Beh = self.Dat.iloc[ind]["BehClass"]
+
+        #     Beh.alignsim_extract_datsegs(input_grid_xy=input_grid_xy, recompute=True,
+        #                                  reclassify_shape_using_stroke=reclassify_shape_using_stroke,
+        #                                  reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
+        #                                  tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid,
+        #                                  shape_name_overwrite=shape_name_overwrite)
 
     def _behclass_alignsim_compute(self, remove_bad_taskstrokes=True,
             taskstrokes_thresh=0.4):
@@ -10789,7 +11133,7 @@ class Dataset(object):
         #     assert False
 
     def plot_strokes(self, strokes, ax=None, single_color=None, 
-            ver="beh", strok_indices=None, add_stroke_number_beh=True):
+            ver="beh", strok_indices=None, add_stroke_number_beh=True,  alpha=0.55):
         """ Simple low-level helper for plotting strokes
         """
         from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
@@ -10802,16 +11146,31 @@ class Dataset(object):
 
         if ver=="beh":
             plotDatStrokesWrapper(strokes, ax, color=single_color, 
-                add_stroke_number=add_stroke_number_beh)    
+                add_stroke_number=add_stroke_number_beh,  alpha=alpha)    
         elif ver=="task":
             plotDatStrokes(strokes, ax, each_stroke_separate=True, 
                 plotver="onecolor", add_stroke_number=False, 
-                mark_stroke_onset=False, pcol=single_color, number_from_zero=False)
+                mark_stroke_onset=False, pcol=single_color, number_from_zero=False, alpha=alpha)
         else:
             assert False
 
+    def plot_mult_trials_overlaid_on_axis(self, inds, ax, 
+                                          single_color=None, 
+            ver="beh", strok_indices=None, add_stroke_number_beh=True, alpha=0.55,
+            nrand=None):
+        """
+        As title says...
+        """
+        if nrand is not None and len(inds)>nrand:
+            import random
+            inds = sorted(random.sample(inds, nrand))
+
+        for idx in inds:
+            self.plot_single_trial(idx, ax, single_color, ver,
+            strok_indices, add_stroke_number_beh, alpha=alpha)
+
     def plot_single_trial(self, idx, ax=None, single_color=None, 
-            ver="beh", strok_indices=None, add_stroke_number_beh=True):
+            ver="beh", strok_indices=None, add_stroke_number_beh=True,  alpha=0.55):
         """ Low-level code to plot a single trial, beh or task strokes, on an axis.
         PARAMS:
         - single_color, either None (colors by ordinal), or str color code
@@ -10824,7 +11183,7 @@ class Dataset(object):
         else:
             assert False
         return self.plot_strokes(strokes, ax, single_color, ver, strok_indices, 
-            add_stroke_number_beh)
+            add_stroke_number_beh,  alpha=alpha)
 
     def plot_trials_after_slicing_within_range_values(self, colname, minval, 
         maxval, plot_hist=True, nrand=20):
@@ -10972,7 +11331,7 @@ class Dataset(object):
         from ..drawmodel.strokePlots import plotDatStrokes
         import random
         from pythonlib.tools.plottools import plotGridWrapper
-
+    
         if is_task:
             plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_task=True, 
                 add_stroke_number=add_stroke_number, centerize=centerize, 
@@ -10981,6 +11340,7 @@ class Dataset(object):
             plotfunc = lambda strokes, ax: plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, 
                 add_stroke_number=add_stroke_number, centerize=centerize, 
                 jitter_each_stroke=jitter_each_stroke, number_from_zero=number_from_zero)
+            
         fig, axes= plotGridWrapper(strokes_list, plotfunc, ncols=ncols, titles=titles,naked_axes=naked_axes, origin="top_left",
             titles_on_y=titles_on_y, SIZE=SIZE, return_axes=True)
 

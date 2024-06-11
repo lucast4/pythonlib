@@ -146,6 +146,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
 
     # Convert from distance to similarity
     if convert_to_similarity:
+        EPS = 0.00001
         # plt.figure()
         # plt.hist(D[:])
         # assert False
@@ -156,15 +157,15 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
         elif similarity_method=="one_minus":
             D = (1-D)
         elif similarity_method=="divide_by_max":
-            D = 1-D/np.max(D)
+            D = 1-D/(np.max(D) + EPS)
         elif similarity_method=="divide_by_median":
-            tmp = D/np.median(D)
-            D = 1-tmp/np.max(tmp)
+            tmp = D/(np.median(D) + EPS)
+            D = 1-tmp/(np.max(tmp) + EPS)
         elif similarity_method=="divide_by_maxcap":
             assert cap_dist is not None
-            D = 1-D/cap_dist
+            D = 1-D/(cap_dist + 1)
         elif similarity_method=="inverse":
-            D = 1./D
+            D = 1./(D + 1)
         else:
             assert False
 
@@ -184,7 +185,11 @@ def closest_pt_twotrajs(traj1, traj2):
     - ind2, indexing into traj1 and 2 for those pts
     """
     from scipy.spatial.distance import cdist
-    D = cdist(traj1, traj2)
+    try:
+        D = cdist(traj1, traj2)
+    except Exception as err:
+        print(traj1.shape, traj2.shape)
+        raise err
 
     ind1, ind2 = np.unravel_index(np.argmin(D), D.shape)
     dist = D[ind1, ind2]

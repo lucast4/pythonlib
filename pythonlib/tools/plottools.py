@@ -3,6 +3,28 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pythonlib.tools.listtools import sort_mixed_type
 
+def axis_xlim_ylim_intervals_modify(ax, interval_size, axis='x'):
+    """ Modify the axis lims for this plot.
+    PARAMS:
+    - interval_size, gaps between ticks.
+    """
+
+    # # Define the interval size
+    # interval_size = 1
+
+    # Extract the current axis limits
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+
+    # Set x and y ticks with the specified interval size based on the extracted limits
+    if axis=="x":
+        ax.set_xticks(np.arange(np.floor(x_min), np.ceil(x_max) + interval_size, interval_size))
+    elif axis=="y":
+        ax.set_yticks(np.arange(np.floor(y_min), np.ceil(y_max) + interval_size, interval_size))
+    else:
+        print(axis)
+        assert False
+
 def radar_plot(ax, thetas, values, color="k", fill=True):
     """ polar radar plot 
     assumes that theta[-1] immedaitely precedes theta[0]. will connect them

@@ -23,7 +23,8 @@ from pythonlib.tools.pandastools import stringify_values
 def preprocess_plot_pipeline(D, PLOT=True, microstim_version=False, grouping=None,
         contrast = "epoch", 
         plot_methods=("grp", "tls", "tl", "drw", "tc"),
-        lenient_preprocess=False):
+        context = None,
+        lenient_preprocess=False, prune_strokes=True):
     """
     Wrapper to Preprocess and plot.
     This is generalyl useful if you want to plot many metrics of strokes and their preceding gaps, 
@@ -37,57 +38,121 @@ def preprocess_plot_pipeline(D, PLOT=True, microstim_version=False, grouping=Non
     # from pythonlib.dataset.dataset_analy.primitivenessv2 import plot_timecourse_results, plot_drawings_results, preprocess, extract_grouplevel_motor_stats, plot_grouplevel_results, plot_triallevel_results
 
     if grouping is None:
-        # grouping = ["shape", "gridloc", "epoch"]
         grouping = ["locshape_pre_this", "epoch", "block"] 
     # else:
     #     assert "locshape_pre_this" in grouping, "Currently plotting code expects locshape_pre_this"
-
-    if "locshape_pre_this" in grouping:
-        context = "locshape_pre_this"
-    elif "shape" in grouping:
-        context = "shape"
-    else:
-        print(grouping)
-        assert False
+    
+    # Determine context var
+    if context is None:
+        if "locshape_pre_this" in grouping:
+            context = "locshape_pre_this"
+        elif "shape" in grouping:
+            context = "shape"
+        else:
+            print(grouping)
+            assert False
 
     ############### Extract data
-    DS, SAVEDIR = preprocess(D, True, microstim_version=microstim_version, lenient_preprocess=lenient_preprocess)
-    dfres, grouping = extract_grouplevel_motor_stats(DS, grouping, 
-        microstim_version=microstim_version)
+    DS, SAVEDIR = preprocess(D, prune_strokes, microstim_version=microstim_version, lenient_preprocess=lenient_preprocess)
 
-    if PLOT:
-        ############### PLOTS
-        if "grp" in plot_methods:
-            # Plot, comparing mean across levels of contrast variable.
-            # Each datapt is a single level of grouping.
-            savedir = f"{SAVEDIR}/grouplevel"
-            os.makedirs(savedir, exist_ok=True)
-            plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir, context=context)
+    dfres = plot_wrapper(DS, contrast, context, grouping, SAVEDIR,
+                    microstim_version=microstim_version, plot_methods=plot_methods, PLOT=PLOT)
 
-        if "tls" in plot_methods:
-            savedir = f"{SAVEDIR}/triallevel_simple"
-            os.makedirs(savedir, exist_ok=True)
-            plot_triallevel_results_simple(DS, contrast, context, savedir)
+    # dfres, grouping = extract_grouplevel_motor_stats(DS, grouping, 
+    #     microstim_version=microstim_version)
+
+    # if PLOT:
+    #     ############### PLOTS
+    #     if "grp" in plot_methods:
+    #         # Plot, comparing mean across levels of contrast variable.
+    #         # Each datapt is a single level of grouping.
+    #         savedir = f"{SAVEDIR}/grouplevel"
+    #         os.makedirs(savedir, exist_ok=True)
+    #         plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir, context=context)
+
+    #     if "tls" in plot_methods:
+    #         savedir = f"{SAVEDIR}/triallevel_simple"
+    #         os.makedirs(savedir, exist_ok=True)
+    #         plot_triallevel_results_simple(DS, contrast, context, savedir)
         
-        if "tl" in plot_methods:
-            # Plot, each datapt a single trial.
-            savedir = f"{SAVEDIR}/triallevel"
-            os.makedirs(savedir, exist_ok=True)
-            plot_triallevel_results(DS, contrast, savedir)
+    #     if "tl" in plot_methods:
+    #         # Plot, each datapt a single trial.
+    #         savedir = f"{SAVEDIR}/triallevel"
+    #         os.makedirs(savedir, exist_ok=True)
+    #         plot_triallevel_results(DS, contrast, savedir)
 
-        if "drw" in plot_methods:
-            # Plot drawings
-            savedir = f"{SAVEDIR}/drawings"
-            os.makedirs(savedir, exist_ok=True)
-            plot_drawings_results(DS, savedir)
+    #     if "drw" in plot_methods:
+    #         # Plot drawings
+    #         savedir = f"{SAVEDIR}/drawings"
+    #         os.makedirs(savedir, exist_ok=True)
+    #         plot_drawings_results(DS, savedir)
 
-        if "tc" in plot_methods:
-            # Plot timecourses
-            savedir = f"{SAVEDIR}/timecourse"
-            os.makedirs(savedir, exist_ok=True)
-            plot_timecourse_results(DS, savedir, contrast)
+    #     if "tc" in plot_methods:
+    #         # Plot timecourses
+    #         savedir = f"{SAVEDIR}/timecourse"
+    #         os.makedirs(savedir, exist_ok=True)
+    #         plot_timecourse_results(DS, savedir, contrast)
 
     return DS, SAVEDIR, dfres, grouping
+
+def preprocess_plot_pipeline_directly_from_DS(DS, PLOT=True, microstim_version=False, grouping=None,
+        contrast = "epoch", 
+        plot_methods=("grp", "tls", "tl", "drw", "tc"),
+        context = None, prune_strokes=True,
+        savedir_suffix = None):
+    """
+    Wrapper to Preprocess and plot.
+    This is generalyl useful if you want to plot many metrics of strokes and their preceding gaps, 
+    showing effect of a contrast variable, and grouping strokes based on arbitrary context.
+
+    Flexible, in inputing which plots to make
+
+    PARAMS:
+    - lenient_preprocess, bool, if True, preprocess skips pruning based on stroke quality.
+    """
+    # from pythonlib.dataset.dataset_analy.primitivenessv2 import plot_timecourse_results, plot_drawings_results, preprocess, extract_grouplevel_motor_stats, plot_grouplevel_results, plot_triallevel_results
+
+    if grouping is None:
+        grouping = ["locshape_pre_this", "epoch", "block"] 
+    
+    # Determine context var
+    if context is None:
+        if "locshape_pre_this" in grouping:
+            context = "locshape_pre_this"
+        elif "shape" in grouping:
+            context = "shape"
+        else:
+            print(grouping)
+            assert False
+
+    ############### Extract data
+    DS, SAVEDIR = preprocess_directly_from_DS(DS, prune_strokes=prune_strokes, microstim_version=microstim_version)
+
+    if savedir_suffix is not None:
+        SAVEDIR = f"{SAVEDIR}/{savedir_suffix}"
+        os.makedirs(SAVEDIR, exist_ok=True)
+
+    dfres = plot_wrapper(DS, contrast, context, grouping, SAVEDIR,
+                    microstim_version=microstim_version, plot_methods=plot_methods, PLOT=PLOT)
+
+    return DS, SAVEDIR, dfres, grouping
+
+
+def preprocess_directly_from_DS(DS, prune_strokes=True, microstim_version=False):
+    """ Entire pipeline to extract motor, image, and other stats, here directly from
+    DS that you pass in (i.e., otherwise identical to preprocess())
+
+    """
+    from pythonlib.dataset.dataset_analy.motortiming import _gapstrokes_preprocess_extract_strokes_gaps
+    DS = _gapstrokes_preprocess_extract_strokes_gaps(DS, microstim_version=microstim_version,
+                                                              prune_strokes=prune_strokes)
+
+    # Novel shapes?
+    DS.shapesemantic_label_and_novel_append()
+
+    SAVEDIR = DS.Dataset.make_savedir_for_analysis_figures_BETTER("primitivenessv2")
+
+    return DS, SAVEDIR
 
 def preprocess(D, prune_strokes=True, microstim_version=False, lenient_preprocess=False):
     """ Entire pipeline to extract motor, image, and other stats
@@ -111,6 +176,58 @@ def preprocess(D, prune_strokes=True, microstim_version=False, lenient_preproces
 
     return DS, SAVEDIR
 
+def plot_wrapper(DS, contrast, context, grouping, SAVEDIR,
+                 microstim_version=False,
+                 plot_methods=("grp", "tls", "tl", "drw", "tc"),
+                 PLOT=True):
+    """
+    Make all the plots...
+    PARAMS:
+    - contrast, str, variable that is contrasted (e.g. "novel")
+    - context, str, defines the datapt (e.g., "shape")
+    - grouping, list of str, each level will have its group-level motor stats. 
+    Mainly relevant for computing within-grp pairwise similarity.
+    """
+
+    print("Saving primitivenessv2 plots at: ", SAVEDIR)
+
+    dfres, grouping = extract_grouplevel_motor_stats(DS, grouping, 
+        microstim_version=microstim_version)
+    D = DS.Dataset
+
+    ############### PLOTS
+    if PLOT:
+        if "grp" in plot_methods:
+            # Plot, comparing mean across levels of contrast variable.
+            # Each datapt is a single level of grouping.
+            savedir = f"{SAVEDIR}/grouplevel"
+            os.makedirs(savedir, exist_ok=True)
+            plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir, context=context)
+
+        if "tls" in plot_methods:
+            savedir = f"{SAVEDIR}/triallevel_simple"
+            os.makedirs(savedir, exist_ok=True)
+            plot_triallevel_results_simple(DS, contrast, context, savedir)
+        
+        if "tl" in plot_methods:
+            # Plot, each datapt a single trial.
+            savedir = f"{SAVEDIR}/triallevel"
+            os.makedirs(savedir, exist_ok=True)
+            plot_triallevel_results(DS, contrast, savedir, context=context)
+
+        if "drw" in plot_methods:
+            # Plot drawings
+            savedir = f"{SAVEDIR}/drawings"
+            os.makedirs(savedir, exist_ok=True)
+            plot_drawings_results(DS, savedir)
+
+        if "tc" in plot_methods:
+            # Plot timecourses
+            savedir = f"{SAVEDIR}/timecourse"
+            os.makedirs(savedir, exist_ok=True)
+            plot_timecourse_results(DS, savedir, contrast, context=context)
+    
+    return dfres
 
 def extract_triallevel_motor_stats(DS, D, map_shape_to_newold=None):
     """ 
@@ -152,31 +269,26 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
     # Collect for each grp level.
     res = []
     for grpname, inds in grpdict.items():
-        print("TODO: use dtw of velocities (separately for x and y) instead of euclidian of diffs")
         # 1) Consistency of motor
 
-    #     list_shape = DS.Dat["shape"].unique().tolist()
-        # list_shape = ["arcdeep-4-5-0"] # remove the outliers
-        # list_shape = ["Lcentered-4-6-0"] 
-
-    #     for shape in list_shape:
-    #         # extract velocity
-    #         inds = DS.Dat[DS.Dat["shape"]==shape].index.tolist()
+        print("Computing group stats for:", grpname)
 
     #     print(shape, ", n=", len(inds))
-        if len(inds)<2:
+        if len(inds)<1:
+        # if len(inds)<2:
             print("SKIPPING (N too low)")
             continue
+        
+        if False: # Cant assume has this (i.e. using task los sometimes, as group)
+            # get the abstract shape
+            tmp = DS.Dat.iloc[inds]["shapeabstract"].unique().tolist()
+            assert len(tmp)==1
+            shapeabstract=tmp[0]
 
-        # get the abstract shape
-        tmp = DS.Dat.iloc[inds]["shapeabstract"].unique().tolist()
-        assert len(tmp)==1
-        shapeabstract=tmp[0]
-
-        # shape 
-        tmp = DS.Dat.iloc[inds]["shape"].unique().tolist()
-        assert len(tmp)==1
-        shape=tmp[0]
+            # shape 
+            tmp = DS.Dat.iloc[inds]["shape"].unique().tolist()
+            assert len(tmp)==1
+            shape=tmp[0]
 
         # shape 
         tmp = DS.Dat.iloc[inds]["epoch_orig"].unique().tolist()
@@ -202,17 +314,31 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
             assert False
 
         # Get all off diagonal sims (all pairwise)
-        score = np.mean(simmat[np.where(~np.eye(simmat.shape[0],dtype=bool))])
+        if len(strokes)>1:
+            score = np.mean(simmat[np.where(~np.eye(simmat.shape[0],dtype=bool))])
+        else:
+            score = np.nan
+
+        # res.append({
+        #     "shapeabstract":shapeabstract,
+        #     "shape":shape,
+        #     "grp":grpname,
+        #     "mean_sim_score":score,
+        #     "distancever":distancever,
+        #     "inds_DS":inds,
+        #     "epoch_orig":epoch_orig,
+        # })
 
         res.append({
-            "shapeabstract":shapeabstract,
-            "shape":shape,
             "grp":grpname,
             "mean_sim_score":score,
             "distancever":distancever,
             "inds_DS":inds,
             "epoch_orig":epoch_orig,
         })
+
+        for _var, _val in zip(grouping, grpname):
+            res[-1][_var] = _val
 
         if "microstim_epoch_code" in DS.Dat.columns:
             tmp = DS.Dat.iloc[inds]["microstim_epoch_code"].unique().tolist()
@@ -266,8 +392,8 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
         dfres, _ = extract_with_levels_of_conjunction_vars(dfres, "microstim_epoch_code",
                                                            ["epoch_orig", "locshape_pre_this", "block"],
                                                            n_min_across_all_levs_var=1)
-        print(len(dfres))
-
+    dfres = dfres.reset_index(drop=True)
+    
     return dfres, grouping
 
 def plot_triallevel_results_simple(DS, contrast, context, savedir, yvars=None):
@@ -293,37 +419,44 @@ def plot_triallevel_results_simple(DS, contrast, context, savedir, yvars=None):
             for epoch_orig in list_epoch_orig:
                     
                 dfthis = DS.Dat[(DS.Dat["block"]==bk) & (DS.Dat["epoch_orig"]==epoch_orig)].reset_index(drop=True)
-                if y == "gap_from_prev_dur":
-                    # remove outliers
-                    dfthis = dfthis[dfthis["gap_from_prev_dur"]<5].reset_index(drop=True)
-                dfthis = dfthis.sort_values(contrast)
-                dfthis = stringify_values(dfthis)
+                if len(dfthis)>10:
 
-                dfthis_agg = aggregGeneral(DS.Dat, [context, contrast], values=yvars)
+                    if y == "gap_from_prev_dur":
+                        # remove outliers
+                        dfthis = dfthis[dfthis["gap_from_prev_dur"]<5].reset_index(drop=True)
+                    dfthis = dfthis.sort_values(contrast)
+                    dfthis = stringify_values(dfthis)
 
-                fig = sns.catplot(data=dfthis, x=context, y=y, hue="dist_beh_task_strok", aspect=4)
-                rotateLabel(fig)
-                savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-1.pdf")
+                    dfthis_agg = aggregGeneral(DS.Dat, [context, contrast], values=yvars)
 
-                fig = sns.catplot(data=dfthis, x=context, y=y, hue=contrast, aspect=4)
-                rotateLabel(fig)
-                savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-2.pdf")
+                    if False: # Not important
+                        fig = sns.catplot(data=dfthis, x=context, y=y, hue="dist_beh_task_strok", aspect=4)
+                        rotateLabel(fig)
+                        savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-1.pdf")
 
-                fig = sns.catplot(data=dfthis, x=context, y=y, hue="gridloc", aspect=4)
-                rotateLabel(fig)
-                savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-2b.pdf")
+                    fig = sns.catplot(data=dfthis, x=context, y=y, hue=contrast, aspect=4, alpha=0.5)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-2.pdf")
 
-                fig = sns.catplot(data=dfthis_agg, x=contrast, y=y, aspect=1.5)
-                rotateLabel(fig)
-                savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-3.pdf")
+                    fig = sns.catplot(data=dfthis, x=context, y=y, hue="gridloc", aspect=4, alpha=0.5)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-2b.pdf")
 
-                plt.close("all")
+                    fig = sns.catplot(data=dfthis, x=context, y=y, hue=contrast, row="gridloc", aspect=4, alpha=0.5)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-2c.pdf")
+
+                    fig = sns.catplot(data=dfthis_agg, x=contrast, y=y, aspect=1.5, alpha=0.4)
+                    rotateLabel(fig)
+                    savefig(fig, f"{savedir}/{context}-{y}-epochorig_{epoch_orig}-bk_{bk}-3.pdf")
+
+                    plt.close("all")
                 
-
 
 def plot_triallevel_results(DS, contrast, savedir, context=None,
                             yvars=None):
     """
+    Plot testing effect of <contrast>, where each datapt is <context>
     """
     from pythonlib.tools.snstools import rotateLabel
     from pythonlib.stats.lme import lme_categorical_fit_plot
@@ -373,7 +506,7 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
                         plt.close("all")
 
                         # Aggreate, scatter plot
-                        fig = sns.catplot(data=dfthis, x=sh, y=y, hue=contrast, aspect=4)
+                        fig = sns.catplot(data=dfthis, x=sh, y=y, hue=contrast, aspect=4, alpha=0.4)
                         rotateLabel(fig)
                         savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}-3.pdf")
 
@@ -387,19 +520,27 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
                             lev_treat_default = "off"
                         else:
                             # fixed_treat = "epoch"
-                            fixed_treat = "contrast"
-                            lev_treat_default = None
+                            fixed_treat = contrast
+                            if fixed_treat == "morph_is_morphed":
+                                lev_treat_default = False
+                            else:
+                                lev_treat_default = None
 
                         # Linear mixed effects
                         dfout, dict_dfthis = extract_with_levels_of_conjunction_vars_helper(dfthis, fixed_treat, INDEX)
-                        if len(dfout)>10:
 
-                            RES, fig, axes = lme_categorical_fit_plot(dfthis, y, fixed_treat, 
-                                lev_treat_default, rand_grp_list=INDEX, PLOT = True)
-                            savefig(fig, f"{savedir}/LME-{fixed_treat}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}.pdf")
+                        if len(dfout)>10:
+                            try:
+                                RES, fig, axes = lme_categorical_fit_plot(dfout, y, fixed_treat, 
+                                    lev_treat_default, rand_grp_list=INDEX, PLOT = True)
+                                savefig(fig, f"{savedir}/LME-{fixed_treat}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}.pdf")
+                            except Exception as err:
+                                print(err)
+                                # Not sure...
+                                pass
 
                             # Plot normalized to the default level.
-                            _, _, _, _, fig = datamod_normalize_row_after_grouping(dfthis, 
+                            _, _, _, _, fig = datamod_normalize_row_after_grouping(dfout, 
                                                                                 fixed_treat, 
                                                                                 INDEX, 
                                                                                 y,
@@ -413,7 +554,7 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
         ############### PLOTS ACROSS ALL DATA
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
         #     kind="point", ci=68)
-        fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, row="shape", kind="point", errorbar=('ci', 68), aspect=1.5)
+        fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, row=context, kind="point", errorbar=('ci', 68), aspect=1.5)
         rotateLabel(fig)
         savefig(fig, f"{savedir}/all-{contrast}-{y}.pdf")
 
@@ -444,6 +585,8 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir,
     from pythonlib.tools.pandastools import datamod_normalize_row_after_grouping
     from pythonlib.tools.snstools import plotgood_lineplot
 
+    assert isinstance(context, str)
+    
     if yvars is None:
         yvars = ["mean_sim_score", "dist_beh_task_strok", "time_duration", "velocity", "distcum", 
         "gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel"]
@@ -458,7 +601,6 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir,
         savefig(fig, f"{savedir}/grplevel-{contrast}-{y}-2.pdf")
 
         plt.close("all")
-    
         fig = sns.catplot(data=dfres, x=context, y=y, row="epoch_orig", hue=contrast, 
                     kind="point", aspect=3)
         rotateLabel(fig)
@@ -477,26 +619,41 @@ def plot_grouplevel_results(dfres, DS, D, grouping, contrast, savedir,
         else:
             # fixed_treat = "epoch"
             fixed_treat = contrast
-            lev_treat_default = None
+            if fixed_treat == "morph_is_morphed":
+                lev_treat_default = False
+            else:
+                lev_treat_default = None
 
-        dfout, dict_dfthis = extract_with_levels_of_conjunction_vars_helper(dfres, fixed_treat, INDEX)
+        dfout, dict_dfthis = extract_with_levels_of_conjunction_vars_helper(dfres, fixed_treat, INDEX,
+                                                                            n_min_per_lev=1)
+
+        # print(len(dfout))
+        # print(dfout[fixed_treat])
+        # print(fixed_treat)
+        # print(INDEX)
+        # assert False
         if len(dfout)>10:
             # Linear mixed effects
             # This doesnt make sense, since there is only one datapt per group
-            RES, fig, ax = lme_categorical_fit_plot(dfres, y=y, fixed_treat=fixed_treat, 
-                    lev_treat_default=lev_treat_default, 
-                    rand_grp_list=INDEX, PLOT=True)
-            savefig(fig, f"{savedir}/LME-{fixed_treat}-{y}.pdf")
+            try:
+                RES, fig, ax = lme_categorical_fit_plot(dfout, y=y, fixed_treat=fixed_treat, 
+                        lev_treat_default=lev_treat_default, 
+                        rand_grp_list=INDEX, PLOT=True)
+                savefig(fig, f"{savedir}/LME-{fixed_treat}-{y}.pdf")
+            except Exception as err:
+                print(err)
+                # Not sure...
+                pass
 
             # Plot normalized to the default level.
-            _, _, _, _, fig = datamod_normalize_row_after_grouping(dfres, 
+            _, _, _, _, fig = datamod_normalize_row_after_grouping(dfout, 
                                                                 fixed_treat, 
                                                                 INDEX, 
                                                                 y,
                                                                 lev_treat_default,
                                                                 PLOT=True
                                                                 )
-        savefig(fig, f"{savedir}/NORM-{fixed_treat}-{y}.pdf")
+            savefig(fig, f"{savedir}/NORM-{fixed_treat}-{y}.pdf")
 
     plt.close("all")
 
@@ -510,13 +667,13 @@ def plot_drawings_results(DS, savedir):
     list_shape = DS.Dat["shape"].unique().tolist()
 
     # yvars = ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]
-    yvars = ["dist_beh_task_strok", "time_duration", "velocity", "distcum"]
+    yvars = ["dist_beh_task_strok"]
 
-    for sh in list_shape:
-        for y in yvars:
-            fig, axes = DS.plotshape_egtrials_sorted_by_feature(sh, y)
-            savefig(fig, f"{savedir}/egtrials-{y}-{sh}.pdf")
-        plt.close("all")
+    # for sh in list_shape:
+    #     for y in yvars:
+    #         fig, axes = DS.plotshape_egtrials_sorted_by_feature(sh, y)
+    #         savefig(fig, f"{savedir}/egtrials-{y}-{sh}.pdf")
+    #     plt.close("all")
 
     if len(list_epoch)>1:
         for sh in list_shape:
@@ -528,13 +685,15 @@ def plot_drawings_results(DS, savedir):
                 plt.close("all")
 
 
-def plot_timecourse_results(DS, savedir, contrast="epoch"):
+def plot_timecourse_results(DS, savedir, contrast="epoch", context=None):
     """ Plot timecourse (trial by trial)
     """
 
     yvars = ["dist_beh_task_strok", "time_duration", "velocity", "distcum", "gap_from_prev_dur"]
-    # shape_vars = ["shape"]
-    shape_vars = ["shape", "shapeabstract"]
+    if context is None:
+        shape_vars = ["shape", "shapeabstract"]
+    else:
+        shape_vars = [context]
 
     DS.dataset_append_column("tvalfake")
     DS.dataset_append_column("session")

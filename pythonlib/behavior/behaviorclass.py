@@ -38,7 +38,12 @@ class BehaviorClass(object):
         self._TokensLocked = False
 
         if ver=="dataset":
-            D = params["D"].copy()
+            if False:
+                # no need to cpy, since not storing it
+                D = params["D"].copy()
+            else:
+                D = params["D"]
+                
             ind = params["ind"]
             Task = D.Dat.iloc[ind]["Task"]
 
@@ -163,7 +168,11 @@ class BehaviorClass(object):
                 "character":D.Dat.iloc[ind]["character"]}
 
             # self.Dataset = D.copy() # must copy, or else if modify D, the ind doesnt match anymore.
-            self.Datrow = D.Dat.iloc[ind]
+            if True:
+                # stop saving dat. this forces me to copy it whch takes a while
+                self.Task = D.Dat.iloc[ind]["Task"]
+            else:
+                self.Datrow = D.Dat.iloc[ind]
 
             #### easier access to some variables
             # self.Strokes = self.Dat["strokes_beh"]
@@ -357,7 +366,10 @@ class BehaviorClass(object):
         """
 
         # print(self.Dataset)
-        return self.Datrow["Task"]
+        if False:
+            return self.Datrow["Task"]
+        else:
+            return self.Task
 
 
 
@@ -479,7 +491,8 @@ class BehaviorClass(object):
 
     def alignsim_extract_datsegs(self, expt=None, plot_print_on=False, recompute=False,
             include_scale=True, input_grid_xy=None, reclassify_shape_using_stroke=False,
-            reclassify_shape_using_stroke_version = "default", tokens_gridloc_snap_to_grid=False):
+            reclassify_shape_using_stroke_version = "default", tokens_gridloc_snap_to_grid=False,
+            list_cluster_by_sim_idx=None):
         """
         [GOOD! This is the only place where datsegs are generated]
         Generate datsegs, sequence of tokens. Uses alignement based on similairty matrix.
@@ -551,7 +564,8 @@ class BehaviorClass(object):
             include_scale=include_scale, input_grid_xy=input_grid_xy,
                              reclassify_shape_using_stroke=reclassify_shape_using_stroke,
                              reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
-                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid) # generate the defualt order
+                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid,
+                             list_cluster_by_sim_idx=list_cluster_by_sim_idx) # generate the defualt order
 
         # Now use the aligned task inds
         inds_taskstrokes = self.Alignsim_taskstrokeinds_sorted

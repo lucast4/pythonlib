@@ -918,6 +918,12 @@ def append_col_with_index_of_level_after_grouping(df, grpvars, column, newcolumn
 
     _check_index_reseted(df)
 
+    if grpvars is None:
+        df = df.copy()
+        assert "_dummy" not in df.columns
+        df["_dummy"] = "dummy"
+        grpvars = ["_dummy"]
+
     n_in = len(df)
     groupdict = grouping_append_and_return_inner_items_good(df, grpvars)
     list_df = []
@@ -961,35 +967,35 @@ def append_col_with_index_of_level(df, column, newcolumn):
 
     return map_idx_to_level, map_level_to_idx
 
-def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
-    """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
-    ie each row is a different index!
-    e.g, if groupby has 2 levels (A and B), then this gives all rows with level A unqiue indices 0, 1,2 ...
-    e.g.. like trial numbers for a given condition/task.
-    - randomize, then will randomize the indices (only within trails with same level of groupby)
-    """
+# def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
+#     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
+#     ie each row is a different index!
+#     e.g, if groupby has 2 levels (A and B), then this gives all rows with level A unqiue indices 0, 1,2 ...
+#     e.g.. like trial numbers for a given condition/task.
+#     - randomize, then will randomize the indices (only within trails with same level of groupby)
+#     """
 
-    # OLD method - avoid since it mutates
-    # dfthis = D.Dat
-    # def F(x):
-    #     # assign in chron order
-    #     x["test"] = range(len(x))
-    # #     x["test"] = 1
-    #     return x
+#     # OLD method - avoid since it mutates
+#     # dfthis = D.Dat
+#     # def F(x):
+#     #     # assign in chron order
+#     #     x["test"] = range(len(x))
+#     # #     x["test"] = 1
+#     #     return x
         
-    # dfthis = dfthis.groupby("character").apply(F)
+#     # dfthis = dfthis.groupby("character").apply(F)
 
-    df = df.copy()
+#     df = df.copy()
 
-    def F(x):
-        # assign in chron order
-        out = list(range(len(x)))
-        if randomize:
-            from random import shuffle
-            shuffle(out)
-        return out
+#     def F(x):
+#         # assign in chron order
+#         out = list(range(len(x)))
+#         if randomize:
+#             from random import shuffle
+#             shuffle(out)
+#         return out
 
-    return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
+#     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
 def convert_to_1d_dataframe_hist(df, col1, plot_hist=True, ax=None):
     """ Aggregate (usually counts for each level of col1).
@@ -1863,7 +1869,7 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     nmin = np.min(np.min(dftmp, axis=0))
     return nmin, nmax
 
-def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None):
+def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -1899,7 +1905,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         ncols = 3
     nrows = int(np.ceil(len(list_dummy)/ncols))
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*7, nrows*7), squeeze=False)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*FIGSIZE, nrows*FIGSIZE), squeeze=False)
     for ax, dum in zip(axes.flatten(), list_dummy):
         dfthis = df[df["dummy"]==dum]
 
@@ -3406,10 +3412,14 @@ def find_unique_values_with_indices(df, col, tolerance = 1e-3,
     or str, adds this column using the unique values.
     """
 
-    series = df[col]
+    # series = df[col]
     unique_values = []
     indices = []
-    
+
+    # # first, sort df by col
+    # df = df.copy()
+    # df = df.sort_values(col).reset_index(drop=True)
+
     map_index_to_value = {}
     for i, value in enumerate(df[col].values):
         found = False

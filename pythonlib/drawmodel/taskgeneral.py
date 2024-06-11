@@ -555,6 +555,39 @@ class TaskClass(object):
             print(self.Params)
             assert False , "not in bounds"
 
+    def extra_tform_params_extract(self):
+        """
+        REturn either None (iof doesnt exist) or dict of extra tform params, like this:
+
+        {'tforms': {},
+        'tforms_each_prim_p': [{},
+            [['th', array(-0.16839016)],
+            ['sx', array(1.01434708)],
+            ['sy', array(1.01434708)]],
+            {}]
+        }        
+        """
+        # print(self.PlanDat["PrimsExtraParams"])
+        # assert False
+
+        if "PrimsExtraParams" not in self.PlanDat.keys():
+            return None
+        elif all([len(x)==0 for x in self.PlanDat["PrimsExtraParams"]]):
+            # liek this [{}, {}]
+            return None
+        else:
+            if len(self.PlanDat["PrimsExtraParams"])>1:
+                print(self.PlanDat["PrimsExtraParams"])
+                assert False, "what is this..."
+            
+            extra_tforms_dict = self.PlanDat["PrimsExtraParams"][0] # Dict
+
+            assert isinstance(extra_tforms_dict, dict)
+            assert all([k in ["tforms", "tforms_each_prim_p"] for k in extra_tforms_dict.keys()])
+
+            return extra_tforms_dict
+        
+
     def check_prims_extra_params_exist(self):
         """
         Check if any extra transformations were applied to the prims in matlab code.
@@ -573,11 +606,12 @@ class TaskClass(object):
         # a = len(T.PlanDat["PrimsExtraParams"])>
         # return a and b
 
-        if "PrimsExtraParams" not in self.PlanDat.keys():
+        extra_tforms_dict = self.extra_tform_params_extract()
+        if extra_tforms_dict is None:
             return False
 
-        return any([len(p)>0 for p in self.PlanDat["PrimsExtraParams"]])
-
+        return any([len(p)>0 for p in extra_tforms_dict.values()])
+                   
     ########################
 
     # def get_task_id(self):
@@ -1242,7 +1276,8 @@ class TaskClass(object):
         include_scale=False, input_grid_xy=None, return_as_tokensclass=False,
                         reclassify_shape_using_stroke=False,
                         reclassify_shape_using_stroke_version="default",
-                        tokens_gridloc_snap_to_grid=False):
+                        tokens_gridloc_snap_to_grid=False,
+                        list_cluster_by_sim_idx=None):
         """ [CONFIRMED - this is the ONLY place where self._DatSegs is accessed (across
         all code files).
         Wrapper to eitehr create new or to return cached. see
@@ -1254,7 +1289,7 @@ class TaskClass(object):
         - input_grid_xy, see inner
         - reclassify_shape_using_stroke, see Dataset()
         """
-
+        assert isinstance(reclassify_shape_using_stroke_version, str)
         if not hasattr(self, "_TokensLocked"):
             self._TokensLocked = False
 
@@ -1282,7 +1317,8 @@ class TaskClass(object):
                 include_scale=include_scale, input_grid_xy=input_grid_xy,
                                             reclassify_shape_using_stroke=reclassify_shape_using_stroke,
                                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
-                                            tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
+                                            tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid,
+                                            list_cluster_by_sim_idx=list_cluster_by_sim_idx)
             self._DatSegs = datsegs
             tokens = self._DatSegs
 
@@ -1345,7 +1381,8 @@ class TaskClass(object):
             track_order=True, hack_is_gridlinecircle=False, include_scale=True,
             input_grid_xy = None, reclassify_shape_using_stroke=False,
             reclassify_shape_using_stroke_version="default",
-            tokens_gridloc_snap_to_grid=False):
+            tokens_gridloc_snap_to_grid=False,
+            list_cluster_by_sim_idx=None):
         """
         [NOTE: ONLY use this for genreated tokens in default order. this important becuase
         generates and caches. To reorder, see tokens_reorder]
@@ -1370,6 +1407,11 @@ class TaskClass(object):
         - datsegs, list of dicts, each a token.
         """
         from math import pi
+
+        if not reclassify_shape_using_stroke_version=="default":
+            assert reclassify_shape_using_stroke==True, "mistake, you siganlled you want to reclassify shapes by stroke becuaes you inputed a param that is not default.."
+        elif reclassify_shape_using_stroke_version == "cluster_by_shape_sim":
+            assert list_cluster_by_sim_idx is not None
 
         shape_rename_perfblockey_decimals_to_defaults = False
         # Not yet coded, this would require hand=coding the shape labels (e.g., binning angles, etc), which can do in
@@ -1514,10 +1556,18 @@ class TaskClass(object):
         def _shape(i):
             # return string
             if reclassify_shape_using_stroke:
+                if reclassify_shape_using_stroke_version == "cluster_by_sim":
+                    assert len(list_cluster_by_sim_idx) == len(Prims)
+                    # assert len(list_shape_name_overwrite) == len(Prims)
+                    # shape_name_overwrite = list_shape_name_overwrite[i]
+                    cluster_by_sim_idx = list_cluster_by_sim_idx[i]
+                else:
+                    cluster_by_sim_idx = None
+                    # shape_name_overwrite = None
                 sh = Prims[i].label_classify_prim_using_stroke(return_as_string=True,
                                                shape_rename_perfblockey_decimals_to_defaults=shape_rename_perfblockey_decimals_to_defaults,
-                                               version=reclassify_shape_using_stroke_version)
-
+                                               version=reclassify_shape_using_stroke_version,
+                                               cluster_by_sim_idx = cluster_by_sim_idx)
                 return sh
             else:
                 return Prims[i].shape_oriented(include_scale=include_scale)

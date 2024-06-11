@@ -403,8 +403,14 @@ def plotwrapper_draw_grid_rows_cols(df, rowvar, colvar, n_examples_per_sublot=1,
     """
 
     assert "strokes_beh" in df.columns
-    assert rowvar in df.columns
-    assert colvar in df.columns
+    try:
+        assert rowvar in df.columns
+        assert colvar in df.columns
+    except Exception as err:
+        print(rowvar, rowvar in df.columns)
+        print(colvar, colvar in df.columns)
+        raise err
+    
     if plot_task:
         assert "strokes_task" in df.columns
     if xlabel_trialcode:

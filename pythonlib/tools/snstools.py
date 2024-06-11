@@ -373,7 +373,7 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         assert False
 
     # Clip to maximum size.
-    SIZEMAX = 15
+    SIZEMAX = 20
     aspect = h/w
     if h>SIZEMAX:
         h = SIZEMAX
@@ -381,6 +381,8 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     if w>SIZEMAX:
         w = SIZEMAX
         h = aspect*w
+    
+    # print(SHAPE, w,h, ax is None)
 
     if ax is None:
         fig, ax = plt.subplots(1,1, figsize=(w, h))

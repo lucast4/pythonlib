@@ -7,6 +7,8 @@ from ..analy_dlist import extract_strokes_monkey_vs_self
 from pythonlib.globals import PATH_DRAWMONKEY_DIR
 from .dates import preprocess_dates
 from pythonlib.dataset.modeling.discrete import _get_default_grouping_map_tasksequencer_to_rule
+from pythonlib.tools.plottools import savefig
+import os
 
 def _groupingParams(D, expt):
     """ Filter and grouping variable to apply to 
@@ -214,7 +216,8 @@ def _groupingParams(D, expt):
         assert False, "fix this, see here"
         # epoch 1 (line) the test tasks were not defined as probes. Add param here , which
         # should have affect in subsewuen code redefining monkye train test.
-    elif expt=="primpanchostim1" or expt=="primdiegostim1" or expt=="primdiegostim1b":
+    
+    elif ("primpanchostim" in expt) or ("primdiegostim" in expt):
         # e.g., primdiegostim1b, or primpanchostim1
         # Is just single prims, but trials differentiated by whether stim or not, during
         # stroke.
@@ -222,8 +225,22 @@ def _groupingParams(D, expt):
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["microstim_code"]
         map_ttl_region = {
-            3:"M1",
+            3:"TTL3",
+            4:"TTL4"
         }
+
+    # elif expt=="primpanchostim1" or expt=="primdiegostim1" or expt=="primdiegostim1b":
+    #     # e.g., primdiegostim1b, or primpanchostim1
+    #     # Is just single prims, but trials differentiated by whether stim or not, during
+    #     # stroke.
+    #     # Just use defaults.
+    #     grouping_reassign = True
+    #     grouping_reassign_methods_in_order = ["microstim_code"]
+    #     map_ttl_region = {
+    #         3:"M1",
+    #     }
+    
+
     elif "gramstim" in expt or "gramdirstim" in expt or "dirdirstim" in expt:
         # e.g,, gramstimpancho1
         # single grammar, and stim on rtandom interleave trials.
@@ -476,22 +493,32 @@ def _groupingParams(D, expt):
     #         4:"TTL4",
     #     } 
     
-    elif ("primdiego1f" in expt) or ("primpancho1f" in expt):
+    elif ("primdiego1f" in expt) or ("primpancho1f" in expt) or (expt in ["primsingridrand8"]):
+        # [Psycho, ROTATIONS]
         # Novel prims, wnat to rename shapes using hash.
-        # (ROTATIONS)
-        reclassify_shape_using_stroke_version = "hash"
-        
-    elif expt in ["primsingridrand8"]:
-        # Novel prims, wnat to rename shapes using hash.
-        # (ROTATIONS)
-        reclassify_shape_using_stroke_version = "hash"
+        # reclassify_shape_using_stroke_version = "hash"
+        reclassify_shape_using_stroke_version = "cluster_by_sim"
     
-    elif ("primdiego1h" in expt) or ("primpancho1h" in expt):
-        # Novel prims, morphing subsements (structured morphs)
-        tokens_gridloc_snap_to_grid = True
-        reclassify_shape_using_stroke_version = True # since these have the incvorrect "name" based on
-        # one of the base prims used in the morph (as a hack).
+    elif (expt=="primdiego1g") or (expt in ["priminvar3j", "priminvar3k", "priminvar3l", "priminvar3m"]):
+        # [Novel prims, concatted segments]
+        # reclassify_shape_using_stroke_version = "hash"
+        # reclassify_shape_using_stroke_version = "cluster_by_sim"
+        pass # just use "novelprims" default name
 
+    elif ("primdiego1g" in expt) or ("primpancho1g" in expt):
+        # Half-half morphs, (e..g, first half of line + second half of circle)
+        # Need to cluster, since they are continous...
+        reclassify_shape_using_stroke_version = "cluster_by_sim"
+
+    elif ("primdiego1h" in expt) or ("primpancho1h" in expt):
+        # [Psycho, structured morphs]
+        # Novel prims, morphing subsements (structured morphs), e.g,, adding an arm gradually.
+        tokens_gridloc_snap_to_grid = True
+        # reclassify_shape_using_stroke_version = "hash" # since these have the incvorrect "name" based on
+        # # one of the base prims used in the morph (as a hack).
+        reclassify_shape_using_stroke_version = "cluster_by_sim"
+        # reclassify_shape_using_stroke_version = "default" NO - cannnot use this.
+# 
     elif "priminvar" in expt:
         # e.g., priminvar5
         # Is just single prims
@@ -689,7 +716,8 @@ def _groupingParams(D, expt):
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
         mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip, \
-        color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist
+        color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist, \
+        reclassify_shape_using_stroke_version
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, #
         mapper_character_to_category=None, append_probe_status=True,
@@ -1010,8 +1038,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, \
         mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict, \
-        epoch_append_cue_stim_flip, color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist \
-        = _groupingParams(D, expt)
+        epoch_append_cue_stim_flip, color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist, \
+        reclassify_shape_using_stroke_version = _groupingParams(D, expt)
     print(len(D.Dat))
 
     # First, quickly generate placeholder datsegs for beh, since downstream code might require it.
@@ -1303,10 +1331,37 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.tokens_append_to_dataframe_column(force_regenerate=force_regenerate)
 
     # GOOD - wrapper for all tokens-related preprocessing (e.g, binning).
-    D.tokens_preprocess_wrapper_good()
+    # - e.g.,, defining shape semantic for each tok.
+    if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
+        # Then be lenient in allowing failures in identifyng shape semantic
+        label_as_novel_if_shape_semantic_fails = True
+    elif reclassify_shape_using_stroke_version == "default":
+        label_as_novel_if_shape_semantic_fails = False
+    else:
+        assert False, "True or False?"
+    D.tokens_preprocess_wrapper_good(label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
+
+    ############ SOME FINAL PREPROCESS DIAGNOSTIC PLOTS
+    if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
+        # Then sanity check that the shape renaming made sense -- plot drawings of all the images.
+        # Plot diagnostic, each cluster, plot 20 example shapes (task).
+        # Finally, plot each class, showing examples
+        from pythonlib.dataset.dataset_strokes import DatStrokes
+
+        savedir_preprocess = D.make_savedir_for_analysis_figures_BETTER("preprocess_general")
+        savedir_preprocess = f"{savedir_preprocess}/final_shapes_renamed"
+        os.makedirs(savedir_preprocess, exist_ok=True)
+
+        DS = DatStrokes(D)
+        # Use this to check that no clusters have different actual tasks.
+        figholder = DS.plotshape_multshapes_egstrokes_grouped_in_subplots(key_subplots="shape", n_examples=20, ver_behtask="task")
+        for i, (fig, _) in enumerate(figholder):
+            savefig(fig, f"{savedir_preprocess}/taskimage_examples_each_shape-sub{i}.pdf")
+        
+        plt.close("all")
 
     assert hasattr(D, "TokensStrokesBeh") and D.TokensStrokesBeh is not None, "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
 
