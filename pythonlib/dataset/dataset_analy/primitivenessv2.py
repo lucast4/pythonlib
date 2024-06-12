@@ -261,6 +261,18 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
     """
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars, grouping_append_and_return_inner_items
 
+    # Some prelimnaries
+    DS.distgood_compute_beh_task_strok_distances()
+    DS.dataset_append_column("epoch_orig")
+
+    feature_keys = ["dist_beh_task_strok", "time_duration", "velocity", "distcum", 
+            "gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel"]
+    feature_keys = [f for f in feature_keys if f in DS.Dat.columns]
+    # for k in feature_keys:
+    #     if k not in DS.Dat.columns:
+    #         print(k)
+    #         assert False, "extrat it..."
+
     # First group trials into (shape, loc) or whatever you want
     if grouping is None:
         grouping = ["shape", "gridloc"]
@@ -361,9 +373,7 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
     list_grp = dfres["grp"].tolist()
     list_inds = dfres["inds_DS"].tolist()
         
-    for key in ["dist_beh_task_strok", "time_duration", "velocity", "distcum", 
-        "gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_vel"]:
-    #     key = "velocity"
+    for key in feature_keys:
 
         list_vals = []
         for grp, inds in zip(list_grp, list_inds):
@@ -554,9 +564,10 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
         ############### PLOTS ACROSS ALL DATA
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
         #     kind="point", ci=68)
-        fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, row=context, kind="point", errorbar=('ci', 68), aspect=1.5)
-        rotateLabel(fig)
-        savefig(fig, f"{savedir}/all-{contrast}-{y}.pdf")
+        if len(DS.Dat[context].unique())<20:
+            fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, col=context, col_wrap=4, kind="point", errorbar=('ci', 68), aspect=1.5)
+            rotateLabel(fig)
+            savefig(fig, f"{savedir}/all-{contrast}-{y}.pdf")
 
         plt.close("all")
 
@@ -702,9 +713,10 @@ def plot_timecourse_results(DS, savedir, contrast="epoch", context=None):
         dfthis = DS.Dat[DS.Dat["epoch_orig"]==epoch_orig]
         for y in yvars:
             for sh in shape_vars:
-                fig = sns.relplot(data=dfthis, x="tvalfake", y=y, hue=contrast, 
-                            row=sh, style="session", aspect=2, alpha=0.7)    
+                
+                if len(dfthis[sh].unique())<20:
+                    fig = sns.relplot(data=dfthis, x="tvalfake", y=y, hue=contrast, col=sh, col_wrap=4, style="session", aspect=2, alpha=0.7)    
 
-                savefig(fig, f"{savedir}/timecourse-{epoch_orig}-{contrast}-{sh}-{y}.pdf")
+                    savefig(fig, f"{savedir}/timecourse-{epoch_orig}-{contrast}-{sh}-{y}.pdf")
 
-                plt.close("all")
+                    plt.close("all")

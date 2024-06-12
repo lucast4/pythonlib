@@ -564,7 +564,8 @@ class TaskClass(object):
             [['th', array(-0.16839016)],
             ['sx', array(1.01434708)],
             ['sy', array(1.01434708)]],
-            {}]
+            {}],
+        'flips': array([0., 0., 0.]),
         }        
         """
         # print(self.PlanDat["PrimsExtraParams"])
@@ -582,8 +583,17 @@ class TaskClass(object):
             
             extra_tforms_dict = self.PlanDat["PrimsExtraParams"][0] # Dict
 
+            # Add default keys if no exist.
+            if "tforms" not in extra_tforms_dict:
+                extra_tforms_dict["tforms"] = {}
+            if "tforms_each_prim_p" not in extra_tforms_dict:
+                extra_tforms_dict["tforms_each_prim_p"] = [{} for _ in range(len(self.Strokes))]
+            if "flips" not in extra_tforms_dict:
+                extra_tforms_dict["flips"] = None
+
             assert isinstance(extra_tforms_dict, dict)
-            assert all([k in ["tforms", "tforms_each_prim_p"] for k in extra_tforms_dict.keys()])
+            print(extra_tforms_dict)
+            assert all([k in ["tforms", "tforms_each_prim_p", "flips"] for k in extra_tforms_dict.keys()])
 
             return extra_tforms_dict
         

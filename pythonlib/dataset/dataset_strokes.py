@@ -862,17 +862,18 @@ class DatStrokes(object):
         - adds to dataframe, column: "dist_beh_task_strok"
         """
 
-        list_inds = list(range(len(self.Dat)))
+        if "dist_beh_task_strok" not in self.Dat.columns:
+            list_inds = list(range(len(self.Dat)))
 
-        list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
-        list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
-        
-        # compute distances    
-        dists = self._dist_alignedtask_to_beh(list_inds)   
+            list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
+            list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
+            
+            # compute distances    
+            dists = self._dist_alignedtask_to_beh(list_inds)   
 
-        # Save it
-        self.Dat["dist_beh_task_strok"] = dists
-        print("Added column: dist_beh_task_strok")
+            # Save it
+            self.Dat["dist_beh_task_strok"] = dists
+            print("Added column: dist_beh_task_strok")
 
 
     ######################### MOTOR TIMING
@@ -1984,7 +1985,7 @@ class DatStrokes(object):
                     # assert False
 
 
-    def plotshape_multshapes_egstrokes_onefig_eachshape(self, savedir, key="shape"):
+    def plotshape_multshapes_egstrokes_onefig_eachshape(self, savedir, key="shape", list_shapes=None):
         """ Good, show in detail individual trials, each subplot a trial, each
         plot a shape, overlaying beh on task.
         Too many plots, so must give savedir.
@@ -1992,8 +1993,13 @@ class DatStrokes(object):
             - saves plots in f"{savedir}/{shape}.pdf"
         """
         from pythonlib.tools.plottools import savefig
-        self.Dat[key].value_counts()
+
         grpdict = self.grouping_append_and_return_inner_items([key])
+
+        if list_shapes is not None:
+            # grpdict = {k:grpdict[k] for k in list_shapes}
+            grpdict = {k:v for k, v in grpdict.items() if k[0] in list_shapes}
+
         for grp, inds in grpdict.items():
             # DS.plot_strokes_overlaid(inds)
             # fig, axes, inds_trials_dataset = DS.plot_multiple_overlay_entire_trial(inds[:10])
@@ -3580,12 +3586,19 @@ class DatStrokes(object):
             # strok2 = strok2 - strok2[0,:] 
 
             # COMPUTE similarities
-            d_orig = self._cluster_compute_sim_matrix([strok1], [strok2])[0] # (1,)
-            d_rev = self._cluster_compute_sim_matrix([strok1], [strok2[::-1]])[0] # (1,)
+            d_orig = self._cluster_compute_sim_matrix([strok1], [strok2])[0].item() # float
+            d_rev = self._cluster_compute_sim_matrix([strok1], [strok2[::-1]])[0].item() # float
+
+            # print(d_rev.shape)
+            # print(d_orig<d_rev)
+            # assert False
+            assert isinstance(d_orig, float)
+            assert isinstance(d_rev, float)
 
             # d_orig = self._dist_strok_pair(strok1, strok2, recenter_to_onset=True)
             # d_rev = self._dist_strok_pair(strok1, strok2[::-1], recenter_to_onset=True)
             if d_orig<0.75*d_rev: # 0.75 allows for some noise.
+                # if d_orig<d_rev: # 0.75 allows for some noise.
                 if plot_failure:
                     # Plot these strokes
                     print("d_orig", d_orig)
@@ -3593,9 +3606,167 @@ class DatStrokes(object):
                     self.plot_multiple_strok([strok1, strok2], ver="beh", 
                         overlay=False, titles=None, ncols=5, size_per_sublot=2)
                 return False
-        return True
-                
+        return True 
+
+    def clean_shapes_strokes_aligned_consistantly_novel_prims(self, MIN_FRAC_ALIGNED=0.8, plot_savedir=None):
+        """ Find the novel prims that are done consistenyl, using base prims to determine
+        thresholds for calling a novel prim "good"
+        """
+        return self.clean_shapes_strokes_aligned_consistantly(MIN_FRAC_ALIGNED=MIN_FRAC_ALIGNED, plot_savedir=plot_savedir,
+                                                       use_min_learned_shapes_to_set_min_selfsim_score=True)
+        
+
+    def clean_shapes_strokes_aligned_consistantly(self, MIN_FRAC_ALIGNED = 0.8, MIN_SELFSIM_SCORE=0.6,
+                                                  plot_savedir = None, use_min_learned_shapes_to_set_min_selfsim_score=False):
+        """ Return list of shapes which pass criteria for good behavior -- ie.,., 
+        self-similar across trials, and consistent alignemnet to task image (ie.., doesnt 
+        start at different ends)
+
+        PARAMS:
+        - MIN_FRAC_ALIGNED, frac, only keeps shapes that have graether than this frac trials aligned to
+         the same endpoint of task strokes.
+        - MIN_SELFSIM_SCORE, frac, keep shapes wiuth self-sim score greater than this
+        - plot_savedir, eithe rNone (skip) or path to dir to save summary plots
+        - use_min_learned_shapes_to_set_min_selfsim_score, bool, if True, then uses min self-sim score for
+        learned (basis) shapes to determine MIN_SELFSIM_SCORE. Useful for pruning novelprims to keep just good ones.
+
+        NOTE: Usually, you want to do this on DS that has NOT yet had bad strokes removed...
+        PARAMS:
+        - use_min_learned_shapes_to_set_min_selfsim_score, bool, if True, then overwrites MIN_SELFSIM_SCORE
+        """
+        from pythonlib.dataset.dataset_analy.primitivenessv2 import extract_grouplevel_motor_stats
+        from pythonlib.tools.pandastools import stringify_values
+
+        if use_min_learned_shapes_to_set_min_selfsim_score:
+            MIN_SELFSIM_SCORE = None
+            self.shapesemantic_label_and_novel_append()
+
+        SHAPES = sorted(self.Dat["shape"].unique().tolist())
+
+        ### Collect data
+        # (1) For each shape as if it is consistently aligned to same endpoint on task image.
+        map_shape_to_list_aligns = {}
+        map_shape_to_is_aligned = {}
+        for sh in SHAPES:
+            inds = self.find_indices_this_shape(sh)
+
+            # For each trial, get which end of the taskstroke it is aligned to.
+            aligns = [self.strok_beh_task_aligned_which_onset(i) for i in inds]
+            map_shape_to_list_aligns[sh] = aligns
+
+            if False: # This is too strict, fails if even a single trial is different...
+                # Aligned to self?
+                strokes = self.extract_strokes("list_arrays", inds)
+                map_shape_to_is_aligned[sh] = self._strokes_check_all_aligned_direction(strokes)
+
+        # Determine which shapes pass criteria
+        shapes_good_align = []
+        for sh in SHAPES:
+            if all([x is None for x in map_shape_to_list_aligns[sh]]):
+                # Then this is circle...
+                shapes_good_align.append(sh)
+            else:
+                nalign = sum(map_shape_to_list_aligns[sh])
+                ntot = len(map_shape_to_list_aligns[sh])
+                frac_aligned = nalign/ntot
+                if frac_aligned<0.5:
+                    frac_aligned = 1-frac_aligned
+                if frac_aligned>=MIN_FRAC_ALIGNED:
+                    shapes_good_align.append(sh)
+
+        # (2) Compute self-similarity (motor distrance)
+        # Further restrict based on similarity across renditions (consistency)
+        dfres, _ = extract_grouplevel_motor_stats(self, grouping=["shape"])
+        dfresthis = stringify_values(dfres)
+
+        # Automatically determine threshodl?
+        if use_min_learned_shapes_to_set_min_selfsim_score:
+            shapes_learned = self.Dat[self.Dat["shape_is_novel"]==False]["shape"].unique().tolist()
+            scores_learned = dfresthis[dfresthis["grp"].isin(shapes_learned)]["mean_sim_score"]
+            # np.percentile(scores_learned, [5, 50, 95])
+            MIN_SELFSIM_SCORE = np.min(scores_learned)
+
+        # Determine which shapes pass criteria
+        shapes_good_selfsim = dfresthis[dfresthis["mean_sim_score"]>=MIN_SELFSIM_SCORE]["grp"].tolist()
+
+        ### Finally, decide what are good shapes  
+        shapes_good = [sh for sh in shapes_good_selfsim if sh in shapes_good_align]
+        shapes_bad = [sh for sh in SHAPES if sh not in shapes_good]
+
+        ### Print summary
+        print("--- Good shapes...")
+        for sh in shapes_good:
+            print(sh)
+
+        print("--- Bad shapes...")
+        for sh in shapes_bad:
+            print(sh)
+
+        ### Plot summary
+        if plot_savedir is not None:
             
+            # x = map_shape_to_is_aligned.keys()
+            # y = map_shape_to_is_aligned.values()
+            # ax.plot(y, x, "ok")
+            # ax.set_xlabel("All trials are aligned")
+            # from pythonlib.tools.plottools import rotate_x_labels
+            # rotate_x_labels(ax)
+            # ax.grid()
+
+            fig = sns.catplot(data=dfresthis, x="mean_sim_score", y="grp", height=8)
+            for ax in fig.axes.flatten():
+                ax.grid()  
+                ax.axvline(MIN_SELFSIM_SCORE, color="r")
+            savefig(fig, f"{plot_savedir}/overview-mean_sim_score.pdf")
+
+            # fig, ax = plt.subplots()
+            # ax.hist(scores_learned, bins=20)
+            # ax.axvline(MIN_SELFSIM_SCORE, color="r")
+            # savefig(fig, f"{plot_savedir}/overview-mean_sim_score.pdf")
+
+            savedir = f"{plot_savedir}/shapes_good"
+            os.makedirs(savedir, exist_ok=True)
+            self.plotshape_multshapes_egstrokes_onefig_eachshape(savedir = savedir, list_shapes=shapes_good)
+            
+            plt.close("all")
+
+            savedir = f"{plot_savedir}/shapes_bad"
+            os.makedirs(savedir, exist_ok=True)
+            self.plotshape_multshapes_egstrokes_onefig_eachshape(savedir = savedir, list_shapes=shapes_bad)
+
+            plt.close("all")
+            
+        return shapes_good, shapes_bad, map_shape_to_list_aligns, dfres, MIN_FRAC_ALIGNED, MIN_SELFSIM_SCORE
+
+    def strok_beh_task_aligned_which_onset(self, ind):
+        """
+        Determine which edge of task stroke this beh trial is aligned to (0, 1, or None if circle)
+        """
+        strok_beh = self.extract_strokes(inds=[ind])[0]
+        strok_task = self.extract_strokes(inds=[ind], ver_behtask="task")[0]
+        return self._strok_beh_task_aligned_which_onset(strok_beh, strok_task)
+
+    def _strok_beh_task_aligned_which_onset(self, strok_beh, strok_task):
+        """
+        Check if onset of strok_beh is closer to strok_task's onset (returns 0) or offset (returns 1),
+        or None (circle)
+        """
+
+        if np.all(np.isclose(strok_task[0, :2], strok_task[-1, :2])):
+            # Then this is circle...
+            return None
+        else:
+            d1 = np.linalg.norm(strok_beh[0, :2] - strok_task[0, :2])
+            d2 = np.linalg.norm(strok_beh[0, :2] - strok_task[-1, :2])
+            if d1 < d2:
+                return 0
+            elif d1 > d2:
+                return 1
+            else:
+                print(strok_beh)
+                print(strok_task)
+                print(d1, d2)
+                assert False, "why identical?"
 
     def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False):
         """ compute doistance between strok1 and 2
