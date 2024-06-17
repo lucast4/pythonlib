@@ -1591,8 +1591,19 @@ class TaskClass(object):
 
         for indprim, params in dict_novel_prims.items():
             list_subprims, list_subrels = params[0], params[1]
-            hashnum = hash(tuple(stringify_list(list_subprims) + stringify_list(list_subrels)))
-            hashnum += sys.maxsize + 1 # To make it positive (important, to avoid dash between novelprim and hash, which will be parsed incorrectly when doign novelprim-x-x-x)
+            _code = tuple(stringify_list(list_subprims) + stringify_list(list_subrels))
+            if False:
+                # PROBLEM: hash is not determistic across Python runs
+                hashnum = hash(_code)
+                hashnum += sys.maxsize + 1 # To make it positive (important, to avoid dash between novelprim and hash, which will be parsed incorrectly when doign novelprim-x-x-x)
+            else:
+                # Use task as string to seed.. this is detemrinstic.
+                import random
+                _code = "".join(_code) # convert to stroiung
+                r = random.Random(_code); # seed with this unique string
+                ndigs = 12
+                hashnum = int("".join([str(r.randrange(10)) for _ in range(ndigs)]))
+
             assert hashnum>=0
 
             shapenew = f"novelprim{hashnum}"
