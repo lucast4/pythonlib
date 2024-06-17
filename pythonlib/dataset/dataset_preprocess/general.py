@@ -229,6 +229,14 @@ def _groupingParams(D, expt):
             4:"TTL4"
         }
 
+    elif ("primsingridpanchostim" in expt) or ("primsingriddiegostim" in expt):
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["microstim_code"]
+        map_ttl_region = {
+            3:"TTL3",
+            4:"TTL4"
+        }
+
     # elif expt=="primpanchostim1" or expt=="primdiegostim1" or expt=="primdiegostim1b":
     #     # e.g., primdiegostim1b, or primpanchostim1
     #     # Is just single prims, but trials differentiated by whether stim or not, during
@@ -318,6 +326,25 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+
+    elif ("shapeseqdiego1" in expt) or ("shapeseqpancho1" in expt):
+        # Reassign rules: each epoch is based on tasksequencer rule
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+
+    elif ("shapeseqdiegostim1" in expt) or ("shapeseqpanchostim1" in expt):
+        # single grammar, and stim on rtandom interleave trials.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "microstim_code"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+        map_ttl_region = {
+            3:"TTL3",
+            4:"TTL4"
+        }
+
     elif "shapedirseq" in expt:
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
@@ -476,6 +503,26 @@ def _groupingParams(D, expt):
         else:
             assert False
 
+        grouping_reassign_params_in_order = [map_epoch_to_block]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = False
+
+    elif expt in ["primsingriddiego2b"]:
+        # Then epochs are a group of blocks. manually enter them here.
+        # Prims in grid with different shape set (Dolnik).
+
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["manual_by_block"]
+        map_epoch_to_block = {
+            "sp_all":[8],
+            "sp_1":[16],
+            "sp_2":[24],
+            "sp_training":list(range(0,8)) + list(range(9,16)) + list(range(17,24)),
+            "pig_1":[31],
+            "pig_1_training":list(range(25, 31)),
+            "pig_2":[38],
+            "pig_2_training":list(range(32, 38)),
+        }
         grouping_reassign_params_in_order = [map_epoch_to_block]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
