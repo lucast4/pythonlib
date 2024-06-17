@@ -266,6 +266,8 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
         else:
             # NOTE: hash(None) is valid
             # if x is int, returns that
+            
+            # Note: hash is not consistent across runs, but is ok here, since just sorting objects within same run..
             return f"{hash(val)}"
 
     def key(x):

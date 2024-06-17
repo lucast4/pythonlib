@@ -3736,6 +3736,19 @@ class DatStrokes(object):
 
             plt.close("all")
             
+            # SAve information
+            from pythonlib.tools.expttools import writeStringsToFile, writeDictToTxtFlattened
+
+            plot_savedir = "/tmp"
+            writeStringsToFile(f"{plot_savedir}/shapes_good.txt", shapes_good)
+            writeStringsToFile(f"{plot_savedir}/shapes_bad.txt", shapes_bad)
+
+            writeDictToTxtFlattened({
+                "map_shape_to_list_aligns":map_shape_to_list_aligns,
+                "MIN_FRAC_ALIGNED":MIN_FRAC_ALIGNED,
+                "MIN_SELFSIM_SCORE":MIN_SELFSIM_SCORE
+            }, f"{plot_savedir}/params.txt")
+                                
         return shapes_good, shapes_bad, map_shape_to_list_aligns, dfres, MIN_FRAC_ALIGNED, MIN_SELFSIM_SCORE
 
     def strok_beh_task_aligned_which_onset(self, ind):

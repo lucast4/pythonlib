@@ -105,6 +105,9 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR, column_binary_success
     """
     from pythonlib.tools.pandastools import aggregGeneral
 
+    from pythonlib.tools.pandastools import stringify_values
+    dfGramScore = stringify_values(dfGramScore)
+
     # Make save dir
     savedir= f"{SDIR}/summary"
     os.makedirs(savedir, exist_ok=True) 
@@ -227,7 +230,7 @@ def plot_performance_timecourse(dfGramScore, list_blockset, SDIR,
     # taskgroup", y=column_binary_success, col="epoch_superv
     print(dfthis.columns)
     fig = sns.catplot(data=dfthis, x="block", y=column_binary_success, row="taskgroup", hue="epoch_superv", kind="point", 
-                aspect=2, alpha=0.4, ci=68)
+                aspect=2, ci=68)
     fig.savefig(f"{sdirthis}/timecourse-blocks-datapt_trial.pdf")
     rotateLabel(fig)
 

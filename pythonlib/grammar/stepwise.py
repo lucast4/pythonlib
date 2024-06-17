@@ -122,10 +122,6 @@ def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
             rotateLabel(fig)
             savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}-2.pdf")
 
-            fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                        kind="point", ci=68, aspect=1.5)
-            rotateLabel(fig)
-            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}.pdf")
 
             fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_code", row="epoch",
                         kind="point", ci=68, aspect=1.5)
@@ -143,18 +139,24 @@ def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
 
             plt.close("all")
 
-            # First
-            df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]==0]
-            fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                kind="point", ci=68, aspect=1.5)
-            rotateLabel(fig)
-            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-FIRST_ACTION.pdf")
+            if "microstim_epoch_code" in df_actions_expanded.columns:
+                fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                            kind="point", ci=68, aspect=1.5)
+                rotateLabel(fig)
+                savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}.pdf")
 
-            df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]>0]
-            fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                kind="point", ci=68, aspect=1.5)
-            rotateLabel(fig)
-            savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-NOT_FIRST_ACTION.pdf")
+                # First
+                df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]==0]
+                fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                    kind="point", ci=68, aspect=1.5)
+                rotateLabel(fig)
+                savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-FIRST_ACTION.pdf")
+
+                df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]>0]
+                fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                    kind="point", ci=68, aspect=1.5)
+                rotateLabel(fig)
+                savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-NOT_FIRST_ACTION.pdf")
 
             plt.close("all")
 
@@ -501,7 +503,7 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 "epoch":D.Dat.iloc[ind]["epoch"],
                 "character":D.Dat.iloc[ind]["character"],
                 "epoch_orig":D.Dat.iloc[ind]["epoch_orig"],
-                "microstim_epoch_code":D.Dat.iloc[ind]["microstim_epoch_code"],
+                # "microstim_epoch_code":D.Dat.iloc[ind]["microstim_epoch_code"],
                 "idx_beh":idx_stroke,
                 "task_state_code":state_code,
                 "task_state_crct_ti_uniq":state_crct_ti_uniq, # True if the correct ti is different from ti for all other rules (including closest)
@@ -517,6 +519,10 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
                 "taskind_list_correct":map_rulestr_correctti_list[rulestring],
                 "taskinds_features":taskinds_features
             }
+
+            if "microstim_epoch_code" in D.Dat.columns:
+                resthis["microstim_epoch_code"] = D.Dat.iloc[ind]["microstim_epoch_code"]
+
             list_res.append(resthis)
             if resthis["choice_correct"]==False:
                 # Track failures.
@@ -605,9 +611,11 @@ def dfactions_convert_to_trial_level(dfactions, Params):
     dfactions = pd.concat(list_g).reset_index(drop=True)
 
     # get one row per trial
-    dfactions_trial = aggregGeneral(dfactions, ["trialcode", "epoch", "epoch_orig",
-                                                "microstim_epoch_code",
-                                                 "trial_sequence_outcome"])
+    group = ["trialcode", "epoch", "epoch_orig", "trial_sequence_outcome"]
+    if "microstim_epoch_code" in dfactions.columns:
+        group.append("microstim_epoch_code")
+
+    dfactions_trial = aggregGeneral(dfactions, group)
 
     return dfactions, dfactions_trial
 

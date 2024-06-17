@@ -255,7 +255,9 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
 
                     # Shorter duration strokes are more likely to have larger diff from filtering, so
                     # give them a bit more leweway
-                    if duration<0.2:
+                    if duration<0.075:
+                        max_frac = 0.37
+                    elif duration<0.2:
                         max_frac = 0.25
                     elif duration<0.34:
                         max_frac = 0.2
@@ -272,6 +274,7 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                         print(sf)
                         print(d)
                         print(d/diag)
+                        print(max_frac)
 
                         fig, axes = plt.subplots(2,2)
                         ax = axes.flatten()[0]

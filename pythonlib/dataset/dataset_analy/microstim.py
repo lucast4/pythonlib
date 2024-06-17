@@ -31,7 +31,17 @@ def plot_all_wrapper(D):
         plot_motortiming(Dcopy)
 
     # Grammar
-    if np.any(D.Dat["task_kind"]=="prims_on_grid"):
+    date = D.dates(True)[0]
+    is_grammar = (sum(D.Dat["epoch_orig"] != date)>0) and (np.any(D.Dat["task_kind"]=="prims_on_grid"))
+
+    # Example values:
+    # print(D.Dat["epoch"].unique())
+    # print(D.Dat["epoch_orig"].unique())
+    # print(D.Dat["task_kind"].unique())
+        # ['240611|off' '240611|TTL3-fg']
+        # ['240611']
+        # ['prims_single' 'prims_on_grid']
+    if is_grammar:
         try:
             from pythonlib.dataset.dataset_analy.grammar import pipeline_generate_and_plot_all
             Dcopy = D.copy()

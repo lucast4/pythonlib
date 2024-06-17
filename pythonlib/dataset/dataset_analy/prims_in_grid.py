@@ -63,11 +63,21 @@ def preprocess_dataset(D, doplots=False):
         if doplots:
             from pythonlib.tools.pandastools import stringify_values
 
+            EPOCHS = D.Dat["epoch"].unique().tolist()
             
             # Spatial locaiton biases, quick scatter plots
             savedir = f"{SAVEDIR}/location_sequence_bias"
             os.makedirs(savedir, exist_ok=True)
             plot_location_sequence_bias_spatial(D, savedir)
+
+            # Do this separately per epoch
+            if len(EPOCHS)>1:
+                for epoch in EPOCHS:
+                    Dc = D.copy()
+                    Dc.Dat = Dc.Dat[Dc.Dat["epoch"] == epoch].reset_index(drop=True)
+                    savedir = f"{SAVEDIR}/location_sequence_bias-epoch={epoch}"
+                    os.makedirs(savedir, exist_ok=True)
+                    plot_location_sequence_bias_spatial(D, savedir)
 
             # Sequential context of strokes
             savedir = f"{SAVEDIR}/stroke_sequential_contexts"
@@ -559,7 +569,6 @@ def plot_location_sequence_bias_spatial(D, savedir):
     E.g., how strongly is there bias to do one location first, then another second, etc?
 
     """
-
 
     D.seqcontext_preprocess()
     D.extract_beh_features()

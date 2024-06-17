@@ -589,7 +589,7 @@ class TaskClass(object):
             if "tforms_each_prim_p" not in extra_tforms_dict:
                 extra_tforms_dict["tforms_each_prim_p"] = [{} for _ in range(len(self.Strokes))]
             if "flips" not in extra_tforms_dict:
-                extra_tforms_dict["flips"] = None
+                extra_tforms_dict["flips"] = {}
 
             assert isinstance(extra_tforms_dict, dict)
             print(extra_tforms_dict)

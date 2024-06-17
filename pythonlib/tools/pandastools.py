@@ -967,35 +967,35 @@ def append_col_with_index_of_level(df, column, newcolumn):
 
     return map_idx_to_level, map_level_to_idx
 
-# def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
-#     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
-#     ie each row is a different index!
-#     e.g, if groupby has 2 levels (A and B), then this gives all rows with level A unqiue indices 0, 1,2 ...
-#     e.g.. like trial numbers for a given condition/task.
-#     - randomize, then will randomize the indices (only within trails with same level of groupby)
-#     """
+def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
+    """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
+    ie each row is a different index!
+    e.g, if groupby has 2 levels (A and B), then this gives all rows with level A unqiue indices 0, 1,2 ...
+    e.g.. like trial numbers for a given condition/task.
+    - randomize, then will randomize the indices (only within trails with same level of groupby)
+    """
 
-#     # OLD method - avoid since it mutates
-#     # dfthis = D.Dat
-#     # def F(x):
-#     #     # assign in chron order
-#     #     x["test"] = range(len(x))
-#     # #     x["test"] = 1
-#     #     return x
+    # OLD method - avoid since it mutates
+    # dfthis = D.Dat
+    # def F(x):
+    #     # assign in chron order
+    #     x["test"] = range(len(x))
+    # #     x["test"] = 1
+    #     return x
         
-#     # dfthis = dfthis.groupby("character").apply(F)
+    # dfthis = dfthis.groupby("character").apply(F)
 
-#     df = df.copy()
+    df = df.copy()
 
-#     def F(x):
-#         # assign in chron order
-#         out = list(range(len(x)))
-#         if randomize:
-#             from random import shuffle
-#             shuffle(out)
-#         return out
+    def F(x):
+        # assign in chron order
+        out = list(range(len(x)))
+        if randomize:
+            from random import shuffle
+            shuffle(out)
+        return out
 
-#     return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
+    return append_col_after_applying_to_group(df, groupby, [groupby], F, colname)    
 
 def convert_to_1d_dataframe_hist(df, col1, plot_hist=True, ax=None):
     """ Aggregate (usually counts for each level of col1).

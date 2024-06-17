@@ -301,25 +301,30 @@ def pipeline_generate_and_plot_all(D,
             ######### 2) Plot summary
             # dfGramScore = bmh.DatLong  
             # dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
+
+            from pythonlib.tools.pandastools import stringify_values
+            DF = stringify_values(bmh.DatLong)
+
             if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
-                plot_performance_all(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR)
-                plot_performance_timecourse(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR)
-                plot_performance_static_summary(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR, False)
-                plot_performance_static_summary(bmh.DatLong, list_blocksets_with_contiguous_probes, SDIR, True)
-                plot_counts_heatmap(bmh.DatLong, SDIR)
-                plot_performance_trial_by_trial(bmh.DatLong, D, SDIR)
-                plot_performance_each_char(bmh.DatLong, D, SDIR)
+                plot_performance_all(DF, list_blocksets_with_contiguous_probes, SDIR)
+                plot_performance_timecourse(DF, list_blocksets_with_contiguous_probes, SDIR)
+                plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, False)
+                plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, True)
+                plot_counts_heatmap(DF, SDIR)
+                plot_performance_trial_by_trial(DF, D, SDIR)
+                plot_performance_each_char(DF, D, SDIR)
                 # 1) print all the taskgroups
                 D.taskgroup_char_ntrials_print_save(SDIR)
 
                 # plot counts, only success triuals
-                df = bmh.DatLong[bmh.DatLong["success_binary_quick"]==True].reset_index(drop=True)
+                df = DF[DF["success_binary_quick"]==True].reset_index(drop=True)
                 plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
             else:
                 print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
 
             ######## CONJUNCTIONS PLOTS
-            DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
+            # DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
+            DS, D, params_anova = conjunctions_preprocess(D)
             if DS is not None:
                 savedir = f"{SDIR}"
                 conjunctions_plot(D, DS, savedir, params_anova)
@@ -512,7 +517,7 @@ def conjunctions_preprocess(D):
     Online sequenbce, plot all conjucntions for grammar neural analyses
     NOTE: returns None if D is empty after preprocessing.
     """
-    from neuralmonkey.metadat.analy.anova_params import dataset_apply_params
+    from neuralmonkey.metadat.analy.anova_params import dataset_apply_params, params_getter_dataset_preprocess
     from neuralmonkey.classes.snippets import datasetstrokes_extract
 
     # remove baseline
@@ -539,23 +544,27 @@ def conjunctions_preprocess(D):
         D.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(ind)
 
     # Clean and extract dataset as would in neural analy
-    ListD = [D]
+    # ListD = [D]
     animal = D.animals(force_single=True)[0]
     tmp = D.Dat["date"].unique()
     assert len(tmp)==1
     DATE = int(tmp[0])
-    which_level = "stroke"
+    # which_level = "stroke"
     ANALY_VER = "seqcontext"
-    anova_interaction = False
+    # anova_interaction = False
 
-    Dall, dataset_pruned_for_trial_analysis, TRIALCODES_KEEP, params_anova, params_anova_extraction = \
-        dataset_apply_params(ListD, None, ANALY_VER, animal, DATE)
+    # Dall, dataset_pruned_for_trial_analysis, TRIALCODES_KEEP, params_anova, params_anova_extraction = \
+    #     dataset_apply_params(ListD, None, ANALY_VER, animal, DATE)
+    D, DS, params_anova = dataset_apply_params(D, None, ANALY_VER, animal, DATE)
 
-    # list_features = ["chunk_rank", "chunk_within_rank", "chunk_within_rank", "chunk_n_in_chunk"]
-    list_features = []
-    DS = datasetstrokes_extract(dataset_pruned_for_trial_analysis, list_features=list_features)
+    # # list_features = ["chunk_rank", "chunk_within_rank", "chunk_within_rank", "chunk_n_in_chunk"]
+    # list_features = []
+    # DS = datasetstrokes_extract(dataset_pruned_for_trial_analysis, list_features=list_features)
 
-    return DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction
+    # # Legacy code -- get params anova.
+    # params_anova = params_getter_dataset_preprocess(ANALY_VER, animal, DATE)
+
+    return DS, D, params_anova
 
 
 def conjunctions_plot(D, DS, savedir, params_anova):
@@ -564,6 +573,8 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     PARAMS:
     - D, DS, savedir, params_anova, see output of conjunctions_preprocess
     """
+
+    globals_nmin = 5
 
     from neuralmonkey.metadat.analy.anova_params import _conjunctions_print_plot_all
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
@@ -585,7 +596,7 @@ def conjunctions_plot(D, DS, savedir, params_anova):
         ["CTXT_prev_this_next", "chunk_rank", "epoch"],
     ]
     DF = DS.Dat
-    _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+    _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
 
     ########## N prims in upcoming chunk
     sdir = f"{savedir}/conjunctions_strokes/chunk_n_in_chunk"
@@ -597,9 +608,9 @@ def conjunctions_plot(D, DS, savedir, params_anova):
         ["CTXT_prev_this_next", "chunk_diff_from_prev", "chunk_n_in_chunk_prev", "epoch"],
         ["CTXT_prev_this_next", "chunk_diff_from_prev", "epoch"],
     ]
-    DF = DS.Dat[DS.Dat["chunk_diff_from_prev"]==True]
+    DF = DS.Dat[DS.Dat["chunk_diff_from_prev"]==True].reset_index(drop=True)
     if len(DF)>0:
-        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
 
     ########## Rule switching, chunk switch, whether dissociate rule switch from shape switch
     sdir = f"{savedir}/conjunctions_strokes/chunk_diff_from_prev"
@@ -611,7 +622,7 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     ]
     DF = DS.Dat
     if len(DF)>0:
-        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
 
     ######## epoch encoding, context same
     sdir = f"{savedir}/conjunctions_strokes/epoch_context1"
@@ -625,7 +636,7 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     # DS.context_chunks_assign_columns()
     DF = DS.Dat
     if len(DF)>0:
-        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
 
     ######## epoch encoding, context same
     sdir = f"{savedir}/conjunctions_strokes/epoch_context2"
@@ -639,7 +650,7 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     DS.context_chunks_assign_columns()
     DF = DS.Dat
     if len(DF)>0:
-        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
     # Restore to defaults
     DS.context_define_local_context_motif(1,1)
     DS.context_chunks_assign_columns()
@@ -656,4 +667,4 @@ def conjunctions_plot(D, DS, savedir, params_anova):
                                                          n_min_across_all_levs_var=2,
                                                          lenient_allow_data_if_has_n_levels=2)
     if len(DF)>0:
-        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, params_anova["globals_nmin"], D)
+        _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
