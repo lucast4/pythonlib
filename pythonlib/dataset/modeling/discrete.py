@@ -16,7 +16,7 @@ MAP_EPOCHKIND_EPOCH = {
     "(AB)n":["(AB)n"], # Any direction within chunks
     "(AB)nDir":["LolDR"], # fixed direction withoin amnd across chunks.
     "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR"],
-    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSP1"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
     "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1",
         "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"], # External cue, either mask or color supervision
@@ -157,6 +157,18 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left'))] = "AnBmCk2" # Pancho, dirgrammarPancho1 (8/2023)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('Lcentered-4-2', 'V-2-4', 'line-8-2', 'arcdeep-4-2', 'usquare-1-3', 'UR'))] = "SSD1b" # shapeseqdiegostim1 (6/13/24)
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('Lcentered-4-2', 'V-2-4', 'line-8-2', 'arcdeep-4-2', 'arcdeep-4-2', 'usquare-1-3', 'UR'))] = "SSD1" # shapeseqdiego1 (6/12/24)
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('arcdeep-4-1', 'V-2-4', 'line-8-4', 'V-2-2', 'Lcentered-4-3', 'UL'))] = "SSP1" # shapeseqpancho1 (6/12/24)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_chunks_in_order', 
@@ -474,7 +486,7 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         elif direction in ["UL"]:
             # left, then break ties with up
             return sorted(objects, key=_getLeftThenUp)
-        elif direction in ["topright"]:
+        elif direction in ["topright", "UR"]:
             # typewriter: first right, ythrn break ties by up.
             return sorted(objects, key=_getRightThenUp)
         else:
@@ -514,25 +526,43 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         return [ind for ind, obj in enumerate(objects) if shape == obj[0]] # if obj[0] contains shape substring
     
     def _chunks_by_shape_rank(objects, shape_order):
-        # Get the "rank" of each shape in objects, where the rank is the index in shape_order.
-        # Return [indsshape1, indsshape2, ...], where each inds is list of ints, holding the indexes into
-        # shape_order where the shape for that item in objects can be found.
+        """
+        Get the "rank" of each shape in objects, where the rank is the index in shape_order.
+        Return [indsshape1, indsshape2, ...], where each inds is list of ints, holding the indexes into
+        shape_order where the shape for that item in objects can be found.
+        PARAMS:
+        - objects, list of stroke object, each a list of [stringname, dict of params]. example:
+        objects = [
+            ['arcdeep-4-2-0', {'x': 1.535, 'y': 1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}], 
+            ['usquare-1-3-0', {'x': -1.517, 'y': -1.6, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+            ]
+        - shape_order, list of shape strings, in order that is ocrrect orcer for this day
+        e.g., shape_order = ['Lcentered-4-2-0', 'V-2-4-0', 'line-8-2-0', 'arcdeep-4-2-0', 'arcdeep-4-2-0', 'usquare-1-3-0']
+        
+        """
 
-        x = [_inds_by_shape(objects, shape) for shape in shape_order]
+        # make sure shape order doesnt have repeats, or else this will fail.
+        assert len(shape_order)==len(set(shape_order))
+
+        x = [_inds_by_shape(objects, shape) for shape in shape_order] # [[0,1], [], [2], ..]
+        
         x = [xx for xx in x if len(xx)>0] # e.g, if this shape exists for this trial.
         # Each object must be assigned a shape, or else you have failed to include a shape in the params (shape_order)
 
-        tmp = []
+        # Flatten into sequence of indices (into objects) in correct order.
+        object_inds_ordered_by_shape_order = []
         for xx in x:
             if len(xx)>0:
-                tmp.extend(xx)
+                object_inds_ordered_by_shape_order.extend(xx)
 
         # Either tmp is completely empty (i.e. on days where a multiple AnBm rules are at play, with diff shapes)
         # or gets all objects.
-        if len(tmp)>0:
-            if (not len(tmp) == len(objects)) or (not max(tmp) == len(objects)-1):
+        if len(object_inds_ordered_by_shape_order)>0:
+            if (not len(object_inds_ordered_by_shape_order) == len(objects)) or (not max(object_inds_ordered_by_shape_order) == len(objects)-1):
                 print("objects:", objects)
                 print("shape_order:", shape_order)
+                print("object_inds_ordered_by_shape_order:", object_inds_ordered_by_shape_order)
+                print("x:", x)
                 assert False, "is this generalization taks wiht new shapes? how deal with this... add some sort of exception?"
 
         return [x]
@@ -1103,7 +1133,7 @@ def rules_map_rulestring_to_ruledict(rulestring):
                     print(rule)
                     print(shape, scale, rot)
                     assert False
-            elif shape in ["L", "V", "V2", "arcdeep", "line", "Lcentered", "circle"]:
+            elif shape in ["L", "V", "V2", "arcdeep", "line", "Lcentered", "circle", "usquare"]:
                 # Assume that for these shapes, you never use reflected version...
                 refl = 0
             else:
@@ -1149,6 +1179,15 @@ def rules_map_rulestring_to_ruledict(rulestring):
         # 2) find it in grouping_map_tasksequencer_to_rule
         categ_matlab, params_matlab = _find_params_matlab(params)
         list_shapestring_good = [_convert_shape_string(shapestring) for shapestring in params_matlab]
+
+        # Keep ony the unique shapes in order. sometimes typo and repeat.
+        if len(list_shapestring_good)>len(set(list_shapestring_good)):
+            tmp = []
+            for sh in list_shapestring_good:
+                if sh not in tmp:
+                    tmp.append(sh)
+            list_shapestring_good = tmp
+
         params_good = list_shapestring_good
 
     elif categ=="ss" and subcat in ["rankdir", "rankdir_nmax2"]:
@@ -1172,6 +1211,17 @@ def rules_map_rulestring_to_ruledict(rulestring):
 
         list_shapestring_good = [_convert_shape_string(shapestring) for shapestring in shapes]
 
+        # Keep ony the unique shapes in order. sometimes typo and repeat.
+        if len(list_shapestring_good)>len(set(list_shapestring_good)):
+            tmp = []
+            for sh in list_shapestring_good:
+                if sh not in tmp:
+                    tmp.append(sh)
+            list_shapestring_good = tmp
+        # if len(list_shapestring_good)>len(set(list_shapestring_good)):
+        #     print(list_shapestring_good)
+        #     print(params)
+        #     assert False, "get unique shapes here?"
         params_good = (list_shapestring_good, direction, max_n_repeats)
 
     elif categ=="ch" and subcat=="dir2":
@@ -1526,6 +1576,9 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("llCV3b",):_get_rankdir_variations(["llCV3b"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
+        ("SSD1",):_get_rankdir_variations(["SSD1"]), #
+        ("SSD1b",):_get_rankdir_variations(["SSD1b"]), #
+        ("SSP1",):_get_rankdir_variations(["SSP1"]), #
         ("rndstr",): ["preset-null-rndstr"], #  
         ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
         ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
