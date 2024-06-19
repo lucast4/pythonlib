@@ -121,7 +121,7 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
         palette = None
     
     if lines_add_ci:
-        ci = 68
+        errorbar=("ci", 68)
     else:
         ci = None
 
