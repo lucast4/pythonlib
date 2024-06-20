@@ -123,7 +123,7 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
     if lines_add_ci:
         errorbar=("ci", 68)
     else:
-        ci = None
+        errorbar = None
 
     if rowvar:
         relplot_kw["row"] = rowvar
@@ -135,7 +135,7 @@ def plotgood_lineplot(data, xval, yval, line_grouping, include_scatter=False,
     g = sns.relplot(data=data, kind='line', x=xval, y=yval,
         hue = line_grouping, 
         height=height, aspect=aspect,
-        palette=palette, ci=ci,
+        palette=palette, errorbar=errorbar,
         legend=legend,
         **relplot_kw)
     # g = sns.relplot(data=data, kind='line', x=xval, y=yval,
