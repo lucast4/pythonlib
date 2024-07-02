@@ -144,6 +144,65 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
+def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap=None):
+    """
+    Helper to make colors for plotting, mapping from unque item
+    in labels to rgba color. Can be continuous or discrete (and will
+    check this automatically).
+    PARAMS:
+    - labels, values, either cont or discrete.
+    - which_dim_of_labels_to_use, either NOne (use entire label) or int, which indexes into
+    each lab in labels, and just uses that to determine the color. e.g,, (shape, loc) --> are the labels,
+    and you just want to color by shape, then use which_dim_of_labels_to_use = 0.
+    RETURNS:
+    - dict,  mapping from value to color (if discrete), otherw sie None
+    - color_type, str, either "cont" or "discrete".
+    - colors, list of colors, matching input labels.
+    """
+
+    if which_dim_of_labels_to_use is None:
+        labels_for_color = labels
+    else:
+        labels_for_color = [lab[which_dim_of_labels_to_use] for lab in labels]
+    labels_color_uniq = sort_mixed_type(list(set(labels_for_color)))
+
+    if len(set([type(x) for x in labels_color_uniq]))>1:
+        # more than one type...
+        color_type = "discr"
+        pcols = makeColors(len(labels_color_uniq))
+        _map_lev_to_color = {}
+        for lev, pc in zip(labels_color_uniq, pcols):
+            _map_lev_to_color[lev] = pc
+    # continuous?
+    elif len(labels_color_uniq)>50 and isinstance(labels_color_uniq[0], (int)):
+        color_type = "cont"
+        # from pythonlib.tools.plottools import map_continuous_var_to_color_range as mcv
+        # valmin = min(df[var_color_by])
+        # valmax = max(df[var_color_by])
+        # def map_continuous_var_to_color_range(vals):
+        #     return mcv(vals, valmin, valmax)
+        # label_rgbs = map_continuous_var_to_color_range(df[var_color_by])
+        _map_lev_to_color = None
+    elif len(labels_color_uniq)>8 and isinstance(labels_color_uniq[0], (np.ndarray, float)):
+        color_type = "cont"
+        _map_lev_to_color = None
+    else:
+        color_type = "discr"
+        # label_rgbs = None
+        pcols = makeColors(len(labels_color_uniq), cmap=cmap)
+        _map_lev_to_color = {}
+        for lev, pc in zip(labels_color_uniq, pcols):
+            _map_lev_to_color[lev] = pc
+
+    # Return the color for each item
+    if _map_lev_to_color is None:
+        colors = labels_color_uniq
+    else:
+        colors = [_map_lev_to_color[lab] for lab in labels_for_color]
+
+    return _map_lev_to_color, color_type, colors
+
+
 def color_make_pallete_categories(df, category_name, cmap="turbo"):
     """ 
     Make colors for categorical variables.
@@ -186,7 +245,7 @@ def legend_add_manual(ax, labels, colors, alpha=0.4, loc="upper right"):
     ax.legend(handles=handles, framealpha=alpha, fontsize=8, loc=loc) # default loc ("best") is slow for large amonts of data.
 
 
-def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):
+def makeColors(numcol, alpha=1, cmap=None, ploton=False):
     """ turbo. see below for reason.
     PREVIOUSLY: gets evensly spaced colors. currntly uses jet map.
     PREVIOUSLY: plasma
@@ -200,6 +259,10 @@ def makeColors(numcol, alpha=1, cmap="turbo", ploton=False):
 
     import matplotlib.pylab as pl
     import matplotlib.cm as cm
+
+    if cmap is None:
+        cmap = "turbo"
+        
     if True:
         pcols = getattr(cm, cmap)(np.linspace(0,1, numcol), alpha=alpha)
     else:
@@ -641,7 +704,6 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     # ax.set_axis("square")
     minimum = np.min([np.min(x), np.min(y)])
     maximum = np.max([np.max(x), np.max(y)])
-    
 
     # minimum = np.min((ax.get_xlim(),ax.get_ylim()))
     # maximum = np.max((ax.get_xlim(),ax.get_ylim()))

@@ -252,7 +252,7 @@ def _plot_microstim_effect(DS, savedir):
                     savefig(fig, f"{sdir}/by_{var_outer}-score_{feat}-scatter-vs-{stim_epoch}-label_{plot_label}.pdf")
 
 
-            fig = sns.catplot(data=dfthis, x=var_outer, y=feat, hue="microstim_epoch_code", kind="point", ci=68)
+            fig = sns.catplot(data=dfthis, x=var_outer, y=feat, hue="microstim_epoch_code", kind="point", errorbar=("ci", 68))
             path =f"{sdir}/by_{var_outer}-score_{feat}-pointplot.pdf"
             print(path)
             savefig(fig, path)
@@ -323,7 +323,7 @@ def plot_epoch_effects_paired_chars_microstim_wrapper(DS, savedir, paired_by_cha
     savefig(fig, f"{sdir}/clust_sim_max-vs-clust_sim_max_colname-1.pdf")
 
     fig = sns.catplot(data=dfthis, x="clust_sim_max_colname", y="clust_sim_max", hue="epoch", aspect=1.5,
-                      kind="point", ci=68)
+                      kind="point", errorbar=("ci", 68))
     rotateLabel(fig)
     savefig(fig, f"{sdir}/clust_sim_max-vs-clust_sim_max_colname-2.pdf")
 

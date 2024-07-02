@@ -1518,6 +1518,147 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
         return dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF
 
 
+def datamod_normalize_row_after_grouping_within(df, class_column, value_column, new_col_name=None):
+    """
+    The function calculates the mean of the values within each class and then subtracts these 
+    means from the corresponding values, returning the modified dataframe. You can call this function 
+    with your specific dataframe and column names.    
+    
+    In this function:
+
+        df is the input dataframe.
+        class_column is the name of the column containing the classes.
+        value_column is the name of the column containing the values to be normalized.
+
+    RETURNS:
+    - modifies df, adding a new column  f"{value_column}_norm"
+
+    # # Sample usage
+    # data = {
+    #     'classes': ['A', 'A', 'B', 'B', 'B', 'C', 'C'],
+    #     'values': [10, 12, 20, 25, 30, 35, 40]
+    # }
+    # df = pd.DataFrame(data)
+
+    # # Normalize values by class
+    # normalized_df = normalize_values_by_class(df, 'classes', 'values')
+
+    # # Display the resulting dataframe
+    # print(normalized_df)
+    """
+        
+    # Calculate mean values for each class
+    class_means = df.groupby(class_column)[value_column].transform('mean')
+
+    if new_col_name is None:
+        new_col_name = f"{value_column}_norm"
+
+    # Subtract mean values from the original values
+    df[new_col_name] = df[value_column] - class_means
+
+
+import pandas as pd
+
+def datamod_normalize_row_after_grouping_return_same_len_df(df, var_contrast, grplist_index, y_var, 
+        lev_default_contrast, PLOT=False, do_normalization=True, do_pvals=False):
+    """
+    Normalize data within groupings by the mean value across trials of a specific level of a categorical (contrast) variable.
+    
+    E.g., consider all trials for a character x block, with measurement "score". 
+    You want to normalize the score for each level of "epoch" to the score across trials for a specific level of epoch (e.g., baseline). 
+        var_contrast = "epoch"
+        grplist_index = ["character", "block"]
+        y_var = "score"
+        lev_default_contrast = "baseline"
+    
+    NOTE: if a lev of grplist_index doesnt have var_contrast level lev_default_contrast, then all rows for it get Na
+    PARAMS:
+    - df, long-form dataframe.
+    - grplist_index, list of str. Each mean will be taken within each conjunctive level.
+    - PLOT, bool, summaries. Scatterplot of distribution vs. each level of var_contrast, along with sign-rank p values.
+    - do_normalization, bool, if True, perform normalization.
+    - do_pvals, bool, if True, perform p-value calculations.
+    
+    RETURNS:
+    - A copied dataframe with an additional normalized column.
+
+    # Sample usage
+    data = {
+        'character': ['A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'B'],
+        'block': [1, 1, 1, 2, 2, 2, 2, 2, 2],
+        'epoch': ['baseline', 'trial1', 'baseline', 'trial1', 'trial2', 'baseline', 'trial1', 'trial1', 'trial1'],
+        'score': [10, 12, 20, 25, 30, 35, 40, 50, 10]
+    }
+    df = pd.DataFrame(data)
+
+    # Normalize values by specific class level
+    normalized_df, stats, fig = datamod_normalize_row_after_grouping_return_same_len_df(df, 'epoch', ['character', 'block'], 'score', 'baseline', PLOT=True)
+
+    # Display the resulting dataframe and plot
+    print(normalized_df)
+    if fig:
+        plt.show()
+
+    """
+
+    df = df.copy()
+        
+    if lev_default_contrast is None:
+        lev_default_contrast = df[var_contrast].unique().tolist()[0]
+
+    # Calculate the mean value for the specific level within each group
+    print()
+    group_means = df[df[var_contrast] == lev_default_contrast].groupby(grplist_index)[y_var].mean().reset_index()
+    group_means = group_means.rename(columns={y_var: f'{y_var}_mean'})
+
+    # Merge the mean values back into the original dataframe
+    df = pd.merge(df, group_means, on=grplist_index, how='left')
+
+    if do_normalization:
+        new_col_name = f"{y_var}_norm"
+        # Subtract the specific class mean from the original values
+        df[new_col_name] = df[y_var] - df[f'{y_var}_mean']
+
+    if do_pvals or PLOT:
+        from scipy.stats import wilcoxon
+
+        list_lev = [x for x in df[var_contrast].unique().tolist() if not x == lev_default_contrast]
+        pvals = []
+        means = []
+        for lev in list_lev:
+            vals = df[df[var_contrast] == lev][new_col_name].dropna().values
+            res = wilcoxon(vals)
+            pvals.append(res.pvalue)
+            means.append(vals.mean())
+        stats = {
+            "levels": list_lev,
+            "pvals": pvals,
+            "means": means
+        }
+    else:
+        stats = {}
+
+    if PLOT:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+        
+        list_lev_plot = [lev_default_contrast] + list_lev
+        pvals_plot = [1.] + pvals
+
+        x = df[var_contrast]
+        y = df[new_col_name]
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+        ax.axhline(0, color="k", alpha=0.5)
+        sns.stripplot(ax=ax, x=x, y=y, jitter=True, alpha=0.7, order=list_lev_plot)
+        sns.pointplot(ax=ax, x=x, y=y, order=list_lev_plot, linestyles="", color="k")
+        ax.set_ylabel(f"{y_var} minus {lev_default_contrast}")
+        ax.set_title(f"each data = {grplist_index}")
+    else:
+        fig = None
+
+    return df, stats, fig
+
 def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
     lev_default_contrast=None, PLOT=False, do_normalization=True,
     do_pvals=False):
@@ -1543,6 +1684,7 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
     NOTE:
     - this is more general versin of summarize_featurediff, which only compares a pair of levels
     (e.g., treatement vs. baseline).
+    NOTE: Thios returns n rows as same as n levels (i.e. not each original row, but after averaging)
     """
     from pythonlib.tools.statstools import ttest_paired, signrank_wilcoxon, plotmod_pvalues
 
@@ -1772,6 +1914,7 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
     - groupdict, grptuple:list_indices_into_df
     """
     groupdict = {}
+    assert groupouter_levels is None, "implementation fails below"
     try:
         for grp in df.groupby(list_groupouter_grouping_vars):
             if (groupouter_levels is not None) and (grp not in groupouter_levels):
@@ -2511,19 +2654,6 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
 
     return dfthis, inds_keep
 
-    #
-    # try:
-    #     assert "_dummy" not in df.columns
-    #     df["_dummy"] = "dummy"
-    #     dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, ["_dummy"], levels_var,
-    #                                                                  n_min_across_all_levs_var=n_min_per_var)
-    #     del df["_dummy"]
-    # except Exception as err:
-    #     del df["_dummy"]
-    #     raise err
-    #
-    # return dfout, dict_dfthis
-
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
                                                    plot_counts_heatmap_savepath=None,
                                                     lenient_allow_data_if_has_n_levels=2):
@@ -3127,7 +3257,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
                           ZLIMS=None, title_size=6, ncols=3,
-                        row_values= None, col_values=None):
+                        row_values= None, col_values=None, W=5):
     """
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
@@ -3150,8 +3280,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         ncols = max([len(list_subplot), 2]) # for axes sake
 
     # ncols = 3
-    W = 5
-    H = 4
+    # W = 5
+    H = (4/5) * W
     nrows = int(np.ceil(len(list_subplot) / ncols))
 
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*W, nrows*H))
@@ -3183,8 +3313,6 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         # zlims = ZLIMS
     zlims = tuple(zlims)
     
-    # zlims = (-0.2, 0.2)
-    # diverge=True
     DictSubplotsDf ={}
     for lev_subplot, ax in zip(list_subplot, axes.flatten()):
         a = df[var_subplot]==lev_subplot
@@ -3281,7 +3409,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     # assert y_lev_manip in dfthis[var_manip].tolist()
 
     nmin = 1
-    if isinstance(var_subplot, list):
+    if isinstance(var_subplot, (tuple, list)):
         assert map_subplot_var_to_new_subplot_var is None, "the subplot var name will change and thus fail."
         dfthis = append_col_with_grp_index(dfthis, var_subplot, "_var_subplot", strings_compact=True)
         var_subplot = "_var_subplot"
