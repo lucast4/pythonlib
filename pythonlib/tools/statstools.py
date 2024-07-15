@@ -262,6 +262,96 @@ def _crossval_folds_indices_onsets(n1, n2, nfold=None):
             assert False
 
 
+def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
+    """ 
+    Returns k-fold indices, startified (with label y), and then
+    ensuring that n train indices per class are same within each fold (i.e.
+    balanced), with test idnices being stratified, matching dataset distribution.
+
+    All indices will take a turn as test, and possibly multiple or zero turns as trainin.
+
+    This is useful to put diff classes on same "footing" by matching num training samples.
+    
+    PARAMS:
+    - n_splits
+    --- int, this many folds.
+    --- auto, takes n that maximizes n fold s(i.e. like LOO)
+    
+    RETURNS:
+    - balanced_folds, list of 2-tuples of indices, which are arrays of ints.
+    Example:
+        [(array([ 5,  7, 13, 12,  6, 16, 15,  9, 17]), array([0, 1, 2, 3, 4])),
+        (array([16,  0,  4, 17, 15,  1, 13, 18,  2]), array([ 5,  6,  7,  9, 12])),
+        (array([12,  0, 16,  1, 17,  9, 13,  2,  7]), array([ 8, 10, 11, 14, 15])),
+        (array([ 6, 14, 12,  1,  9, 15,  3,  2,  7]), array([13, 16, 17, 18, 19]))]
+
+    EXAMPLE
+    Example usage
+    from sklearn.datasets import make_classification
+
+    # Create a sample dataset
+    X, y = make_classification(n_samples=30, n_classes=3, weights=[0.2, 0.3, 0.5], n_informative=3, random_state=42)
+
+    balanced_folds = balanced_stratified_kfold(X, y, n_splits="auto", do_print=True)
+
+
+    """
+    import numpy as np
+    from sklearn.model_selection import StratifiedKFold
+    from collections import Counter
+    
+    if n_splits == "auto":
+        # Then do max n splits
+        n_splits = min(Counter(y).values())
+
+        # Cap it
+        max_n_splits = 15
+        n_splits = min([n_splits, max_n_splits])
+
+        print(f"[Auto] Doing {n_splits} splits")
+    else:
+        # dont take more splits than possible.
+        n_splits = min([n_splits, min(Counter(y).values())])
+
+    skf = StratifiedKFold(n_splits=n_splits)
+    folds = list(skf.split(X, y)) # folds[0], 2-tuple of arays of ints
+    
+    balanced_folds = []
+    
+    for train_idx, test_idx in folds:
+        # print("HER", type(train_idx), train_idx)
+        # y_train = y[train_idx]
+        y_train = [y[i] for i in train_idx]
+        class_counts = Counter(y_train)
+        min_class_count = min(class_counts.values())
+        
+        # Create a balanced train set
+        new_train_idx = []
+        # print(y_train)
+        # print(list(class_counts.keys()))
+        # assert False
+
+        # class_indices = {cls: np.where(y_train == cls)[0] for cls in class_counts}
+        class_indices = {cls: [i for i, ythis in enumerate(y_train) if ythis==cls] for cls in class_counts}
+        # print(class_indices)
+        # assert False
+        for cls in class_counts:
+            np.random.shuffle(class_indices[cls])
+            cls_indices = class_indices[cls][:min_class_count]
+            new_train_idx.extend(train_idx[cls_indices])
+        
+        balanced_folds.append((np.array(new_train_idx), test_idx))
+    
+    if do_print:
+        for i, (train_idx, test_idx) in enumerate(balanced_folds):
+            print(f"---- Fold {i+1}")
+            print("Train class distribution:", Counter([y[i] for i in train_idx]))
+            print("Test class distribution:", Counter([y[i] for i in test_idx]))
+            print("train_idx:", train_idx)
+            print("test_idx:", test_idx)
+
+    return balanced_folds
+
 def cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=None, PLOT_SIL=False,
                                          PLOT_FINAL=False, return_figs=False):
     """

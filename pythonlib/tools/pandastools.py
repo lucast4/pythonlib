@@ -220,6 +220,10 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     assert isinstance(values, list)
     assert isinstance(group, list)
 
+    # if nonnumercols == "all":
+    #     nonnumercols = df.columns.tolist()
+
+
     if nonnumercols is None:
         nonnumercols = []
     else:
@@ -1077,7 +1081,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
                 n = len(dfsub)
                 valthis = n
             elif agg_method=="mean":
-                valthis = dfsub[val_name].mean()
+                # valthis = dfsub[val_name].mean()
+                valthis = np.nanmean(dfsub[val_name])
             else:
                 print(agg_method)
                 assert False
@@ -1607,7 +1612,6 @@ def datamod_normalize_row_after_grouping_return_same_len_df(df, var_contrast, gr
         lev_default_contrast = df[var_contrast].unique().tolist()[0]
 
     # Calculate the mean value for the specific level within each group
-    print()
     group_means = df[df[var_contrast] == lev_default_contrast].groupby(grplist_index)[y_var].mean().reset_index()
     group_means = group_means.rename(columns={y_var: f'{y_var}_mean'})
 
@@ -1763,6 +1767,79 @@ def datamod_normalize_row_after_grouping(df, var_contrast, grplist_index, y_var,
     return dfpivot, dfpivot_norm, dflong_norm, stats, fig
 
 
+def extract_resample_balance_by_var(df, var, n_samples="min", method_if_not_enough_samples="replacement",
+                                     assert_all_rows_unique=False):
+    """
+    Resample rows of dataframe, with goal of balancing n rows per level of var.
+    Various methods to do so
+    PARAMS:
+    - n_samples
+    --- "min", use the min acorss levels.
+    --- "max", uses max
+    --- <int>
+    - method_if_not_enough_samples
+    --- "replacement", for any level without enough n, sample with replacement, but in way that sampels without repl,
+    then "replenishes" pool, and so on.
+    --- "min", for any level that has not enough samples, use n samples it has. This leads to imbalanced output
+    RETURNS:
+    - copy of df, balanced, with index not reset, so its posisble to have repeated indices.
+
+    # Sample data
+    data = {
+        'category': ['A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'C'],
+        'item': [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    }
+    df = pd.DataFrame(data)
+    display(df)
+
+    balanced_df = extract_resample_balance_by_var(df, "category", 10, "min", assert_all_rows_unique=True)
+    display(balanced_df)
+    balanced_df.index
+    """
+
+    if n_samples=="min":
+        # Determine the number of samples based on the minimum number of samples available across all categories
+        n_samples = df[var].value_counts().min()
+    elif n_samples=="max":
+        n_samples = df[var].value_counts().max()
+    else:
+        assert isinstance(n_samples, int)
+        
+    # Resample dataset to balance the number of cases for each category with replacement
+    if method_if_not_enough_samples=="replacement":
+        # sample with replacement
+
+        # Function to conditionally resample
+        def conditional_resample(group, n):
+            if len(group) >= n:
+                return group.sample(n=n, replace=False)
+            else:
+                return group.sample(n=n, replace=True)     
+
+        def conditional_resample_replenish(group, n):
+            result = pd.DataFrame(columns=group.columns)
+            while len(result) < n:
+                needed = n - len(result)
+                if len(group) <= needed:
+                    result = pd.concat([result, group.sample(n=len(group), replace=False)])
+                else:
+                    result = pd.concat([result, group.sample(n=needed, replace=False)])
+            return result
+
+        balanced_df = df.groupby(var, group_keys=False).apply(lambda s: conditional_resample_replenish(s, n_samples))
+    elif method_if_not_enough_samples=="min":
+        # lower the n_samples to how many samples exist.
+        balanced_df = df.groupby(var, group_keys=False).apply(lambda s: s.sample(n=min(len(s), n_samples)))
+    else:
+        print(method_if_not_enough_samples)
+        assert False
+
+    if assert_all_rows_unique:
+        assert len(set(balanced_df.index.tolist())) == len(balanced_df), "found repeated indices..."
+
+    return balanced_df
+
+                                         
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                                     F = None, return_as_dict=False, 
                                     method_if_not_enough_examples="prune_subset"):
@@ -3258,7 +3335,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           annotate_heatmap=False, return_dfs=False,
                           ZLIMS=None, title_size=6, ncols=3,
                         row_values= None, col_values=None, W=5):
-    """
+    """ 
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
     cell, if needed.
@@ -3270,6 +3347,11 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     use the auto value. e.g,., (0., None) means fiz min to 0, but use auto for max.
     :return:
     """
+
+    if var_subplot is None:
+        df = df.copy()
+        df["var_subplot"] = "dummy"
+        var_subplot = "var_subplot"
 
     assert isinstance(var_subplot, str)
 
@@ -3284,6 +3366,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     H = (4/5) * W
     nrows = int(np.ceil(len(list_subplot) / ncols))
 
+    # print(nrows, ncols, list_subplot, var_subplot, df.columns, len(df))
+    # assert False
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*W, nrows*H))
 
     if share_zlim:
@@ -3291,11 +3375,17 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         grpdict = grouping_append_and_return_inner_items(df, [varrow, varcol, var_subplot])
         mins = []
         maxs = []
+        groupmeans = []
         for grp, inds in grpdict.items():
-            mins.append(np.min(df.iloc[inds][val_name]))
-            maxs.append(np.max(df.iloc[inds][val_name]))
-        zmin = min(mins)
-        zmax = max(maxs)
+            # mins.append(np.min(df.iloc[inds][val_name]))
+            # maxs.append(np.max(df.iloc[inds][val_name]))
+            groupmeans.append(np.mean(df.iloc[inds][val_name])) 
+        zmin = min(groupmeans)
+        zmax = max(groupmeans)
+        delta = zmax-zmin
+        zmax += 0.1*delta
+        zmin -= 0.1*delta
+        
         # print([varrow, varcol, var_subplot])
         # df_agg = aggregGeneral(df.loc[:, [varrow, varcol, var_subplot, val_name]], [varrow, varcol, var_subplot], [val_name])
         # zmin = np.min(df_agg[val_name])
@@ -3399,6 +3489,10 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     """
     from scipy.stats import sem
     from pythonlib.tools.plottools import plotScatter45
+
+    if isinstance(var_datapt, (list, tuple)):
+        dfthis = append_col_with_grp_index(dfthis, var_datapt, "_var_datapt")
+        var_datapt = "_var_datapt"
 
     assert not x_lev_manip==y_lev_manip
 
