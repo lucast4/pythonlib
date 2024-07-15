@@ -33,9 +33,8 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
 
     # identical across input objects. Will inherit that value.
     list_attr_identical = attributes_get_capitalized_or_underscore_capitalized(list_obj[0])
-    # Only those that are strings
-    list_attr_identical = [attr for attr in list_attr_identical if isinstance(getattr(list_obj[0], attr), str)]
-    # print(list_attr_identical)
+    # Only those that are strings or bool, int
+    list_attr_identical = [attr for attr in list_attr_identical if isinstance(getattr(list_obj[0], attr), (bool, str, int))]
     # list_attr_identical = ["TokensVersion"]
     for attr in list_attr_identical:
         items = [getattr(d, attr) for d in list_obj]

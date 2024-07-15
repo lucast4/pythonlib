@@ -221,6 +221,15 @@ def concatDatasets(Dlist, do_cleanup=False):
         # that is global in a way that would wnat to run even if you have already cleaned up.
         Dnew.Dat = Dnew.Dat.sort_values("trialcode", axis=0).reset_index(drop=True)
 
+    # Preprocess to get all toekns-related variables, etc.
+    # Have to redo, becuase must cluster variables across entire dataset.
+    # - Use the flag that you used for the oriignal datasets. or else will fail for novel and psycho tasks, potentailyl.
+    if hasattr(Dnew, "TokensPreprocessWrapperLabelNovel"):
+        label_as_novel_if_shape_semantic_fails = Dnew.TokensPreprocessWrapperLabelNovel
+    else:
+        label_as_novel_if_shape_semantic_fails = False
+    Dnew.tokens_preprocess_wrapper_good(label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
+
     return Dnew
 
 
