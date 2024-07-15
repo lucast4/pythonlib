@@ -46,10 +46,22 @@ def preprocess_dataset(D, doplots=False):
         os.makedirs(SAVEDIR, exist_ok=True)
         # SAVEDIR = D.make_savedir_for_analysis_figures("prims_in_grid")
 
+        if len(D.Dat) <5:
+            continue
+
         # Determine if aborts were befaucs sequence error...
-        D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
+        if False:
+            D.grammarmatlab_successbinary_score() # Quickly score using matlab sequence...
+        else:
+            # Better, since it can deal with PIG (gives all trials success = true)
+            D.grammarparses_successbinary_score_wrapper()
         D.grammarparsesmatlab_score_wrapper_append()
-        assert len(D.Dat)>0
+        
+        if len(D.Dat) <5:
+            # Often becuase is singel prims during grammar day
+            continue
+
+        # assert len(D.Dat)>0
 
         # get DatStrokes
         DS = preprocess_dataset_to_datstrokes(D, "primsingrid")
@@ -77,7 +89,7 @@ def preprocess_dataset(D, doplots=False):
                     Dc.Dat = Dc.Dat[Dc.Dat["epoch"] == epoch].reset_index(drop=True)
                     savedir = f"{SAVEDIR}/location_sequence_bias-epoch={epoch}"
                     os.makedirs(savedir, exist_ok=True)
-                    plot_location_sequence_bias_spatial(D, savedir)
+                    plot_location_sequence_bias_spatial(Dc, savedir)
 
             # Sequential context of strokes
             savedir = f"{SAVEDIR}/stroke_sequential_contexts"

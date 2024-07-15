@@ -23,6 +23,25 @@ def check_if_list1_is_ordered_subset_of_list2(list1, list2):
     return np.all(np.diff(inds)>0)
 
 
+def stringify_list_of_tuple(li):
+    """
+    Converts liust of tuple/list into list of str.
+    
+    Given this:
+    [(0, 1),
+        (0, 1),
+        (0, 0),
+        (1, 0),
+        (0, 1),
+    Returns:
+        ['0|1',
+        '0|1',
+        '0|0',
+        '1|0',
+        '0|1']         
+    """
+    return [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in li]
+                        
 def stringify_list(li, return_as_str=False, separator="--"):
     """ 
     list --> list of str

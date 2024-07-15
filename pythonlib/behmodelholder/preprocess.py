@@ -77,6 +77,9 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
     ################## Generate behclass
     D.behclass_preprocess_wrapper()
 
+    if len(D.Dat)==0:
+        return None
+
     results = [] #dataframe to return
 
     # Collect these things to put back into D.Dat
@@ -230,7 +233,7 @@ def generate_scored_beh_model_data_long(D, list_rules, binary_rule=False,
         LIST_exclude_because_online_abort.append(exclude_because_online_abort)
 
     dfGramScore = pd.DataFrame(results)
-
+        
     if USE_DATASET_DF:
         # merge the dataframes
         assert np.all(dfGramScore["trialcode"]==D.Dat["trialcode"])

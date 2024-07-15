@@ -44,7 +44,48 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         D.preprocessGood(params=["no_supervision", "remove_online_abort"])
         DS = DatStrokes(D)
     
-    elif version=="singleprim_psycho":
+    elif version == "singleprim_psycho_noabort":
+        # single prims, but for psycho wheihc means (i) aloows if mulitpel strokes and (ii) more lenient overall,
+        # to allow failures, etc, which often happen for novel shapes
+        
+        # remove_online_abort = False
+        # frac_touched_min = 0.05
+        # ft_decim_min = 0.1
+        # shortness_min = 0.1
+
+        min_stroke_length = 50
+        min_stroke_dur = 0.1
+        # beh_task_dist_too_large = 80 
+
+        # check that only one stroke per task. otherwise shold not call this
+        if False: # Skip, since psycho are sometimes multistroke (e.g., structured psycho), but one beh stroke.
+            if "FEAT_num_strokes_task" not in D.Dat.columns:
+                D.extract_beh_features(feature_list = ("num_strokes_task"))
+                D.Dat = D.Dat[D.Dat["FEAT_num_strokes_task"]==1].reset_index(drop=True)
+        
+        D.preprocessGood(params=["beh_strokes_at_least_one",
+                                 "no_supervision"],
+                        #  frac_touched_min=frac_touched_min,
+                        #  ft_decim_min=ft_decim_min,
+                        #  shortness_min = shortness_min
+                         )
+
+        DS = DatStrokes(D)
+
+        # These values empriically chosen (see primitivenessv2 preprocessing).
+        methods = ["stroke_too_short", "stroke_too_quick"]
+        params = {
+            "min_stroke_length":min_stroke_length,
+            "min_stroke_dur":min_stroke_dur
+        }
+        DS.distgood_compute_beh_task_strok_distances()
+        n1 = len(DS.Dat)
+        DS.clean_preprocess_data(methods=methods, params=params)
+        # DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
+        n2 = len(DS.Dat)
+        assert n2/n1>0.75, "why removed so much data?"
+
+    elif version in ["singleprim_psycho", "singleprim_novel"]:
         # single prims, but for psycho wheihc means (i) aloows if mulitpel strokes and (ii) more lenient overall,
         # to allow failures, etc, which often happen for novel shapes
         
@@ -59,9 +100,10 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # beh_task_dist_too_large = 80 
 
         # check that only one stroke per task. otherwise shold not call this
-        if "FEAT_num_strokes_task" not in D.Dat.columns:
-            D.extract_beh_features(feature_list = ("num_strokes_task"))
-            D.Dat = D.Dat[D.Dat["FEAT_num_strokes_task"]==1].reset_index(drop=True)
+        if False: # Skip, since psycho are sometimes multistroke (e.g., structured psycho), but one beh stroke.
+            if "FEAT_num_strokes_task" not in D.Dat.columns:
+                D.extract_beh_features(feature_list = ("num_strokes_task"))
+                D.Dat = D.Dat[D.Dat["FEAT_num_strokes_task"]==1].reset_index(drop=True)
         
         D.preprocessGood(params=["beh_strokes_at_least_one",
                                  "no_supervision"],
@@ -104,8 +146,15 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         frac_touched_min = 0.6
         ft_decim_min = 0.3
         shortness_min = 0.2
-        D.preprocessGood(params=["beh_strokes_at_least_one",
-                                 "one_to_one_beh_task_strokes_allow_unfinished",
+        # D.preprocessGood(params=["beh_strokes_at_least_one",
+        #                          "one_to_one_beh_task_strokes_allow_unfinished",
+        #                          "no_supervision",
+        #                          "remove_online_abort"],
+        #                  frac_touched_min=frac_touched_min,
+        #                  ft_decim_min=ft_decim_min,
+        #                  shortness_min = shortness_min
+        #                  )
+        D.preprocessGood(params=["beh_strokes_one",
                                  "no_supervision",
                                  "remove_online_abort"],
                          frac_touched_min=frac_touched_min,
@@ -230,9 +279,11 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         # Third, hard-coded pruning, to be above threshold value for clean prims
         animal = D.animals(force_single=True)[0]
         if animal=="Pancho":
-            THRESH_clust_sim_max = 1.1
+            # THRESH_clust_sim_max = 1.1
+            THRESH_clust_sim_max = 0.475 # 7/12/24 - could be 0.52, but this throws out too many circles.
         elif animal=="Diego":
-            THRESH_clust_sim_max = 1.2 # based on 12/1/23...
+            # THRESH_clust_sim_max = 1.2 # based on 12/1/23...
+            THRESH_clust_sim_max = 0.5 # 7/12/24 - could be 0.55, but this throws out too many circles.
         else:
             assert False
 
@@ -413,6 +464,18 @@ class DatStrokes(object):
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_next", "CTXT_shape_next"], "CTXT_locshape_next")
         self.Dat = append_col_with_grp_index(self.Dat, ["CTXT_loc_prev", "CTXT_shape_prev"], "CTXT_locshape_prev")
 
+        ###### SANITY CHECK
+        for i in range(len(self.Dat)):
+            strokes_task = self.dataset_extract("strokes_task", i) 
+            if self.Dat.iloc[i]["ind_taskstroke_orig"]+1 > len(strokes_task):
+                # This cannot be
+                print(i)
+                print(len(strokes_task))
+                print(self.Dat.iloc[i])
+                print(self.Dat.iloc[i]["trialcode"])
+                print(self.Dat.iloc[i]["ind_taskstroke_orig"])
+                assert False, "Fix this bug"
+            
         assert sum(self.Dat["gridloc"].isna())==0
 
     def _prepare_dataset(self):
@@ -1343,7 +1406,7 @@ class DatStrokes(object):
                     pass
                 else:
                     print(if_fail)
-                    assert False
+                    raise err
             
             # confirm trialcode
             tc = self.Dat.iloc[inds]["dataset_trialcode"].unique().tolist()
@@ -1630,12 +1693,15 @@ class DatStrokes(object):
 
 
     def plot_multiple_strok(self, list_strok, ver="beh", ax=None,
-        overlay=True, titles=None, ncols=5, size_per_sublot=2):
+        overlay=True, titles=None, ncols=5, size_per_sublot=2, alpha=None):
         """
         PARAMS;
         - ax, either None, single ax (if overlay==True) or list of axes
         (if overlay==False).
         """
+
+        if ax is not None:
+            fig = None
 
         if overlay:
             # Then all use the same axis.
@@ -1650,11 +1716,10 @@ class DatStrokes(object):
                 fig, axes = plt.subplots(nrows, ncols, sharex=True, sharey=True, 
                     figsize=(ncols*size_per_sublot, nrows*size_per_sublot), squeeze=False)
                 axes = axes.flatten()
-            else:
-                assert len(ax)==len(list_strok)
+                # assert len(ax)==len(list_strok)
 
         for strok, ax in zip(list_strok, axes):
-            self.plot_single_strok(strok, ver=ver, ax=ax)
+            self.plot_single_strok(strok, ver=ver, ax=ax, alpha_beh=alpha)
 
         if titles is not None:
             assert len(titles)==len(list_strok)
@@ -1671,12 +1736,14 @@ class DatStrokes(object):
         ax.plot(strok[:,0], strok[:,1], "-", color=color, alpha=alpha)
 
     def plot_single_strok(self, strok, ver="beh", ax=None, 
-            color=None, alpha_beh=0.55):
+            color=None, alpha_beh=None):
         """ plot a single inputed strok on axis.
         INPUT:
         - strok, np array,
         """
 
+        if alpha_beh is None:
+            alpha_beh = 0.55
         if ax is None:
             fig, ax = plt.subplots()
 
@@ -2051,7 +2118,7 @@ class DatStrokes(object):
         return figbeh, figtask
 
     def plotshape_row_col_vs_othervar(self, rowvar, colvar="shape", n_examples_per_sublot=1,
-        plot_task=False):
+        plot_task=False, ver_behtask="task_aligned_single_strok"):
         """ Plot shapes on columns and othervar as rows, each slot an example stroke 
         conjucntion those levels
         PARAMS:
@@ -2060,7 +2127,7 @@ class DatStrokes(object):
 
         if plot_task:
             # NEed to extract strokes beh and task
-            list_strokes_task = self.extract_strokes("list_list_arrays", ver_behtask="task_aligned_single_strok")
+            list_strokes_task = self.extract_strokes("list_list_arrays", ver_behtask=ver_behtask)
             self.Dat["strokes_task"] = list_strokes_task
 
         if False:
@@ -2702,10 +2769,12 @@ class DatStrokes(object):
             assert False, "use dtw_vels_2d insetad, its been tested..."
         elif distancever == "dtw_vels_2d":
             # DTW, using velocity in 2d, invariant to scale and
-            # temporal structure.
+            # temporal structure.   
+
 
             # fs = self.dataset_get_sample_rate()
             fs = None # not needed, since now is using "fake time"
+            assert rescale_strokes_ver is None, "not used"
             similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever=distancever,
                                                 convert_to_similarity=True, similarity_method="inverse",
                                                  align_to_onset=True, fs=fs, DEBUG=DEBUG,
@@ -4167,7 +4236,6 @@ class DatStrokes(object):
         print("Basis set of strokes:", list_shape_basis)
 
         for sh in list_shape_basis:
-            print(dfbasis["shape"])
             if sh not in dfbasis["shape"].tolist():
                 print("shape doesnt exist in basis set:", sh)
                 assert False

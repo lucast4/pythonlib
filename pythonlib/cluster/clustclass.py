@@ -186,7 +186,10 @@ class Clusters(object):
             print(labs)
             print(label)
             print(n)
-            assert False, "why multiple identical lables?"
+            if n==0:
+                assert False, "DId not find this label!"
+            else:
+                assert False, "why multiple identical lables?"
         return labs.index(label)
 
     def extract_dat(self, datkind="raw"):
@@ -2448,7 +2451,7 @@ class Clusters(object):
 
         return ma_same, ma_diff
 
-    def rsa_dataextract_with_labels_as_flattened_df(self, keep_only_one_direction_for_each_pair=True):
+    def rsa_dataextract_with_labels_as_flattened_df(self, keep_only_one_direction_for_each_pair=True, plot_heat=True):
         """ Return a df such that each row is a single distance between
         a specific row and column of distance matrix, along with
         variables that were in the x and y axis.
@@ -2491,7 +2494,7 @@ class Clusters(object):
 
         dfdists = pd.DataFrame(dats)
 
-        if True:
+        if plot_heat:
             # sanity, this matches heatmap (but y axis flipped)
             import seaborn as sns
             sns.scatterplot(data=dfdists, x="idx_col", y="idx_row", hue="dist")

@@ -327,14 +327,14 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
-    elif ("shapeseqdiego1" in expt) or ("shapeseqpancho1" in expt):
+    elif ("shapeseqdiego1" in expt) or ("shapeseqdiego2" in expt) or ("shapeseqdiego3" in expt) or ("shapeseqpancho1" in expt) or ("shapeseqpancho2" in expt):
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
-    elif ("shapeseqdiegostim1" in expt) or ("shapeseqpanchostim1" in expt):
+    elif ("shapeseqdiegostim" in expt) or ("shapeseqpanchostim" in expt):
         # single grammar, and stim on rtandom interleave trials.
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "microstim_code"]
@@ -507,10 +507,11 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = False
 
-    elif expt in ["primsingriddiego2b"]:
+    elif expt in ["primsingriddiego2b", "primsingriddiego2c", "primsingriddiego2d"]:
         # Then epochs are a group of blocks. manually enter them here.
         # Prims in grid with different shape set (Dolnik).
-
+        # NOTE: To decide on blocks to hand enter, run this in dataset_summarize notebook:
+        # "Mapping from blocks to shape sets [complexvar, Dolnik]""
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["manual_by_block"]
         map_epoch_to_block = {
@@ -1040,7 +1041,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,
     score_all_pairwise_within_task=False, extract_features = False, 
     only_keep_trials_across_groupings=False,
-    rename_shapes_if_cluster_labels_exist=True):
+    rename_shapes_if_cluster_labels_exist=True,
+    label_as_novel_if_shape_semantic_fails_overwrite = None):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -1053,6 +1055,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     sequence assignment is accurate/confident.
     - rename_shapes_if_cluster_labels_exist, bool, if True (and if doing so is specified for this day) then
     will do this. If False, overwrites whataver was supposed to do for this day.
+    - label_as_novel_if_shape_semantic_fails_overwrite, bool, if not None (bool), then this overwrites method for deciding
+    what to do if token task prim doesnt fall into a semantic class. If True, then just calls it novel (with unique hash).
     NOTE:
     - if D.Dat ends up being empty, then returns None
     - if all flags False, then doesnt do any mods to D, just returns groupings, etc.
@@ -1110,7 +1114,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
             # 2) Replace all tokens with extracted shapes.
             print(" -- 2. Replacing tokens in Dataset")
-            D.tokens_generate_replacement_from_raw()
+            D.tokens_generate_replacement_from_raw_helper() 
+            # D.tokens_generate_replacement_from_raw()
 
             # 3) delete older tokens
             print(" -- 3. Deleting and locking older tokens")
@@ -1386,7 +1391,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         label_as_novel_if_shape_semantic_fails = False
     else:
         assert False, "True or False?"
-    D.tokens_preprocess_wrapper_good(label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
+    D.tokens_preprocess_wrapper_good(label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails,
+                                     label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
 
     # () Note that preprocess done
     D._analy_preprocess_done=True
