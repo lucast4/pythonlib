@@ -94,8 +94,10 @@ def get_angle(v):
     from math import pi
     """given a vector, gets angle from (1,0), 
     in domain [0, 2pi)"""
+    if isinstance(v, (list, tuple)):
+        v = np.array(v)
+
     a = angle_between([1,0], v)
-#     print(a)
     if np.sum(v**2)==0:
         print(v)
         assert False, "cannot compute angle -- length of vector is 0..."

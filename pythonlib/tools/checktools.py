@@ -5,7 +5,8 @@ def check_objects_identical(obj1, obj2, PRINT=False):
     Returns False if any difference found
     otherwise True.
     """
-
+    from pythonlib.tools.listtools import sort_mixed_type
+    
     # Go thru all cases. if any are false, returns False
     if not type(obj1)==type(obj2):
         if PRINT:
@@ -26,7 +27,7 @@ def check_objects_identical(obj1, obj2, PRINT=False):
                     print('obj2',obj2)
                 return False
     elif isinstance(obj1, dict):
-        if not sorted(obj1.keys()) == sorted(obj2.keys()):
+        if not sort_mixed_type(obj1.keys()) == sort_mixed_type(obj2.keys()):
             if PRINT:
                 print('obj1',obj1, obj1.keys())
                 print('obj2',obj2, obj2.keys())
