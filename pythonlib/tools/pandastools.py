@@ -2089,7 +2089,8 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     nmin = np.min(np.min(dftmp, axis=0))
     return nmin, nmax
 
-def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7):
+def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
+    norm_method=None):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2131,7 +2132,8 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
 
         # plot 2d
         convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
-            list_cat_1 = list_var1, list_cat_2 = list_var2)
+            list_cat_1 = list_var1, list_cat_2 = list_var2,
+            norm_method=norm_method)
 
         ax.set_title(dum)
     return fig

@@ -41,6 +41,37 @@ def zscore(val, vals_dist):
 #     return stats.ranksums(df1[f"{varname}"], df2[f"{varname}"])
 
 # NOT YET DONE!!!
+def statsmodel_ols(x, y, PRINT=False):
+    """
+    PARAMS:
+    - x, (ndat, nfeat), or (ndat,)
+    - y, (ndat,)
+
+    """ 
+    import statsmodels.api as sm
+
+    # print(x.shape)
+    # print(y.shape)
+
+    # print(x.shape)
+    x = sm.add_constant(x)
+    # print(x.shape)
+    # assert False
+
+    model = sm.OLS(y,x, hasconst=True)
+    results = model.fit()
+
+    if PRINT:
+        print(results.summary())
+
+    if len(results.params)!=2:
+        print(results.summary())
+        print(y.shape)
+        print(x.shape)
+        assert False, "why"
+
+    return results
+
 if False:
     def getStatsOLS(dfthis_teststimonly, colname):
         from statsmodels.regression.linear_model import OLS
