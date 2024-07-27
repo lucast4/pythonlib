@@ -557,16 +557,17 @@ class TaskClass(object):
 
     def extra_tform_params_extract(self):
         """
-        REturn either None (iof doesnt exist) or dict of extra tform params, like this:
-
-        {'tforms': {},
-        'tforms_each_prim_p': [{},
-            [['th', array(-0.16839016)],
-            ['sx', array(1.01434708)],
-            ['sy', array(1.01434708)]],
-            {}],
-        'flips': array([0., 0., 0.]),
-        }        
+        REturn either None (iof doesnt exist) or list (len strokes) of dict of extra tform params, like this:
+        
+        list_extra_tforms_dict[0] = 
+            {'tforms': {},
+            'tforms_each_prim_p': [{},
+                [['th', array(-0.16839016)],
+                ['sx', array(1.01434708)],
+                ['sy', array(1.01434708)]],
+                {}],
+            'flips': array([0., 0., 0.]),
+            }        
         """
         # print(self.PlanDat["PrimsExtraParams"])
         # assert False
@@ -577,26 +578,28 @@ class TaskClass(object):
             # liek this [{}, {}]
             return None
         else:
-            if len(self.PlanDat["PrimsExtraParams"])>1:
-                print(self.PlanDat["PrimsExtraParams"])
-                assert False, "what is this..."
-            
-            extra_tforms_dict = self.PlanDat["PrimsExtraParams"][0] # Dict
+            # if len(self.PlanDat["PrimsExtraParams"])>1:
+            #     print(self.PlanDat["PrimsExtraParams"])
+            #     assert False, "what is this..."
 
-            # Add default keys if no exist.
-            if "tforms" not in extra_tforms_dict:
-                extra_tforms_dict["tforms"] = {}
-            if "tforms_each_prim_p" not in extra_tforms_dict:
-                extra_tforms_dict["tforms_each_prim_p"] = [{} for _ in range(len(self.Strokes))]
-            if "flips" not in extra_tforms_dict:
-                extra_tforms_dict["flips"] = {}
+            list_extra_tforms_dict = []
+            for extra_tforms_dict in self.PlanDat["PrimsExtraParams"]:
+                # extra_tforms_dict = self.PlanDat["PrimsExtraParams"][0] # Dict
 
-            assert isinstance(extra_tforms_dict, dict)
-            print(extra_tforms_dict)
-            assert all([k in ["tforms", "tforms_each_prim_p", "flips"] for k in extra_tforms_dict.keys()])
+                # Add default keys if no exist.
+                if "tforms" not in extra_tforms_dict:
+                    extra_tforms_dict["tforms"] = {}
+                if "tforms_each_prim_p" not in extra_tforms_dict:
+                    extra_tforms_dict["tforms_each_prim_p"] = [{} for _ in range(len(self.Strokes))]
+                if "flips" not in extra_tforms_dict:
+                    extra_tforms_dict["flips"] = {}
 
-            return extra_tforms_dict
-        
+                assert isinstance(extra_tforms_dict, dict)
+                assert all([k in ["tforms", "tforms_each_prim_p", "flips"] for k in extra_tforms_dict.keys()])
+
+                list_extra_tforms_dict.append(extra_tforms_dict)
+
+            return list_extra_tforms_dict
 
     def check_prims_extra_params_exist(self):
         """
@@ -616,11 +619,22 @@ class TaskClass(object):
         # a = len(T.PlanDat["PrimsExtraParams"])>
         # return a and b
 
-        extra_tforms_dict = self.extra_tform_params_extract()
-        if extra_tforms_dict is None:
+        list_extra_tforms_dict = self.extra_tform_params_extract()
+        if list_extra_tforms_dict is None:
             return False
 
-        return any([len(p)>0 for p in extra_tforms_dict.values()])
+        for extra_tforms_dict in list_extra_tforms_dict:
+            if any([len(p)>0 for p in extra_tforms_dict.values()]):
+                # Then at least one stroke is being transformed...
+                return True
+        return False
+            
+
+        # extra_tforms_dict = self.extra_tform_params_extract()
+        # if extra_tforms_dict is None:
+        #     return False
+
+        # return any([len(p)>0 for p in extra_tforms_dict.values()])
                    
     ########################
 

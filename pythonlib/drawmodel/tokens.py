@@ -71,28 +71,30 @@ import matplotlib.pyplot as plt
 #             assert v==MAP_SHAPE_TO_SHAPESEMANTIC[k]
 
 # HACKY -- use the above code to generate this...
+# NOTE: THis below is hand modified
 MAP_SHAPE_TO_SHAPESEMANTIC = {
+    'circle-6-1-0': 'circle-XX-XX',
+    'Lcentered-4-1-0': 'Lcentered-UL-UL',
     'Lcentered-4-2-0': 'Lcentered-DL-DL',
     'Lcentered-4-3-0': 'Lcentered-DR-DR',
     'Lcentered-4-4-0': 'Lcentered-UR-UR',
     'V-2-1-0': 'V-LL-LL',
     'V-2-2-0': 'V-DD-DD',
+    'V-2-3-0': 'V-RR-RR',
     'V-2-4-0': 'V-UU-UU',
     'arcdeep-4-1-0': 'arcdeep-LL-LL',
     'arcdeep-4-2-0': 'arcdeep-DD-DD',
+    'arcdeep-4-3-0': 'arcdeep-RR-RR',
     'arcdeep-4-4-0': 'arcdeep-UU-UU',
-    'circle-6-1-0': 'circle-XX-XX',
     'line-8-1-0': 'line-LL-LL',
     'line-8-2-0': 'line-UU-UU',
     'line-8-3-0': 'line-UR-UR',
     'line-8-4-0': 'line-UL-UL',
-    'squiggle3-3-1-0': 'squiggle3-LL-0.0',
+    'squiggle3-3-1-0': 'squiggle3-UU-1.0', # NOTE: THis below is hand modified, becuase auto messed it up, calling it 'squiggle3-LL-0.0'. See primiutiveclass, where I need to fix the code. For now, use hand labeld here.
+    'squiggle3-3-1-1': 'squiggle3-UU-0.0',
     'squiggle3-3-2-0': 'squiggle3-LL-1.0',
     'squiggle3-3-2-1': 'squiggle3-LL-0.0',
-    'Lcentered-4-1-0': 'Lcentered-UL-UL',
-    'V-2-3-0': 'V-RR-RR',
-    'arcdeep-4-3-0': 'arcdeep-RR-RR',
-    'squiggle3-3-1-1': 'squiggle3-UU-0.0',
+    'usquare-1-1-0': 'usquare-LL-LL',
     'usquare-1-2-0': 'usquare-DD-DD',
     'usquare-1-3-0': 'usquare-RR-RR',
     'usquare-1-4-0': 'usquare-UU-UU',
@@ -101,9 +103,28 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
     'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
 
+###### To merge shapesem into shamesemgroups, which are groups of similar shapes. Useful for characters, where you want to increase
+# sample size for each shape.
+map_shapesemgroup_to_shapesem = {}
+for orient in ["LL", "RR", "DD", "UU"]:
+    map_shapesemgroup_to_shapesem[f"ARC-{orient}"] = [f"{sh}-{orient}-{orient}" for sh in ["V", "arcdeep", "usquare", "Lcentered"]]
+for orient in ["UU", "LL"]:
+    for reflect in ["0.0",  "1.0"]:
+        map_shapesemgroup_to_shapesem[f"ZZ-{orient}-{reflect}"] = [f"{sh}-{orient}-{reflect}" for sh in ["squiggle3", "zigzagSq", "Lzigzag1"]]
+print("TODO: Pancho -- combine circles with the tohers")
+for sh in ['circle-XX-XX', 'Lcentered-UL-UL', 'Lcentered-DL-DL', 'Lcentered-DR-DR', 'Lcentered-UR-UR', 'line-LL-LL', 'line-UU-UU', 'line-UR-UR', 'line-UL-UL']:
+    map_shapesemgroup_to_shapesem[sh] = [sh]
+map_shapesemgroup_to_shapesem["NOVEL-X-X-X"] = ["NOVEL-X-X-X"]
+MAP_SHAPESEMGROUP_TO_SHAPESEM = map_shapesemgroup_to_shapesem
+
+MAP_SHAPESEM_TO_SHAPESEMGROUP = {}
+for shsemgrp, list_shsem in MAP_SHAPESEMGROUP_TO_SHAPESEM.items():
+    for shsem in list_shsem:
+        assert shsem not in MAP_SHAPESEM_TO_SHAPESEMGROUP
+        MAP_SHAPESEM_TO_SHAPESEMGROUP[shsem] = shsemgrp
 
 def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None,
-                             reclassify_shape_using_stroke=False):
+                             reclassify_shape_using_stroke=False, list_ind_taskstroke_orig=None):
     """
     [NOTE: ONLY use this for genreated tokens in default order. this important becuase
     generates and caches. To reorder, see tokens_reorder]
@@ -127,9 +148,14 @@ def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None
     """
     from pythonlib.primitives.primitiveclass import PrimitiveClass, generate_primitiveclass_from_raw
 
+    # assert list_ind_taskstroke_orig is not None, "i only put on end becuase retain argument singature."
+
     ############ PREPARE DATA
     # Convert to Primitives, since the rest of code requires that.
     assert len(strokes)==len(shapes)
+    if list_ind_taskstroke_orig is not None:
+        assert len(strokes)==len(list_ind_taskstroke_orig)
+
     Prims = []
     for traj, sh in zip(strokes, shapes):
         P = generate_primitiveclass_from_raw(traj, sh)
@@ -147,7 +173,8 @@ def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None
         #     assert False
         Prims.append(P)
 
-    inds_taskstrokes = list(range(len(Prims)))
+    if False:
+        inds_taskstrokes = list(range(len(Prims)))
 
     ################ METHODS (doesnt matter if on grid)
     # def _orient(i):
@@ -202,7 +229,8 @@ def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None
             "diag":_diag(i),
             "max_wh":_max_wh(i),
             "Prim":Prims[i],
-            "ind_taskstroke_orig":inds_taskstrokes[i],
+            # "ind_taskstroke_orig":inds_taskstrokes[i],
+            "ind_taskstroke_orig":list_ind_taskstroke_orig[i] if list_ind_taskstroke_orig is not None else None,
             "center": Prims[i].Stroke.extract_center(), # in pixels
             "gridloc": gridlocs[i] if gridlocs is not None else ("IGN", "IGN"),
             "gridloc_local": gridlocs_local[i] if gridlocs_local is not None else ("IGN", "IGN"),
@@ -692,48 +720,67 @@ class Tokens(object):
 
                     # First, shape_semantic is defined only if there is no tforms extra rotation
 
-                    # assert "tforms_extra_exist" in tok.keys(), "needs this to know whether is novel prim. see Dataset.tokens_preprocess_wrapper_good()"
-                    if "tforms_extra_exist" in tok.keys() and tok["tforms_extra_exist"]:
-                        # Then ignore, since this is not base prim.
-                        tok["shape_semantic"] = "NOVEL-X-X-X"
-                        tok["shape_semantic_cat"] = "NOVEL"
-                    else:
+                    # # assert "tforms_extra_exist" in tok.keys(), "needs this to know whether is novel prim. see Dataset.tokens_preprocess_wrapper_good()"
+                    # if "tforms_extra_exist" in tok.keys() and tok["tforms_extra_exist"]:
+                    #     # Then ignore, since this is not base prim.
+                    #     tok["shape_semantic"] = "NOVEL-X-X-X"
+                    #     tok["shape_semantic_cat"] = "NOVEL"
+                    # else:
 
-                        try:
-                            # #TODO:
-                            # # get this: TaskClass.PlanDat, and from this get whether did extra
-                            # # tform, as PlanDat.ParamsSpatialExtra.tforms_each_prim. If did, then
-                            # # don't try to get shape semantic (doesnt exist). 
-                            # assert False
+                    try:
+                        # NOTE on how to deal with novel/transformed prims:
+                        # Previously (before 6/21/24) I checked if tforms_extra_exist exists (above) and if so, called it
+                        # novel. Problem is that for characters, this is true, but I still want to assign shape semantic (using
+                        # the charclust shapes). Solution: Always try to assign shape semantic, but if it faisl, then call it NOVEL.
+                        # I just have to be careful to only use shape semantic when I beleive it is nmeaningful, since it can assign shapes
+                        # that are rotated to the same semantic label.
+                        
+                        # #TODO:
+                        # # get this: TaskClass.PlanDat, and from this get whether did extra
+                        # # tform, as PlanDat.ParamsSpatialExtra.tforms_each_prim. If did, then
+                        # # don't try to get shape semantic (doesnt exist). 
+                        # assert False
 
-                            if shape_semantic_regenerate_from_stroke:
-                                # Then force rgenerate from raw stroke
+                        if shape_semantic_regenerate_from_stroke:
+                            # Then force rgenerate from raw stroke
+                            tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
+                        else:
+                            # First, try to get mapping between shap string and semantic.
+                            if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
+                                tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
+                            else:
+                                # If that fails, then try to compute it. But this will often fail for CHAR, since
+                                # these strokes are not task-strokes, so are irregular.
                                 tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
-                            else:
-                                # First, try to get mapping between shap string and semantic.
-                                if tok["shape"] in MAP_SHAPE_TO_SHAPESEMANTIC:
-                                    tok["shape_semantic"] = MAP_SHAPE_TO_SHAPESEMANTIC[tok["shape"]]
-                                else:
-                                    # If that fails, then try to compute it. But this will often fail for CHAR, since
-                                    # these strokes are not task-strokes, so are irregular.
-                                    tok["shape_semantic"] = tok["Prim"].label_classify_prim_using_stroke_semantic()
 
-                            tmp = deconstruct_filename(tok["shape_semantic"])
-                            tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
-                        except NotEnoughDataException as err:
-                            # Failed... how deal with this.
-                            if label_as_novel_if_shape_semantic_fails:
-                                tok["shape_semantic"] = "NOVEL-X-X-X"
-                                tok["shape_semantic_cat"] = "NOVEL"
-                                n_fails+=1
-                                # close the diagnostic plot that is made in label_classify_prim_using_stroke_semantic
-                                plt.close("all")
-                            else:
-                                print("...Failed at determining shape_semantic for this tok:", tok)
-                                raise err                               
-                        except Exception as err:
+                        tmp = deconstruct_filename(tok["shape_semantic"])
+                        tok["shape_semantic_cat"] = tmp["filename_components_hyphened"][0] # e..g, ['test', '1', '2']
+                    except NotEnoughDataException as err:
+                        # Failed... how deal with this.
+                        if label_as_novel_if_shape_semantic_fails:
+                            tok["shape_semantic"] = "NOVEL-X-X-X"
+                            tok["shape_semantic_cat"] = "NOVEL"
+                            n_fails+=1
+                            # close the diagnostic plot that is made in label_classify_prim_using_stroke_semantic
+                            plt.close("all")
+                        else:
+                            print(shape_semantic_regenerate_from_stroke)
+                            print(label_as_novel_if_shape_semantic_fails)
                             print("...Failed at determining shape_semantic for this tok:", tok)
                             raise err                               
+                    except Exception as err:
+                        print("...Failed at determining shape_semantic for this tok:", tok)
+                        raise err        
+                elif feature=="shape_semantic_group":
+                    assert "shape_semantic" in tok, "first extract shape_semantic using whatever method is appropriate"
+                    if tok["shape_semantic"] not in MAP_SHAPESEM_TO_SHAPESEMGROUP:
+                        if label_as_novel_if_shape_semantic_fails:
+                            tok["shape_semantic_grp"] = "NOVEL-X-X-X"
+                        else:
+                            print(tok)
+                            raise NotEnoughDataException
+                    else:
+                        tok["shape_semantic_grp"] = MAP_SHAPESEM_TO_SHAPESEMGROUP[tok["shape_semantic"]]
                 elif feature=="loc_on":
                     tok["loc_on"] = strok[0,:2]
                 elif feature=="loc_off":

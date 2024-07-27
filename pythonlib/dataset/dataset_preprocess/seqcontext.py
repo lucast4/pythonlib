@@ -21,8 +21,27 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
         - SP, PIG --> easy, use taskstrokes.
         - CHAR --> use behstrokes, then find that in prim database, then label that.
     """
+
+    # New on 6/21/24 - OPtion to use wither beh strokes algined to either beh or task for calling seqc. 
+    # This only matters for days with char, where must decode for non-char trials whether to use beh (which
+    # is the charclust label) or task (ground truth).
     
+    # If use beh, then seqc_0_shape matches what do for char. But sometimes the charclust label differs from ground truth.
+    # So best to avoid this.
+    
+    # If use task, then seqc_0_shape might differ from chars, e.g., if slighyl different scale, but can solve this by
+    # using seqc_0_shapesem instead. Sticking with this.
+    
+    # Also See notes in D.tokens_generate_replacement_from_raw:
+    # NOTE: This means that for non-char task_kinds (e.g,, sp and pig), it is possible for
+    # TokensStrokesBeh to differ from TokensStrokesBehUsingTaskStrokes. To ensure that sp/pig matches 
+    # chars on the same day, do that seqc_... uses beh tokens, not task tokens.
+    DEFINE_SEQC_USING = "task"
+
     D.behclass_preprocess_wrapper()
+
+    n_strok_max = max([len(strokes_beh) for strokes_beh in D.Dat["strokes_beh"]])
+    n_strok_max = max([n_strok_max, 8]) # get at least 8, becuase expect this in older code.
 
     datall = []
     list_dat = []
@@ -75,7 +94,12 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
         # shapes in order
         try:
             GET_CENTER = "center_binned" in tokens_beh_using_task[0].keys()
-            GET_SHAPE_SEM = "shape_semantic" in tokens_beh_using_task[0].keys()
+            if DEFINE_SEQC_USING == "beh":
+                GET_SHAPE_SEM = "shape_semantic" in tokens_beh_using_beh[0].keys()
+            elif DEFINE_SEQC_USING == "task":
+                GET_SHAPE_SEM = "shape_semantic" in tokens_beh_using_task[0].keys()
+            else:
+                assert False
 
             GET_ANGLE = "angle_binned" in tokens_beh_using_beh[0].keys()
             GET_LOC = "loc_on" in tokens_beh_using_beh[0].keys()
@@ -88,18 +112,27 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
                 if j < nstrokes_beh:
                     # Varialbes using task-stroke (aligned to beh)
                     tok = tokens_beh_using_task[j]
-                    assert isinstance(tok["shape"], str)
-                    dat[f"seqc_{j}_shape"] = tok["shape"]
+
+                    if DEFINE_SEQC_USING == "task":
+                        dat[f"seqc_{j}_shape"] = tok["shape"]
+                        if GET_SHAPE_SEM:
+                            dat[f"seqc_{j}_shapesem"] = tok["shape_semantic"]
+                            dat[f"seqc_{j}_shapesemcat"] = tok["shape_semantic_cat"]
+                            dat[f"seqc_{j}_shapesemgrp"] = tok["shape_semantic_grp"]
                     dat[f"seqc_{j}_loc"] = tok["gridloc"]
                     dat[f"seqc_{j}_loc_local"] = tok["gridloc_local"]
                     if GET_CENTER:
                         dat[f"seqc_{j}_center_binned"] = tok["center_binned"]
-                    if GET_SHAPE_SEM:
-                        dat[f"seqc_{j}_shapesem"] = tok["shape_semantic"]
-                        dat[f"seqc_{j}_shapesemcat"] = tok["shape_semantic_cat"]
 
                     # Variables using beh stroke (algined to beh)
                     tok = tokens_beh_using_beh[j]
+
+                    if DEFINE_SEQC_USING == "beh":
+                        dat[f"seqc_{j}_shape"] = tok["shape"]
+                        if GET_SHAPE_SEM:
+                            dat[f"seqc_{j}_shapesem"] = tok["shape_semantic"]
+                            dat[f"seqc_{j}_shapesemcat"] = tok["shape_semantic_cat"]
+                            dat[f"seqc_{j}_shapesemgrp"] = tok["shape_semantic_grp"]
                     if GET_ANGLE:
                         dat[f"seqc_{j}_angle_binned"] = tok["angle_binned"]
                         dat[f"seqc_{j}_angle"] = tok["angle"]
@@ -124,6 +157,7 @@ def preprocess_dataset(D, n_strok_max = 8, version="tokens", plot_examples=False
                     if GET_SHAPE_SEM:
                         dat[f"seqc_{j}_shapesem"] = "IGN"
                         dat[f"seqc_{j}_shapesemcat"] = "IGN"
+                        dat[f"seqc_{j}_shapesemgrp"] = "IGN"
 
                     # --------------------
                     if GET_ANGLE:

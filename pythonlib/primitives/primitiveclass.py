@@ -364,15 +364,16 @@ class PrimitiveClass(object):
             scale = features["scale"]
             # scale = "X" # ignore
 
-            def _raise_error(a1, a2):
+            def _raise_error(a1, a2, PLOT=False):
                 print(shcat)
                 print(features)
                 print(a1, a2)
                 print(self.extract_as())
-                fig = self.plot_stroke()
-                fig.savefig("/tmp/stroke.png")
-                print("Check saved stroke at ", "/tmp/stroke.png")
-                print("for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'")
+                if PLOT: # Skip for now, since now I try always to get shape sem, and if it fails, this would save fig for evey stroke. too long. Can turn on.
+                    fig = self.plot_stroke()
+                    fig.savefig("/tmp/stroke.png")
+                    print("Check saved stroke at ", "/tmp/stroke.png")
+                    print("for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'")
                 raise NotEnoughDataException
                 # assert False, "for code debuggin, see 210506_analy_dataset_summarize.ipynb --> 'DatStrokes, reclassifying prims based on motor (image) (e.g., novel prims)'"
 
@@ -451,7 +452,30 @@ class PrimitiveClass(object):
                     label = (shcat, scale, "DL" , "DL") #
                 else:
                     _raise_error(a1, a2)
-            elif shcat in ["Lzigzag", "squiggle3", "Lzigzag1", "zigzagSq"]:
+            elif shcat in ["squiggle3"]:
+                a1 = features["angle_midpt_to_onset"]
+                a2 = features["angle_midpt_to_offset"]
+                hw = features["height_divide_width"]
+                a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
+                a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
+
+                if (a1 in [3, 4] and a2==8) and hw<1:
+                    label = (shcat, scale, "LL" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif (a1==8 and a2 ==4) and hw>1:
+                    label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif (a1==8 and a2==3):
+                    print("PROBLEM: two diff actual sahpes ended up being assgiend to this. Figure out why. See tokens.py for what the mapping SHOULD be")
+                    _raise_error(a1, a2, PLOT=True)
+                    label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [6, 7] and a2==2 and hw<1:
+                    label = (shcat, scale, "LL" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [5, 6] and a2==2 and hw>1:
+                    label = (shcat, scale, "UU" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                elif a1 in [1, 8] and a2==4:
+                    label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
+                else:
+                    _raise_error(a1, a2, True)
+            elif shcat in ["Lzigzag", "Lzigzag1", "zigzagSq"]:
                 a1 = features["angle_midpt_to_onset"]
                 a2 = features["angle_midpt_to_offset"]
                 hw = features["height_divide_width"]
@@ -483,7 +507,6 @@ class PrimitiveClass(object):
                     label = (shcat, scale, "UR" , "UR") # direction of line, in top hemisphere
                 elif a1==7 and a2==3:
                     label = (shcat, scale, "UU" , "UU") # direction of line, in top hemisphere
-
                 else:
                     _raise_error(a1, a2)
             elif "novelprim" in shcat:
