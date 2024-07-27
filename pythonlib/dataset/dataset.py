@@ -40,7 +40,8 @@ def _checkPandasIndices(df):
     assert np.unique(np.diff(df.index)) ==1 
 
 
-def load_dataset_daily_helper(animal, date, rename_shapes_if_cluster_labels_exist=True):
+def load_dataset_daily_helper(animal, date, rename_shapes_if_cluster_labels_exist=True,
+                              label_as_novel_if_shape_semantic_fails_overwrite=None):
     """Helper, just pass in animal and dat, load the
     single dataset for this day. 
     PARAMS;
@@ -65,12 +66,14 @@ def load_dataset_daily_helper(animal, date, rename_shapes_if_cluster_labels_exis
         expt = list_metadat[0][0]
         print("Loading this dataset", animal, expt, date)
         D = load_dataset_notdaily_helper(animal, expt, rulelist=[date],
-                                         rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+                                         rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist,
+                                         label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
         assert hasattr(D, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."    
         return D
 
 def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=False,
-                                 rename_shapes_if_cluster_labels_exist=True):
+                                 rename_shapes_if_cluster_labels_exist=True,
+                                 label_as_novel_if_shape_semantic_fails_overwrite=None):
     """
     Helper to load a dataset, using most common methods. Works for both
     daily and main analysis (see PARAMS).
@@ -98,7 +101,8 @@ def load_dataset_notdaily_helper(animal, expt, rulelist=None, return_rulelist=Fa
 
     D = Dataset([])
     D.load_dataset_helper(animal, expt, ver="mult", rule=rulelist,
-                          rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+                          rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist,
+                          label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
     assert hasattr(D, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
     
     if return_rulelist:
@@ -159,6 +163,7 @@ class Dataset(object):
         self.TokensStrokesBehUsingTaskStrokes = None
         self.TokensTask = None
         self.TokensVersion = "taskclass"
+        self.TokensPreprocessWrapperLabelNovel = None
 
         self.ML2_FILEDATA = {}
 
@@ -189,7 +194,8 @@ class Dataset(object):
             assert False
 
     def load_dataset_helper(self, animal, expt, ver="single", rule="",
-                            rename_shapes_if_cluster_labels_exist=True):
+                            rename_shapes_if_cluster_labels_exist=True,
+                            label_as_novel_if_shape_semantic_fails_overwrite=None):
         """ load a single dataset. 
         - ver, str
         --- "single", endures that there is one and only one.
@@ -247,7 +253,8 @@ class Dataset(object):
         else:
             # 2/4/23 - Now run preprocess whenever load.
             GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = self._cleanup_preprocess_each_time_load_dataset(
-                rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+                rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist,
+                label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
             
         assert hasattr(self, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
 
@@ -459,7 +466,6 @@ class Dataset(object):
                 setattr(Dnew, attr, copy.deepcopy(getattr(self, attr)))
 
         # Unlock, since one goal of copy is speciifacl to do so.
-
         Dnew.LockPreprocess = False
         return Dnew
 
@@ -1671,10 +1677,12 @@ class Dataset(object):
             T = self.Dat.iloc[ind]["Task"]
             return T.get_grid_ver()
 
-    def taskclass_tokens_sanitycheck_gridloc_identical(self):
+    def taskclass_tokens_sanitycheck_gridloc_identical(self, lenient_if_unusual_prim=True):
         """ Check that each tasks gridloc:loc mapping is the same
         This can fail if different datasets with different TSC, since
         gridloc is defined relative to all tasks within a dataset
+        PARAMS:
+        - lenient_if_unusual_prim, bool, see within
         RETURNS:
         - throws error if fails
         """
@@ -1685,12 +1693,35 @@ class Dataset(object):
             print(".. because this day aligned to onset, so gridloc:loc mapping is not same across tasks")
             return
 
+        def _check_if_this_trial_is_ok_if_being_lenient(ind, val_grid, val_actual):
+            """
+            REturn True if this trial is allowed to pass, ewven though val_grid and val_actual
+            are not identical. allows so if this is novel prim or ortated...
+            """
+            if lenient_if_unusual_prim:
+                # screen is about 3 w and h. 
+                _dist = val_actual - val_grid
+
+                # Allow leniency if this is a "novel" prim, or if has extra tforms
+                if self.taskclass_check_prims_extra_params_tforms_exist_single(ind) and _dist<0.65:
+                    return True
+
+                if "shape_is_novel_all" not in self.Dat:
+                    self.shapesemantic_classify_novel_shape()
+
+                if self.Dat.iloc[ind]["shape_is_novel_all"] and _dist<0.65:
+                    return True
+            
+                return False
+            else:
+                return False
+        
+
         # Sanity check that all grids are aligned across tasks
         map_gridloc_loc_x = {}
         map_gridloc_loc_y = {}
         for ind in range(len(self.Dat)):
             tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
-            # print(ind, len(tokens))
             for tok in tokens:
                 if tok["gridloc"] is not None and not tok["gridloc"]==("IGN", "IGN"):
                     x = tok["Prim"].extract_as("params")["cnr_x"]
@@ -1701,15 +1732,21 @@ class Dataset(object):
                     
                     if xgrid in map_gridloc_loc_x.keys():
                         if not np.isclose(map_gridloc_loc_x[xgrid], x):
-                            print(map_gridloc_loc_x)
-                            print(xgrid)
-                            print(x)
-                            assert False, "maye this is becuase tasks are aligned at onset? same gridloc, but different center"
+                            if not _check_if_this_trial_is_ok_if_being_lenient(ind, map_gridloc_loc_x[xgrid], x):
+                                print(map_gridloc_loc_x)
+                                print(xgrid)
+                                print(x)
+                                assert False, "maye this is becuase tasks are aligned at onset? same gridloc, but different center"
                     else:
                         map_gridloc_loc_x[xgrid] = x
                         
                     if ygrid in map_gridloc_loc_y.keys():
-                        assert np.isclose(map_gridloc_loc_y[ygrid], y)
+                        if not np.isclose(map_gridloc_loc_y[ygrid], y):
+                            if not _check_if_this_trial_is_ok_if_being_lenient(ind, map_gridloc_loc_y[ygrid], y):
+                                print(map_gridloc_loc_y)
+                                print(ygrid)
+                                print(y)
+                                assert False, "maye this is becuase tasks are aligned at onset? same gridloc, but different center"
                     else:
                         map_gridloc_loc_y[ygrid] = y
             
@@ -1718,16 +1755,26 @@ class Dataset(object):
         print("x...", map_gridloc_loc_x)
         print("y...", map_gridloc_loc_y)   
 
-    def tokens_preprocess_wrapper_good(self, PLOT=False, label_as_novel_if_shape_semantic_fails=False):
+    def tokens_preprocess_wrapper_good(self, PLOT=False, label_as_novel_if_shape_semantic_fails=False,
+                                       label_as_novel_if_shape_semantic_fails_overwrite=None):
         """
         Wrapper for preprocessing --> Given just-generated tokens (using tokens_append_to_dataframe_column) here do all
         processing steps, e.g, derived features, like storke onset, and binned/clustered fgeatures, like onset binned.
         :return: Modifies tokens and appends columns with "seqc_" to dataset.
 
-        NOTE: for extracting semantic shape, this calls it "NOVEL" for any trial that has an extra tform in ML2
+        NOTE [OBSOLETE]: for extracting semantic shape, this calls it "NOVEL" for any trial that has an extra tform in ML2
         Plan class, which means it doesnt have well-defined shape. Problem is this currently checks entire trial, so if any
         single prim is rotated, then this might call all of them NOVEL. Solution: incorporate code to detect "tforms_each_prim"
+        ACTUALLY: Stopped doing above. Instead, trying to label each semantic, and if that fails, then call it novel. see notes within 
+        features_extract_wrapper() for reasoning.
         """
+
+        if self.TokensPreprocessWrapperLabelNovel is not None and isinstance(self.TokensPreprocessWrapperLabelNovel, bool):
+            label_as_novel_if_shape_semantic_fails = self.TokensPreprocessWrapperLabelNovel
+
+        if label_as_novel_if_shape_semantic_fails_overwrite is not None:
+            # Overwrite
+            label_as_novel_if_shape_semantic_fails = label_as_novel_if_shape_semantic_fails_overwrite
 
         # - and get touch onset binned.
         _, fig_final = self.tokens_cluster_touch_onset_loc_across_all_data(PLOT_FINAL=True)
@@ -1740,24 +1787,27 @@ class Dataset(object):
 
         # - Get sequence context for all tokens
         for ind in range(len(self.Dat)):    
-            # Determine if any shapes were transformed rotations
-            prims_extra_params = self.taskclass_extract_prims_extra_params_tforms(ind)
-            if False: # Ignroe this for now -- this raises err for novel motif char flex, which I doint care about, since those are actually single prims uisng multple strokes.
-                # SHOULD: check that this is PIG, and then those are the cases where I actully care about trakcing this.
-                try:
-                    if (prims_extra_params is not None) and (len(prims_extra_params)>0) and "tforms_each_prim" in prims_extra_params.keys():
-                        print(prims_extra_params)
-                        print(prims_extra_params[0]["tforms_each_prim"])
-                        assert False, "add code to apply the below step (assigning shape semantic to be NOVEL) to only the specific prims that were tformed, using the information in tforms_each_prim"
-                except Exception as err:
-                    print("HERE", prims_extra_params)
-                    raise err
+
+            if False:
+                # Determine if any shapes were transformed rotations
+                list_prims_extra_params = self.taskclass_extract_prims_extra_params_tforms(ind)
+                if False: # Ignroe this for now -- this raises err for novel motif char flex, which I doint care about, since those are actually single prims uisng multple strokes.
+                    # SHOULD: check that this is PIG, and then those are the cases where I actully care about trakcing this.
+                    try:
+                        if (prims_extra_params is not None) and (len(prims_extra_params)>0) and "tforms_each_prim" in prims_extra_params.keys():
+                            print(prims_extra_params)
+                            print(prims_extra_params[0]["tforms_each_prim"])
+                            assert False, "add code to apply the below step (assigning shape semantic to be NOVEL) to only the specific prims that were tformed, using the information in tforms_each_prim"
+                    except Exception as err:
+                        print("HERE", prims_extra_params)
+                        raise err
             tforms_extra_exist = self.taskclass_check_prims_extra_params_tforms_exist_single(ind)
 
             # Beh strokes
             Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
             Tk_behdata.features_extract_wrapper(["loc_on", "angle"])
             Tk_behdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+            Tk_behdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
             Tk_behtaskdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
             # append extra tforms (e.g.,  novel prims).
@@ -1767,7 +1817,7 @@ class Dataset(object):
             #     tk["tforms_extra"] = tf
             for tk in Tk_behtaskdata.Tokens:
                 tk["tforms_extra_exist"] = tforms_extra_exist
-            Tk_behtaskdata.features_extract_wrapper(["shape_semantic"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
+            Tk_behtaskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
             # Task strokes (ignore beh)
             Tk_taskdata = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
@@ -1777,8 +1827,14 @@ class Dataset(object):
             #     tk["tforms_extra"] = tf
             for tk in Tk_taskdata.Tokens:
                 tk["tforms_extra_exist"] = tforms_extra_exist
-            Tk_taskdata.features_extract_wrapper(["shape_semantic"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
-            Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
+            # If this is character, then is ok if semantic label fails, since shapes are not separted and well-defined.
+            if self.Dat.iloc[ind]["task_kind"] == "character":
+                label_as_novel_if_shape_semantic_fails_this = True
+            else:
+                label_as_novel_if_shape_semantic_fails_this = label_as_novel_if_shape_semantic_fails
+            Tk_taskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails_this)
+            if False: # not sure why.. if this is just task
+                Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
 
         # (2) Compute all binned data, using beh data
         nbins = 3 # 2 or 3...
@@ -1811,6 +1867,8 @@ class Dataset(object):
         # (4) LAST: Extract new seq context variables, based on variables in tokens.
         self.seqcontext_preprocess(plot_examples=PLOT, force_run=True)
 
+        # Save the state (this is useful, so that afte concat can run this again using this param)
+        self.TokensPreprocessWrapperLabelNovel = label_as_novel_if_shape_semantic_fails
 
     def tokens_append_to_dataframe_column(self, force_regenerate=False):
         """
@@ -2190,6 +2248,7 @@ class Dataset(object):
             # (1) Strokes beh, what sahpes to call each beh stroke
             tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
             shape_seq = [tok["shape"] for tok in tokens_beh_old]
+            list_ind_taskstroke_orig = [tok["ind_taskstroke_orig"] for tok in tokens_beh_old]
             strokes = self.Dat.iloc[ind]["strokes_beh"]
             if not len(strokes)==len(shape_seq):
                 # Keep the tokens that match the strokes..
@@ -2214,7 +2273,8 @@ class Dataset(object):
                 gridlocs_local = None
 
             # Generate tokens: strokesbeh_using_beh
-            Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local)
+            Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local,
+                                          list_ind_taskstroke_orig=list_ind_taskstroke_orig)
             assert Tk is not None
             TokensStrokesBeh[tc] = Tk
 
@@ -2236,10 +2296,14 @@ class Dataset(object):
         and stored in tuples in self.Dat[<charclust_shape_seq>].
         :param shape_sequence_col:
         :return:
+        [For all task_kinds:]
         - updates self.TokensStrokesBeh, dict from trialcode --> tokens (strokes, beh)
         [if char, then the following two are identical to above]
         - updates self.TokensStrokesBehUsingTaskStrokes, dict from trialcode --> tokens (strokes, task)
         - updates self.TokensTask, dict from trialcode --> tokens (task)
+        NOTE: This means that for non-char task_kinds (e.g,, sp and pig), it is possible for
+        TokensStrokesBeh to differ from TokensStrokesBehUsingTaskStrokes. To ensure that sp/pig matches 
+        chars on the same day, do that seqc_... uses beh tokens, not task tokens.
         """
         from pythonlib.drawmodel.tokens import generate_tokens_from_raw
         from pythonlib.drawmodel.tokens import Tokens
@@ -2266,6 +2330,8 @@ class Dataset(object):
                 else:
                     shape_seq = self.Dat.iloc[ind][shape_sequence_col] #
                 strokes = self.Dat.iloc[ind]["strokes_beh"]
+                list_ind_taskstroke_orig = [tok["ind_taskstroke_orig"] for tok in tokens_beh_old]
+
                 assert len(strokes)==len(shape_seq)
 
                 # (2) Strokes beh, what locations to call each beh stroke
@@ -2283,16 +2349,20 @@ class Dataset(object):
                     gridlocs_local = None
 
                 # Generate tokens: strokesbeh_using_beh
-                Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local)
-                TokensStrokesBeh[tc] = Tk
+                TokensStrokesBeh[tc] = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local,
+                                                                list_ind_taskstroke_orig=list_ind_taskstroke_orig)
+
+                # Task tokens, always use the image (6/21/24 - so that this also stores task, for char tasks.)
+                Task = self.Dat.iloc[ind]["Task"]
+                TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
 
                 #### HOW TO DEFINE TASK STROKE TOKENS
                 if self.taskclass_get_grid_ver(ind)=="on_grid":
                     assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
                     # Use the standard.
                     # (2) Also save task tokens, so that can safely delete task tokens and still use it here.
-                    Task = self.Dat.iloc[ind]["Task"]
-                    TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
+                    # Task = self.Dat.iloc[ind]["Task"]
+                    # TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
 
                     # (3) Also save the old "beh strokes, aligned to task"
                     TokensStrokesBehUsingTaskStrokes[tc] = Tokens(tokens_beh_old)
@@ -2300,7 +2370,7 @@ class Dataset(object):
                     # For char, should ignore entirely any task tokens, since they are meaninglesss. This avoids erros later.
                     # Make them identical to Beh
                     assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
-                    TokensTask[tc] = TokensStrokesBeh[tc]
+                    # TokensTask[tc] = TokensStrokesBeh[tc]
                     TokensStrokesBehUsingTaskStrokes[tc] = TokensStrokesBeh[tc]
 
             # Switch so that always uses these tokens
@@ -2360,10 +2430,11 @@ class Dataset(object):
         and with aligned indices into beh strokes.
         PARAMS:
         - which_order, in
-        --- 'task', order of ind_taskstrokes
+        --- 'task', ALL strokes in the image, in order of ind_taskstrokes
         --- 'beh_using_beh_data', matching each beh stroke, holding data of strokes_beh (tok["Prim"])
-        --- 'beh', matching each beh stroke, holding data on the best-matching task stroke
-        --- 'beh_firsttouch', ordered by behstroke first touch, but length <=ntask.
+        --- 'beh_using_task_data', matching each beh stroke, holding data of strokes_task (tok["Prim"])
+        # --- 'beh', matching each beh stroke, holding data on the best-matching task stroke
+        # --- 'beh_firsttouch', ordered by behstroke first touch, but length <=ntask.
         RETURNS:
         - list of dict, a reordered tokens
         """
@@ -2397,6 +2468,22 @@ class Dataset(object):
             else:
                 print(which_order)
                 assert False, "only beh and task make sense for 'regenerated_from_raw'..."
+
+            if plot:                
+                self.plotSingleTrial(ind)
+                if which_order == "beh_using_beh_data":
+                    list_feat = ["shape", "shape_semantic", "gridloc"]
+                elif which_order == "beh_using_task_data":
+                    list_feat = ["shape", "shape_semantic", "gridloc"]
+                elif which_order == "task":
+                    list_feat = ["shape", "shape_semantic", "gridloc"]
+                else:
+                    assert False
+                for feat in list_feat:
+                    print(feat, " -- ",  [tok[feat] for tok in Tk.Tokens])
+                print("seqc_{i}_shape:", [self.Dat.iloc[ind][f"seqc_{i}_shape"] for i in range(8) if self.Dat.iloc[ind][f"seqc_{i}_shape"]!="IGN"])
+                print("seqc_{i}_shapesem:", [self.Dat.iloc[ind][f"seqc_{i}_shapesem"] for i in range(8) if self.Dat.iloc[ind][f"seqc_{i}_shapesem"]!="IGN"])
+                print("seqc_{i}_shapesemgrp:", [self.Dat.iloc[ind][f"seqc_{i}_shapesemgrp"] for i in range(8) if self.Dat.iloc[ind][f"seqc_{i}_shapesemgrp"]!="IGN"])
 
             if return_as_tokensclass:
                 return Tk
@@ -2607,48 +2694,39 @@ class Dataset(object):
             # D.Dat.loc[inds, ["taskconfig_loc", "taskconfig_shp", "taskconfig_shploc"]]
 
             print(self.Dat.loc[inds, [f"taskconfig_shploc{suffix}"]].values)
-
-    def taskclass_shapes_extract_unique_alltrials(self):
+        
+    def taskclass_shapes_extract_unique_alltrials(self, SHAPES_EXIST = {}, shape_kind="shape", token_kind="task"):
         """ REturn list of (sorted) shapes across all trial sin dataset,
         unqiue. 
         """
-        shapes = []
-        for ind in range(len(self.Dat)):
-            shapes.extend(self.taskclass_shapes_extract(ind))
+        
+        if (shape_kind, token_kind) not in SHAPES_EXIST:
+            shapes_exist =[]
+            for ind in range(len(self.Dat)):
+                shapes_exist.extend(self.taskclass_shapes_extract(ind, shape_kind=shape_kind, token_kind=token_kind))
+            shapes_exist = sorted(list(set(shapes_exist)))
+            SHAPES_EXIST[(shape_kind, token_kind)] = shapes_exist
 
-        return sorted(list(set(shapes)))
+        return SHAPES_EXIST[(shape_kind, token_kind)]
 
     def taskclass_extract_prims_extra_params_tforms(self, ind):
         """
         Return dict holding extra params applied to prims, including tforms,
         and rotations (e.g., novel prims)
         RETURNS:
-        - prims_extra_params, dict
+        - list_extra_tforms_dict, list of len n strokes, where
+        list_extra_tforms_dict[0] = 
             {'tforms': {},
             'tforms_each_prim_p': [{},
                 [['th', array(-0.16839016)],
                 ['sx', array(1.01434708)],
                 ['sy', array(1.01434708)]],
-                {}]
+                {}],
+            'flips': array([0., 0., 0.]),
             }        
         """
         T = self.Dat.iloc[ind]["Task"]
         return T.extra_tform_params_extract()
-    
-        # P = self.taskclass_extract_planclass(ind)
-        # if "PrimsExtraParams" not in P.keys():
-        #     prims_extra_params = []
-        # else:
-        #     prims_extra_params = P["PrimsExtraParams"]
-        
-        # # if len(tforms)>0:
-        # #     nstrokes = len(self.Dat.iloc[ind]["strokes_beh"])
-        # #     if not len(tforms)==nstrokes:
-        # #         print(tforms)
-        # #         print(len(tforms), nstrokes)
-        # #         assert False
-        
-        # return prims_extra_params
 
     def taskclass_check_prims_extra_params_tforms_exist_single(self, ind):
         """ check if, for this trial, if additiaonl tforms to prims in matlab code. 
@@ -2675,21 +2753,21 @@ class Dataset(object):
                     break
         return self._TaskclassCheckPrimsExtraParams
 
-    def taskclass_shapes_extract(self, ind):
+    def taskclass_shapes_extract(self, ind, shape_kind="shape", token_kind = "task"):
         """ Return list of shape strings used in 
         this task, in order of indices in taskstrokes (HAS NOTHING
         TO DO WITH BEHAVIOR)
         (i.e. get shape sequence)
         """
-        tokens = self.taskclass_tokens_extract_wrapper(ind, "task")
-        shapes = [d["shape_oriented"] for d in tokens]
+        tokens = self.taskclass_tokens_extract_wrapper(ind, which_order=token_kind)
+        shapes = [d[shape_kind] for d in tokens]
         return shapes
 
-    def taskfeatures_category_by(self, method="shape_repeat", params=None,
+    def taskfeatures_category_classify_by(self, method="shape_repeat", params=None,
         colname="taskfeat_cat", PRINT=False):
         """ Give each trial a label for the catgegory of its tak,
         based on specific kinds of features. often will depend just on the 
-        task image.
+        task image (and NOT on the grammar).
         PARAMS;
         - method, str, what features to use        
         - params, flexible, for method
@@ -2701,7 +2779,7 @@ class Dataset(object):
         if method=="shape_repeat":
             # For each shape that exists today, determine whether it eitehrh (i) doesnt exists in this trial,
             # (ii) has at least 2 isntances separated in space by another shape. or 
-            # (iii) exists, but is not separated.
+            # (iii) exists, but is not separated.``
             # - reutrns values like VNS-lNS-lNS, for 3 shapes V l l.
             from pythonlib.drawmodel.task_features import shapes_has_separated_cases_of_shape
 
@@ -3195,8 +3273,11 @@ class Dataset(object):
         
     def shapesemantic_classify_novel_shape(self, DS=None):
         """
-        Append columns idnicating wehther shapes are novel, eacjh stroke
+        GOOD - wrapper to append columns idnicating wehther shapes are novel, eacjh stroke
         a shape, using the semantic lable of the shape.
+
+        NOTE: flexily determines best method for deciding. 
+
         NOTE: for any rows that are "character" task_kind, skips, since might
         run into error if this is using cluster labels.. (?) either way is not
         relevant.
@@ -3205,6 +3286,40 @@ class Dataset(object):
         "shape_is_novel_all" (bool)
         """
 
+        if self.NovelPrimsMethod == "shape_semantic":
+            ### Method 1- use shape_semantic. This is generally correct
+            # DEfault, asking if ss label is part of learned prims
+            pass
+        elif self.NovelPrimsMethod == "continuous_psycho_morph":
+            ### Method 2. Continuous morph (half 1 and 2 from diff base prims). This cant use semantic.
+            # Instead, use psycho params.
+            #  Method using psycho cont morphs (two halfs)
+
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess_cont_morph
+            DS, DSmorphsets, map_morph_set_idx_to_shapes, map_shape_to_base_prims, map_base_prims_to_morphed_shape, SAVEDIR = preprocess_cont_morph(self)        
+            
+            # MOprhed prims --> they are novel
+            map_shape_to_novel = {}
+            for i, row in DSmorphsets.Dat.iterrows():
+                
+                sh = row["shape"]
+                novel = row["morph_is_morphed"]
+
+                if sh in map_shape_to_novel:
+                    assert map_shape_to_novel[sh] == novel
+                else:
+                    map_shape_to_novel[sh] = novel
+            
+            # Get also the sahpes that are not part of morph sets.
+            for sh, baseprims in map_shape_to_base_prims.items():
+                novel = baseprims is not None
+                if sh in map_shape_to_novel:
+                    assert map_shape_to_novel[sh] == novel
+                else:
+                    map_shape_to_novel[sh] = novel
+        else:
+            assert False
+            
         # Get learned shapes
         if DS is None:
             from pythonlib.dataset.dataset_strokes import DatStrokes
@@ -3213,7 +3328,7 @@ class Dataset(object):
         labels_learned = list(map_shape_to_shapesemantic.values())
 
         # Extract from D
-        labels_all_trials = []
+        # labels_all_trials = []
         list_novels = []
         list_novels_all_strokes = []
         for i, row in self.Dat.iterrows():
@@ -3222,51 +3337,29 @@ class Dataset(object):
                 Tk.features_extract_wrapper(["shape_semantic"])
             tokens_task = Tk.Tokens
 
-            labels = []
+            # labels = []
             novels = []
             for tok in tokens_task:
-                lab = tok["shape_semantic"]
-                # try:
-                #     lab = tok["Prim"].label_classify_prim_using_stroke_semantic()
-                # except Exception as err:
-                #     print(tok)
-                #     print(row["trialcode"])
-                #     self.plotSingleTrial(i)
-                #     assert False, "why..."
-                labels.append(lab)
-                novels.append(lab not in labels_learned)
+                if self.NovelPrimsMethod == "shape_semantic":
+                    lab = tok["shape_semantic"]
+                    nov = lab not in labels_learned
+                elif self.NovelPrimsMethod == "continuous_psycho_morph":
+                    lab = tok["shape"]
+                    nov = map_shape_to_novel[lab]
+                else:
+                    assert False
 
-            labels_all_trials.append(labels)
+                # labels.append(lab)
+                novels.append(nov)
+
+            # labels_all_trials.append(labels)
             list_novels.append(tuple(novels))
             list_novels_all_strokes.append(all(novels))
 
         # Append to self.Dat
         self.Dat["shape_is_novel_list"] = list_novels
         self.Dat["shape_is_novel_all"] = list_novels_all_strokes
-        self.Dat["shape_semantic_labels"] = labels_all_trials
-
-        # FAILS -- This looks at beh strokes..
-        # if DS is None:
-        #     from pythonlib.dataset.dataset_strokes import DatStrokes
-        #     DS = DatStrokes(self)
-        #
-        # list_novels = []
-        # list_novels_all_strokes = []
-        # for i, row in self.Dat.iterrows():
-        #     if row["task_kind"] == "character":
-        #         # then this is not novel shape
-        #         novels = [False for _ in range(len(row["strokes_beh"]))]
-        #     else:
-        #         tc = row["trialcode"]
-        #         novels = DS.dataset_extract_strokeslength_list(tc, "shape_is_novel")
-        #
-        #     list_novels.append(tuple(novels))
-        #     list_novels_all_strokes.append(all(novels))
-        #     # assert all(novels) or not any(novels)
-        #
-        # self.Dat["shape_is_novel_list"] = list_novels
-        # self.Dat["shape_is_novel_all"] = list_novels_all_strokes
-
+        # self.Dat["shape_semantic_labels"] = labels_all_trials
 
     ############### MICROSTIM
     def microstim_assign_catch_trial_objectclass(self, PRINT=False):
@@ -3325,7 +3418,8 @@ class Dataset(object):
 
 
     ############# CLEANUP
-    def _cleanup_preprocess_each_time_load_dataset(self, rename_shapes_if_cluster_labels_exist=True):
+    def _cleanup_preprocess_each_time_load_dataset(self, rename_shapes_if_cluster_labels_exist=True,
+                                                   label_as_novel_if_shape_semantic_fails_overwrite=None):
         # e..g, if loading saved dataset using neuralmonkey
         print("=== CLEANING UP self.Dat (_cleanup_reloading_saved_state) ===== ")
         if not hasattr(self, "_BehClassExtracted"):
@@ -3346,7 +3440,8 @@ class Dataset(object):
         expt = self.expts(force_single=True)[0]
         self._analy_preprocess_done=False
         self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt,
-                                                    rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist)
+                                                    rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist,
+                                                    label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
 
         # print("1.5 dfafasf", self.TokensVersion)
         assert hasattr(self, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."    
@@ -4173,6 +4268,12 @@ class Dataset(object):
                         list_good = []
                         for i in range(len(self.Dat)):
                             list_good.append(self.sequence_compute_one_to_one_beh_to_task(i))
+                        self.Dat = self.Dat[list_good]
+                    elif p=="beh_strokes_one":
+                        # then only keep trials where ther eis singel stroke (ie. single prims)
+                        list_good = []
+                        for i in range(len(self.Dat)):
+                            list_good.append(len(self.Dat.iloc[i]["strokes_beh"])==1)
                         self.Dat = self.Dat[list_good]
                     elif p=="beh_strokes_at_least_one":
                         # then only keep trials where at least one beh stroke was made
@@ -7737,6 +7838,18 @@ class Dataset(object):
                                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
                                             tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid, 
                                             list_cluster_by_sim_idx=list_cluster_by_sim_idx)
+            
+            # Sanity -- becuase sometimes I found that ind_taskstroke_orig was too large for the len of strokes_task (for chars) 
+            strokes_task = self.Dat.iloc[i]["strokes_task"]
+            
+            tokens = Beh.alignsim_extract_datsegs_both_beh_task()[1]
+            for tok in tokens:
+                assert tok["ind_taskstroke_orig"]<len(strokes_task)
+
+            tokens = Beh.alignsim_extract_datsegs_both_beh_task()[2]
+            for tok in tokens:
+                assert tok["ind_taskstroke_orig"]<len(strokes_task)
+            
             if i%200==0:
                 print(i, "_behclass_tokens_extract_datsegs")
         # else:
@@ -8874,6 +8987,17 @@ class Dataset(object):
         self.Dat["epoch_is_DIR"] = list_DIR
         print("Appended column: self.Dat[epoch_is_DIR]")
 
+    def grammarparses_rules_shape_AnBmCk_get_shape_order(self):
+        """
+        Return correct shape order for this rule, only works if one rule exists.
+        Returns list of shape str.
+        """
+        # Get ground truth ordering of shapes
+        assert len(self.Dat["epoch"].unique())==1, "assume only one shape set today..."
+        epoch = self.Dat["epoch"].values[0]
+        shape_sequence = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["params_good"][0]
+        return shape_sequence
+
     def grammarparses_rules_shape_AnBmCk(self):
         """
         For each row, appends column "epoch_is_AnBmCk", bool, indicating
@@ -9072,7 +9196,25 @@ class Dataset(object):
         epoch = self.Dat.iloc[ind]["epoch_orig"]
         ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]
         return ruledict["rulestring"], ruledict
-
+    
+    def grammarparses_check_if_dataset_has_defined_rules(self):
+        """ Return whether today is grammar ules. Based on looking for 
+        rules in discrete.py saved data, and if doesnt find, returns False.
+        """
+        from pythonlib.tools.exceptions import RuleDoesntExist
+        try:
+            Dc = self.copy()
+            Dc.preprocessGood(params=["remove_baseline"])
+            Dc.grammarparses_rulestrings_exist_in_dataset()
+            # got here. is ok
+            return True
+        except RuleDoesntExist:
+            # Ok, this is not a rule dataset
+            return False
+        except Exception as err:
+            raise Exception
+        
+                    
     def grammarparses_rulestrings_exist_in_dataset(self):
         """ return list of rulestrings that exist in this dtaset, ignoring cases that at "baseline"
         """
@@ -9891,7 +10033,7 @@ class Dataset(object):
         # Then run grammar_successbinary_print_summary
 
 
-    def grammarparses_successbinary_score_wrapper(self, print_summary=False, DEBUG=False):
+    def grammarparses_successbinary_score_wrapper(self, print_summary=False, DEBUG=False, recompute_taskfeat_cat=True):
         """ Good, determine if beh is success based on matching any of the possible
         parses given each trial's rule.
         PARAMS:
@@ -9902,11 +10044,28 @@ class Dataset(object):
         """
         from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
 
+
         if "base" in self.Dat["epoch"] or "baseline" in self.Dat["epoch"]:
             assert False, "You must remove baseline epochs, they dont have defined parses."
 
+        if self.grammarparses_check_if_dataset_has_defined_rules()==False:
+            # Then today not all trials uses rules...
+            # Assume all trials are success
+            self.Dat["success_binary_quick"] = True
+            self.Dat["beh_sequence_wrong"] = False
+            self.Dat["beh_too_short"] = False
+            self.Dat["exclude_because_online_abort"] = False
+            return 
+
         # 1) Score each trial based on parses
-        bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG)
+        bm = preprocess_dataset_recomputeparses(self, DEBUG=DEBUG, recompute_taskfeat_cat=recompute_taskfeat_cat)
+
+        if bm is None:
+            self.Dat["success_binary_quick"] = True
+            self.Dat["beh_sequence_wrong"] = False
+            self.Dat["beh_too_short"] = False
+            self.Dat["exclude_because_online_abort"] = False
+            return 
 
         # D.sequence_extract_beh_and_task(230, True)
         if print_summary:
@@ -9985,6 +10144,7 @@ class Dataset(object):
         """
         from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_matlabrule
 
+        assert False, "Dont use this; instead use grammarparses, since that does check that this is grammard ataset."
         # 1) Score each trial based on parses
         bm = preprocess_dataset_matlabrule(self)
 
@@ -10316,6 +10476,7 @@ class Dataset(object):
         if DS is None:
             # Then no data found
             print("Skipping cluster labels extractioun! no data found")
+            return None
         else:
 
             # plot examples for each shape
@@ -10365,10 +10526,11 @@ class Dataset(object):
                 shapes_keep.append(shapes)
                 clust_sim_maxes_keep.append(clust_sim_maxes)
 
-            if n_success/(n_failures + n_success)<0.9:
+            # if n_success/(n_failures + n_success)<0.9:
+            if n_success/(n_failures + n_success)<0.98: # I expect that all strokes are included (i.e., not just quality ones) in the saved data
                 print(n_success, n_failures)
                 print(len(DS.Dat["trialcode"].unique()))
-                print(len(D.Dat["trialcode"].unique()))
+                print(len(self.Dat["trialcode"].unique()))
                 assert False, "why skipped so many? Id expect the only reason to skipt o be very rare losses of strokes (e.g, noise reduction)"
 
             # Assign them back to
@@ -10378,20 +10540,6 @@ class Dataset(object):
             self.Dat["charclust_shape_seq_did_replace"] = did_replace
 
             print("Appended column of shape labels: charclust_shape_seq")
-
-            # if replace_seq_context_cols:
-            #     # Extract seq context info, given the new labels.
-            #     from pythonlib.dataset.dataset_preprocess.seqcontext import preprocess_dataset
-            #
-            #     # make sure all seqc are replaced
-            #     n = 100
-            #     for i in range(n):
-            #         if f"seqc_{i}_shape" not in self.Dat.columns:
-            #             break
-            #     nmax = max([i, 9]) # man n strokes to take for seqc...
-            #
-            #     preprocess_dataset(self, n_strok_max=nmax, version="char_clust_labels")
-            #     print("Replaced all seqc_{}_shape columns with char clust labels!")
 
             assert len(self.Dat)==nstart
 
