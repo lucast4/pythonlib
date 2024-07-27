@@ -509,7 +509,7 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
 
                         fig = sns.catplot(data=dfthis, x=sh, hue=contrast, y=y, kind="point", errorbar=('ci', 68), aspect=3)
                         # fig = sns.catplot(data=dfthis, x=contrast, col=sh, 
-                        #     col_wrap=4, y=y, kind="point", ci=68)
+                        #     col_wrap=4, y=y, kind="point", errorbar=("ci", 68))
                         rotateLabel(fig)
                         savefig(fig, f"{savedir}/triallevel-{contrast}-{sh}-{y}-epochorig_{epoch_orig}-bk_{bk}-2.pdf")
 
@@ -563,7 +563,7 @@ def plot_triallevel_results(DS, contrast, savedir, context=None,
 
         ############### PLOTS ACROSS ALL DATA
         # fig = sns.catplot(data=DS.Dat, x=contrast, y=y, hue="shape", col="block", col_wrap=4,
-        #     kind="point", ci=68)
+        #     kind="point", errorbar=("ci", 68))
         if len(DS.Dat[context].unique())<20:
             fig = sns.catplot(data=DS.Dat, x="block", y=y, hue=contrast, col=context, col_wrap=4, kind="point", errorbar=('ci', 68), aspect=1.5)
             rotateLabel(fig)

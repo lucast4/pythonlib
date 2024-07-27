@@ -571,13 +571,13 @@ class MultBehModelHandler(object):
             name = f"alignment_{alignment_ver}_chunks"
 
             dftmp = dfthis[dfthis["model"]==name]
-        #     sns.catplot(data=dftmp, x="epoch", y="score", hue="model", kind="point", ci=68)
+        #     sns.catplot(data=dftmp, x="epoch", y="score", hue="model", kind="point", errorbar=("ci", 68))
             fig = sns.catplot(data=dftmp, x="epoch", y="score", hue="model")
             if YLIM is not None:
                 plt.ylim(YLIM)
             list_figs.append(fig)
             
-            fig = sns.catplot(data=dftmp, x="epoch", y="score", hue="model", kind="bar", ci=68)
+            fig = sns.catplot(data=dftmp, x="epoch", y="score", hue="model", kind="bar", errorbar=("ci", 68))
             if YLIM is not None:
                 plt.ylim(YLIM)
             list_figs.append(fig)

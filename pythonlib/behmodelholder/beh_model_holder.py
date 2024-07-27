@@ -449,9 +449,9 @@ class BehModelHolder(object):
 
         # combine in single plot (all taskgroups)
         # fig1 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-        #     row=split_by, col="score_name", kind="bar", ci=68)
+        #     row=split_by, col="score_name", kind="bar", errorbar=("ci", 68))
         # fig2 = sns.catplot(data=df, x="agent_rule", y="score", hue="agent_kind", 
-        #     row=split_by, col="score_name", kind="swarm", ci=68)
+        #     row=split_by, col="score_name", kind="swarm", errorbar=("ci", 68))
 
         NMIN = 5
 
@@ -461,20 +461,30 @@ class BehModelHolder(object):
             dfthis = df[df["block"]==bk]
 
             if len(dfthis)>NMIN:
-
-                fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
-                    col="epoch_orig",
-                    row=split_by, kind="bar", ci=68)
-                rotateLabel(fig)
-                if sdir is not None:
-                    savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-1.pdf") 
-
-                fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
-                    col="epoch_orig", 
-                    row=split_by, jitter=True, alpha=0.4)
-                rotateLabel(fig)
-                if sdir is not None:
-                    savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
+                
+                try:
+                    fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
+                        col="epoch_orig",
+                        row=split_by, kind="bar", errorbar=("ci", 68))
+                    rotateLabel(fig)
+                    if sdir is not None:
+                        savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-1.pdf") 
+                except RuntimeError as err:
+                    # RuntimeError: In draw_glyphs_to_bitmap: Could not convert glyph to bitmap (raster overflow; error code 0x62)
+                    print(err)
+                    pass
+                
+                try:
+                    fig = sns.catplot(data=dfthis, x=var, y="score", hue="agent_kind", 
+                        col="epoch_orig", 
+                        row=split_by, jitter=True, alpha=0.4)
+                    rotateLabel(fig)
+                    if sdir is not None:
+                        savefig(fig, f"{sdir}/splitby_{split_by}-{suffix}-bk_{bk}-2.pdf") 
+                except RuntimeError as err:
+                    # RuntimeError: In draw_glyphs_to_bitmap: Could not convert glyph to bitmap (raster overflow; error code 0x62)
+                    print(err)
+                    pass
 
                 plt.close("all")
 
@@ -493,14 +503,14 @@ class BehModelHolder(object):
         col = "epoch_orig"
         # col = "score_name"
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                   col=col, col_wrap = 3, kind="point", ci=68, aspect=1.5)
+                   col=col, col_wrap = 3, kind="point", errorbar=("ci", 68), aspect=1.5)
         rotateLabel(fig)
         if savedir:
             fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
 
         if False:
             fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
-                       col="score_name", col_wrap = 3, kind="point", ci=68, aspect=1.5)
+                       col="score_name", col_wrap = 3, kind="point", errorbar=("ci", 68), aspect=1.5)
             rotateLabel(fig)
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
@@ -519,7 +529,7 @@ class BehModelHolder(object):
         # fig.savefig(f"{savedir}/splitby_{split_by}-points.pdf")
         try:
             fig = sns.catplot(data = df, x=split_by, y="score", col="agent", 
-                       row="score_name", alpha=0.25, kind="point", ci=68, aspect=1.5)
+                       row="score_name", kind="point", errorbar=('ci', 68), aspect=1.5)
             rotateLabel(fig)
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-1.pdf")
@@ -579,7 +589,7 @@ class BehModelHolder(object):
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
 
             fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                kind="point", ci=68, aspect=aspect, col="agent")
+                kind="point", errorbar=("ci", 68), aspect=aspect, col="agent")
             rotateLabel(fig)        
             if savedir:
                 fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
@@ -596,7 +606,7 @@ class BehModelHolder(object):
                         fig.savefig(f"{savedir}/splitby_{split_by}-characters-1-bk_{bk}.pdf")
 
                     fig = sns.catplot(data=dfthis, x="character", y="score", hue=split_by,
-                        kind="point", ci=68, aspect=aspect)
+                        kind="point", errorbar=("ci", 68), aspect=aspect)
                     rotateLabel(fig)        
                     if savedir:
                         fig.savefig(f"{savedir}/splitby_{split_by}-characters-2-bk_{bk}.pdf")
@@ -610,7 +620,7 @@ class BehModelHolder(object):
 
                     fig = sns.catplot(data=dfthis, x="character", y="score", hue="agent", 
                         row=split_by, col="block",
-                        kind="point", ci=68, aspect=aspect)
+                        kind="point", errorbar=("ci", 68), aspect=aspect)
                     rotateLabel(fig)        
                     if savedir:
                         fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-2-bk_{bk}.pdf")

@@ -284,23 +284,23 @@ def _gapstrokes_timing_plot_all(DS, savedir, LIST_Y_PLOT=None):
             savefig(fig, f"{savedir}/{valthis}-1.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= "set_stroke_index_fromlast", ci=68)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= "set_stroke_index_fromlast", errorbar=("ci", 68))
             savefig(fig, f"{savedir}/{valthis}-2.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, ci=68)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, errorbar=("ci", 68))
             savefig(fig, f"{savedir}/{valthis}-3.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, col="stroke_index", ci=68)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, hue= VAR_CONTEXT, col="stroke_index", errorbar=("ci", 68))
             savefig(fig, f"{savedir}/{valthis}-4.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, row = "set_stroke_index_fromlast", ci=68)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, kind="point", alpha=0.2, row = "set_stroke_index_fromlast", errorbar=("ci", 68))
             savefig(fig, f"{savedir}/{valthis}-5.pdf")
             plt.close("all")
 
-            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", ci=68)
+            fig = sns.catplot(data=DFTHIS, x=VAR, y=valthis, jitter=True, alpha=0.2, row = "set_stroke_index_fromlast", errorbar=("ci", 68))
             savefig(fig, f"{savedir}/{valthis}-6.pdf")
             plt.close("all")
 
@@ -326,9 +326,10 @@ def gapstroke_timing_compare_by_variable(D, VAR, VARS_CONTEXT, params_preprocess
     from pythonlib.tools.pandastools import append_col_with_grp_index
 
     ###### EXTRACT DATASET STROKES, PREPROCESSED
-    # restrict to cases without online supervision
-    D.grammarmatlab_successbinary_score()
-    # D.preprocessGood(params=params_preprocess)
+    if False: # Not sure why I need this...
+        # restrict to cases without online supervision
+        D.grammarmatlab_successbinary_score()
+        # D.preprocessGood(params=params_preprocess)
 
     # Get data strokes
     DS, SAVEDIR = gapstrokes_preprocess_extract_strokes_gaps(D,
@@ -764,7 +765,7 @@ def _plot_velocity_all(DS):
     fig = sns.catplot(data=DFTHISGOOD, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch", jitter=True, alpha=0.2)
     rotateLabel(fig)
 
-    fig = sns.catplot(data=DFTHISGOOD, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch", kind="point", ci=68)
+    fig = sns.catplot(data=DFTHISGOOD, x="shape_pre_this", y="gap_from_prev_vel", hue="epoch", kind="point", errorbar=("ci", 68))
     rotateLabel(fig)
 
 

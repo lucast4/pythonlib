@@ -293,7 +293,7 @@ def plot_all(D, SAVEDIR, animal, expt):
     import seaborn as sns
     DF_cross = pd.DataFrame(OUT_cross)
 
-    fig = sns.catplot(data=DF_cross, x="early_or_late", row="ptuple1", col="self_or_cross", y="dist", kind="point", ci=68)
+    fig = sns.catplot(data=DF_cross, x="early_or_late", row="ptuple1", col="self_or_cross", y="dist", kind="point", errorbar=("ci", 68))
     # sns.catplot(data=DF_cross, x="early_or_late", hue="self_or_cross", y="dist")
     fig.savefig(f"{SDIRTHIS}/eachprim_overview_selfandcross.pdf")
 
@@ -315,7 +315,7 @@ def plot_all(D, SAVEDIR, animal, expt):
 
     fig = sns.catplot(data=dfsummaryflat, x="self_or_cross", row="variable", y="value")
     fig.savefig(f"{SDIRTHIS}/summary_eachprim_crossvsself_1.pdf")
-    fig = sns.catplot(data=dfsummaryflat, x="self_or_cross", row="variable", y="value", kind="bar", ci=68)
+    fig = sns.catplot(data=dfsummaryflat, x="self_or_cross", row="variable", y="value", kind="bar", errorbar=("ci", 68))
     fig.savefig(f"{SDIRTHIS}/summary_eachprim_crossvsself_2..pdf")
 
     # from pythonlib.tools.snstools import relplotOverlaid, relPlotOverlayLineScatter
@@ -338,9 +338,9 @@ def plot_all(D, SAVEDIR, animal, expt):
     # dfthis = dfthis[dfthis["test"]=="self_div_cross"].reset_index(drop=True)
 
     import seaborn as sns
-    fig = sns.catplot(data=dfthis, x="early_or_late", y="value",  kind="bar", col="variable", ci=68)
+    fig = sns.catplot(data=dfthis, x="early_or_late", y="value",  kind="bar", col="variable", errorbar=("ci", 68))
     fig.savefig(f"{SDIRTHIS}/selfdist_div_crossdist-1.pdf")
-    fig = sns.catplot(data=dfthis, x="early_or_late", y="value",  kind="point", col="variable", ci=68)
+    fig = sns.catplot(data=dfthis, x="early_or_late", y="value",  kind="point", col="variable", errorbar=("ci", 68))
     fig.savefig(f"{SDIRTHIS}/selfdist_div_crossdist-2.pdf")
     fig = sns.catplot(data=dfthis, x="early_or_late", y="value",  col="variable")
     fig.savefig(f"{SDIRTHIS}/selfdist_div_crossdist-3.pdf")

@@ -40,13 +40,13 @@ def zscore(val, vals_dist):
 # def statsRanksum(df1, df2, varname):
 #     return stats.ranksums(df1[f"{varname}"], df2[f"{varname}"])
 
-# NOT YET DONE!!!
-def statsmodel_ols(x, y, PRINT=False):
+def statsmodel_ols(x, y, PRINT=False, 
+                   overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12):
     """
     PARAMS:
     - x, (ndat, nfeat), or (ndat,)
     - y, (ndat,)
-
+    - overlay_on_this_ax, bool, then overlays text of regression summary on axis.
     """ 
     import statsmodels.api as sm
 
@@ -70,7 +70,10 @@ def statsmodel_ols(x, y, PRINT=False):
         print(x.shape)
         assert False, "why"
 
-    return results
+    if overlay_on_this_ax is not None:
+        overlay_on_this_ax.text(overlay_x, overlay_y, f"r2={results.rsquared:.2f}|p={results.pvalues[1]:.3f}|int={results.params[0]:.3f}|slope={results.params[1]:.3f}", color=overlay_color, fontsize=overlay_font_size)
+
+    return results  
 
 if False:
     def getStatsOLS(dfthis_teststimonly, colname):

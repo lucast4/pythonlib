@@ -113,18 +113,18 @@ def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
             df_actions_expanded = expand_categorical_variable_to_binary_variables(df_actions, var)
 
             fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_crct_ti_uniq", row="epoch",
-                        kind="point", ci=68, aspect=1.5)
+                        kind="point", errorbar=("ci", 68), aspect=1.5)
             rotateLabel(fig)
             savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}.pdf")
 
             fig = sns.catplot(data=df_actions_expanded, x=var, y="value", row="task_state_crct_ti_uniq", hue="epoch",
-                        kind="point", ci=68, aspect=1.5)
+                        kind="point", errorbar=("ci", 68), aspect=1.5)
             rotateLabel(fig)
             savefig(fig, f"{sdir}/actions-task_state_crct_ti_uniq-{var}-2.pdf")
 
 
             fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="task_state_code", row="epoch",
-                        kind="point", ci=68, aspect=1.5)
+                        kind="point", errorbar=("ci", 68), aspect=1.5)
             rotateLabel(fig)
             savefig(fig, f"{sdir}/actions-task_state_code-{var}.pdf")
 
@@ -132,7 +132,7 @@ def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
             df_actions_this = df_actions[df_actions["task_state_code"]==((), (0,), (1,))].reset_index(drop=True)
             if len(df_actions_this)>0:
                 df_actions_this_expanded = expand_categorical_variable_to_binary_variables(df_actions_this, var)
-                fig = sns.catplot(data=df_actions_this_expanded, x=var, y="value", hue="epoch", kind="point", aspect=1.5, ci=68,
+                fig = sns.catplot(data=df_actions_this_expanded, x=var, y="value", hue="epoch", kind="point", aspect=1.5, errorbar=("ci", 68),
                             row="epoch_orig")
                 rotateLabel(fig)
                 savefig(fig, f"{sdir}/actions-task_state_code-only_taskstatecode_separated-{var}.pdf")
@@ -141,28 +141,30 @@ def preprocess_plot_actions(D, suffix=None, saveon=True, cleanup_actions=True):
 
             if "microstim_epoch_code" in df_actions_expanded.columns:
                 fig = sns.catplot(data=df_actions_expanded, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                            kind="point", ci=68, aspect=1.5)
+                            kind="point", errorbar=("ci", 68), aspect=1.5)
                 rotateLabel(fig)
                 savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}.pdf")
 
                 # First
                 df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]==0]
-                fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                    kind="point", ci=68, aspect=1.5)
-                rotateLabel(fig)
-                savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-FIRST_ACTION.pdf")
+                if len(df_actions_expanded_this)>0:
+                    fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                        kind="point", errorbar=("ci", 68), aspect=1.5)
+                    rotateLabel(fig)
+                    savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-FIRST_ACTION.pdf")
 
                 df_actions_expanded_this = df_actions_expanded[df_actions_expanded["idx_beh"]>0]
-                fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
-                    kind="point", ci=68, aspect=1.5)
-                rotateLabel(fig)
-                savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-NOT_FIRST_ACTION.pdf")
+                if len(df_actions_expanded_this)>0:
+                    fig = sns.catplot(data=df_actions_expanded_this, x=var, y="value", hue="microstim_epoch_code", row="epoch_orig",
+                        kind="point", errorbar=("ci", 68), aspect=1.5)
+                    rotateLabel(fig)
+                    savefig(fig, f"{sdir}/actions-microstim_epoch_code-{var}-NOT_FIRST_ACTION.pdf")
 
             plt.close("all")
 
         df_actions_trial_expand = expand_categorical_variable_to_binary_variables(df_actions_trial,
                                                                                   "trial_sequence_outcome")
-        fig = sns.catplot(data=df_actions_trial_expand, x="trial_sequence_outcome", y="value", kind="point", hue="epoch", ci=68,
+        fig = sns.catplot(data=df_actions_trial_expand, x="trial_sequence_outcome", y="value", kind="point", hue="epoch", errorbar=("ci", 68),
                           row="epoch_orig")
         rotateLabel(fig)
         savefig(fig, f"{sdir}/actionstrial-outcome-{var}.pdf")

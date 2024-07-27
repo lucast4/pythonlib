@@ -405,17 +405,17 @@ def plots_cross_prior_and_model_combined(D, GROUPING, GROUPING_LEVELS, list_mcla
     # PLOT
     col_scores = CN.colnames_score()
     df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(col_scores)]
-    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", ci=68, aspect=1.5)
-    #     fig = sns.catplot(data=df, x="monkey_prior", y="value", hue="model", kind="point", ci=68, aspect=1.5)
-    # sns.catplot(data=df, x="model", y="value", hue="monkey_prior", kind="bar", ci=68)
+    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", errorbar=("ci", 68), aspect=1.5)
+    #     fig = sns.catplot(data=df, x="monkey_prior", y="value", hue="model", kind="point", errorbar=("ci", 68), aspect=1.5)
+    # sns.catplot(data=df, x="model", y="value", hue="monkey_prior", kind="bar", errorbar=("ci", 68))
     fig.savefig(f"{savedir_this}/pairedtasks_rawscores_allmodelspriors_bars.pdf")
 
     col_minus = CN.colnames_minus()
     df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(col_minus)]
-    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", ci=68)
+    fig = sns.catplot(data=df, x=GROUPING, y="value", hue="model", kind="bar", errorbar=("ci", 68))
     rotateLabel(fig)
     fig.savefig(f"{savedir_this}/pairedtasks_modeldiffscores_allmodelspriors_1.pdf")
-    fig = sns.catplot(data=df, x="model", y="value", hue=GROUPING, kind="bar", ci=68)
+    fig = sns.catplot(data=df, x="model", y="value", hue=GROUPING, kind="bar", errorbar=("ci", 68))
     rotateLabel(fig)
     fig.savefig(f"{savedir_this}/pairedtasks_modeldiffscores_allmodelspriors_2.pdf")
 
@@ -423,14 +423,14 @@ def plots_cross_prior_and_model_combined(D, GROUPING, GROUPING_LEVELS, list_mcla
     # compute alignement score.
     colnames = CN.colnames_alignment_tasks()
     df = DatThisAggPairedAllFlat[DatThisAggPairedAllFlat["model"].isin(colnames)]
-    fig = sns.catplot(data=df, x="model", y="value", kind="bar", ci=68)
+    fig = sns.catplot(data=df, x="model", y="value", kind="bar", errorbar=("ci", 68))
     rotateLabel(fig)
     fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_1.pdf")
     fig = sns.catplot(data=df, x="model", y="value")
     plt.axhline(0, color="k", alpha=0.5)
     rotateLabel(fig)
     fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_2.pdf")
-    fig = sns.catplot(data=df, x="model", y="value", kind="point", ci=68)
+    fig = sns.catplot(data=df, x="model", y="value", kind="point", errorbar=("ci", 68))
     plt.axhline(0, color="k", alpha=0.5)
     rotateLabel(fig)
     fig.savefig(f"{savedir_this}/pairedtasks_alignmentscore_3.pdf")

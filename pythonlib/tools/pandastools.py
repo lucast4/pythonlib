@@ -203,6 +203,7 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     than whats in group
     - nonnumercols, list of str. these columsn will be retained, keeping only the 
     first encountered value.
+    -- or "all", in which case keeps all columns which have only single value for each level of group.
     - aggmethod, list of str, applies each of these agg methods.
     """
 
@@ -224,9 +225,25 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     #     nonnumercols = df.columns.tolist()
 
 
-    if nonnumercols is None:
+    if nonnumercols == "all":
+        # Get all the columns
+        nonnumercols = [col for col in df.columns if col not in group+values]
+
+        # Check they all exist and has a single unique item per level of group
+        # Throw out cols that fail this test.
+        cols_exclude = []
+        for col in nonnumercols: 
+            groupdict = grouping_append_and_return_inner_items(df, group, 
+                groupinner=col, new_col_name="dummy")
+            for k, v in groupdict.items():
+                if len(v)!=1:
+                    cols_exclude.append(col)
+                    break
+        nonnumercols = [col for col in nonnumercols if col not in cols_exclude]
+    elif nonnumercols is None:
         nonnumercols = []
     else:
+        assert isinstance(nonnumercols, list)
         # Check they all exist and has a single unique item per level of group
         for col in nonnumercols: 
             groupdict = grouping_append_and_return_inner_items(df, group, 
@@ -2090,7 +2107,7 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     return nmin, nmax
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
-    norm_method=None):
+    norm_method=None, annotate_heatmap=True):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2133,7 +2150,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         # plot 2d
         convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
             list_cat_1 = list_var1, list_cat_2 = list_var2,
-            norm_method=norm_method)
+            norm_method=norm_method, annotate_heatmap=annotate_heatmap)
 
         ax.set_title(dum)
     return fig

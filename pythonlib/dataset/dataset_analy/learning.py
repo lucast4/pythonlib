@@ -230,7 +230,7 @@ def plot_performance_timecourse(dfGramScore, list_blockset, SDIR,
     # taskgroup", y=column_binary_success, col="epoch_superv
     print(dfthis.columns)
     fig = sns.catplot(data=dfthis, x="block", y=column_binary_success, row="taskgroup", hue="epoch_superv", kind="point", 
-                aspect=2, ci=68)
+                aspect=2, errorbar=("ci", 68))
     fig.savefig(f"{sdirthis}/timecourse-blocks-datapt_trial.pdf")
     rotateLabel(fig)
 
@@ -285,7 +285,7 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
 
     # 2) Plot bar plot (same infor as in list_textstrings)
     try:
-        fig = sns.catplot(data = dfthis, x="taskgroup", y=column_binary_success, hue = "epoch_superv", kind="bar", ci=68,
+        fig = sns.catplot(data = dfthis, x="taskgroup", y=column_binary_success, hue = "epoch_superv", kind="bar", errorbar=("ci", 68),
                    row="which_probe_blockset", aspect=2, height=3)
         rotateLabel(fig)
         fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-1.pdf")
@@ -296,7 +296,7 @@ def plot_performance_static_summary(dfGramScore, list_blockset, SDIR,
     # 2) More compact bar plot
     try:
         fig = sns.catplot(data = dfthis, x="which_probe_blockset", y=column_binary_success, 
-                    hue = "epoch_superv", kind="bar", ci=68,
+                    hue = "epoch_superv", kind="bar", errorbar=("ci", 68),
                    col="taskgroup", col_wrap=3, aspect=2, height=3)
         rotateLabel(fig)
         fig.savefig(f"{sdirthis}/staticsummary-first_strk_correct_{only_cases_got_first_stroke}-2.pdf")
