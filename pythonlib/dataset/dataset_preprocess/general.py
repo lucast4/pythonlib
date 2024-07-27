@@ -91,6 +91,13 @@ def _groupingParams(D, expt):
     # force a grid assignemnet by proxibimyty.
     tokens_gridloc_snap_to_grid = False
 
+    label_as_novel_if_shape_semantic_fails = None
+    # None --> determine auto, based on reclassify_shape_using_stroke_version
+    # bool, overwrite the auto.
+
+    # What method for defining whethre prim is novel?
+    novel_prims_define_method = "shape_semantic"
+
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
         F = {
@@ -551,12 +558,20 @@ def _groupingParams(D, expt):
         # [Novel prims, concatted segments]
         # reclassify_shape_using_stroke_version = "hash"
         # reclassify_shape_using_stroke_version = "cluster_by_sim"
-        pass # just use "novelprims" default name
+    
+        # pass # just use "novelprims" default name
+        # UIse orignial names (e.g, just use "novelprims" default name) but dont try to get samentic labels,
+        # which can fail for novel shapes
+        # reclassify_shape_using_stroke_version = "default_but_skip_semantic_if_fails"
+        reclassify_shape_using_stroke_version = "default"
+        label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
+        # reclassify_shape_using_stroke_version = "cluster_by_sim"
 
-    elif ("primdiego1g" in expt) or ("primpancho1g" in expt):
+    elif ("primdiego1g2" in expt) or ("primpancho1g" in expt):
         # Half-half morphs, (e..g, first half of line + second half of circle)
         # Need to cluster, since they are continous...
         reclassify_shape_using_stroke_version = "cluster_by_sim"
+        novel_prims_define_method = "continuous_psycho_morph"
 
     elif ("primdiego1h" in expt) or ("primpancho1h" in expt):
         # [Psycho, structured morphs]
@@ -614,7 +629,6 @@ def _groupingParams(D, expt):
     D.behclass_preprocess_wrapper(skip_if_exists=False, 
                             reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version, 
                             tokens_gridloc_snap_to_grid = tokens_gridloc_snap_to_grid)
-
 
     ############### OPTIONAL:
     # Filter dataframe
@@ -761,11 +775,14 @@ def _groupingParams(D, expt):
         # Then you did not enter it manually. extract it
         grouping_levels = D.Dat[grouping].unique().tolist() # note, will be in order in dataset (usually chron)
 
+    # Which novel prims methdo?
+    D.NovelPrimsMethod = novel_prims_define_method
+        
     return D, grouping, grouping_levels, feature_names, features_to_remove_nan, \
         features_to_remove_outliers, traintest_reassign_method, mapper_taskset_to_category, \
         mapper_auto_rename_probe_taskgroups, epoch_merge_dict, epoch_append_cue_stim_flip, \
         color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist, \
-        reclassify_shape_using_stroke_version
+        reclassify_shape_using_stroke_version, label_as_novel_if_shape_semantic_fails
 
 def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, #
         mapper_character_to_category=None, append_probe_status=True,
@@ -1090,7 +1107,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         features_to_remove_outliers, traintest_reassign_method, \
         mapper_taskset_to_category, mapper_auto_rename_probe_taskgroups, epoch_merge_dict, \
         epoch_append_cue_stim_flip, color_is_considered_instruction, replace_shapes_with_clust_labels_if_exist, \
-        reclassify_shape_using_stroke_version = _groupingParams(D, expt)
+        reclassify_shape_using_stroke_version, label_as_novel_if_shape_semantic_fails = _groupingParams(D, expt)
     print(len(D.Dat))
 
     # First, quickly generate placeholder datsegs for beh, since downstream code might require it.
@@ -1384,13 +1401,15 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # GOOD - wrapper for all tokens-related preprocessing (e.g, binning).
     # - e.g.,, defining shape semantic for each tok.
-    if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
-        # Then be lenient in allowing failures in identifyng shape semantic
-        label_as_novel_if_shape_semantic_fails = True
-    elif reclassify_shape_using_stroke_version == "default":
-        label_as_novel_if_shape_semantic_fails = False
-    else:
-        assert False, "True or False?"
+    if label_as_novel_if_shape_semantic_fails is None:
+        # Then determine this autoamticaly
+        if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
+            # Then be lenient in allowing failures in identifyng shape semantic
+            label_as_novel_if_shape_semantic_fails = True
+        elif reclassify_shape_using_stroke_version == "default":
+            label_as_novel_if_shape_semantic_fails = False
+        else:
+            assert False, "True or False?"
     D.tokens_preprocess_wrapper_good(label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails,
                                      label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
 
@@ -1398,7 +1417,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D._analy_preprocess_done=True
 
     ############ SOME FINAL PREPROCESS DIAGNOSTIC PLOTS
-    if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
+    # if reclassify_shape_using_stroke_version in ["hash", "cluster_by_sim"]:
+    if True: # 7/27/24 - doing it always, since sometimes renames by motor cluster even if reclassify_shape_using_stroke_version=="default"
+        # (if it detes that novel prims are presnet)
+
         # Then sanity check that the shape renaming made sense -- plot drawings of all the images.
         # Plot diagnostic, each cluster, plot 20 example shapes (task).
         # Finally, plot each class, showing examples
@@ -1414,6 +1436,16 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
         for i, (fig, _) in enumerate(figholder):
             savefig(fig, f"{savedir_preprocess}/taskimage_examples_each_shape-sub{i}.pdf")
         
+        plt.close("all")
+
+        # Save noites on which sahpes are called novel
+        from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+        fig = grouping_plot_n_samples_conjunction_heatmap(D.Dat, "seqc_0_shape", "shape_is_novel_all")
+        savefig(fig, f"{savedir_preprocess}/novel_shape_labels-seqc_0_shape.pdf")
+
+        fig = grouping_plot_n_samples_conjunction_heatmap(D.Dat, "seqc_0_shapesem", "shape_is_novel_all")
+        savefig(fig, f"{savedir_preprocess}/novel_shape_labels-seqc_0_shapesem.pdf")
+
         plt.close("all")
 
     assert hasattr(D, "TokensStrokesBeh") and D.TokensStrokesBeh is not None, "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."
