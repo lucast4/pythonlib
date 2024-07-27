@@ -16,7 +16,7 @@ MAP_EPOCHKIND_EPOCH = {
     "(AB)n":["(AB)n"], # Any direction within chunks
     "(AB)nDir":["LolDR"], # fixed direction withoin amnd across chunks.
     "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR"],
-    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSP1"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSP1", "SSP2"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
     "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1",
         "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"], # External cue, either mask or color supervision
@@ -168,7 +168,19 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
+        ('Lcentered-4-2', 'V-2-4', 'line-8-2', 'arcdeep-4-2', 'Lcentered-4-1', 'usquare-1-3', 'UR'))] = "SSD2" # shapeseqdiego2
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('Lcentered-4-2', 'V-2-4', 'line-8-2', 'arcdeep-4-2', 'Lcentered-4-1', 'circle-6-1', 'usquare-1-3', 'UR'))] = "SSD3" # shapeseqdiego3
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
         ('arcdeep-4-1', 'V-2-4', 'line-8-4', 'V-2-2', 'Lcentered-4-3', 'UL'))] = "SSP1" # shapeseqpancho1 (6/12/24)
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('arcdeep-4-1', 'line-8-3', 'V-2-4', 'line-8-4', 'V-2-2', 'Lcentered-4-3', 'UL'))] = "SSP2" # shapeseqpancho2 (6/19/24)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_chunks_in_order', 
@@ -1475,7 +1487,10 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
         if r not in DICT_RULESTRINGS_CONSISTENT.keys():
             print(r)
             print(DICT_RULESTRINGS_CONSISTENT)
-            assert False, "add this r to keys of DICT_RULESTRINGS_CONSISTENT"
+            from pythonlib.tools.exceptions import RuleDoesntExist
+            print("add this r to keys of DICT_RULESTRINGS_CONSISTENT")
+            # assert False, "add this r to keys of DICT_RULESTRINGS_CONSISTENT"
+            raise RuleDoesntExist
 
     x = [DICT_RULESTRINGS_CONSISTENT[r] for r in list_rules]
     if return_as_dict:
@@ -1576,9 +1591,12 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3",):_get_rankdir_variations(["llCV3"]), #  dirgrammardiego5
         ("llCV3b",):_get_rankdir_variations(["llCV3b"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
+        ("SSD3",):_get_rankdir_variations(["SSD3"]), #
+        ("SSD2",):_get_rankdir_variations(["SSD2"]), #
         ("SSD1",):_get_rankdir_variations(["SSD1"]), #
         ("SSD1b",):_get_rankdir_variations(["SSD1b"]), #
         ("SSP1",):_get_rankdir_variations(["SSP1"]), #
+        ("SSP2",):_get_rankdir_variations(["SSP2"]), #
         ("rndstr",): ["preset-null-rndstr"], #  
         ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
         ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
@@ -1843,3 +1861,66 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         assert o is not None
 
     return OUT
+
+
+def _tasks_categorize_based_on_rule_shape_sequence_TI(D, ind, version="endpoints"):
+    """ Shape seuence, transitive inference, given a shape seuqence order,
+    classify task by determine if this task has endpoints and what is the average rank distance between
+    adjacent strokes.
+    RETURNS:
+    - (
+        has endpoint 1 [bool], 
+        has endpoiunt 2 [bool], 
+        average rank distance between adjacent strokes [int]
+        )
+    """
+
+    # get sequence of shapes (ground truth)
+    sequence_correct = D.grammarparses_ruledict_rulestring_extract(ind)[1]["params_good"][0] # list of str names.
+    if True: 
+        # TODO: should do this probably, but it is slow.
+        sequence_correct = [sh for sh in sequence_correct if sh in D.taskclass_shapes_extract_unique_alltrials()]
+    
+    # Given a trial, see if it has shapes at endpoints of ground truth order.
+    if False:
+        shapes_beh = D.seqcontext_extract_shapes_in_beh_order(ind)
+
+    # Get the sahpes exist in this trial
+    shapes_this = D.Dat.iloc[ind]["taskconfig_shp"]
+
+    # print(shapes_this)
+    # print(sequence_correct)
+    # assert False
+    
+    if version=="endpoints":
+        # (1) includes endpoints
+        end1 = sequence_correct[0] in shapes_this
+        end2 = sequence_correct[-1] in shapes_this
+
+
+        # (2) distance in rank space
+        if False: # not that useful..
+            shapes_this_ordered = []
+            for sh in sequence_correct:
+                if sh in shapes_this:
+                    shapes_this_ordered.append(sh)
+            if not set(shapes_this) == set(shapes_this_ordered):
+                print(shapes_this)
+                print(shapes_this_ordered)
+                assert False
+
+            def _distance(sh1, sh2):
+                return int(np.abs(sequence_correct.index(sh1) - sequence_correct.index(sh2)))
+
+            rankdist = sum([_distance(sh1, sh2) for sh1, sh2 in zip(shapes_this_ordered[:-1], shapes_this_ordered[1:])])
+
+        # FINAL CODE:
+        # code = (end1, end2, rankdist)
+        code = (end1, end2)
+    elif version == "shape_indices":
+        code = sorted([sequence_correct.index(sh) for sh in shapes_this])
+    else:
+        print(version)
+        assert False
+
+    return code

@@ -25,7 +25,8 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False,
                                        exclude_because_online_abort=False,
                                        ONLY_ACTUAL_RULE=True,
                                        replace_agent_with_epoch=True,
-                                       include_alternative_rules=False):
+                                       include_alternative_rules=False,
+                                       recompute_taskfeat_cat=True):
     """ Preprocess Dataset, extracting score by looking at parsese of rules for each epoch,
     and asking if beh is compatible with any of them.
     NOTE: dataset length will be multiplied by however many rules there are...
@@ -39,8 +40,9 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False,
     # get epochsets
     D.epochset_apply_sequence_wrapper()
 
-    # get taskfeatures (e.g., repeat circle, separated by line)
-    D.taskfeatures_category_by(method="shape_repeat", colname="taskfeat_cat")
+    if recompute_taskfeat_cat:
+        # get taskfeatures (e.g., repeat circle, separated by line)
+        D.taskfeatures_category_classify_by(method="shape_repeat", colname="taskfeat_cat")
 
     # 2) Get grammar scores.
     # - get rules autoamticlaly.
@@ -52,6 +54,9 @@ def preprocess_dataset_recomputeparses(D, DEBUG=False,
         list_rules = D.grammarparses_rulestrings_exist_in_dataset()
     bm = generate_scored_beh_model_data_long(D, list_rules = list_rules, DEBUG=DEBUG,
                                              ONLY_ACTUAL_RULE=ONLY_ACTUAL_RULE)
+
+    if bm is None:
+        return None
 
     if ONLY_ACTUAL_RULE:
         # Then confirm that max one trial per trialcode.
@@ -85,7 +90,7 @@ def preprocess_dataset_matlabrule(D, exclude_because_online_abort=False):
     D.epochset_apply_sequence_wrapper()
 
     # get taskfeatures (e.g., repeat circle, separated by line)
-    D.taskfeatures_category_by(method="shape_repeat", colname="taskfeat_cat")
+    D.taskfeatures_category_classify_by(method="shape_repeat", colname="taskfeat_cat")
 
     # 2) Get grammar scores.
     bm = generate_scored_beh_model_data_matlabrule(D)
@@ -162,6 +167,7 @@ def pipeline_generate_and_plot_all(D,
             bmh  = preprocess_dataset_recomputeparses(D, ONLY_ACTUAL_RULE=True)
             # assert False, "aggregate bmh.DatLong so that there is only one ind per trialcode. this should work since success_binary_quick should be identical for all instance for a given trialcode. confirm this"
             # Problem sovled with ONLY_ACTUAL_RULE
+            assert bmh is not None
         else:
             print(which_rules)
             assert False
@@ -171,17 +177,99 @@ def pipeline_generate_and_plot_all(D,
             return None, None
 
         if doplots:
-            ## STEPWISE action plots (e..g, classify seuqence errors)
-            plot_stepwise_actions(D)
-            # from pythonlib.grammar.stepwise import preprocess_plot_actions
-            # preprocess_plot_actions(D)
-
             ####### 1) COmpare beh to all hypotheses (rules, discrete)
             # Also make plots for rule-based analysis
             savedir= f"{SDIR}/discrete_rules"
             os.makedirs(savedir, exist_ok=True) 
 
+            ####### Transitive inference, shape seq, concrete syntax
+            # Shape sequence, split by what shapes are presnet.
+            from pythonlib.dataset.modeling.discrete import _tasks_categorize_based_on_rule_shape_sequence_TI
+            from pythonlib.tools.pandastools import stringify_values
+
             # combine in single plot (all taskgroups)
+            sdir = f"{savedir}/syntax_concrete_TI"
+            os.makedirs(sdir, exist_ok=True)
+            Dc = D.copy()
+            Dc.preprocessGood(params=["remove_baseline"])
+
+            # version = "shape_indices"
+            version = "endpoints"
+            list_taskcat = [_tasks_categorize_based_on_rule_shape_sequence_TI(Dc, ind, version) for ind in range(len(Dc.Dat))]
+            Dc.Dat["taskfeat_cat_TI"] = list_taskcat
+
+            Dc.grammarparses_syntax_concrete_append_column()
+
+            # Plot
+            df = stringify_values(Dc.Dat)
+
+            order = sorted(df["syntax_concrete"].unique().tolist())
+            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/syntax_concrete-1.pdf")
+
+            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", alpha=0.4, jitter=True, 
+                              col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/syntax_concrete-2.pdf")
+
+            # Separate by epoch
+            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
+                            hue="epoch", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/syntax_concrete-epoch-1.pdf")
+            
+            order = sorted(df["taskfeat_cat_TI"].unique())
+            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/taskfeat_cat_TI-1.pdf")
+
+            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", alpha=0.4, jitter=True, col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/taskfeat_cat_TI-2.pdf")
+
+            # Separate by epoch
+            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", 
+                              hue="epoch",
+                              col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                            order=order)
+            rotateLabel(fig, 90)
+            savefig(fig, f"{sdir}/taskfeat_cat_TI-epoch-1.pdf")
+
+            if "microstim_epoch_code" in df.columns:
+                order = sorted(df["syntax_concrete"].unique().tolist())
+                fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
+                                hue="microstim_epoch_code", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                                order=order)
+                rotateLabel(fig, 90)
+                savefig(fig, f"{sdir}/syntax_concrete-microstim_epoch_code-1.pdf")
+
+                order = sorted(df["taskfeat_cat_TI"].unique())
+                fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                                hue="microstim_epoch_code", order=order)
+                rotateLabel(fig, 90)
+                savefig(fig, f"{sdir}/taskfeat_cat_TI-microstim_epoch_code-1.pdf")
+
+                stim_codes = [code for code in df["microstim_epoch_code"].unique() if code!="off"]
+                from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+                for code in stim_codes:
+                    for plot_text in [False, True]:
+                        _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task"), 
+                                                            "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
+                        savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-{code}-plot_text={plot_text}.pdf")
+
+                        _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task", "taskfeat_cat_TI"), 
+                                                            "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
+                        savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-splitby_taskfeat_cat_TI-{code}-plot_text={plot_text}.pdf")
+
+            #######
+
+            ####### Combine in single plot (all taskgroups)
             sdir = f"{savedir}/score_epoch_x_rule_splitby"
             os.makedirs(sdir, exist_ok=True)
 
@@ -198,7 +286,6 @@ def pipeline_generate_and_plot_all(D,
             bmh.DatLong = bmh.DatLong[bmh.DatLong["exclude_because_online_abort"]==False].reset_index(drop=True)
 
             for split_by in LIST_SPLIT_BY:
-                
                 try:
                     # Old plots
                     bmh.plot_score_cross_prior_model_splitby(df=bmh.DatLong, split_by=split_by,
@@ -329,6 +416,11 @@ def pipeline_generate_and_plot_all(D,
                 savedir = f"{SDIR}"
                 conjunctions_plot(D, DS, savedir, params_anova)
 
+            ## STEPWISE action plots (e..g, classify seuqence errors)
+            plot_stepwise_actions(D)
+            # from pythonlib.grammar.stepwise import preprocess_plot_actions
+            # preprocess_plot_actions(D)
+
         return bmh, SDIR
 
 def plot_stepwise_actions(D):
@@ -387,7 +479,7 @@ def plot_binned_by_time(D, sdir):
 
             y = "success_binary_quick"
             for split_by in LIST_SPLIT_BY:
-                fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", ci=68)
+                fig = sns.catplot(data=dfthissess, x="trial_binned", y=y, hue="epoch", row=split_by, kind="point", errorbar=("ci", 68))
                 path = f"{sdir}/binned_time-nbins_{nbins}-sess_{sess}-splitby_{split_by}.pdf"
                 savefig(fig, path)
                 print(path)
@@ -555,7 +647,10 @@ def conjunctions_preprocess(D):
 
     # Dall, dataset_pruned_for_trial_analysis, TRIALCODES_KEEP, params_anova, params_anova_extraction = \
     #     dataset_apply_params(ListD, None, ANALY_VER, animal, DATE)
-    D, DS, params_anova = dataset_apply_params(D, None, ANALY_VER, animal, DATE)
+    D, _, params_anova = dataset_apply_params(D, None, ANALY_VER, animal, DATE)
+
+    from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
+    DS = preprocess_dataset_to_datstrokes(D, "all_no_clean")
 
     # # list_features = ["chunk_rank", "chunk_within_rank", "chunk_within_rank", "chunk_n_in_chunk"]
     # list_features = []
