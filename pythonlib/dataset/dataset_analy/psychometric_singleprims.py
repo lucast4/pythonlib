@@ -10,6 +10,58 @@ from pythonlib.tools.plottools import savefig
 import os
 import seaborn as sns
 
+def params_extract_psycho_groupings_manual_using_tsc_inds(animal, date):
+    """
+    Store params, manually entred, to be used with psychogood_preprocess_wrapper_using_tsc_inds.
+    For defining morphsets for structured morph.
+    Inoput the indices that were used in tsc params in dragmonkey.
+
+    Assumes that morphsets are contiguous indices in TSC, and same n in each morphset.
+
+    Approach:
+    """
+
+    if (animal, date) == ("Diego", 240802):
+        
+        # Params for morphs
+        # - Method: Easy: just see the generative code in matlab
+        morphs_tsc_n_sets = 8 # jhow many sets
+        morphs_tsc_n_each_set = 7 # n in each set (excluring base prims).
+        morphs_tsc_idx_start = 31 # first index in TSC
+        morphs_tsc_idx_end = 86 # last index in TSC
+        assert morphs_tsc_n_sets * morphs_tsc_n_each_set == morphs_tsc_idx_end - morphs_tsc_idx_start + 1
+
+        # Map from index rank to the final index within. 
+        # morphs_tsc_map_to_these_indices = [1, 2, 3, 4, 5] # This is standard
+        morphs_tsc_map_to_these_indices = [-1, 1, 2, 3, 4, 5, 100] # if the flanking are nbefore and after the base prims (0, 99)
+
+        # Params for base prims.
+        # list is len num morphsets.
+        # Within each morphset, Each is (base1, base2).
+        # Sometimes multkple candidate LOS fore each base prim. If so, enter them as a tuple and will collect all and combine.
+        # - Method: pull up saved images and manaulyl enter them here. To knwo what image sto lok for for each  morphset,
+        # you can iterate by entering this e,mpy, running the preporcess_wrapper_using_tsc, and see it prints the morphsets,
+        # look at those images (morphs) and use thgat to find these base prims.
+        list_example_base_los = [
+            [("singleprims_psycho", 25, (4, 5, 7, 25)), ("singleprims_psycho", 25, (3, 19, 20, 30))],
+            [("singleprims_psycho", 25, (5, 4, 7, 25)) , ("singleprims_psycho", 25, (8, 6, 9, 22))],
+            [("singleprims_psycho", 25, 10) , ("singleprims_psycho", 25, (2, 24, 12, 14, 23, 24, 26))],
+            [("singleprims_psycho", 25, 16) , ("singleprims_psycho", 25, 20)],
+            [("singleprims_psycho", 25, 28), ("singleprims_psycho", 25, 13)],
+            [("singleprims_psycho", 25, 29), ("singleprims_psycho", 25, (2, 24, 12, 14, 23, 24, 26))],
+            [("singleprims_psycho", 25, (11, 18)) , ("singleprims_psycho", 25, (2, 24, 12, 14, 23, 24, 26))],
+            [("singleprims_psycho", 25, (11, 18)) , ("singleprims_psycho", 25, (8, 6, 9, 22))],
+        ]   
+
+        nlocations_expected = 2 # for each LOS. Used for saniyt checi that got all data.
+    else:
+        print(animal, date)
+        assert False
+    
+    return morphs_tsc_idx_start, morphs_tsc_idx_end, morphs_tsc_n_sets, morphs_tsc_n_each_set, morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected
+
+
+
 def params_extract_psycho_groupings_manual(animal, date):
     """
     Repo of params for each (animal ,date), for psychogood. 
@@ -305,7 +357,97 @@ def params_extract_psycho_groupings_manual(animal, date):
             ('singleprims_psycho', 7, 12),
             ('singleprims_psycho', 7, 21)]
 
+    elif animal == "Diego" and date == 240730:
+        # GOOD
 
+        PARAMS.append(
+            {'los_base_1': ('singleprims_psycho', 15, 2), 
+             'los_base_2': ('singleprims_psycho', 15, 10), 
+             'los_within': ('singleprims_psycho', 14, 26), 
+             'psycho_params': {'psycho_ver': 'extra_tforms_each_prim', 'idx_prim': [0, 1], 'tform_key': 'th'}}
+        )
+
+        PARAMS.append(
+            {'los_base_1': ('singleprims_psycho', 15, 15), 
+             'los_base_2': ('singleprims_psycho', 15, 16), 
+             'los_within': ('singleprims_psycho', 14, 44), 
+             'psycho_params': {'psycho_ver': 'attachpt1_interp', 'idx_motif_char_flex': 0, 'idx_rel': 1, 'convert_extra_tforms_to_sign': True}}
+        )
+        PARAMS.append(
+            {'los_base_1': ('singleprims_psycho', 15, 15), 
+             'los_base_2': ('singleprims_psycho', 15, 19), 
+             'los_within': ('singleprims_psycho', 14, 31), 
+             'psycho_params': {'psycho_ver': 'attachpt1_interp', 'idx_motif_char_flex': 0, 'idx_rel': 1, 'convert_extra_tforms_to_sign': True}}
+        )
+        PARAMS.append(
+            {'los_base_1': ('singleprims_psycho', 15, 6), 
+             'los_base_2': ('singleprims_psycho', 15, 2), 
+             'los_within': ('singleprims_psycho', 14, 41), 
+             'psycho_params': {'psycho_ver': 'extra_tforms_each_prim', 'idx_prim': [0, 1, 2], 'tform_key': 'th'}}
+        )
+        PARAMS.append(
+            {'los_base_1': ('singleprims_psycho', 15, 5), 
+             'los_base_2': ('singleprims_psycho', 15, 3), 
+             'los_within': ('singleprims_psycho', 14, 18), 
+             'psycho_params': {'psycho_ver': 'extra_tforms_each_prim', 'idx_prim': [0, 1, 2], 'tform_key': 'th'}}
+        )
+
+        # # Arc --> For each one find both locations.
+        PARAMS.append(
+            {'los_base_1': ('singleprims', 86, 11), 
+             'los_base_2': ('singleprims', 86, 26), 
+             'los_within': ('singleprims_psycho', 13, 1), 'psycho_params': {'psycho_ver': 'morph_frac', 'replace_morph_params_with_binary_whether_exists': True}
+             })
+
+        los_allowed_to_miss = [
+            ('singleprims', 86, 1),
+            ('singleprims', 86, 2),
+            ('singleprims', 86, 3),
+            ('singleprims', 86, 4),
+            ('singleprims', 86, 5),
+            ('singleprims', 86, 6),
+            ('singleprims', 86, 7),
+            ('singleprims', 86, 8),
+            ('singleprims', 86, 9),
+            ('singleprims', 86, 10),
+            ('singleprims', 86, 13),
+            ('singleprims', 86, 14),
+            ('singleprims', 86, 15),
+            ('singleprims', 86, 16),
+            ('singleprims', 86, 17),
+            ('singleprims', 86, 18),
+            ('singleprims', 86, 20),
+            ('singleprims', 86, 21),
+            ('singleprims', 86, 22),
+            ('singleprims', 86, 23),
+            ('singleprims', 86, 24),
+            ('singleprims', 86, 25),
+            ('singleprims', 86, 27),
+            ('singleprims', 86, 28),
+            ('singleprims', 86, 29),
+            ('singleprims', 86, 30),
+            ('singleprims', 86, 31),
+            ('singleprims', 86, 32),
+            ('singleprims', 86, 33),
+            ('singleprims', 86, 34),
+            ('singleprims', 86, 35),
+            ('singleprims', 86, 36),
+            ('singleprims', 86, 37),
+            ('singleprims', 86, 38),
+            ('singleprims', 86, 39),
+            ('singleprims', 86, 40),
+            ('singleprims', 86, 41),
+            ('singleprims', 86, 42),
+            ('singleprims', 86, 43),
+            ('singleprims', 86, 44),
+            ('singleprims', 86, 45),
+            ('singleprims', 86, 46),
+            ('singleprims', 86, 47),
+            ('singleprims', 86, 48),
+        ]   
+
+    elif animal == "Diego" and date == 240802:
+        asdafasdf
     else:
         assert False
 
@@ -1277,7 +1419,6 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
     """
     from pythonlib.tools.listtools import stringify_list
     from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_find_tasks_in_this_psycho_group_wrapper, params_extract_psycho_groupings_manual
-    import pandas as pd
     from pythonlib.tools.pandastools import append_col_with_index_of_level_after_grouping, append_col_with_index_of_level
     from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
     from pythonlib.tools.plottools import savefig
@@ -1325,98 +1466,6 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
         dfres_all["morph_set_idx"] = psycho_group
 
         list_dfres.append(dfres_all)
-
-        ############ MAKE PLOTS (drawings)
-        if PLOT_DRAWINGS:
-            savedir = f"{SAVEDIR}/psycho_group_{psycho_group}"
-            import os
-            os.makedirs(savedir, exist_ok=True)
-
-            # Print results 
-            fig = grouping_plot_n_samples_conjunction_heatmap(dfres_all, "los", "morph_idxcode_within_set", ["morph_is_morphed"])
-            savefig(fig, f"{savedir}/counts-los-vs-morph_idxcode_within_set.pdf")
-
-            fig = grouping_plot_n_samples_conjunction_heatmap(dfres_all, "psycho_value", "morph_idxcode_within_set", ["morph_is_morphed"])
-            savefig(fig, f"{savedir}/counts-psycho_value-vs-morph_idxcode_within_set.pdf")
-        
-            for ver in ["beh", "task"]:
-
-                if ver=="beh":
-                    nrand = 3
-                elif ver =="task":
-                    # then you want to plot all, to sanity check that correctly detected
-                    nrand = None
-                else:
-                    assert False
-
-                SIZE = 4
-                list_morph_idx = sorted(dfres_all["morph_idxcode_within_set"].unique())
-
-                n = len(list_morph_idx) + 2
-                ncols = 6
-                nrows = int(np.ceil(n/ncols))
-
-                fig_combined, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE), sharex=True, sharey=True)
-
-                # base 1
-                ax = axes.flatten()[0]
-                inds = dfres_base_1["idx_dat"].tolist()
-                D.plot_mult_trials_overlaid_on_axis(inds, ax, ver=ver, single_color="b", nrand=nrand)
-                ax.set_title(f"base_prim 1")
-
-                # - also plot individual trials
-                if False: # is included with morph index 0 and end
-                    fig, _, _ = D.plotMultTrials2(inds, "strokes_beh")
-                    savefig(fig, f"{savedir}/indivtrials-base_1-beh.pdf")
-                    fig, _, _  = D.plotMultTrials2(inds, "strokes_task")
-                    savefig(fig, f"{savedir}/indivtrials-base_1-task.pdf")
-
-                # Within, in order
-                inds_base1 = dfres_base_1["idx_dat"].tolist()
-                inds_base2 = dfres_base_2["idx_dat"].tolist()
-
-                ct = 1
-                for morph_idx in list_morph_idx:
-                    ax = axes.flatten()[ct]
-
-                    if ver == "task":
-                        # Ovelray base inds
-                        D.plot_mult_trials_overlaid_on_axis(inds_base1, ax, ver=ver, single_color="b", alpha=0.25, nrand=10)
-                        D.plot_mult_trials_overlaid_on_axis(inds_base2, ax, ver=ver, single_color="r", alpha=0.25, nrand=10)
-
-                    inds = dfres_all[dfres_all["morph_idxcode_within_set"] == morph_idx]["idx_dat"].tolist()
-                    D.plot_mult_trials_overlaid_on_axis(inds, ax, ver=ver, single_color="k")
-
-
-                    ax.set_title(f"morph_idx: {morph_idx}")
-                    ct += 1
-
-                    if PLOT_EACH_TRIAL:
-                        # - also plot individual trials
-                        fig, _, _  = D.plotMultTrials2(inds, "strokes_beh")
-                        savefig(fig, f"{savedir}/indivtrials-morph_idx_{morph_idx}-beh.pdf")
-                        if False: # not needed, since tasks are already plot in the overlaid plot
-                            fig, _, _  = D.plotMultTrials2(inds, "strokes_task")
-                            savefig(fig, f"{savedir}/indivtrials-morph_idx_{morph_idx}-task.pdf")
-            
-                    plt.close("all")
-
-                # base 2
-                ax = axes.flatten()[ct]
-                inds = dfres_base_2["idx_dat"].tolist()
-                D.plot_mult_trials_overlaid_on_axis(inds, ax, ver=ver, single_color="r", nrand=nrand)
-                ax.set_title(f"base_prim 2")
-
-                # - also plot individual trials
-                if False: # is included with morph index 0 and end
-                    fig, _, _  = D.plotMultTrials2(inds, "strokes_beh")
-                    savefig(fig, f"{savedir}/indivtrials-base_2-beh.pdf")
-                    fig, _, _  = D.plotMultTrials2(inds, "strokes_task")
-                    savefig(fig, f"{savedir}/indivtrials-base_2-task.pdf")
-
-                savefig(fig_combined, f"{savedir}/all_overlaid-{ver}.pdf")
-
-                plt.close("all")
     DFRES = pd.concat(list_dfres).reset_index(drop=True)
 
     # CHECK that all los have been assigned to something
@@ -1451,6 +1500,36 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
             los = DFRES[(DFRES["morph_set_idx"]==morph_group) & (DFRES["morph_idxcode_within_set"]==idx_within_group)]["los"].unique().tolist()
             map_group_to_los[morph_group][idx_within_group] = los
 
+    ##################################### PLOTS/ANALYSIS
+    DSmorphsets = psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR, 
+                                                PLOT_SCORES, PLOT_DRAWINGS, clean_ver=clean_ver)
+
+    return DFRES, DSmorphsets, PARAMS, los_allowed_to_miss
+        
+
+def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR, 
+                                              PLOT_SCORES=True, PLOT_DRAWINGS=True, clean_ver = "singleprim_psycho"):
+    """
+    WRapper for all merthods for extracting DFmorphset, scoring and plotting, for structured morphs,
+    where the input is the output of the psychogood_preprocess_wrapper... functions.
+
+    """
+    
+    ### EXTRACT DS
+    from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
+    DS = preprocess_dataset_to_datstrokes(D, clean_ver)
+    DS.dataset_append_column("los_info")
+
+    # Map from psycho group to trial info
+    map_group_to_los = {}
+    for morph_group in DFRES["morph_set_idx"].unique().tolist():
+        list_idx = DFRES[DFRES["morph_set_idx"]==morph_group]["morph_idxcode_within_set"].unique().tolist()
+        map_group_to_los[morph_group] = {idx:None for idx in list_idx}
+        for idx_within_group in list_idx:
+            los = DFRES[(DFRES["morph_set_idx"]==morph_group) & (DFRES["morph_idxcode_within_set"]==idx_within_group)]["los"].unique().tolist()
+            map_group_to_los[morph_group][idx_within_group] = los
+
+
     ##################################### PLOTS
     if PLOT_SCORES:
         from pythonlib.tools.pandastools import find_unique_values_with_indices
@@ -1459,7 +1538,6 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
         from pythonlib.tools.pandastools import grouping_print_n_samples
         from pythonlib.tools.checktools import check_objects_identical
         from math import pi
-        import pandas as pd
         from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_directly_from_DS
         from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline_directly_from_DS
         from pythonlib.dataset.dataset_analy.psychometric_singleprims import _plot_overview_scores
@@ -1573,9 +1651,211 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
         DF = pd.concat(list_df).reset_index(drop=True)
         DSmorphsets = DS.copy()
         DSmorphsets.Dat = DF
+
+    ################# Plot drawings
+    if PLOT_DRAWINGS:
+
+        # Single plot holding all
+        from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets
+        savedir = f"{SAVEDIR}/drawings_combined"
+        os.makedirs(savedir, exist_ok=True)
+        psychogood_plot_drawings_morphsets(DSmorphsets, savedir)
+
+        # All trials for each morphset,  many plots
+        savedir = f"{SAVEDIR}/drawings_each"
+        os.makedirs(savedir, exist_ok=True)
+        psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, True)
+
+
+    return DSmorphsets
         
-    return DFRES, DSmorphsets, PARAMS, los_allowed_to_miss
+
+def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs_tsc_idx_end, morphs_tsc_n_sets, morphs_tsc_n_each_set,
+                                        morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected,
+                                        print_summary = True,  PLOT_SCORES=True, PLOT_DRAWINGS = True):
+    """
+    For extraction and plotting of structured morphs (and any morph in general), as alterantive to psychogood_preprocess_wrapper,
+    where here you manaulyl define morphsets using the matlab TSC indices.
+
+    See within for how to mnaully define params for morphsets.
+
+    This has advatnage of not needing to deal with taskparams.
+
+    One diadvantage is that it doenst have psycho variable (it just hacks it with the idx within).
+
+
+    PARAMS
+    [Input params, see params_extract_psycho_groupings_manual_using_tsc_inds]
+
+    
+    """
+
+    from pythonlib.tools.pandastools import grouping_print_n_samples
+
+    assert morphs_tsc_n_sets * morphs_tsc_n_each_set == morphs_tsc_idx_end - morphs_tsc_idx_start + 1
+
+    SAVEDIR = D.make_savedir_for_analysis_figures_BETTER("psycho_singleprims")
+    SAVEDIR = f"{SAVEDIR}/general"
+
+    # Helper functino
+    def extract_all_los_if_they_exist(los_example, 
+                                    res, morphset, morph_idxcode_within_set, morph_is_morphed, psycho_value,
+                                    allow_to_not_find=False):
+        """
+        Helper function to append data to res. 
+        See use within.
+        """
+        assert isinstance(los_example, tuple)
+        assert len(los_example)==3
+        assert isinstance(los_example[0], str)
+        assert isinstance(los_example[1], int)
+        assert isinstance(los_example[2], int)
         
+        if allow_to_not_find == False:
+            assert los_example in map_los_to_tscind
+
+        if los_example in map_los_to_tscind:
+            tsc_ind = map_los_to_tscind[los_example]
+            list_los = map_tscind_to_listlos[tsc_ind] # exand to all los that match this inputed los
+            for los in list_los:
+                res.append({
+                    "morph_set_idx":morphset,
+                    "morph_idxcode_within_set":morph_idxcode_within_set,
+                    "morph_is_morphed":morph_is_morphed,
+                    "psycho_value":psycho_value,
+                    "los":los
+                })
+
+    ### PREPARE
+    # First, get mapping between TSC and los
+    # (1) append tsc_ind to dataset
+    tsc_inds = []
+    for ind in range(len(D.Dat)):
+        plan = D.taskclass_extract_planclass(ind)
+        si = int(plan["Info"]["TaskSetClass"]["sampled_prims_inds"])
+        assert isinstance(si, int), "multi-prim plan... why?"
+        # assert len(si)==1, "multi-prim plan... why?"
+        tsc_inds.append(si)
+    D.Dat["tsc_ind"] = tsc_inds
+    # (2) Get mapping
+    map_tscind_to_listlos = {}
+    map_los_to_tscind = {}
+    for _, row in D.Dat.iterrows():
+        tsc_ind = row["tsc_ind"]
+        los = row["los_info"]
+
+        if tsc_ind in map_tscind_to_listlos:
+            if los not in map_tscind_to_listlos[tsc_ind]:
+                map_tscind_to_listlos[tsc_ind].append(los)
+        else:
+            map_tscind_to_listlos[tsc_ind] = [los]
+        
+        if los in map_los_to_tscind:
+            assert map_los_to_tscind[los] == tsc_ind
+        else:
+            map_los_to_tscind[los] = tsc_ind
+
+    ########################## Get morphed tasks
+    morphset_tscinds = []
+    on = morphs_tsc_idx_start
+    for _ in range(morphs_tsc_n_sets):
+        off = on+morphs_tsc_n_each_set
+        morphset_tscinds.append(list(range(on,off)))
+        on = off
+
+    ### (1)  Get all the morphed los
+    morph_is_morphed = True
+    HACK_PSYCHO_VALUE = True
+    res = []
+    for morphset, tscinds in enumerate(morphset_tscinds):
+        for _i, _tscind in enumerate(tscinds):
+
+            idx_within = morphs_tsc_map_to_these_indices[_i]
+
+            if print_summary:
+                print("-----------")
+                print(morphs_tsc_map_to_these_indices)
+                print(_i, idx_within)
+                print(morphset, " -- ", idx_within, " -- ", los)
+            
+            if HACK_PSYCHO_VALUE:
+                # psycho_value = _i # HACKKY
+                psycho_value = idx_within # HACKKY
+            else:
+                assert False, "what method to use?"
+
+            list_los = map_tscind_to_listlos[_tscind]
+
+            for los in list_los:
+                extract_all_los_if_they_exist(los, 
+                                                res, morphset, idx_within, morph_is_morphed, psycho_value)
+
+                # res.append({
+                #     "morph_set_idx":morphset,
+                #     "morph_idxcode_within_set":idx_within,
+                #     "morph_is_morphed":morph_is_morphed,
+                #     "psycho_value":psycho_value,
+                #     "los":los
+                # })
+    
+    ### (2) Base prim los
+    for morphset, (example_los_base_1, example_los_base_2) in enumerate(list_example_base_los):
+
+        if isinstance(example_los_base_1[2], tuple):
+            # Then you gave multiple candidate los. try each one, and take whatever find.
+            for _ind in example_los_base_1[2]:
+                _los = (example_los_base_1[0], example_los_base_1[1], _ind)
+                extract_all_los_if_they_exist(_los, res, morphset, 0, False, 0, allow_to_not_find=True)
+        else:
+            # Then you gave a single candidate los. it must exist or else fail.
+            extract_all_los_if_they_exist(example_los_base_1, res, morphset, 0, False, 0)
+
+        if isinstance(example_los_base_2[2], tuple):
+            for _ind in example_los_base_2[2]:
+                _los = (example_los_base_2[0], example_los_base_2[1], _ind)
+                extract_all_los_if_they_exist(_los, res, morphset, 99, False, 99, allow_to_not_find=True)
+        else:
+            extract_all_los_if_they_exist(example_los_base_2, res, morphset, 99, False, 99)
+
+    ### Finalize
+    DFRES = pd.DataFrame(res)    
+    if print_summary:
+        from pythonlib.tools.pandastools import stringify_values, grouping_print_n_samples
+        _dfres = stringify_values(DFRES)
+        grouping_print_n_samples(_dfres, ["morph_set_idx", "morph_idxcode_within_set", "morph_is_morphed", "psycho_value", "los"],
+                                 print_header=True)        
+
+    ############## Sanity checks 
+    # (1) Each idx_within must have data at all locations.
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpvar = ["morph_set_idx", "morph_idxcode_within_set", "morph_is_morphed", "psycho_value"]
+    grpdict = grouping_append_and_return_inner_items_good(DFRES, grpvar)
+    for grp, inds in grpdict.items():
+        if len(inds)<nlocations_expected:
+            print("This grp didnt have corrent expected unique tasks (i.e., locations)")
+            print(grpvar)
+            print(grp)
+            print(inds)
+            assert False
+    
+    # (2) Check that not too many los were not included in the above.
+    # Print all the los that were not included.
+    los_exist_all = D.Dat["los_info"].unique().tolist()
+    los_found = DFRES["los"].unique().tolist()
+    los_excluded = [los for los in los_exist_all if los not in los_found]
+    print("These LOS were not included in morph or base prims...")
+    for x in los_excluded:
+        print(x)
+    n = sum(D.Dat["los_info"].isin(los_excluded))
+    ntot = len(D.Dat["los_info"])
+    print(f"counting for this mnay trials: {n}/{ntot}")
+    assert n/ntot<0.2, "why excludd so many? this might be expected"
+
+    #################### ANALYSIS
+    DSmorphsets = psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR, 
+                                                PLOT_SCORES, PLOT_DRAWINGS)
+    
+    return DFRES, DSmorphsets
 
 def simplify_morph_info_dict(morph_info):
     """
@@ -2006,6 +2286,8 @@ def psychogood_find_tasks_in_this_psycho_group_wrapper_manual_helper(D, example_
     Determines whether the psycho params inputed successfully calls los1 and los1 as same group. If so, then copy and paster
     the output in to PARAMS> If Not ,then read what's printed, and updated psycho_params_try accordingly...
 
+    READ the comments in code to see steps for using this.
+
     See 210506_.. notebook for example how to run this.
 
     PARAMS:
@@ -2037,6 +2319,7 @@ def psychogood_find_tasks_in_this_psycho_group_wrapper_manual_helper(D, example_
     # psycho_params = {
     #     "psycho_ver":"extra_tforms_each_prim",
     #     "idx_prim": 1, # the substroke index
+        # "idx_prim": [0, 1], # take a hacky combination 0 and 1.
     #     "tform_key": "sx" # scale x
     # }
     # -- Example task:
@@ -2170,15 +2453,17 @@ def psychogood_find_tasks_in_this_psycho_group_wrapper_manual_helper(D, example_
 
     if not same_psycho_group:
         print("Differences between task represnetations (Use these to determine how to change psycho params, if needed):")
-        print(len(template1), len(template2))
+        print("len of templates: ", len(template1), len(template2))
         for i, (x, y) in enumerate(zip(template1, template2)):
             if not x==y:
-                print(i, " -- ", x, y)
+                print(f"idx in template = {i} -- values: {x}, {y}")
     
     # print(f"los_within = {example_los_1}")
     # print(f"psycho_params = {psycho_params}")
     print("If this is same group, then copy and paste the following in to PARAMS:")
-    print(f"'los_within': {example_los_1}, 'psycho_params': {psycho_params}")
+
+    print(f"'los_base_1': ('singleprims_psycho', FILL_IN, FILL_IN), 'los_base_2': ('singleprims_psycho', FILL_IN, FILL_IN), 'los_within': {example_los_1}, 'psycho_params': {psycho_params}")
+
     
 def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
     """
@@ -2586,9 +2871,12 @@ def psychogood_plot_drawings_morphsets(DSmorphsets, savedir, n_iter=2):
      
     One large figure for all dataset
     """
+
     for _iter in range(n_iter):
+
         figbeh, figtask = DSmorphsets.plotshape_row_col_vs_othervar("morph_idxcode_within_set", "morph_set_idx", 
             n_examples_per_sublot=8, plot_task=True, ver_behtask="task_entire")
         savefig(figbeh, f"{savedir}/morph_idxcode_within_set-vs-morph_set_idx-beh-iter{_iter}.pdf")
         savefig(figtask, f"{savedir}/morph_idxcode_within_set-vs-morph_set_idx-task-iter{_iter}.pdf")
         plt.close("all")
+
