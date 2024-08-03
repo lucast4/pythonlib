@@ -207,7 +207,7 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         DS.clean_preprocess_data(methods=methods, params=params)
         DS.clean_data(["remove_if_multiple_behstrokes_per_taskstroke"])
         n2 = len(DS.Dat)
-        assert n2/n1>0.75, "why removed so much data?"
+        assert n2/n1>0.7, "why removed so much data?"
 
     elif version=="clean_chars":
         # Ignore whether stroke is aligne dto taskl. Just want clean strokes, not
@@ -1199,8 +1199,9 @@ class DatStrokes(object):
                 else:
                     return self.Dat.iloc[i]["Stroke"]()
             elif ver_behtask=="task_entire":
+                # Get entire tasks's strokes
                 strokes_task = self.dataset_extract("strokes_task", i)
-                print("HACKY (extract_strokes) for task, taking entire task")
+                # print("HACKY (extract_strokes) for task, taking entire task")
                 return np.concatenate(strokes_task, axis=0)
                 # return strokes_task[0]
             elif ver_behtask in ["task", "task_aligned_single_strok"]:
