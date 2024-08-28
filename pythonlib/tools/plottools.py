@@ -729,7 +729,7 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     if labels is not None:
         assert len(labels)==len(x)
         for l, xx, yy in zip(labels, x,y):
-            ax.text(xx, yy, l, alpha=0.5, fontsize=6)
+            ax.text(xx, yy, l, alpha=0.5, fontsize=fontsize+2)
     else:
 
         if plot_string_ind:
@@ -1110,6 +1110,27 @@ def share_axes(axes, which="x"):
     else:
         print(which)
         assert False
+
+def share_axes_row_or_col_of_subplots(axes, row_or_col, x_or_y):
+    """
+    Given subplots, chhose to share axes either along row or column.
+    PARAMS:
+    - row_or_col, str, e..g, if "row", then within eahc row, the axes will be
+    shared.
+    """
+    if row_or_col == "row":
+        for i in range(len(axes)):
+            axes_this = axes[i] # list of ax
+            share_axes(axes_this, x_or_y)
+    elif row_or_col == "col":
+        for i in range(len(axes[0])):
+            axes_this = np.array([axes[j][i] for j in range(len(axes))])
+            share_axes(axes_this, x_or_y)
+    elif row_or_col == "both":
+        share_axes(axes, x_or_y)
+    else:
+        assert False
+
 def plot_beh_codes(codes, times, ax=None, codenames=False,
                   color="k", yval=1):
     """ Help plot behcodes, which are int or str, along x axis correspnding

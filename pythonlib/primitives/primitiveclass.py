@@ -508,7 +508,7 @@ class PrimitiveClass(object):
                 elif a1==7 and a2==3:
                     label = (shcat, scale, "UU" , "UU") # direction of line, in top hemisphere
                 else:
-                    _raise_error(a1, a2)
+                    _raise_error(a1, a2, PLOT=True)
             elif "novelprim" in shcat:
                 shcat = features["shape_cat"]
                 scale = features["scale"]
