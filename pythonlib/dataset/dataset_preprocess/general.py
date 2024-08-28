@@ -334,7 +334,7 @@ def _groupingParams(D, expt):
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
 
-    elif ("shapeseqdiego1" in expt) or ("shapeseqdiego2" in expt) or ("shapeseqdiego3" in expt) or ("shapeseqpancho1" in expt) or ("shapeseqpancho2" in expt):
+    elif ("shapeseqdiego1" in expt) or ("shapeseqdiego2" in expt) or ("shapeseqdiego3" in expt) or ("shapeseqdiego4" in expt) or ("shapeseqpancho1" in expt) or ("shapeseqpancho2" in expt) or ("shapeseqpancho3" in expt) or ("shapeseqpancho4" in expt):
         # Reassign rules: each epoch is based on tasksequencer rule
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer"]
@@ -610,6 +610,12 @@ def _groupingParams(D, expt):
         color_is_considered_instruction = True
         replace_shapes_with_clust_labels_if_exist=True
         pass
+    elif "shapeseqsup" in expt:
+        # Grammar vs. seqsup
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
     elif expt[:4] == "prim":
         # Single prims, e.g., primdiego1
         pass
@@ -984,12 +990,20 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # each prim in list prims could be 3-list, like ['line', 1, 1] or 1-list, ['line']
             list_prims_str = [_convert_to_prim(x) for x in list_prims] # list of strings
             direction = prms[1][0] # topright, or ['UL']
+            # if prms[3].shape==():
+            #     _inds_must_change = []
+            # else:
+            #     _inds_must_change = prms[3]
 
             if len(prms[2].shape)==0:
                 inds_dont_shuffle = tuple([int(prms[2])]) # array([1., 2.]) --> (1,2)
             else:
                 inds_dont_shuffle = tuple([int(x) for x in prms[2]]) # array([1., 2.]) --> (1,2)
-            inds_must_change = tuple([int(x) for x in prms[3]]) # array([3., 4., 5.]) --> (3,4,5)
+
+            if len(prms[3].shape)==0:
+                inds_must_change = tuple([int(prms[3])]) # array([3., 4., 5.]) --> (3,4,5)
+            else:
+                inds_must_change = tuple([int(x) for x in prms[3]]) # array([3., 4., 5.]) --> (3,4,5)
 
             p = tuple(list_prims_str + [direction] + [inds_dont_shuffle] + [inds_must_change])
             # e.g,, ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2), (3, 4, 5))
