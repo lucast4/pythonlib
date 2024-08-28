@@ -86,10 +86,22 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'arcdeep-4-2-0': 'arcdeep-DD-DD',
     'arcdeep-4-3-0': 'arcdeep-RR-RR',
     'arcdeep-4-4-0': 'arcdeep-UU-UU',
-    'line-8-1-0': 'line-LL-LL',
-    'line-8-2-0': 'line-UU-UU',
-    'line-8-3-0': 'line-UR-UR',
-    'line-8-4-0': 'line-UL-UL',
+    # 'line-8-1-0': 'line-LL-LL',
+    # 'line-8-2-0': 'line-UU-UU',
+    # 'line-8-3-0': 'line-UR-UR',
+    # 'line-8-4-0': 'line-UL-UL',
+    # 'line-6-1-0': 'line-LL-LL',
+    # 'line-6-2-0': 'line-UU-UU',
+    # 'line-6-3-0': 'line-UR-UR',
+    # 'line-6-4-0': 'line-UL-UL',
+    # 'line-11-1-0': 'line-LL-LL',
+    # 'line-11-2-0': 'line-UU-UU',
+    # 'line-11-3-0': 'line-UR-UR',
+    # 'line-11-4-0': 'line-UL-UL',
+    # 'line-14-1-0': 'line-LL-LL',
+    # 'line-14-2-0': 'line-UU-UU',
+    # 'line-14-3-0': 'line-UR-UR',
+    # 'line-14-4-0': 'line-UL-UL',
     'squiggle3-3-1-0': 'squiggle3-UU-1.0', # NOTE: THis below is hand modified, becuase auto messed it up, calling it 'squiggle3-LL-0.0'. See primiutiveclass, where I need to fix the code. For now, use hand labeld here.
     'squiggle3-3-1-1': 'squiggle3-UU-0.0',
     'squiggle3-3-2-0': 'squiggle3-LL-1.0',
@@ -102,6 +114,12 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'zigzagSq-1-1-1': 'zigzagSq-LL-0.0',
     'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
     'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
+
+for scale in [8, 6, 11, 14, 15]:
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-1-0'] = 'line-LL-LL'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-2-0'] = 'line-UU-UU'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-3-0'] = 'line-UR-UR'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-4-0'] = 'line-UL-UL'
 
 ###### To merge shapesem into shamesemgroups, which are groups of similar shapes. Useful for characters, where you want to increase
 # sample size for each shape.
@@ -689,7 +707,7 @@ class Tokens(object):
 
     ########################### FEATURES
     def features_extract_wrapper(self, features_get = None, shape_semantic_regenerate_from_stroke=False,
-                                 angle_twind = (0, 0.2), label_as_novel_if_shape_semantic_fails=False):
+                                 angle_twind = (0, 0.1), label_as_novel_if_shape_semantic_fails=False):
         """
         WRapper to generate features for each token,
         which are appended to tokens. Where
