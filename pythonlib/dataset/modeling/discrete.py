@@ -16,9 +16,9 @@ MAP_EPOCHKIND_EPOCH = {
     "(AB)n":["(AB)n"], # Any direction within chunks
     "(AB)nDir":["LolDR"], # fixed direction withoin amnd across chunks.
     "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR"],
-    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSP1", "SSP2"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSD4", "SSP1", "SSP2", "SSP3", "SSP4", "gramP2", "gramP2b", "gramD4"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
-    "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "llCV3RndFlx1",
+    "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "SSD4Rnd", "SSP4Rnd", "SSD4RndFlx1", "SSD4RndFlx2", "SSP4RndFlx1", "SSP4RndFlx2", "llCV3RndFlx1",
         "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"], # External cue, either mask or color supervision
     "baseline":["base", "baseline"]
 }
@@ -176,11 +176,47 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
+        ('arcdeep-4-2', 'Lcentered-4-1', 'line-8-2', 'circle-6-1', 'V-2-4', 'usquare-1-3', 'Lcentered-4-2', 'UR'))] = "SSD4" # shapeseqdiego4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('arcdeep-4-2', 'Lcentered-4-1', 'line-8-2', 'circle-6-1', 'V-2-4', 'usquare-1-3', 'Lcentered-4-2', 'UR', (), ()))] = "SSD4Rnd" 
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('arcdeep-4-2', 'Lcentered-4-1', 'line-8-2', 'circle-6-1', 'V-2-4', 'usquare-1-3', 'Lcentered-4-2', 'UR', (1,), (2, 3)))] = "SSD4RndFlx1" 
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('arcdeep-4-2', 'Lcentered-4-1', 'line-8-2', 'circle-6-1', 'V-2-4', 'usquare-1-3', 'Lcentered-4-2', 'UR', (), (1,)))] = "SSD4RndFlx2" 
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
         ('arcdeep-4-1', 'V-2-4', 'line-8-4', 'V-2-2', 'Lcentered-4-3', 'UL'))] = "SSP1" # shapeseqpancho1 (6/12/24)
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('arcdeep-4-1', 'line-8-3', 'V-2-4', 'line-8-4', 'V-2-2', 'Lcentered-4-3', 'UL'))] = "SSP2" # shapeseqpancho2 (6/19/24)
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('V-2-4', 'Lcentered-4-3', 'V-2-2', 'line-8-3', 'arcdeep-4-1', 'line-8-4', 'UL'))] = "SSP3" # shapeseqpancho3
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('V-2-4', 'Lcentered-4-3', 'V-2-2', 'line-8-3', 'arcdeep-4-1', 'line-8-4', 'line-8-1', 'UL'))] = "SSP4" # shapeseqpancho4
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('V-2-4', 'Lcentered-4-3', 'V-2-2', 'line-8-3', 'arcdeep-4-1', 'line-8-4', 'line-8-1', 'UL', (), ()))] = "SSP4Rnd" # shapeseqpancho4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('V-2-4', 'Lcentered-4-3', 'V-2-2', 'line-8-3', 'arcdeep-4-1', 'line-8-4', 'line-8-1', 'UL', (1,), (2, 3)))] = "SSP4RndFlx1" # shapeseqpancho4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('V-2-4', 'Lcentered-4-3', 'V-2-2', 'line-8-3', 'arcdeep-4-1', 'line-8-4', 'line-8-1', 'UL', (), (1,)))] = "SSP4RndFlx2" # shapeseqpancho4
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_chunks_in_order', 
@@ -207,9 +243,6 @@ def _get_default_grouping_map_tasksequencer_to_rule():
         'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
         ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2, 3), (4, 5)))] = "llCV3RndFlx123"
 
-
-
-
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left', (), (1, 2, 3, 4)))] = "AnBmCk2RndFlx0" # Pancho
@@ -221,6 +254,18 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
         ('line-8-3', 'line-6-3', 'line-13-13', 'line-8-4', 'line-6-4', 'line-13-14', 'V-2-4', 'V2-2-4', 'V2-2-2', 'line-8-1', 'line-8-2', 'line-6-1', 'line-6-2', 'left', (1, 2), (3, 4)))] = "AnBmCk2RndFlx12" # Pancho
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('V-2-2', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'Lcentered-4-2', 'Lcentered-4-3', 'UL'))] = "gramD4" # Diego, gramdiego4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-3', 'line-8-4', 'line-14-1', 'right'))] = "gramP2" # grampancho2
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('line-8-3', 'line-8-4', 'line-14-1', 'line-15-1', 'right'))] = "gramP2b" # grampancho2
 
     grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
@@ -1592,11 +1637,17 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3b",):_get_rankdir_variations(["llCV3b"]), #  dirgrammardiego5
         ("AnBmTR",):_get_rankdir_variations(["AnBmTR"]) + _get_direction_variations(["TR"]), #  grammardir2
         ("SSD3",):_get_rankdir_variations(["SSD3"]), #
+        ("SSD4",):_get_rankdir_variations(["SSD4"]), #
         ("SSD2",):_get_rankdir_variations(["SSD2"]), #
         ("SSD1",):_get_rankdir_variations(["SSD1"]), #
         ("SSD1b",):_get_rankdir_variations(["SSD1b"]), #
         ("SSP1",):_get_rankdir_variations(["SSP1"]), #
         ("SSP2",):_get_rankdir_variations(["SSP2"]), #
+        ("SSP3",):_get_rankdir_variations(["SSP3"]), #
+        ("SSP4",):_get_rankdir_variations(["SSP4"]), #
+        ("gramP2",):_get_rankdir_variations(["gramP2"]), #
+        ("gramP2b",):_get_rankdir_variations(["gramP2b"]), #
+        ("gramD4",):_get_rankdir_variations(["gramD4"]), #
         ("rndstr",): ["preset-null-rndstr"], #  
         ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
         ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
@@ -1606,6 +1657,12 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("llCV3RndFlx123",): ["preset-null-llCV3RndFlx123"],
         ("llCV3RndFlx12",): ["preset-null-llCV3RndFlx12"],
         ("llCV3RndFlx1",): ["preset-null-llCV3RndFlx1"],
+        ("SSD4Rnd",): ["preset-null-SSD4Rnd"],
+        ("SSP4Rnd",): ["preset-null-SSP4Rnd"],
+        ("SSP4RndFlx1",): ["preset-null-SSP4RndFlx1"],
+        ("SSP4RndFlx2",): ["preset-null-SSP4RndFlx2"],
+        ("SSD4RndFlx1",): ["preset-null-SSD4RndFlx1"],
+        ("SSD4RndFlx2",): ["preset-null-SSD4RndFlx2"],
         ("AnBmCk2RndFlx12",): ["preset-null-AnBmCk2RndFlx12"],
         ("AnBmCk2RndFlx1",): ["preset-null-AnBmCk2RndFlx1"],
         ("AnBmCk2RndFlx0",): ["preset-null-AnBmCk2RndFlx0"],
@@ -1875,12 +1932,22 @@ def _tasks_categorize_based_on_rule_shape_sequence_TI(D, ind, version="endpoints
         )
     """
 
+    # Only run this if it is actually a shapes sequqence
     # get sequence of shapes (ground truth)
-    sequence_correct = D.grammarparses_ruledict_rulestring_extract(ind)[1]["params_good"][0] # list of str names.
+    _sequence_correct = D.grammarparses_ruledict_rulestring_extract(ind)[1]["params_good"][0] # list of str names.
     if True: 
         # TODO: should do this probably, but it is slow.
-        sequence_correct = [sh for sh in sequence_correct if sh in D.taskclass_shapes_extract_unique_alltrials()]
-    
+        sequence_correct = [sh for sh in _sequence_correct if sh in D.taskclass_shapes_extract_unique_alltrials()]
+    if len(sequence_correct)==0:
+        print(_sequence_correct)
+        print(D.taskclass_shapes_extract_unique_alltrials())
+        print(ind)
+        print(D.Dat.iloc[ind]["trialcode"])
+        print(D.grammarparses_ruledict_rulestring_extract(ind)[1])
+        fig = D.plotSingleTrial(ind)
+        fig.savefig("/tmp/debug.pdf")
+        assert False, "why this error?"
+
     # Given a trial, see if it has shapes at endpoints of ground truth order.
     if False:
         shapes_beh = D.seqcontext_extract_shapes_in_beh_order(ind)
