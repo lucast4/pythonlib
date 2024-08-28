@@ -1098,6 +1098,10 @@ class DatStrokes(object):
                 sns.displot(data=self.Dat, x="gap_from_prev_angle", y="gap_from_prev_dist", col=si)
                 sns.displot(data=DS.Dat, x=xvar, col=si, hue=f"{xvar}_binned")
 
+        if "loc_on" in self.Dat.columns:
+            self.Dat["loc_on_x"] = [loc[0] for loc in self.Dat["loc_on"]]
+            self.Dat["loc_on_y"] = [loc[1] for loc in self.Dat["loc_on"]]
+
         print("DONE!")
             
 

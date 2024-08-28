@@ -1702,6 +1702,10 @@ class Dataset(object):
                 # screen is about 3 w and h. 
                 _dist = val_actual - val_grid
 
+                # Hacky stuff
+                if self.dates(True)[0] == '240802' and self.animals(True)[0]=="Diego":
+                    return True
+                
                 # Allow leniency if this is a "novel" prim, or if has extra tforms
                 if self.taskclass_check_prims_extra_params_tforms_exist_single(ind) and _dist<0.65:
                     return True
@@ -1807,7 +1811,8 @@ class Dataset(object):
             Tk_behdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_beh_data", return_as_tokensclass=True)
             Tk_behdata.features_extract_wrapper(["loc_on", "angle"])
             Tk_behdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
-            Tk_behdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
+            Tk_behdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], 
+                                                label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
             Tk_behtaskdata = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
             # append extra tforms (e.g.,  novel prims).
@@ -1817,7 +1822,8 @@ class Dataset(object):
             #     tk["tforms_extra"] = tf
             for tk in Tk_behtaskdata.Tokens:
                 tk["tforms_extra_exist"] = tforms_extra_exist
-            Tk_behtaskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
+            Tk_behtaskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], 
+                                                    label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails)
 
             # Task strokes (ignore beh)
             Tk_taskdata = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=True)
@@ -1832,7 +1838,8 @@ class Dataset(object):
                 label_as_novel_if_shape_semantic_fails_this = True
             else:
                 label_as_novel_if_shape_semantic_fails_this = label_as_novel_if_shape_semantic_fails
-            Tk_taskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails_this)
+            Tk_taskdata.features_extract_wrapper(["shape_semantic", "shape_semantic_group"], 
+                                                 label_as_novel_if_shape_semantic_fails=label_as_novel_if_shape_semantic_fails_this)
             if False: # not sure why.. if this is just task
                 Tk_taskdata.sequence_context_relations_calc() # Get sequence, will be needed for datseg
 
@@ -4280,6 +4287,14 @@ class Dataset(object):
                         list_good = []
                         for i in range(len(self.Dat)):
                             list_good.append(len(self.Dat.iloc[i]["strokes_beh"])>0)
+                        self.Dat = self.Dat[list_good]
+                    elif p=="task_strokes_more_than_one":
+                        # then only keep trials where >1 task stroke (i.e, sequencing)
+                        # if "FEAT_num_strokes_task" not in self.Dat.columns:
+                        #     self.extract_beh_features()
+                        list_good = []
+                        for i in range(len(self.Dat)):
+                            list_good.append(len(self.Dat.iloc[i]["strokes_task"])>1)
                         self.Dat = self.Dat[list_good]
                     elif p=="correct_sequencing":
                         # Only if beh sequence is consistent with at least one acceptable rule 
@@ -8987,6 +9002,30 @@ class Dataset(object):
         self.Dat["epoch_is_DIR"] = list_DIR
         print("Appended column: self.Dat[epoch_is_DIR]")
 
+    def grammarparses_task_tokens_correct_order_sequence(self, ind, PLOT=False):
+        """
+        Get the task tokens in the correct order it shold be done given the rule of this trial.
+        Asserts that only one parse exists.
+        Ignores behvaiior. Uses up all taskstrokes.
+        RETURNS:
+        - tokens_correct_order, tokens, in correct order
+        """
+
+        if PLOT:
+            self.grammarparses_print_plot_summarize(ind)
+        
+        # Get the correct sequence parse
+        tmp = self.grammarparses_parses_extract_trial(ind)
+        assert len(tmp)==1, "only codede for deterministic rule"
+        parse = tmp[0]
+
+        # Convert to tokens
+        tokens = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=False)
+        assert np.all(np.diff([tok["ind_taskstroke_orig"] for tok in tokens])==1), "make this happen, in taskclass_tokens_extract_wrapper"
+        tokens_correct_order = [tokens[i] for i in parse]
+
+        return tokens_correct_order
+
     def grammarparses_rules_shape_AnBmCk_get_shape_order(self):
         """
         Return correct shape order for this rule, only works if one rule exists.
@@ -9256,6 +9295,7 @@ class Dataset(object):
 
     def grammarparses_grammardict_return(self, ind, doplot=False):
         """
+        Return the grammardict, correct sequence, for this trail.
         """
         tc = self.Dat.iloc[ind]["trialcode"]
         gd = self.GrammarDict[tc]

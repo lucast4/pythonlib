@@ -122,6 +122,9 @@ def pipeline_generate_and_plot_all(D,
     # Remove baselione
     D.preprocessGood(params=["remove_baseline"])
 
+    # Remove single prim tasks that may be labeled as "grammar" and within grammar blocks.
+    D.preprocessGood(params=["task_strokes_more_than_one"])
+
     # Get shape code seuqence
     D.sequence_tasksequencer_shapeseq_assign()
 
@@ -188,86 +191,9 @@ def pipeline_generate_and_plot_all(D,
             from pythonlib.tools.pandastools import stringify_values
 
             # combine in single plot (all taskgroups)
-            sdir = f"{savedir}/syntax_concrete_TI"
-            os.makedirs(sdir, exist_ok=True)
-            Dc = D.copy()
-            Dc.preprocessGood(params=["remove_baseline"])
-
-            # version = "shape_indices"
-            version = "endpoints"
-            list_taskcat = [_tasks_categorize_based_on_rule_shape_sequence_TI(Dc, ind, version) for ind in range(len(Dc.Dat))]
-            Dc.Dat["taskfeat_cat_TI"] = list_taskcat
-
-            Dc.grammarparses_syntax_concrete_append_column()
-
-            # Plot
-            df = stringify_values(Dc.Dat)
-
-            order = sorted(df["syntax_concrete"].unique().tolist())
-            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/syntax_concrete-1.pdf")
-
-            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", alpha=0.4, jitter=True, 
-                              col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/syntax_concrete-2.pdf")
-
-            # Separate by epoch
-            fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
-                            hue="epoch", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/syntax_concrete-epoch-1.pdf")
-            
-            order = sorted(df["taskfeat_cat_TI"].unique())
-            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/taskfeat_cat_TI-1.pdf")
-
-            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", alpha=0.4, jitter=True, col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/taskfeat_cat_TI-2.pdf")
-
-            # Separate by epoch
-            fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", 
-                              hue="epoch",
-                              col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                            order=order)
-            rotateLabel(fig, 90)
-            savefig(fig, f"{sdir}/taskfeat_cat_TI-epoch-1.pdf")
-
-            if "microstim_epoch_code" in df.columns:
-                order = sorted(df["syntax_concrete"].unique().tolist())
-                fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
-                                hue="microstim_epoch_code", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                                order=order)
-                rotateLabel(fig, 90)
-                savefig(fig, f"{sdir}/syntax_concrete-microstim_epoch_code-1.pdf")
-
-                order = sorted(df["taskfeat_cat_TI"].unique())
-                fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
-                                hue="microstim_epoch_code", order=order)
-                rotateLabel(fig, 90)
-                savefig(fig, f"{sdir}/taskfeat_cat_TI-microstim_epoch_code-1.pdf")
-
-                stim_codes = [code for code in df["microstim_epoch_code"].unique() if code!="off"]
-                from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
-                for code in stim_codes:
-                    for plot_text in [False, True]:
-                        _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task"), 
-                                                            "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
-                        savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-{code}-plot_text={plot_text}.pdf")
-
-                        _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task", "taskfeat_cat_TI"), 
-                                                            "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
-                        savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-splitby_taskfeat_cat_TI-{code}-plot_text={plot_text}.pdf")
-
+            # -- only do this for shapes rules
             #######
+            plot_syntax_TI(D, savedir)
 
             ####### Combine in single plot (all taskgroups)
             sdir = f"{savedir}/score_epoch_x_rule_splitby"
@@ -390,16 +316,21 @@ def pipeline_generate_and_plot_all(D,
             # dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
 
             from pythonlib.tools.pandastools import stringify_values
-            DF = stringify_values(bmh.DatLong)
+            if False:
+                DF = stringify_values(bmh.DatLong)
+            else:
+                DF = stringify_values(D.Dat)
 
             if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
                 plot_performance_all(DF, list_blocksets_with_contiguous_probes, SDIR)
                 plot_performance_timecourse(DF, list_blocksets_with_contiguous_probes, SDIR)
                 plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, False)
-                plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, True)
+                if False: # I never hceck this anymore...
+                    plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, True)
                 plot_counts_heatmap(DF, SDIR)
-                plot_performance_trial_by_trial(DF, D, SDIR)
-                plot_performance_each_char(DF, D, SDIR)
+                plot_performance_trial_by_trial(None, D, SDIR)
+                if False: # takes too long, not runing for now
+                    plot_performance_each_char(DF, D, SDIR)
                 # 1) print all the taskgroups
                 D.taskgroup_char_ntrials_print_save(SDIR)
 
@@ -421,7 +352,146 @@ def pipeline_generate_and_plot_all(D,
             # from pythonlib.grammar.stepwise import preprocess_plot_actions
             # preprocess_plot_actions(D)
 
+        plt.close("all")
         return bmh, SDIR
+
+def plot_syntax_TI(D, savedir):
+    """
+    Plots related to syntax concrete, e..g, (1,0,2,...) for ACC... sequence.
+    Breaks out scores split by syntax concrete.
+    Also plots microstim, if that exists.
+    """
+    from pythonlib.dataset.modeling.discrete import _tasks_categorize_based_on_rule_shape_sequence_TI
+    from pythonlib.tools.pandastools import stringify_values
+
+    Dc = D.copy()
+    rules_shapes = Dc.grammarparses_rules_involving_shapes(return_as_epoch_orig=True)
+    print("These are the epoch_orig that are shapes rules for today: ", rules_shapes)
+    print("These are the epoch_orig that exist today:",  Dc.Dat["epoch_orig"].unique())
+    Dc.Dat = Dc.Dat[Dc.Dat["epoch_orig"].isin(rules_shapes)].reset_index(drop=True)
+
+    sdir = f"{savedir}/syntax_concrete_TI"
+    os.makedirs(sdir, exist_ok=True)
+    # Dc = D.copy()
+    Dc.preprocessGood(params=["remove_baseline"])
+
+    # version = "shape_indices"
+    version = "endpoints"
+    list_taskcat = [_tasks_categorize_based_on_rule_shape_sequence_TI(Dc, ind, version) for ind in range(len(Dc.Dat))]
+    Dc.Dat["taskfeat_cat_TI"] = list_taskcat
+
+    Dc.grammarparses_syntax_concrete_append_column()
+
+    # Plot
+    df = stringify_values(Dc.Dat)
+
+    # Plot counts
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+    for nstrokes in df["FEAT_num_strokes_task"].unique():
+        dfthis = df[df["FEAT_num_strokes_task"]==nstrokes].reset_index(drop=True)
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, "syntax_concrete", "probe", ["epoch", "FEAT_num_strokes_task"])
+        savefig(fig, f"{sdir}/counts-syntax_concrete-vs-probe-nstrokes={nstrokes}.pdf")
+        
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, "syntax_concrete", "taskfeat_cat_TI", ["epoch", "FEAT_num_strokes_task"])
+        savefig(fig, f"{sdir}/counts-syntax_concrete-vs-taskfeat_cat_TI-nstrokes={nstrokes}.pdf")
+
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, "syntax_concrete", "supervision_online", ["epoch", "FEAT_num_strokes_task"])
+        savefig(fig, f"{sdir}/counts-syntax_concrete-vs-supervision_online-nstrokes={nstrokes}.pdf")
+
+        from pythonlib.tools.pandastools import plot_subplots_heatmap
+        fig, axes = plot_subplots_heatmap(dfthis, "syntax_concrete", "probe", "success_binary_quick", "supervision_online", 
+                                            share_zlim=True, annotate_heatmap=False, ZLIMS=[0,1])
+        savefig(fig, f"{sdir}/heatmap-syntax_concrete-vs-probe-nstrokes={nstrokes}.pdf")
+    plt.close("all")
+
+    # Plot scores
+    order = sorted(df["syntax_concrete"].unique().tolist())
+    fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="point", col="FEAT_num_strokes_task", 
+                        aspect=2, row="supervision_online", hue="probe", order=order)
+    rotateLabel(fig, 90)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([0, 1])
+    savefig(fig, f"{sdir}/syntax_concrete-1.pdf")
+
+    fig = sns.catplot(data=df, y="syntax_concrete", x="success_binary_quick", kind="point", col="FEAT_num_strokes_task", 
+                        aspect=0.5, row="supervision_online", hue="probe", order=order)
+    rotateLabel(fig, 90)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([0, 1])
+    savefig(fig, f"{sdir}/syntax_concrete-1b.pdf")
+
+    fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", alpha=0.4, jitter=True, 
+                        col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/syntax_concrete-2.pdf")
+
+    fig = sns.catplot(data=df, y="syntax_concrete", x="success_binary_quick", alpha=0.4, jitter=True, 
+                        col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/syntax_concrete-2b.pdf")
+
+    # Separate by epoch
+    fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
+                    hue="epoch", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/syntax_concrete-epoch-1.pdf")
+
+    fig = sns.catplot(data=df, y="syntax_concrete", x="success_binary_quick", kind="bar", 
+                    hue="epoch", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/syntax_concrete-epoch-1b.pdf")
+    
+    order = sorted(df["taskfeat_cat_TI"].unique())
+    fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", 
+                        aspect=2, row="supervision_online", hue="probe", order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/taskfeat_cat_TI-1.pdf")
+
+    fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", alpha=0.4, jitter=True, col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/taskfeat_cat_TI-2.pdf")
+
+    # Separate by epoch
+    fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", 
+                        hue="epoch",
+                        col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                    order=order)
+    rotateLabel(fig, 90)
+    savefig(fig, f"{sdir}/taskfeat_cat_TI-epoch-1.pdf")
+
+    plt.close("all")
+
+    if "microstim_epoch_code" in df.columns:
+        order = sorted(df["syntax_concrete"].unique().tolist())
+        fig = sns.catplot(data=df, x="syntax_concrete", y="success_binary_quick", kind="bar", 
+                        hue="microstim_epoch_code", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                        order=order)
+        rotateLabel(fig, 90)
+        savefig(fig, f"{sdir}/syntax_concrete-microstim_epoch_code-1.pdf")
+
+        order = sorted(df["taskfeat_cat_TI"].unique())
+        fig = sns.catplot(data=df, x="taskfeat_cat_TI", y="success_binary_quick", kind="bar", col="FEAT_num_strokes_task", aspect=2, row="supervision_online",
+                        hue="microstim_epoch_code", order=order)
+        rotateLabel(fig, 90)
+        savefig(fig, f"{sdir}/taskfeat_cat_TI-microstim_epoch_code-1.pdf")
+
+        stim_codes = [code for code in df["microstim_epoch_code"].unique() if code!="off"]
+        from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+        for code in stim_codes:
+            for plot_text in [False, True]:
+                _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task"), 
+                                                    "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
+                savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-{code}-plot_text={plot_text}.pdf")
+
+                _, fig = plot_45scatter_means_flexible_grouping(df, "microstim_epoch_code", "off", code, ("supervision_online", "FEAT_num_strokes_task", "taskfeat_cat_TI"), 
+                                                    "success_binary_quick", "syntax_concrete", shareaxes=True, plot_text=plot_text);            
+                savefig(fig, f"{sdir}/scatter45-syntax_concrete-microstim_epoch_code-splitby_taskfeat_cat_TI-{code}-plot_text={plot_text}.pdf")
+
 
 def plot_stepwise_actions(D):
     """ All plots related to probs of actions at each stroke step.

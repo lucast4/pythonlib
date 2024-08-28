@@ -400,68 +400,75 @@ def plot_performance_trial_by_trial(dfGramScore, D, SDIR, column_binary_success=
 
     list_sess = D.Dat["session"].unique().tolist()
     for sess in list_sess:
+        for probe_only in [False, True]:
+            if probe_only:
+                dfthis = D.Dat[
+                    (D.Dat["exclude_because_online_abort"]==False) & 
+                    (D.Dat["session"]==sess) &
+                    (D.Dat["probe"]==True) 
+                ]
+            else:
+                dfthis = D.Dat[
+                    (D.Dat["exclude_because_online_abort"]==False) & 
+                    (D.Dat["session"]==sess) 
+                ]
 
-        dfthis = D.Dat[
-            (D.Dat["exclude_because_online_abort"]==False) & 
-            (D.Dat["session"]==sess) 
-        ]
+            fig, axes = plt.subplots(5,1, figsize=(35,11))
 
-        fig, axes = plt.subplots(5,1, figsize=(35,11))
+            # 1) info, plot blocks and etc.
+            ax = axes.flatten()[0]
+            sns.scatterplot(data=dfthis, x="trial", y="block", hue="which_probe_blockset", style="epoch", ax=ax, alpha = 0.75)
+            ax.grid(True)
 
-        # 1) info, plot blocks and etc.
-        ax = axes.flatten()[0]
-        sns.scatterplot(data=dfthis, x="trial", y="block", hue="which_probe_blockset", style="epoch", ax=ax, alpha = 0.75)
-        ax.grid(True)
+            # 2) trial by trial performance
+            ax = axes.flatten()[1]
+            ax.grid(True)
+            sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch_superv", style="probe", ax=ax, 
+                        alpha = 0.75)
+            smwin = 20
 
-        # 2) trial by trial performance
-        ax = axes.flatten()[1]
-        ax.grid(True)
-        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch_superv", ax=ax, 
-                       alpha = 0.75)
-        smwin = 20
+            cols_keep = ["trial", column_binary_success] # Filter, or else the mean() will throw error.
+            dfthis_rolling = dfthis[cols_keep].rolling(window=smwin, center=True).mean()
 
-        cols_keep = ["trial", column_binary_success] # Filter, or else the mean() will throw error.
-        dfthis_rolling = dfthis[cols_keep].rolling(window=smwin, center=True).mean()
+            # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
+            sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
+            blockver = "block"
+            idx_of_bloque_onsets = []
+            for i in np.argwhere(dfthis[blockver].diff().values):
+                idx_of_bloque_onsets.append(i[0])
+            bloque_onsets = dfthis["trial"].values[idx_of_bloque_onsets]
+            # bloque_nums = df["bloque"].values[idx_of_bloque_onsets]
+            # blokk_nums = dfthis["blokk"].values[idx_of_bloque_onsets]
+            block_nums = dfthis["block"].values[idx_of_bloque_onsets]
+            for b, x in zip(block_nums, bloque_onsets):
+                ax.axvline(x)
+                ax.text(x, ax.get_ylim()[1], f"k{b}\nt{x}", size=8)
+            ax.grid(True)
 
-        # sns.lineplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
-        sns.scatterplot(ax=ax, data=dfthis_rolling, x="trial", y=column_binary_success)
-        blockver = "block"
-        idx_of_bloque_onsets = []
-        for i in np.argwhere(dfthis[blockver].diff().values):
-            idx_of_bloque_onsets.append(i[0])
-        bloque_onsets = dfthis["trial"].values[idx_of_bloque_onsets]
-        # bloque_nums = df["bloque"].values[idx_of_bloque_onsets]
-        # blokk_nums = dfthis["blokk"].values[idx_of_bloque_onsets]
-        block_nums = dfthis["block"].values[idx_of_bloque_onsets]
-        for b, x in zip(block_nums, bloque_onsets):
-            ax.axvline(x)
-            ax.text(x, ax.get_ylim()[1], f"k{b}\nt{x}", size=8)
-        ax.grid(True)
+            ax = axes.flatten()[2]
+            ax.grid(True)
+            sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch", style="epoch_superv", ax=ax, 
+                        alpha = 0.75)
 
-        ax = axes.flatten()[2]
-        ax.grid(True)
-        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="epoch", style="epoch_superv", ax=ax, 
-                       alpha = 0.75)
+            ## NOT EXCLUDING ONLINE ABORTS
+            dfthis = D.Dat[(D.Dat["session"]==sess)]
+            ax = axes.flatten()[3]
+            ax.grid(True)
+            ax.set_title('NOT excluding abort trials')
+            sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="exclude_because_online_abort", style="epoch", ax=ax, 
+                        alpha = 0.75)
 
-        ## NOT EXCLUDING ONLINE ABORTS
-        dfthis = D.Dat[(D.Dat["session"]==sess)]
-        ax = axes.flatten()[3]
-        ax.grid(True)
-        ax.set_title('NOT excluding abort trials')
-        sns.scatterplot(data=dfthis, x="trial", y=column_binary_success, hue="exclude_because_online_abort", style="epoch", ax=ax, 
-                       alpha = 0.75)
-
-        # Plotting reason for failure.
-        ax = axes.flatten()[4]
-        ax.grid(True)
-        ax.set_title('NOT excluding abort trials')
-        sns.scatterplot(data=dfthis, x="trial", y="exclude_because_online_abort", hue=column_binary_success, style="epoch", ax=ax, 
-                       alpha = 0.75)
+            # Plotting reason for failure.
+            ax = axes.flatten()[4]
+            ax.grid(True)
+            ax.set_title('NOT excluding abort trials')
+            sns.scatterplot(data=dfthis, x="trial", y="exclude_because_online_abort", hue=column_binary_success, style="epoch", ax=ax, 
+                        alpha = 0.75)
 
 
-        sdirthis = f"{SDIR}/summary"
-        path = f"{sdirthis}/timecourse-trials-overview-sess_{sess}.pdf"
-        fig.savefig(path)
+            sdirthis = f"{SDIR}/summary"
+            path = f"{sdirthis}/timecourse-trials-overview-sess_{sess}-PROBEONLY={probe_only}.pdf"
+            savefig(fig, path)
 
 def _blocks_to_str(blocks):
     """ Helper to conver tlist of ints (blocks) to a signle string"""
