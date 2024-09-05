@@ -85,3 +85,21 @@ def standardizeTime(datetime, datestart, daystart=9/24, dayend=22/24, staybounde
             assert False, "this time is otuside bounds.."
         
     return d + dayfrac
+
+def standardize_time_helper(datetime):
+    """ Convert from datetime to a scalar between (0,1), which is the 
+    fraction of the day. 
+    PARAMS:
+    - datetime, str, in format YYMMDD-HHMMSS.
+    RETURNS:
+    - time_frac, fraction of day (0,1)
+    EXAMPLE:
+        datetime = "240802-060000"
+        --> 0.5
+    """
+    # Get the start of day
+    assert isinstance(datetime, str)
+    assert len(datetime)==13, "must be YYMMDD-HHMMSS"
+    date_start = f"{datetime[:6]}-000000"
+    time_frac = standardizeTime(datetime, date_start, daystart=0, dayend=1)    
+    return time_frac

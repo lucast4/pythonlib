@@ -218,6 +218,12 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
     rulestrings_check = sorted(D.grammarparses_rulestrings_exist_in_dataset()) # get rules that are used int his day
     # rulestrings_check = rulestrings_check[:-1]
 
+    if RULE_FOR_SHAPE not in rulestrings_check:
+        # This is bug
+        print(rulestrings_check)
+        print(D.grammarparses_rules_involving_shapes())
+        assert False, "these must be compatible. There is bug."
+
     if HACK_ADD_LEFT_RULE:
         if rulestrings_check[0]=="dir-null-R":
             rulestrings_check = rulestrings_check[:1] + ["dir-null-L"] + rulestrings_check[1:]
@@ -443,21 +449,34 @@ def extract_each_stroke_vs_rules(D, DEBUG=False):
             # b = [taskind_beh == map_rulestr_correctti[rs] for rs in rulestrings_check]
             b = [taskind_beh in map_rulestr_correctti_list[rs] for rs in rulestrings_check]
 
-
+            if RULE_FOR_SHAPE not in rulestrings_check:
+                # This is bug
+                print(rulestrings_check)
+                print(D.grammarparses_rules_involving_shapes())
+                assert False, "these must be compatible. There is bug."
+        
             # 1) Did he choose the same shape?
             # same shape, different location
             if RULE_FOR_SHAPE is None:
                 # then no rule cares about shape ...
                 c = []
             else:
-                if FORCE_SINGLE_PARSE_PER_RULE:
-                    ti = map_rulestr_correctti[RULE_FOR_SHAPE]
-                    shape_correct = map_taskind_tok[ti]["shape"]
-                else:
-                    ti_list = map_rulestr_correctti_list[RULE_FOR_SHAPE]
-                    shape_correct = [map_taskind_tok[ti]["shape"] for ti in ti_list]
-                    assert len(set(shape_correct))==1, "bug. next ti should have have same sahpe, if this is a shape rule"
-                    shape_correct = shape_correct[0]
+                try:
+                    if FORCE_SINGLE_PARSE_PER_RULE:
+                        ti = map_rulestr_correctti[RULE_FOR_SHAPE]
+                        shape_correct = map_taskind_tok[ti]["shape"]
+                    else:
+                        ti_list = map_rulestr_correctti_list[RULE_FOR_SHAPE]
+                        shape_correct = [map_taskind_tok[ti]["shape"] for ti in ti_list]
+                        assert len(set(shape_correct))==1, "bug. next ti should have have same sahpe, if this is a shape rule"
+                        shape_correct = shape_correct[0]
+                except Exception as err:
+                    # This is bug
+                    print(RULE_FOR_SHAPE)
+                    print(map_rulestr_correctti)
+                    print(map_taskind_tok)
+                    print(map_rulestr_correctti_list)
+                    assert False, "these must be compatible. There is bug."
 
                 shape_chosen = map_taskind_tok[taskind_beh]["shape"]
                 c = [shape_chosen == shape_correct]

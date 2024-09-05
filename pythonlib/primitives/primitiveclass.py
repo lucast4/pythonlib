@@ -474,7 +474,7 @@ class PrimitiveClass(object):
                 elif a1 in [1, 8] and a2==4:
                     label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
                 else:
-                    _raise_error(a1, a2, True)
+                    _raise_error(a1, a2)
             elif shcat in ["Lzigzag", "Lzigzag1", "zigzagSq"]:
                 a1 = features["angle_midpt_to_onset"]
                 a2 = features["angle_midpt_to_offset"]
@@ -508,7 +508,7 @@ class PrimitiveClass(object):
                 elif a1==7 and a2==3:
                     label = (shcat, scale, "UU" , "UU") # direction of line, in top hemisphere
                 else:
-                    _raise_error(a1, a2, PLOT=True)
+                    _raise_error(a1, a2)
             elif "novelprim" in shcat:
                 shcat = features["shape_cat"]
                 scale = features["scale"]

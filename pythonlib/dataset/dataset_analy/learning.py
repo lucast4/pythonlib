@@ -111,9 +111,9 @@ def plot_performance_all(dfGramScore, list_blockset, SDIR, column_binary_success
     # Make save dir
     savedir= f"{SDIR}/summary"
     os.makedirs(savedir, exist_ok=True) 
-    if checkIfDirExistsAndHasFiles(savedir)[1]:
-        print("[SKIPPING, since SDIR exists and has contents: ", savedir)
-        return
+    # if checkIfDirExistsAndHasFiles(savedir)[1]:
+    #     print("[SKIPPING, since SDIR exists and has contents: ", savedir)
+    #     return
 
 
     def plot_(dfthis):

@@ -14,6 +14,7 @@ from ..tools.nptools import sort_by_labels as sbl
 from pythonlib.tools.plottools import savefig
 from pythonlib.tools.listtools import sort_mixed_type
 import seaborn as sns
+import pandas as pd
 
 class Clusters(object):
     """docstring for Clusters"""
@@ -1518,104 +1519,171 @@ class Clusters(object):
         else:
             return MASKS, None, None
 
-    # def rsa_distmat_score_same_diff_by_context(self, var, var_others, context_input,
-    #                                            PLOT_MASKS=False, plot_mask_path=None, 
-    #                                            path_for_save_print_lab_each_mask=None):
-    #     """
-    #     Like rsa_distmat_score_same_diff, but here returns scores for each context
-    #     """
 
-    #     ### Get masks of context
-    #     if context_input is not None and len(context_input)>0:
-    #         print("Generating masks using context:", context_input)
-    #         if "diff_context_ver" in context_input:
-    #             diff_context_ver = context_input["diff_context_ver"]
-    #         else:
-    #             diff_context_ver = "diff_specific_lenient"
-    #         # Then use inputed context
-    #         MASKS, fig, axes = self.rsa_mask_context_helper(var, var_others, diff_context_ver,
-    #                               context_input["same"], context_input["diff"], PLOT=PLOT_MASKS,
-    #                               path_for_save_print_lab_each_mask=path_for_save_print_lab_each_mask)
-    #     else:
-    #         # Called "diff" if ANY var in var_others is different.
-    #         MASKS, fig, axes = self.rsa_mask_context_helper(var, var_others, "diff_at_least_one", PLOT=PLOT_MASKS,
-    #                                                           path_for_save_print_lab_each_mask=path_for_save_print_lab_each_mask)
-    #     if plot_mask_path is not None and PLOT_MASKS and not skip_mask_plot:
-    #         print("Saving context mask at: ", plot_mask_path)
-    #         savefig(fig, plot_mask_path)
+    def rsa_distmat_score_all_pairs_of_label_groups(self, get_only_one_direction=True, label_vars=None,
+            return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff"):
+        """
+        Get mean distance between all conjucntions of labels, returning dataframe where each row is distance between a levbel of
+        labels_1 and labels_2, where labels_1 is tuple, conjunction of self.Labels
+
+        Gets only a single direction (ie assumes symmetric score)
+
+        Gets dist_yue_diff between all pairs of different groups
+
+        PARAMS:
+        - return_as_clustclass, bool, if True, then returns data as clustclass. Otherwise is a dataframe where
+        each pair of groups gets a row.
+        RETURNS:
+        - df, with one column for each variable in self.Labels, separtely for labels 1 vs 2, appending "_1" to 
+        name of column
+
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+
+        if return_as_clustclass:
+            get_only_one_direction = False
+
+        assert self.Labels == self.LabelsCols, "assumes so for soem of below"
+
+        # Get dataframe of labels for each trial
+        dflabels = self.rsa_labels_return_as_df()
+
+        # Get all label groupings and their trial indices.
+        if label_vars is None:
+            label_vars= self.rsa_labels_extract_label_vars()
+        grpdict = grouping_append_and_return_inner_items_good(dflabels, label_vars)
+        # for k, v in grpdict.items():
+        #     print(k, "n =", len(v))
+
+        # Get distance between each pair or grps
+        res = []
+        for i, (grp1, inds1) in enumerate(grpdict.items()):
+            for j, (grp2, inds2) in enumerate(grpdict.items()):
+                if get_only_one_direction and i<j:
+                    continue
+                if i==j:
+                    assert inds1==inds2
+                    ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
+                    # - exclude diagonal
+                    ma_ut = self._rsa_matindex_generate_upper_triangular()
+                    X = self.Xinput[ma & ma_ut]
+                else:
+                    # Should include below lower and upper triangle, to make sure get all pairs.
+                    ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
+                    X = self.Xinput[ma]
+
+                res.append({
+                    "labels_1":grp1,
+                    "labels_2":grp2,
+                    "dist_mean":np.mean(X)
+                })
+                
+                # Expand, to get each variable in label.
+                for _ivar, _var in enumerate(label_vars):
+                    res[-1][f"{_var}_1"] = grp1[_ivar]
+                    res[-1][f"{_var}_2"] = grp2[_ivar]
+
+        # Also get pairwise distance for each level with itself
+        # for grp, inds in grpdict.items():
+        #     ma = self._rsa_matindex_convert_to_mask_rect(inds, inds)
+        #     # - exclude diagonal
+        #     ma_ut = self._rsa_matindex_generate_upper_triangular()
+
+        #     X = self.Xinput[ma & ma_ut]
+
+            # res.append({
+            #     "labels_1":grp,
+            #     "labels_2":grp,
+            #     "dist_mean":np.mean(X)
+            # })
+            
+            # # Expand, to get each variable in label.
+            # for _ivar, _var in enumerate(label_vars):
+            #     res[-1][f"{_var}_1"] = grp[_ivar]
+            #     res[-1][f"{_var}_2"] = grp[_ivar]
+
+        # Also get 98th percentile between pairs of pts.
+        ma = self._rsa_matindex_generate_upper_triangular()
+        DIST_50, DIST_98 = np.percentile(self.Xinput[ma], [50, 98])
+
+        dfres = pd.DataFrame(res)
+        dfres["DIST_50"] = DIST_50
+        dfres["DIST_98"] = DIST_98
+
+        # normalize the distances
+        dfres["dist_norm"] = dfres["dist_mean"]/dfres["DIST_98"]
+
+        # Convert scores to dist_yue_diff
+        def _get_within_group_dist(grp, var_score):
+            """ return scalar avearge distance wtihin this group"""
+            tmp = dfres[(dfres["labels_1"]==grp) & (dfres["labels_2"]==grp)]
+            assert len(tmp)==1
+            return tmp[var_score].values[0]
+
+        var_score = "dist_norm"
+        list_dist_yue_diff = []
+        for i, row in dfres.iterrows():
+            
+            # - get average within-group score for the two groups
+            dist_within_1 = _get_within_group_dist(row["labels_1"], var_score)
+            dist_within_2 = _get_within_group_dist(row["labels_2"], var_score)
+            dist_within = 0.5 * (dist_within_1 + dist_within_2)
+
+            dist_across = row[var_score]
+
+            dist_yue_diff = dist_across - dist_within
+
+            list_dist_yue_diff.append(dist_yue_diff)
+
+        dfres["dist_yue_diff"] = list_dist_yue_diff
 
 
-    #     ##################### COMPUTE SCORES.
-    #     res = []
-    #     # 1. Within each context, average pairwise distance between levels of effect var
-    #     map_grp_to_mask_context_same = self.rsa_mask_context_split_levels_of_conj_var(var_others, PLOT=PLOT_MASKS, exclude_diagonal=False,
-    #                                                                                     contrast="same")
-    #     map_grp_to_mask_vareffect = self.rsa_mask_context_split_levels_of_conj_var([var], PLOT=PLOT_MASKS, exclude_diagonal=False,
-    #                                                                                 contrast="any") # either row or col must be the given level.
-    #     ma_ut = self._rsa_matindex_generate_upper_triangular()
+        ### Return as a ClustClass object
+        if return_as_clustclass:
+            
+            assert get_only_one_direction==False
 
-    #     # Difference between levels of var, computed within(separately) for each level of ovar
-    #     # (NOTE: this does nto care about "context")
-    #     for grp, ma_context_same in map_grp_to_mask_context_same.items():
-    #         ma_final = ma_context_same & MASKS["effect_diff"] & ma_ut # same context, diff effect
-    #         if np.any(ma_final): # might not have if allow for cases with 1 level of effect var.
-    #             dist = self.Xinput[ma_final].mean()
-    #             # sanity check
-    #             _ma_final = ma_context_same & MASKS["effect_diff"] & ma_ut & MASKS["context_same"]
-    #             _dist = self.Xinput[_ma_final].mean()
-    #             if not np.isclose(dist, _dist):
-    #                 print(dist, _dist)
-    #                 print("I thoguth that context_same is exactly identical to the vars_others... figure this out")
-    #                 print("It is probably becuase one is nan, becuase not enougb datapts? if so, make sure all conjucntions have enough n above")
-    #                 assert False
-    #             res.append({
-    #                 "var":var,
-    #                 "var_others":tuple(var_others),
-    #                 "effect_samediff":"diff",
-    #                 "context_samediff":"same",
-    #                 "levo":grp,
-    #                 "leveff":"ALL",
-    #                 "dist":dist,
-    #                 # "dat_level":dat_level
-    #             })
 
-    #     #### ACROSS CONTEXTS (compute separately for each level of effect)
-    #     for lev_effect, ma in map_grp_to_mask_vareffect.items():
-    #         # Also collect (same effect, diff context)
-    #         # For each level of var, get its distance to that same level of var across
-    #         # all contexts.
-    #         # - same effect diff context
-    #         ma_final = ma & MASKS["effect_same"] & MASKS["context_diff"] & ma_ut
-    #         if np.sum(ma_final)>0:
-    #             dist = self.Xinput[ma_final].mean()
-    #             res.append({
-    #                 "var":var,
-    #                 "var_others":tuple(var_others),
-    #                 "effect_samediff":"same",
-    #                 "context_samediff":"diff",
-    #                 "levo":"ALL",
-    #                 "leveff":lev_effect,
-    #                 "dist":dist,
-    #                 # "dat_level":dat_level
-    #             })
+            labels = sorted(set(dfres["labels_1"].tolist() + dfres["labels_2"].tolist()))
+            # labels = sorted(set(self.Labels))
+            map_label_to_idx = {lab:i for i, lab in enumerate(labels)}
 
-    #         # Distance for (diff effect, diff context)
-    #         ma_final = ma & MASKS["effect_diff"] & MASKS["context_diff"] & ma_ut
-    #         if np.sum(ma_final)>0:
-    #             dist = self.Xinput[ma_final].mean()
-    #             res.append({
-    #                 "var":var,
-    #                 "var_others":tuple(var_others),
-    #                 "effect_samediff":"diff",
-    #                 "context_samediff":"diff",
-    #                 "levo":"ALL",
-    #                 "leveff":lev_effect,
-    #                 "dist":dist,
-    #                 # "dat_level":dat_level
-    #             })
+            indsgotten = []
+            X = np.zeros((len(labels), len(labels)))-np.inf
+            for i, row in dfres.iterrows():
+                indrow = map_label_to_idx[row["labels_1"]]
+                indcol = map_label_to_idx[row["labels_2"]]
+                X[indrow, indcol] = row[return_as_clustclass_which_var_score]
 
-    #     return res
+                assert (indrow, indcol) not in indsgotten
+                indsgotten.append((indrow, indcol))
+            assert not np.any(X==-np.inf), "did not fill in all indices..."
 
+            # Alternative, mucgh slower method
+            # import numpy as np
+            # var_score = "dist_yue_diff"
+            # labels = sorted(set(self.Labels))
+            # X = np.zeros((len(labels), len(labels)))
+            # for i, labrow in enumerate(labels):
+            #     print(i)
+            #     for j, labcol in enumerate(labels):
+            #         tmp = dfres[(dfres["labels_1"] == labrow) & (dfres["labels_2"] == labcol)]
+            #         assert len(tmp)==1
+            #         X[i, j] = tmp[var_score].values[0]
+
+            # fig, ax = plt.subplots()
+            # ax.imshow(X)
+
+            params = {
+                "label_vars":self.Params["label_vars"],
+                "version_distance":self.Params["version_distance"],
+                "Clraw":None,
+            }
+            Cldist = Clusters(X, labels, labels, ver="dist", params=params)
+
+            return dfres, Cldist
+        else:
+            return dfres
 
     def rsa_distmat_score_same_diff_by_context(self, var_effect, var_others, context_input,
                                                dat_level, PLOT_MASKS=False, plot_mask_path=None, 
@@ -1673,7 +1741,7 @@ class Clusters(object):
             # Called "diff" if ANY var in var_others is different.
             MASKS, fig, axes = self.rsa_mask_context_helper(var_effect, var_others, "diff_at_least_one", PLOT=PLOT_MASKS,
                                                               path_for_save_print_lab_each_mask=path_for_save_print_lab_each_mask)
-        if plot_mask_path is not None and PLOT_MASKS and not skip_mask_plot:
+        if plot_mask_path is not None and PLOT_MASKS:
             print("Saving context mask at: ", plot_mask_path)
             savefig(fig, plot_mask_path)
 
@@ -1888,7 +1956,7 @@ class Clusters(object):
 
 
 
-    def rsa_distmat_score_same_diff(self, var_effect, vars_all,
+    def rsa_distmat_score_same_diff_OBSOLETE(self, var_effect, vars_all,
                                     vars_test_invariance_over_dict,
                                     PLOT=False):
         """
@@ -2451,7 +2519,8 @@ class Clusters(object):
 
         return ma_same, ma_diff
 
-    def rsa_dataextract_with_labels_as_flattened_df(self, keep_only_one_direction_for_each_pair=True, plot_heat=True):
+    def rsa_dataextract_with_labels_as_flattened_df(self, keep_only_one_direction_for_each_pair=False,
+        plot_heat=True, exclude_diagonal=False):
         """ Return a df such that each row is a single distance between
         a specific row and column of distance matrix, along with
         variables that were in the x and y axis.
@@ -2494,6 +2563,12 @@ class Clusters(object):
 
         dfdists = pd.DataFrame(dats)
 
+        if keep_only_one_direction_for_each_pair:
+            dfdists = dfdists[dfdists["idx_col"] > dfdists["idx_row"]].reset_index(drop=True)
+
+        if exclude_diagonal:
+            dfdists = dfdists[dfdists["idx_col"] != dfdists["idx_row"]].reset_index(drop=True)
+
         if plot_heat:
             # sanity, this matches heatmap (but y axis flipped)
             import seaborn as sns
@@ -2521,7 +2596,7 @@ class Clusters(object):
             dflab["row_index"] = list(range(len(dflab)))
         return dflab
 
-    def rsa_distmat_quantify_same_diff_variables(self, ind_var, ignore_diagonal=True):
+    def rsa_distmat_quantify_same_diff_variables_OBS(self, ind_var, ignore_diagonal=True):
         """
         For this variable, get distance across same and diff parirs, across
         all lewvels.
@@ -2531,6 +2606,7 @@ class Clusters(object):
         ind_var==0, then this means "same" is defined as having same shape
         """
 
+        assert False, "should use either rsa_distmat_score_same_diff_by_context or rsa_distmat_score_all_pairs_of_label_groups"
         assert self._rsa_check_compatible()
         assert self.Version=="dist"
 

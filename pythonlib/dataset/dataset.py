@@ -157,6 +157,7 @@ class Dataset(object):
         self._ParserPathBase = None
         self.LockPreprocess = False # if true, then doesnt allow to modify dataset with...
         self._BehClassExtracted = False
+        self._LockSyntaxConcrete = False # If TRue, then if you call self.grammarparses_syntax_concrete_append_column() it will not overwtrite, but instaed check that it exists, then pass.
         self.Log_preprocessGood = []
         # For swtiching to Dataset-stored toekns
         self.TokensStrokesBeh = None
@@ -164,6 +165,8 @@ class Dataset(object):
         self.TokensTask = None
         self.TokensVersion = "taskclass"
         self.TokensPreprocessWrapperLabelNovel = None
+
+        self.GrammarRuleDictEachEpochOrig = None
 
         self.ML2_FILEDATA = {}
 
@@ -9183,50 +9186,54 @@ class Dataset(object):
         # list_rule = 
         # dict_rules_consistent_with_each_rule = {}
 
-        list_rules_exist = self.Dat["epoch_orig"].unique().tolist()
-        list_rules_exist = [r for r in list_rules_exist if not r in ["base", "baseline"]]
+        if self.GrammarRuleDictEachEpochOrig is None:
+            list_rules_exist = self.Dat["epoch_orig"].unique().tolist()
+            list_rules_exist = [r for r in list_rules_exist if not r in ["base", "baseline"]]
 
-        # For each existing rule, get ruledicts consistent with it
-        dict_ruledicts_consistent_with_each_existing_rule = {}
-        map_rulestr_ruledict = {}
-        for rule in list_rules_exist:
-            ld = _rules_consistent_rulestrings_extract_auto([rule], return_as_dict=True)[0]
-            dict_ruledicts_consistent_with_each_existing_rule[rule] = ld
-            # Collect all ruledicts.
-            for ruledict in ld:
-                rs = ruledict["rulestring"]
-                if rs in map_rulestr_ruledict.keys():
-                    assert ruledict==map_rulestr_ruledict[rs]
-                else:
-                    map_rulestr_ruledict[rs] = ruledict
+            # For each existing rule, get ruledicts consistent with it
+            dict_ruledicts_consistent_with_each_existing_rule = {}
+            map_rulestr_ruledict = {}
+            for rule in list_rules_exist:
+                ld = _rules_consistent_rulestrings_extract_auto([rule], return_as_dict=True)[0]
+                dict_ruledicts_consistent_with_each_existing_rule[rule] = ld
+                # Collect all ruledicts.
+                for ruledict in ld:
+                    rs = ruledict["rulestring"]
+                    if rs in map_rulestr_ruledict.keys():
+                        assert ruledict==map_rulestr_ruledict[rs]
+                    else:
+                        map_rulestr_ruledict[rs] = ruledict
 
-        # ruledict_for_each_rule = {}
-        # for list_ruledicts in dict_ruledicts_consistent_with_each_existing_rule.values():
-        #     for ruledict in list_ruledicts:
-        #         rule_short = ruledict["params"] # 'llV1R',
-        #         rule = ruledict["rulestring"] # 'ss-chain-llV1R'}
-        #         if rule_short in list_rules_exist:
-        #             if rule not in ruledict_for_each_rule:
-        #                 ruledict_for_each_rule[rule] = ruledict
-        #             else:
-        #                 assert ruledict_for_each_rule[rule] == ruledict
+            # ruledict_for_each_rule = {}
+            # for list_ruledicts in dict_ruledicts_consistent_with_each_existing_rule.values():
+            #     for ruledict in list_ruledicts:
+            #         rule_short = ruledict["params"] # 'llV1R',
+            #         rule = ruledict["rulestring"] # 'ss-chain-llV1R'}
+            #         if rule_short in list_rules_exist:
+            #             if rule not in ruledict_for_each_rule:
+            #                 ruledict_for_each_rule[rule] = ruledict
+            #             else:
+            #                 assert ruledict_for_each_rule[rule] == ruledict
 
-        out = {
-            "list_rules_exist":list_rules_exist,
-            "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule,
-            "ruledict_for_each_rule":rules_map_rule_to_ruledict_extract_auto(self),
-            "map_rulestr_ruledict":map_rulestr_ruledict
-        }
+            out = {
+                "list_rules_exist":list_rules_exist,
+                "dict_ruledicts_consistent_with_each_existing_rule":dict_ruledicts_consistent_with_each_existing_rule,
+                "ruledict_for_each_rule":rules_map_rule_to_ruledict_extract_auto(self),
+                "map_rulestr_ruledict":map_rulestr_ruledict
+            }
 
-        try:
-            out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
-        except Exception as err:
-            for k, v in out.items():
-                print(k, " -- ", v)
-            print(" ________________ ruledict_for_each_rule")
-            print(out["ruledict_for_each_rule"].keys())
-            raise err
-        return out
+            try:
+                out["list_rules_exist_as_rulestring"] = [out["ruledict_for_each_rule"][r]["rulestring"] for r in out["list_rules_exist"]]
+            except Exception as err:
+                for k, v in out.items():
+                    print(k, " -- ", v)
+                print(" ________________ ruledict_for_each_rule")
+                print(out["ruledict_for_each_rule"].keys())
+                raise err
+            
+            self.GrammarRuleDictEachEpochOrig = out
+        
+        return self.GrammarRuleDictEachEpochOrig
 
     def grammarparses_ruledict_rulestring_extract(self, ind):
         """ Return the ruledict and rulestring for this trial, based on
@@ -9854,6 +9861,11 @@ class Dataset(object):
         either tuple of ints or (if no shape rules today)  or ("IGNORE")
         (i.e, item will alwyas be tuple)
         """
+        
+        if self._LockSyntaxConcrete:
+            # Check that it exists, then return
+            assert "syntax_concrete" in self.Dat.columns
+            return
 
         # Get mapping from epoch_orig to syntax, for each trial
         map_epoch_orig_to_list_syntax = self.grammarparses_classify_tasks_syntax_based_on_rule()
@@ -9865,11 +9877,14 @@ class Dataset(object):
         list_syntax = []
         for i in range(len(self.Dat)):
             epoch_orig = self.Dat.iloc[i]["epoch_orig"]
-            if epoch_orig in map_epoch_orig_to_list_syntax:
-                syntax = map_epoch_orig_to_list_syntax[epoch_orig][i]
+            if epoch_orig in ["base", "baseline"]:
+                syntax = ("IGNORE",)
             else:
-                # This is epoch doesnt have a syntax. Just take the first epoch, should be using this anyway
-                syntax = list(map_epoch_orig_to_list_syntax.values())[0][i]
+                if epoch_orig in map_epoch_orig_to_list_syntax:
+                    syntax = map_epoch_orig_to_list_syntax[epoch_orig][i]
+                else:
+                    # This is epoch doesnt have a syntax. Just take the first epoch, should be using this anyway
+                    syntax = list(map_epoch_orig_to_list_syntax.values())[0][i]
             list_syntax.append(syntax)
         self.Dat["syntax_concrete"] = list_syntax
 
@@ -9909,15 +9924,22 @@ class Dataset(object):
                 return tuple([s])
 
         map_epoch_orig_to_list_syntax = {}
-        for epoch_orig in self.Dat["epoch_orig"].unique():
+        if "epoch_orig" in self.Dat.columns:
+            list_epoch = self.Dat["epoch_orig"].unique()
+        else:
+            list_epoch = self.Dat["epoch"].unique()
+        for epoch_orig in list_epoch:
         # for rs in rs_using_shape:
             # assert len(rs_using_shape)==1
             # rs = rs_using_shape[0]
             # rulestring --> epoch
             # epoch_orig = self.grammarparses_rules_extract_info()["map_rulestr_ruledict"][rs]["params"]
-            list_syntax = tasks_categorize_based_on_rule(self, epoch_orig)
-            list_syntax = [_tupleize(s) if not isinstance(s, tuple) else s for s in list_syntax]
-            map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
+            if epoch_orig in ["base", "baseline"]:
+                map_epoch_orig_to_list_syntax[epoch_orig] = None
+            else:
+                list_syntax = tasks_categorize_based_on_rule(self, epoch_orig)
+                list_syntax = [_tupleize(s) if not isinstance(s, tuple) else s for s in list_syntax]
+                map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
         return map_epoch_orig_to_list_syntax
 
     def grammarparses_classify_tasks_categorize_based_on_rule(self):
@@ -10253,21 +10275,15 @@ class Dataset(object):
             if hasattr(Beh, "Alignsim_Datsegs_BehLength"):
                 del Beh.Alignsim_Datsegs_BehLength
 
-    def sequence_tasksequencer_shapeseq_assign(self):
+    def grammar_correct_sequence_by_epoch(self):
         """
-        For each trial, extract its correct set of shapes
-        based on tasksequencer rule, as a tuple of ints, where the ints
-        are codes for shapes, sorted so that order doesnt matter.
-        Auto extracts the map based on ruledict.
-        If a trial's rule is not shape sequence, then gives it "UNKNOWN"  
+        Get each epoch's correct shape sequence based on its tasksequencer (grammar) rule
         RETURNS:
-        - assigns new column to self.Dat["taskconfig_shp_code"], with 
-        sorted tuple of ints (codes to shapes).
+        - MAP_CODE_SHAPE_byepoch
+        - MAP_SHAPE_CODE_byepoch
+        NOTE:
+        - This is very fast, as it uses cached data. Takes like 15us.
         """
-
-        # if "taskconfig_shp" not in self.Dat.columns:
-        self.taskclass_shapes_loc_configuration_assign_column()
-
         list_epoch = self.Dat["epoch_orig"].unique().tolist()
         ruledict_by_epoch = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
 
@@ -10303,6 +10319,60 @@ class Dataset(object):
                 MAP_CODE_SHAPE_byepoch[epoch] = map_code_shape
                 MAP_SHAPE_CODE_byepoch[epoch] = map_shape_code
 
+        return MAP_CODE_SHAPE_byepoch, MAP_SHAPE_CODE_byepoch
+
+    def grammar_correct_sequence_tasksequencer_shapeseq_assign(self):
+        """
+        For each trial, extract its correct set of shapes
+        based on tasksequencer rule, as a tuple of ints, where the ints
+        are codes for shapes, sorted so that order doesnt matter.
+        Auto extracts the map based on ruledict.
+        If a trial's rule is not shape sequence, then gives it "UNKNOWN"  
+        RETURNS:
+        - assigns new column to self.Dat["taskconfig_shp_code"], with 
+        sorted tuple of ints (codes to shapes).
+        """
+
+        # if "taskconfig_shp" not in self.Dat.columns:
+        self.taskclass_shapes_loc_configuration_assign_column()
+
+        MAP_CODE_SHAPE_byepoch, MAP_SHAPE_CODE_byepoch = self.grammar_correct_sequence_by_epoch()
+
+        # list_epoch = self.Dat["epoch_orig"].unique().tolist()
+        # ruledict_by_epoch = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"]
+
+        # ## Get map betwen index and shape, separaltey for each epoch
+        # MAP_CODE_SHAPE_byepoch = {}
+        # MAP_SHAPE_CODE_byepoch = {}
+        # for epoch in list_epoch:
+        #     if ruledict_by_epoch[epoch]["categ"]=="ss":
+                
+        #         # Then this rule is about shapse. Force it to extract some sheapse.
+        #         if ruledict_by_epoch[epoch]["subcat"]=="rankdir":
+        #             # Then this is sahpe sequence
+        #             shapes_ordered = ruledict_by_epoch[epoch]["params_good"][0]
+        #         elif ruledict_by_epoch[epoch]["subcat"]=="rank":
+        #             # Then this is sahpe sequence
+        #             shapes_ordered = ruledict_by_epoch[epoch]["params_good"]
+        #         else:
+        #             print(1, ruledict_by_epoch)
+        #             print(2, ruledict_by_epoch[epoch])
+        #             print(3, ruledict_by_epoch[epoch]["categ"])
+        #             print(4, ruledict_by_epoch[epoch]["subcat"])
+        #             assert False, "find the list of shapes."
+        #         assert isinstance(shapes_ordered, (list, tuple))
+        #         assert isinstance(shapes_ordered[0], str)            
+
+        #         # give a code
+        #         map_code_shape = {}
+        #         map_shape_code = {}
+        #         for i, sh in enumerate(shapes_ordered):
+        #             map_code_shape[i] = sh
+        #             map_shape_code[sh] = i
+                    
+        #         MAP_CODE_SHAPE_byepoch[epoch] = map_code_shape
+        #         MAP_SHAPE_CODE_byepoch[epoch] = map_shape_code
+
         ## For each trial, get its list of shapes, in codenum
         try:
             list_shcode =[]
@@ -10325,7 +10395,7 @@ class Dataset(object):
             print(7, shapes_code)
             raise err
             
-        print("New column in self.Dat[taskconfig_shploc_code]")
+        print("New column in self.Dat[taskconfig_shp_code]")
         self.Dat["taskconfig_shp_code"] = list_shcode
 
         return MAP_CODE_SHAPE_byepoch, MAP_SHAPE_CODE_byepoch
@@ -10482,6 +10552,39 @@ class Dataset(object):
             assert n_beh == n_task
         return one_to_one
 
+    def sequence_extract_shapes_drawn(self, shape_var_suff = "shape", loc_var_suff = "loc"):
+        """
+        Add new columns "shapes_drawn" whichg is tuple of shapes in order drawn on that trial
+        RETURNS:
+        - Appends new cooumns to self.Dat, "shapes_drawn", "locs_drawn", ...
+        """
+
+        if "FEAT_num_strokes_beh" not in self.Dat.columns:
+            self.extract_beh_features()
+
+        dflab = self.Dat
+        nstrokes_max = max(dflab["FEAT_num_strokes_beh"])
+
+        # (1) shapes drawn (tuple of shapes)
+        list_shapes_drawn = []
+        list_locs_drawn = []
+        list_locs_drawn_x = []
+        for ind in range(len(dflab)):
+            shapes_drawn = tuple([dflab.iloc[ind][f"seqc_{i}_{shape_var_suff}"] for i in range(nstrokes_max) if dflab.iloc[ind][f"seqc_{i}_{shape_var_suff}"] != "IGN"])
+            list_shapes_drawn.append(shapes_drawn)
+
+            locs_drawn = tuple([dflab.iloc[ind][f"seqc_{i}_{loc_var_suff}"] for i in range(nstrokes_max) if (dflab.iloc[ind][f"seqc_{i}_{loc_var_suff}"][0] != "IGN") and (dflab.iloc[ind][f"seqc_{i}_{loc_var_suff}"] != "IGN")])
+            list_locs_drawn.append(locs_drawn)
+
+            locs_drawn_x = tuple([loc[0] for loc in locs_drawn])
+            list_locs_drawn_x.append(locs_drawn_x)
+
+            assert len(locs_drawn)==len(shapes_drawn)
+
+        dflab["shapes_drawn"] = list_shapes_drawn            
+        dflab["locs_drawn"] = list_locs_drawn   
+        dflab["locs_drawn_x"] = list_locs_drawn_x   
+        
     ##################################### CHAR CLUSTER RESULTS
     def charclust_shape_labels_extract_presaved_from_DS(self, skip_if_labels_not_found=False):
         """ Good - Load the shape labels already computed and saved using

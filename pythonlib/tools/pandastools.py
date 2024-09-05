@@ -17,6 +17,8 @@ def _check_index_reseted(df):
     """
     Assert that indices are 0, 1, 2....
     This is assumed for lots of my code...
+
+    Is very fast, around 15us if df is len 1000
     :param df:
     :return:
     """
@@ -207,6 +209,9 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     - aggmethod, list of str, applies each of these agg methods.
     """
 
+    if len(df)==0:
+        return df
+
     if values is None:
         # use dummy
         df = df.copy()
@@ -224,37 +229,96 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     # if nonnumercols == "all":
     #     nonnumercols = df.columns.tolist()
 
+    if nonnumercols == "all" or isinstance(nonnumercols, list):
+        ### Find all the nonnumercolumns that exist
+        nonnumercols_exist = [col for col in df.columns if col not in group+values]
 
-    if nonnumercols == "all":
-        # Get all the columns
-        nonnumercols = [col for col in df.columns if col not in group+values]
+        # Only keep if values are categorical
+        categorical_types = [str, tuple, int, bool]
+        nonnumercols_exist = [col for col in nonnumercols_exist if type(df[col].tolist()[0]) in categorical_types]
+        print(1, nonnumercols_exist)
 
+        # assert "idx_morph_temp" in nonnumercols_exist
+        # assert False
         # Check they all exist and has a single unique item per level of group
         # Throw out cols that fail this test.
         cols_exclude = []
-        for col in nonnumercols: 
+        for col in nonnumercols_exist: 
             groupdict = grouping_append_and_return_inner_items(df, group, 
-                groupinner=col, new_col_name="dummy")
+                groupinner=col)
             for k, v in groupdict.items():
                 if len(v)!=1:
                     cols_exclude.append(col)
                     break
-        nonnumercols = [col for col in nonnumercols if col not in cols_exclude]
-    elif nonnumercols is None:
-        nonnumercols = []
+        print(2, cols_exclude)
+        nonnumercols_exist = [col for col in nonnumercols_exist if col not in cols_exclude]
+        print(3, nonnumercols_exist)
     else:
-        assert isinstance(nonnumercols, list)
-        # Check they all exist and has a single unique item per level of group
-        for col in nonnumercols: 
-            groupdict = grouping_append_and_return_inner_items(df, group, 
-                groupinner=col, new_col_name="dummy")
-            for k, v in groupdict.items():
-                if len(v)!=1:
-                    print(col)
-                    print(group)
-                    print(k)
-                    print(v)
-                    assert False, "nonnumercols takes the first. this is wrong if there are multipel levels for any nonnumercol..."
+        nonnumercols_exist = None
+
+    ### Decide on which columns to keep, based on user input
+    if nonnumercols == "all":
+        # Get all the columns
+        nonnumercols = nonnumercols_exist
+        # # Check they all exist and has a single unique item per level of group
+        # # Throw out cols that fail this test.
+        # cols_exclude = []
+        # for col in nonnumercols: 
+        #     groupdict = grouping_append_and_return_inner_items(df, group, 
+        #         groupinner=col, new_col_name="dummy")
+        #     for k, v in groupdict.items():
+        #         if len(v)!=1:
+        #             cols_exclude.append(col)
+        #             break
+        # nonnumercols = [col for col in nonnumercols if col not in cols_exclude]
+    elif nonnumercols is None:
+        # Dont take any
+        nonnumercols = []
+    elif isinstance(nonnumercols, list):
+        # You inputed specifc ones that MUST exist, or else will raise error
+        # - Here, check that they are included
+        for col in nonnumercols:
+            if col not in nonnumercols_exist:
+                
+                groupdict = grouping_append_and_return_inner_items(df, group, 
+                    groupinner=col)
+
+                if False:
+                    print("nonnumercols_exist:", nonnumercols_exist)
+                    print("col:", col)
+                    print("len(df):", len(df))                                                
+                            
+                    for k, v in groupdict.items():
+                        if len(v)>1:
+                            print("**", k, " --- ", v, type(v[0]))
+                        else:
+                            print(k, " --- ", v, type(v[0]), type(df[col].values[0]))
+
+                    assert False, "you are asking to keep a colum that actually has multiple unique vals -- this ambiguity, cannot do...."
+                    # assert False, "nonnumercols takes the first. this is wrong if there are multipel levels for any nonnumercol..."
+                else:
+                    for k, v in groupdict.items():
+                        if len(v)>1:
+                            print("**", k, " --- ", v, type(v[0]))
+                            assert False, "you are asking to keep a colum that actually has multiple unique vals -- this ambiguity, cannot do...."
+
+        # - NMow take all
+        nonnumercols = list(set(nonnumercols + nonnumercols_exist))
+        # # Check they all exist and has a single unique item per level of group
+        # for col in nonnumercols: 
+        #     groupdict = grouping_append_and_return_inner_items(df, group, 
+        #         groupinner=col, new_col_name="dummy")
+        #     for k, v in groupdict.items():
+        #         if len(v)!=1:
+        #             print(col)
+        #             print(group)
+        #             print(k)
+        #             print(v)
+        #             assert False, "nonnumercols takes the first. this is wrong if there are multipel levels for any nonnumercol..."
+    else:
+        print(nonnumercols)
+        print(type(nonnumercols))
+        assert False
 
     if aggmethod is None:
         aggmethod = ["mean"]
@@ -2007,6 +2071,7 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
     RETURNS:
     - groupdict, grptuple:list_indices_into_df
     """
+    _check_index_reseted(df)
     groupdict = {}
     assert groupouter_levels is None, "implementation fails below"
     try:
@@ -2071,28 +2136,44 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
     _check_index_reseted(df)
     assert not isinstance(groupinner, list)
 
-    if groupinner=="index" and return_df==False:
-        groupdict = grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
-                                                                groupouter_levels, sort_keys)
-        return groupdict
+    if return_df == False:
+        # Quicker methods
+        if groupinner=="index":
+            # Return the indices for each group
+            groupdict = grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
+                                                                    groupouter_levels, sort_keys)
+            return groupdict
+        else:
+            # Return the unique levels of <groupinner>, within each level of conj of list_groupouter_grouping_vars
+            dftmp = df.groupby(list_groupouter_grouping_vars)[groupinner].unique().reset_index()
+            assert sorted(dftmp.columns) == sorted(list_groupouter_grouping_vars + [groupinner]) # Sanityc check
 
-    # 1) Append new grouping variable to each row
-    # while new_col_name in df.columns:
-    #     new_col_name+="_"
-    df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)
+            groupdict = {}
+            for i, row in dftmp.iterrows():
+                key = tuple([row[g] for g in list_groupouter_grouping_vars])
+                vals = row[groupinner].tolist() # list of vals
+                groupdict[key] = vals
 
-    # 2) Get dict of eaceh group
-    groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
-
-    if sort_keys:
-        keys = list(groupdict.keys())
-        keys = sort_mixed_type(keys)
-        groupdict = {k:groupdict[k] for k in keys}
-
-    if return_df:
-        return groupdict, df
+            if groupouter_levels is not None:
+                groupdict = {key:groupdict[key] for key in groupouter_levels}
+            if sort_keys:
+                groupdict = {key:groupdict[key] for key in sorted(groupdict.keys())}
+            return groupdict
     else:
-        return groupdict
+        # 1) Append new grouping variable to each row
+        # while new_col_name in df.columns:
+        #     new_col_name+="_"
+        df = append_col_with_grp_index(df, list_groupouter_grouping_vars, new_col_name, use_strings=False)
+
+        # 2) Get dict of eaceh group
+        groupdict = grouping_get_inner_items(df, new_col_name, groupinner, groupouter_levels=groupouter_levels)
+
+        if sort_keys:
+            keys = list(groupdict.keys())
+            keys = sort_mixed_type(keys)
+            groupdict = {k:groupdict[k] for k in keys}
+        
+        return groupdict, df
 
 def grouping_count_n_samples(df, groupvars):
     """ REturn list of ints, the n across all conjucntiosn of groupvars"""
@@ -2115,6 +2196,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     of 2 vars.
     PARAMS:
     - var1, var2, string, columns in df, categorical varlibels, will be axes of heatmsp
+    (var1:rows)
     - vars_others, list of str, columns in df, each conj is a sbuplot
     rRETURNS:s
     - fig
@@ -2137,6 +2219,9 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     list_var1 = sort_mixed_type(df[var1].unique().tolist())
     list_var2 = sort_mixed_type(df[var2].unique().tolist())
 
+    if len(list_var1)>30 or len(list_var2)>30:
+        annotate_heatmap = False
+
     if len(list_dummy)<3:
         ncols = len(list_dummy)
     else:
@@ -2158,7 +2243,8 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
 # def plot_
 
 def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath=None,
-        save_convert_keys_to_str = False, save_as="txt", sorted_by_keys=True):
+        save_convert_keys_to_str = False, save_as="txt", sorted_by_keys=True,
+        print_header=False):
     """ print the sample size for each conjunctive level (defined by grouping list: list_groupouter_grouping_vars)
     e.g., if goruping is [shape, location, size]: prints:
     ('Lcentered-3-0', (-1, -1), 'rig3_3x3_small') 58
@@ -2179,6 +2265,9 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
     RETURNS:
     - outdict, dict[level]=n
     """
+
+    if print_header:
+        print(" -- ".join(list_groupouter_grouping_vars))
 
     if len(df)==0:
         return {}
@@ -2777,6 +2866,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
                     balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
                     ignore_values_called_ignore=False, plot_counts_heatmap_savepath=None,
+                                            plot_counts_heatmap_savepath_pre=None,
                                             balance_force_to_drop_which=None):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
@@ -2918,6 +3008,14 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
         # except TypeError as err:
         #     pass
         #     # print("not sorting (TypeError): ", levels_others)
+
+        
+        if plot_counts_heatmap_savepath_pre:
+            # plot before pruning
+            fig = grouping_plot_n_samples_conjunction_heatmap(df, var, "vars_others", 
+                vars_others=None)
+            savefig(fig, plot_counts_heatmap_savepath_pre)
+
 
         # 3) check each sub datfarme
         list_dfthis = []
@@ -3348,6 +3446,7 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
             assert False
     
     return dfthis_shuff
+    
 
 def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
@@ -3366,7 +3465,6 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     use the auto value. e.g,., (0., None) means fiz min to 0, but use auto for max.
     :return:
     """
-
     if var_subplot is None:
         df = df.copy()
         df["var_subplot"] = "dummy"
@@ -3422,6 +3520,11 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         # zlims = ZLIMS
     zlims = tuple(zlims)
     
+    if row_values is None:
+        row_values = sorted(df[varrow].unique())
+    if col_values is None:
+        col_values = sorted(df[varcol].unique())
+    
     DictSubplotsDf ={}
     for lev_subplot, ax in zip(list_subplot, axes.flatten()):
         a = df[var_subplot]==lev_subplot
@@ -3475,7 +3578,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                            alpha=0.8, SIZE=3, shareaxes=False,
                                            plot_error_bars=True,
                                            map_subplot_var_to_new_subplot_var=None,
-                                           ):
+                                           fontsize=4, xymin_zero=False):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -3541,7 +3644,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         dfthis = applyFunctionToAllRows(dfthis, F, "_var_subplot")
         var_subplot = "_var_subplot"
 
-    list_lev = dfthis[var_subplot].unique().tolist()
+    list_lev = sort_mixed_type(dfthis[var_subplot].unique().tolist())
     list_datapt = dfthis[var_datapt].unique().tolist()
 
     # dict_res = {}
@@ -3576,6 +3679,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
     list_xs = []
     list_ys = []
+    verbose_done=False
     for ax, lev in zip(axes.flatten(), list_lev):
 
         # Collect data
@@ -3601,12 +3705,19 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
             labels = None
         try:
             plotScatter45(xs, ys, ax, labels=labels, marker="o",
-                          x_errors=x_errors, y_errors=y_errors, alpha=alpha)
+                          x_errors=x_errors, y_errors=y_errors, alpha=alpha, fontsize=fontsize)
         except Exception as err:
             raise err
-        ax.set_title(lev, fontsize=8)
-        ax.set_xlabel(x_lev_manip)
-        ax.set_ylabel(y_lev_manip)
+        
+        if verbose_done:
+            ax.set_title(lev, fontsize=8)
+            ax.set_xlabel(x_lev_manip)
+            ax.set_ylabel(y_lev_manip)
+        else:
+            ax.set_title(f"{var_subplot}={lev}", fontsize=8)
+            ax.set_xlabel(f"{var_manip}={x_lev_manip}")
+            ax.set_ylabel(f"{var_manip}={y_lev_manip}")
+            verbose_done = True
 
         list_xs.extend(xs)
         list_ys.extend(ys)
@@ -3627,13 +3738,19 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         MIN = MIN - delt
         MAX = MAX + delt
 
-        if MIN>0:
-            # force min to be 0
-            MIN = 0
+        if xymin_zero:
+            if MIN>0:
+                # force min to be 0
+                MIN = 0
 
         for ax in axes.flatten():
             ax.set_xlim(MIN, MAX)
             ax.set_ylim(MIN, MAX)
+    else:
+        if xymin_zero:
+            for ax in axes.flatten():
+                ax.set_xlim(left=0)
+                ax.set_ylim(bottom=0)
 
     return dfres, fig
 

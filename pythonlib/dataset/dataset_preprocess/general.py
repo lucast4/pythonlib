@@ -97,6 +97,8 @@ def _groupingParams(D, expt):
 
     # What method for defining whethre prim is novel?
     novel_prims_define_method = "shape_semantic"
+    #
+    map_syntconcr_template_to_shapeset, map_shapeset_to_indices_syntax = None, None
 
     # 2) Overwrite defaults    
     if expt == "neuralprep2":
@@ -591,14 +593,40 @@ def _groupingParams(D, expt):
         # Just regulare prims in grid
         # Just use defaults.
         pass
-    # IGNORE - replaced this method.
-    # elif "grammar" in expt and D.animals(force_single=True)[0]=="Pancho" and int(D.dates(True)[0])>=220902 and int(D.dates(True)[0])<=220909:
-    #     # AnBm, with two shape ses switching by trail in same day.
-    #
-    #     grouping_reassign = True
-    #     grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
-    #     traintest_reassign_method = "supervision_except_color"
-    #     mapper_auto_rename_probe_taskgroups = True
+
+    elif "grammar" in expt and D.animals(force_single=True)[0]=="Pancho" and int(D.dates(True)[0])>=220906 and int(D.dates(True)[0])<=220909:
+        # AnBm, with two shape ses switching by trail in same day.
+        # Pancho 220902 actually already has them called different epochs, so exclude from this.
+    
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True
+
+        map_syntconcr_template_to_shapeset = {
+            (0,2):"A",
+            (1,3):"B",
+        }
+        map_shapeset_to_indices_syntax = {
+            "A":[0,2],
+            "B":[1,3],
+        }
+
+    elif ("gramdiego3" in expt) or ("gramdiego4" in expt):
+        # Assume that if grammar in name, it has rules.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+
+        map_syntconcr_template_to_shapeset = {
+            (0,2,4):"A",
+            (1,3,5):"B",
+        }
+        map_shapeset_to_indices_syntax = {
+            "A":[0,2,4],
+            "B":[1,3,5],
+        }
 
     elif "gram" in expt:
         # Assume that if grammar in name, it has rules.
@@ -610,12 +638,25 @@ def _groupingParams(D, expt):
         color_is_considered_instruction = True
         replace_shapes_with_clust_labels_if_exist=True
         pass
+
+    elif "shapeseqsupstim" in expt:
+        # Grammar vs. seqsup
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "microstim_code"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+        map_ttl_region = {
+            3:"TTL3",
+            4:"TTL4"
+        }
+
     elif "shapeseqsup" in expt:
         # Grammar vs. seqsup
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
+
     elif expt[:4] == "prim":
         # Single prims, e.g., primdiego1
         pass
@@ -662,6 +703,8 @@ def _groupingParams(D, expt):
                 print(grouping_map_tasksequencer_to_rule)
                 assert len(grouping_map_tasksequencer_to_rule)>0, "need to define how to remap rules."
                 epoch_grouping_reassign_by_tasksequencer(D, grouping_map_tasksequencer_to_rule)
+                # Epoch_orig really just means tasksequencer epoch. So assign it here
+                D.Dat["epoch_orig"] = D.Dat["epoch"]
             elif grmeth=="color_instruction":
                 print(" ")
                 D.supervision_reassign_epoch_rule_by_color_instruction()
@@ -720,11 +763,11 @@ def _groupingParams(D, expt):
                 # 2) get grouping.
                 grouping_vars = ["epoch", "CUE_csflipped"]
                 D.supervision_reassign_epoch_byvars(grouping_vars)
-            # SKIP THIS, since only running in anova_params
-            # elif grmeth=="syntax_AnBm_hack":
-            #     # Hacky, split epoch into <epoch>|A and <epoch>|B based on which shape set was used,
-            #     # is AnBm with two sets today.
-            #
+            elif grmeth=="syntax_AnBm_hack":
+                # Preivously skipped here and running in anova_params. Not sure why...
+                # Hacky, split epoch into <epoch>|A and <epoch>|B based on which shape set was used,
+                # is AnBm with two sets today.
+                epoch_grouping_reassign_AnBmCk_mult_shape_sets(D, map_syntconcr_template_to_shapeset, map_shapeset_to_indices_syntax)
             else:
                 print(grmeth)
                 assert False
@@ -888,8 +931,95 @@ def taskgroup_reassign_by_mapper(D, mapper_taskset_to_category, #
         D.Dat["taskgroup"] = list_taskgroup
         print("[taskgroup_reassign_by_mapper], reassigned values in column: taskgroup")
 
-    
+def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D, 
+                                                   map_syntconcr_template_to_shapeset, 
+                                                   map_shapeset_to_indices_syntax):
+    """
+    If this day has multiple shape sets doing same syntax, then rename epoch to 
+    indicate which sahep set.
+    e..g, AnBm and CnDm, where each trial can be either first (set A) or second (set B)
+    PARAMS:
+    - map_syntconcr_template_to_shapeset, dict mapping from indices within syntax concrete to
+    shape set. e.g., this means shapes 0 and 2 are presented togegether and they constitue shape
+    set A. 
+        # # Pancho 220908
+        # map_syntconcr_template_to_shapeset = {
+        #     (0,2):"A",
+        #     (1,3):"B",
+        # }
+    - map_shapeset_to_indices_syntax, dict, mapping from shapoe set to which indices to take to determine
+    new syntax concrete. e.g, here, shape set A takes from 0 and 2
+        map_shapeset_to_indices_syntax = {
+        "A":[0,2],
+        "B":[1,3],
+    }   
+    RETURNS:
+    - modifies self.Dat["epoch"] and self.Dat["syntax_concrete"]
 
+    OTHER EXAMPLES.
+    # map_syntconcr_template_to_indices_syntax = {
+    #     (0,2):[0,2],
+    #     (1,3):[1,3],
+    # }
+
+    # # Diego 240828
+    map_syntconcr_template_to_shapeset = {
+        (0,2,4):"A",
+        (1,3,5):"B",
+    }
+
+    # map_syntconcr_template_to_indices_syntax = {
+    #     (0,2,4):[0,2,4],
+    #     (1,3,5):[1,3,5],
+    # }
+    map_shapeset_to_indices_syntax = {
+        "A":[0,2,4],
+        "B":[1,3,5],
+    }
+
+
+    """
+    assert D._LockSyntaxConcrete == False
+    if "syntax_concrete" not in D.Dat.columns:
+        D.grammarparses_syntax_concrete_append_column()
+
+    # Consider single prims cases to be poart of the shape set.
+    tmp = {}
+    for indices, shapeset in map_syntconcr_template_to_shapeset.items():
+        tmp[indices] = shapeset
+        for idx in indices:
+            tmp[(idx,)] = shapeset
+    map_syntconcr_template_to_shapeset = tmp
+    
+    # AnBm, with two shape ses switching by trail in same day.
+    # Replace epoch and syntax_concrete so shapaes are diff epoch, but same synta concrete.
+    list_epoch = []
+    list_syntax_concrete = []
+    for i, row in D.Dat.iterrows():
+        if row["epoch_orig"] in ["base", "baseline"]:
+            # Just keep, usually sc = ("IGNORE",)
+            epoch_new = row["epoch"]
+            syntax_concrete_new = row["syntax_concrete"]
+        else:  
+            inds_shapes = tuple([i for i, val in enumerate(row["syntax_concrete"]) if val>0])
+            
+            shape_set = map_syntconcr_template_to_shapeset[inds_shapes] # e.g., "A"
+            indices_syntax = map_shapeset_to_indices_syntax[shape_set]
+            # indices_syntax = map_syntconcr_template_to_indices_syntax[inds_shapes] # e.g., "A"
+
+            epoch_orig = row["epoch_orig"]
+            epoch_new = f"{epoch_orig}|{shape_set}"
+            syntax_concrete_new = tuple([row["syntax_concrete"][i] for i in indices_syntax]) # get the syntax concrete
+        
+        list_epoch.append(epoch_new)
+        list_syntax_concrete.append(syntax_concrete_new)
+
+        print(row["syntax_concrete"], " -- ", epoch_new, " -- ", syntax_concrete_new)
+
+    # Update things
+    D.Dat["epoch"] = list_epoch # must update epoch_orig (and not epoch) or else grammarparses_syntax_role_append_to_tokens
+    D.Dat["syntax_concrete"] = list_syntax_concrete
+    D._LockSyntaxConcrete = True # Or else new syntax concrete might overrtie this
 
 def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     """ Decide what is the epoch and level for each trial, based on the tasksequencer rule

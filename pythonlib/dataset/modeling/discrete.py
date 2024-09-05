@@ -19,7 +19,7 @@ MAP_EPOCHKIND_EPOCH = {
     "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSD4", "SSP1", "SSP2", "SSP3", "SSP4", "gramP2", "gramP2b", "gramD4"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
     "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "SSD4Rnd", "SSP4Rnd", "SSD4RndFlx1", "SSD4RndFlx2", "SSP4RndFlx1", "SSP4RndFlx2", "llCV3RndFlx1",
-        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1"], # External cue, either mask or color supervision
+        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1", "gramP2bRnd", "gramP2bRndFlx1"], # External cue, either mask or color supervision
     "baseline":["base", "baseline"]
 }
 
@@ -266,6 +266,14 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('line-8-3', 'line-8-4', 'line-14-1', 'line-15-1', 'right'))] = "gramP2b" # grampancho2
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('line-8-3', 'line-8-4', 'line-14-1', 'line-15-1', 'right', (), (1, 2, 3, 4, 5)))] = "gramP2bRnd" # grampancho2
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('line-8-3', 'line-8-4', 'line-14-1', 'line-15-1', 'right', (1,), (2, 3, 4, 5)))] = "gramP2bRndFlx1" # grampancho2
 
     grouping_map_tasksequencer_to_rule[(
         'shape_chunk_concrete', 
@@ -1666,7 +1674,8 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("AnBmCk2RndFlx12",): ["preset-null-AnBmCk2RndFlx12"],
         ("AnBmCk2RndFlx1",): ["preset-null-AnBmCk2RndFlx1"],
         ("AnBmCk2RndFlx0",): ["preset-null-AnBmCk2RndFlx0"],
-        # ("AnBm2"):["ss-rank-AnBm2", "ss-rank-AnBm1a"] # grammar2
+        ("gramP2bRnd",): ["preset-null-gramP2bRnd"],
+        ("gramP2bRndFlx1",): ["preset-null-gramP2bRndFlx1"],
     }
 
     for key, values in DICT_RELATED_RULES.items():
@@ -1934,16 +1943,21 @@ def _tasks_categorize_based_on_rule_shape_sequence_TI(D, ind, version="endpoints
 
     # Only run this if it is actually a shapes sequqence
     # get sequence of shapes (ground truth)
-    _sequence_correct = D.grammarparses_ruledict_rulestring_extract(ind)[1]["params_good"][0] # list of str names.
+    if False:
+        _sequence_correct = D.grammarparses_ruledict_rulestring_extract(ind)[1]["params_good"][0] # list of str names.
+    else:
+        MAP_CODE_SHAPE_byepoch, _ = D.grammar_correct_sequence_by_epoch()
+        _sequence_correct = MAP_CODE_SHAPE_byepoch[D.Dat.iloc[ind]["epoch_orig"]].values()
+
     if True: 
         # TODO: should do this probably, but it is slow.
         sequence_correct = [sh for sh in _sequence_correct if sh in D.taskclass_shapes_extract_unique_alltrials()]
     if len(sequence_correct)==0:
-        print(_sequence_correct)
-        print(D.taskclass_shapes_extract_unique_alltrials())
+        print("Correct sequence: ", _sequence_correct)
+        print("Sahpes that exist on this day:", D.taskclass_shapes_extract_unique_alltrials())
         print(ind)
         print(D.Dat.iloc[ind]["trialcode"])
-        print(D.grammarparses_ruledict_rulestring_extract(ind)[1])
+        print("Rule this trial: ", D.grammarparses_ruledict_rulestring_extract(ind)[1])
         fig = D.plotSingleTrial(ind)
         fig.savefig("/tmp/debug.pdf")
         assert False, "why this error?"

@@ -126,7 +126,7 @@ def pipeline_generate_and_plot_all(D,
     D.preprocessGood(params=["task_strokes_more_than_one"])
 
     # Get shape code seuqence
-    D.sequence_tasksequencer_shapeseq_assign()
+    D.grammar_correct_sequence_tasksequencer_shapeseq_assign()
 
     ################# AD HOC SPLITTING OF DATASETS
     # if D.animals()==["Diego"] and D.Dat["date"].unique().tolist()==['231025'] and not run_inner_loop_only:
@@ -145,8 +145,8 @@ def pipeline_generate_and_plot_all(D,
         if save_suffix is not None:
             SDIR = f"{SDIR}/{save_suffix}"
 
-        savedir= f"{SDIR}/summary"
-        os.makedirs(savedir, exist_ok=True) 
+        # savedir= f"{SDIR}/summary"
+        # os.makedirs(savedir, exist_ok=True) 
 
         if reset_grammar_dat:
             D.GrammarDict = {}
@@ -180,6 +180,36 @@ def pipeline_generate_and_plot_all(D,
             return None, None
 
         if doplots:
+
+            ######### 2) Plot summary
+            # dfGramScore = bmh.DatLong  
+            # dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
+
+            from pythonlib.tools.pandastools import stringify_values
+            if False:
+                DF = stringify_values(bmh.DatLong)
+            else:
+                DF = stringify_values(D.Dat)
+
+            # if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
+            plot_performance_all(DF, list_blocksets_with_contiguous_probes, SDIR)
+            plot_performance_timecourse(DF, list_blocksets_with_contiguous_probes, SDIR)
+            plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, False)
+            if False: # I never hceck this anymore...
+                plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, True)
+            plot_counts_heatmap(DF, SDIR)
+            plot_performance_trial_by_trial(None, D, SDIR)
+            if False: # takes too long, not runing for now
+                plot_performance_each_char(DF, D, SDIR)
+            # 1) print all the taskgroups
+            D.taskgroup_char_ntrials_print_save(SDIR)
+
+            # plot counts, only success triuals
+            df = DF[DF["success_binary_quick"]==True].reset_index(drop=True)
+            plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
+            # else:
+            #     print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
+
             ####### 1) COmpare beh to all hypotheses (rules, discrete)
             # Also make plots for rule-based analysis
             savedir= f"{SDIR}/discrete_rules"
@@ -311,35 +341,6 @@ def pipeline_generate_and_plot_all(D,
             if "microstim_epoch_code" in bmh.DatLong.columns:
                 plot_trial_by_trial(D, sdir)
 
-            ######### 2) Plot summary
-            # dfGramScore = bmh.DatLong  
-            # dfGramScore = dfGramScore[dfGramScore["exclude_because_online_abort"]==False]
-
-            from pythonlib.tools.pandastools import stringify_values
-            if False:
-                DF = stringify_values(bmh.DatLong)
-            else:
-                DF = stringify_values(D.Dat)
-
-            if not checkIfDirExistsAndHasFiles(f"{SDIR}/summary")[1]:
-                plot_performance_all(DF, list_blocksets_with_contiguous_probes, SDIR)
-                plot_performance_timecourse(DF, list_blocksets_with_contiguous_probes, SDIR)
-                plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, False)
-                if False: # I never hceck this anymore...
-                    plot_performance_static_summary(DF, list_blocksets_with_contiguous_probes, SDIR, True)
-                plot_counts_heatmap(DF, SDIR)
-                plot_performance_trial_by_trial(None, D, SDIR)
-                if False: # takes too long, not runing for now
-                    plot_performance_each_char(DF, D, SDIR)
-                # 1) print all the taskgroups
-                D.taskgroup_char_ntrials_print_save(SDIR)
-
-                # plot counts, only success triuals
-                df = DF[DF["success_binary_quick"]==True].reset_index(drop=True)
-                plot_counts_heatmap(df, SDIR, suffix="SUCCESS")
-            else:
-                print("[SKIPPING, since SDIR exists and has contents: ", SDIR)
-
             ######## CONJUNCTIONS PLOTS
             # DS, dataset_pruned_for_trial_analysis, params_anova, params_anova_extraction = conjunctions_preprocess(D)
             DS, D, params_anova = conjunctions_preprocess(D)
@@ -370,6 +371,9 @@ def plot_syntax_TI(D, savedir):
     print("These are the epoch_orig that exist today:",  Dc.Dat["epoch_orig"].unique())
     Dc.Dat = Dc.Dat[Dc.Dat["epoch_orig"].isin(rules_shapes)].reset_index(drop=True)
 
+    if "FEAT_num_strokes_beh" not in Dc.Dat:
+        Dc.extract_beh_features()
+
     sdir = f"{savedir}/syntax_concrete_TI"
     os.makedirs(sdir, exist_ok=True)
     # Dc = D.copy()
@@ -381,6 +385,7 @@ def plot_syntax_TI(D, savedir):
     Dc.Dat["taskfeat_cat_TI"] = list_taskcat
 
     Dc.grammarparses_syntax_concrete_append_column()
+    Dc.sequence_extract_shapes_drawn()
 
     # Plot
     df = stringify_values(Dc.Dat)
@@ -389,6 +394,20 @@ def plot_syntax_TI(D, savedir):
     from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
     for nstrokes in df["FEAT_num_strokes_task"].unique():
         dfthis = df[df["FEAT_num_strokes_task"]==nstrokes].reset_index(drop=True)
+        dfthis_success = df[(df["FEAT_num_strokes_task"] == df["FEAT_num_strokes_beh"]) & (df["FEAT_num_strokes_task"] == nstrokes)].reset_index(drop=True)
+        
+        # Plot counts of syntax concrete vs. epoch. Including by locaiton config. 
+        # Useful if epoch designates different shape sets.
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis_success, "epoch", "syntax_concrete", ["FEAT_num_strokes_task"])
+        savefig(fig, f"{sdir}/counts-SUCCESS-epoch-vs-syntax_concrete-nstrokes={nstrokes}.pdf")
+
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis_success, "locs_drawn_x", "syntax_concrete", ["epoch", "FEAT_num_strokes_task"]);
+        savefig(fig, f"{sdir}/counts-SUCCESS-locs_drawn_x-vs-syntax_concrete-nstrokes={nstrokes}.pdf")
+        
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfthis_success, "locs_drawn_x", "epoch", ["syntax_concrete", "FEAT_num_strokes_task"]);
+        savefig(fig, f"{sdir}/counts-SUCCESS-locs_drawn_x-vs-epoch-nstrokes={nstrokes}.pdf")
+
+        # Older plots.
         fig = grouping_plot_n_samples_conjunction_heatmap(dfthis, "syntax_concrete", "probe", ["epoch", "FEAT_num_strokes_task"])
         savefig(fig, f"{sdir}/counts-syntax_concrete-vs-probe-nstrokes={nstrokes}.pdf")
         
