@@ -24,6 +24,19 @@ def ttest_paired(x1, x2=None, ignore_nan=False):
         nan_policy = 'propagate'
     return stats.ttest_rel(x1, x2, nan_policy=nan_policy)
 
+def ttest_unpaired(x1, x2, equal_var=True, ignore_nan=False, permutations=None):
+    """ x1, x2 arrays, with same lenght
+    if x2 is None, then assumes is comparing to 0s.
+    Automatically removes any rows with nans
+    RETURNS:
+    - ttest result object.
+    """
+    if ignore_nan:
+        nan_policy='omit'
+    else:
+        nan_policy = 'propagate'
+    return stats.ttest_ind(x1, x2, equal_var=equal_var, nan_policy=nan_policy, permutations=permutations)
+
 def zscore(val, vals_dist):
     """ zscore val relative to the vals_dist distribtion"""
     return (val - np.mean(vals_dist)) / np.std(vals_dist)
@@ -40,6 +53,200 @@ def zscore(val, vals_dist):
 # def statsRanksum(df1, df2, varname):
 #     return stats.ranksums(df1[f"{varname}"], df2[f"{varname}"])
 
+def curve_fit_and_test_wrapper_compare_logistic_linear(X, Y, X_cat, nfolds = 5, doplot=False, plot_sanity = False):
+    """
+    Compare fit using logistic vs. linear curve
+    NOTE: is hard coded for speicifc scales of X and Y, and for speciific form of logistic.
+    For psychometric experiments. 
+    PARAMS:
+    - X, vector 
+    - Y, vector
+    - X_cat, categorical version of X, which is used for stratified train-test split.
+    """
+
+    ### Define fyucntions and hard-code bounds.
+    # TODO: Replace this -- so that sigmoid is not hard coded.
+    def sigmoid(x, L, k, x0, b):
+        return L * (1 / (1 + np.exp(-k*(x-x0)))) + b
+
+    # bounds_sigmoid=([0., 0., -6., -5.], [7., 15., 6., 5]) # decode vs. index_within (rnak)
+    # bounds_sigmoid=([0.95, 0., 0.25, 0], [1., 15., 0.75, 0.05]) # forcing to (0, 1) ylims, and steep slope around x=0.5 [not good, PMv got worse]
+    bounds_sigmoid=([0.95, 0., -6., -5.], [7., 15., 6., 0.05]) # forcing to (0, 1) ylims, and steep slope around x=0.5
+
+    def linear(x, a, b):
+        return (a*x) + b
+
+    bounds_linear = ([-2, -5], [2, 5])
+
+    # For the optimaization, this is better type.
+    X = X.astype(float)
+    Y = Y.astype(float)
+
+    # Get train-test folds
+    folds = balanced_stratified_kfold(None, X_cat, nfolds)
+
+    res = []
+    for inds_train, inds_test in folds:
+        x_train = X[inds_train]
+        y_train = Y[inds_train]
+        x_test = X[inds_test]
+        y_test = Y[inds_test]
+
+        assert x_test.shape == y_test.shape
+
+        if plot_sanity:
+            fig, axes = plt.subplots(2,2, figsize=(10, 10), sharex=True, sharey=True)
+            ax = axes.flatten()[0]
+            ax.set_title("all data")
+            ax.plot(x, y, "ob", alpha=0.5)
+            # ax.plot(x, sigmoid(x,  2, 1, 0, -0.9), 'go')
+
+            ax = axes.flatten()[1]
+            ax.set_title("train data")
+            ax.plot(x_train, y_train, "ob", alpha=0.5)
+            
+            ax = axes.flatten()[2]
+            ax.set_title("test data")
+            ax.plot(x_test, y_test, "ob", alpha=0.5)
+            
+            assert False
+
+        y_pred, R2, residuals_pred, residuals_mean = curve_fit_and_test(sigmoid, bounds_sigmoid, x_train, y_train, 
+                                                                        x_test, y_test, doplot=doplot)
+        if y_pred is None:
+            return None, None
+
+        res.append({
+            "model":"sigmoid",
+            "y_pred":y_pred,
+            "y_test":y_test,
+            "R2":R2,
+            "residuals_pred":residuals_pred,
+            "residuals_mean":residuals_mean,
+        })
+
+        y_pred, R2, residuals_pred, residuals_mean = curve_fit_and_test(linear, bounds_linear, x_train, y_train, 
+                                                                        x_test, y_test, doplot=doplot)
+        if y_pred is None:
+            return None, None
+
+        res.append({
+            "model":"linear",
+            "y_pred":y_pred,
+            "y_test":y_test,
+            "R2":R2,
+            "residuals_pred":residuals_pred,
+            "residuals_mean":residuals_mean,
+        })
+
+    dfres = pd.DataFrame(res)
+
+    # Collect single result for each model
+    res = []
+    for model in ["linear", "sigmoid"]:
+        # Collect all predicted values, and compute R2
+        
+        dfresthis = dfres[dfres["model"] == model]
+        
+        # (1) Good version, use all datapts
+        Y_PRED = np.concatenate(dfresthis["y_pred"].tolist())
+        Y_TEST = np.concatenate(dfresthis["y_test"].tolist())
+        assert Y_PRED.shape == Y_TEST.shape == Y.shape
+        R2, residuals_pred, residuals_mean = coeff_determination_R2(Y_TEST, Y_PRED, False)
+
+        # (2) Less good, this has high variance.
+        R2_mean = np.mean(dfresthis["R2"])
+        R2_std = np.std(dfresthis["R2"])
+
+        # Collect output
+        res.append({
+            "model":model,
+            "R2":R2,
+            "R2_mean":R2_mean,
+            "R2_std":R2_std
+        })
+    dfres_summary = pd.DataFrame(res)
+
+    return dfres_summary, dfres
+
+def curve_fit_and_test(func, bounds, x_train, y_train, x_test, y_test, doplot=False, if_fail_converge="return_none"):
+    """
+    Fit function to data, and then evaluate on new test data, getting cross-validated R^2.
+    PARAMS:
+    - x_train, y_train, univariate data    
+    """
+    from pythonlib.tools.statstools import coeff_determination_R2
+    from scipy.optimize import curve_fit
+
+    ### Fit model
+    try:
+        popt, pcov, infodict, msg, _ = curve_fit(func, x_train, y_train, 
+                                                bounds=bounds, full_output=True, maxfev=10000)
+    except RuntimeError as err:
+        if if_fail_converge=="return_none":
+            return None, None, None, None
+        else:
+            raise err
+
+    # Score test data:
+    y_pred = func(x_test, *popt)
+    R2, residuals_pred, residuals_mean = coeff_determination_R2(y_test, y_pred)
+        
+    if doplot:
+        # Get R2 for training data too
+        R2_train, _, _ = coeff_determination_R2(y_train, func(x_train, *popt))
+        fig, axes = plt.subplots(2,2, figsize=(10, 10), sharex=True, sharey=True)
+
+        ax = axes.flatten()[0]
+        ax.set_title(f"train data and fit (R2={R2_train:.3f})")
+        ax.plot(x_train, y_train, "ob", alpha=0.5)
+        ax.plot(x_train, func(x_train, *popt), 'go')
+
+        ax = axes.flatten()[1]
+        ax.set_title(f"test data and fit (R2={R2:.3f})")
+        ax.plot(x_test, y_test, "ob", alpha=0.5)
+        ax.plot(x_test, func(x_test, *popt), 'go')
+
+        print('---- Fittiung this function:', func)
+        # print("Parameters: ", popt)
+        print(f"R2_train={R2_train:.3f} -- R2_test={R2:.3f}")
+
+    return y_pred, R2, residuals_pred, residuals_mean
+    
+
+def coeff_determination_R2(yvals, yvals_pred, doplot=False):
+    """
+    Compute R2 manually.
+    """
+    residuals_pred = yvals - yvals_pred
+    ss_resid = np.sum(residuals_pred**2)
+
+    residuals_mean = yvals - np.mean(yvals)
+    ss_tot = np.sum(residuals_mean**2)
+
+    R2 = 1 - ss_resid/ss_tot
+
+    if doplot:
+        fig, axes = plt.subplots(2,2, figsize=(10,10))
+
+        ax = axes.flatten()[0]
+        ax.plot(yvals, yvals_pred, "xk")
+        ax.set_xlabel("yvals")
+        ax.set_ylabel("yvals_pred")
+
+        ax = axes.flatten()[1]
+        ax.plot(yvals, residuals_pred, "xk")
+        ax.set_xlabel("yvals")
+        ax.set_ylabel("residuals_pred")
+
+        ax = axes.flatten()[2]
+        ax.plot(yvals, residuals_mean, "xk")
+        ax.set_xlabel("yvals")
+        ax.set_ylabel("residuals_mean")
+
+    return R2, residuals_pred, residuals_mean   
+
+    
 def statsmodel_ols(x, y, PRINT=False, 
                    overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12):
     """
@@ -218,6 +425,9 @@ def crossval_folds_indices(n1, n2, nfold=None):
     """ Return the indices for partitioning
     two datasets with size n1 and n2, to obtain
     crossvalkidated data of nfolds.
+
+    Each index used once exactly.
+    
     Written for unbiased euclidian distnace.
     PARAMS:
     - n1, n2, int, size of two dataset
@@ -244,6 +454,8 @@ def crossval_folds_indices(n1, n2, nfold=None):
 
     assert len(list_inds_1)==len(list_inds_2)
 
+    assert sorted(set(np.concatenate(list_inds_1))) == sorted(np.concatenate(list_inds_1))
+    assert sorted(set(np.concatenate(list_inds_2))) == sorted(np.concatenate(list_inds_2))
     return list_inds_1, list_inds_2
 
 
@@ -296,13 +508,69 @@ def _crossval_folds_indices_onsets(n1, n2, nfold=None):
             assert False
 
 
+def stratified_resample_split_kfold(y, n_splits, test_size=0.5, PRINT=False):
+    """
+    Split data (into two partitions that use up all data) in stratified manner, ie ensuring taking 
+    same proportiuon of each class of labels (not balanced). 
+    Useful for splitting data similar to train-test.
+    Returns:
+    - list of 2-tuples, each holding random train and test inds (arrays) covering all data, that index into y. 
+    len of the list is n_splits.
+    """
+    from sklearn.model_selection import StratifiedShuffleSplit
+
+    sss = StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size)
+    X = [0 for _ in range(len(y))] # not needed
+    split_inds = list(sss.split(X, y))
+    
+    if PRINT:
+        for i, (train_index, test_index) in enumerate(split_inds):
+            print(f"Fold {i}:")
+            print(f"  Train: index={train_index}")
+            print(f"  Test:  index={test_index}")
+
+    return split_inds
+
+def balanced_stratified_resample_kfold(X, y, n_splits):
+    """
+    Resample <n_splits> times, each time returning set of indices that are balnaced (semae n for each level of 
+    class label y), and maximizing how mnay you inds you cans ample (which depends on the class with min n 
+    cases).
+
+    USeful for resampling X and y such that the calss label y is balnced.
+
+    Is like balanced_stratified_kfold but not splitign in to train/test
+
+    RETURNS:
+    - inds_folds, list of list, each inner list are inds to sample y (e.g., y[inds]), such that
+    len(inds) = num_classes * n_min_trials_across_classes.
+    """
+    from pythonlib.tools.pandastools import extract_resample_balance_by_var
+    import pandas as pd
+
+    df = pd.DataFrame({"index":range(len(y)), "y":y})
+    nmin = df.groupby("y").size().min()
+    nclass = len(df["y"].unique())
+
+    inds_folds = []
+    for k in range(n_splits):
+        dfbalanced = extract_resample_balance_by_var(df, "y", n_samples=nmin, method_if_not_enough_samples="min")
+        inds = sorted(dfbalanced["index"].tolist())
+        assert len(inds) == nmin * nclass, "not balnaced..."
+        assert len(inds) == len(set(inds)), "not unique inds.."
+        inds_folds.append(inds)
+
+    return inds_folds
+
 def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
     """ 
     Returns k-fold indices, startified (with label y), and then
-    ensuring that n train indices per class are same within each fold (i.e.
-    balanced), with test idnices being stratified, matching dataset distribution.
+    ensuring that the number of train indices per class are same within each fold (i.e.
+    balancing the data for trainig), with test idnices being stratified, matching dataset distribution,
+    i.e., not balanced.
 
-    All indices will take a turn as test, and possibly multiple or zero turns as trainin.
+    This means that all indices will take one and only one turn as test, but possibly multiple or zero turns as trainig.
+    with higher n_splits leading to more turns in training on average
 
     This is useful to put diff classes on same "footing" by matching num training samples.
     
@@ -334,6 +602,9 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
     from sklearn.model_selection import StratifiedKFold
     from collections import Counter
     
+    if X is None:
+        X = np.zeros_like(y)
+
     if n_splits == "auto":
         # Then do max n splits
         n_splits = min(Counter(y).values())
@@ -349,7 +620,7 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
 
     skf = StratifiedKFold(n_splits=n_splits)
     folds = list(skf.split(X, y)) # folds[0], 2-tuple of arays of ints
-    
+
     balanced_folds = []
     
     for train_idx, test_idx in folds:
@@ -361,14 +632,8 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
         
         # Create a balanced train set
         new_train_idx = []
-        # print(y_train)
-        # print(list(class_counts.keys()))
-        # assert False
-
-        # class_indices = {cls: np.where(y_train == cls)[0] for cls in class_counts}
         class_indices = {cls: [i for i, ythis in enumerate(y_train) if ythis==cls] for cls in class_counts}
-        # print(class_indices)
-        # assert False
+
         for cls in class_counts:
             np.random.shuffle(class_indices[cls])
             cls_indices = class_indices[cls][:min_class_count]
@@ -383,6 +648,11 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
             print("Test class distribution:", Counter([y[i] for i in test_idx]))
             print("train_idx:", train_idx)
             print("test_idx:", test_idx)
+
+    # Sanity check that each datapt contributes once and only onces to testing, after combining across folds.
+    test_idx_all = np.concatenate([x[1] for x in balanced_folds])
+    assert len(test_idx_all) == len(y)
+    assert len(test_idx_all) == len(set(test_idx_all))
 
     return balanced_folds
 

@@ -12,7 +12,7 @@ def bin_values_categorical_factorize(vals):
 
 
 def bin_values_by_rank(values, nbins=8, assert_all_vals_within_bins=True):
-    """ Convert values to vranks, then bin those, thus ensuring equal n
+    """ Convert values to ranks, then bin those, thus ensuring equal n
     items in each class
     """
     from pythonlib.tools.listtools import rank_items

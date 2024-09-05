@@ -10,6 +10,179 @@ from pythonlib.tools.plottools import savefig
 import os
 import seaborn as sns
 
+def params_has_intermediate_shape(animal, date):
+    """ Within the ones that are smooth (no swithcing), which
+    has intermediate shape?
+    RETURNS:
+    - list of  morphsets (ints) which have intermeiate shape. empy list means no intermed morphsets
+    """
+        
+    date = int(date)
+
+    if (animal, date) == ("Diego", 240515):
+        morphset_good = []
+    elif (animal, date) == ("Diego", 240517):
+        morphset_good = [0, 4, 7]
+    elif (animal, date) == ("Diego", 240521):
+        morphset_good = [] 
+    elif (animal, date) == ("Diego", 240523):
+        morphset_good = [] # 
+    elif (animal, date) == ("Diego", 240731):
+        morphset_good = [2, 6] # 
+    elif (animal, date) == ("Diego", 240801):
+        morphset_good = [2] # 
+    elif (animal, date) == ("Diego", 240802):
+        morphset_good = [] # 
+
+    elif (animal, date) == ("Pancho", 240516):
+        morphset_good = [0, 3] # 
+    elif (animal, date) == ("Pancho", 240521):
+        morphset_good = [3] # 
+    elif (animal, date) == ("Pancho", 240524):
+        morphset_good = [] # 
+    elif (animal, date) == ("Pancho", 240801):
+        morphset_good = [0, 3, 4] # 
+    elif (animal, date) == ("Pancho", 240802):
+        morphset_good = [] # 
+    else:
+        print(animal, date)
+        assert False    
+    return morphset_good
+
+def params_good_morphsets_no_switching(animal, date):
+    """ 
+    Those morphsets which have no clear switching between 
+    different beh strategies -- smooth psychometric.
+    Here incliudng all, so maybe some arent cleanest, e..g 
+    some switching (rare).
+    """
+
+    date = int(date)
+
+    if (animal, date) == ("Diego", 240515):
+        morphset_good = [0, 1]
+    elif (animal, date) == ("Diego", 240517):
+        morphset_good = [0, 3, 4, 7]
+    elif (animal, date) == ("Diego", 240521):
+        morphset_good = [] # HAS NONE!
+    elif (animal, date) == ("Diego", 240523):
+        morphset_good = [6] # 
+    elif (animal, date) == ("Diego", 240731):
+        morphset_good = [0, 1, 2, 3, 4, 5, 6] # 
+    elif (animal, date) == ("Diego", 240801):
+        morphset_good = [0, 1, 2, 3, 4] # 
+    elif (animal, date) == ("Diego", 240802):
+        morphset_good = [0, 1, 2, 3, 4, 5, 6, 7] # 
+
+    elif (animal, date) == ("Pancho", 240516):
+        morphset_good = [0, 1, 3] # 
+    elif (animal, date) == ("Pancho", 240521):
+        morphset_good = [3, 7, 8] # 
+    elif (animal, date) == ("Pancho", 240524):
+        morphset_good = [2, 4, 5, 7] # 
+    elif (animal, date) == ("Pancho", 240801):
+        morphset_good = [0, 1, 2, 3, 4] # 
+    elif (animal, date) == ("Pancho", 240802):
+        morphset_good = [0, 1, 2, 3, 4, 5, 6, 7] # 
+    else:
+        print(animal, date)
+        assert False    
+    return morphset_good
+        
+def params_remap_angle_to_idx_within_morphset(animal, date):
+    """
+    Uyseful if there exist angle morphs to left and right of base prims.
+    """
+    date = int(date)
+    if (animal, date) in [("Diego", 240731)]:
+        # If have flank to left and right of base prims...  
+        map_angleidx_to_finalidx  ={
+            0:0,
+            1:1,
+            2:2,
+            3:3,
+            4:4,
+            5:5,
+            99:99,
+            6:100,
+            7:-1}
+        split_by_morphset = False
+    elif (animal, date) in [("Diego", 240801)]:
+        map_angleidx_to_finalidx = {}
+
+        for morphset in [0,1,3,4]:
+            _map  ={
+                0:0,
+                1:1,
+                2:2,
+                3:3,
+                4:4,
+                5:5,
+                99:99,
+                6:100,
+                7:-1}
+            map_angleidx_to_finalidx[morphset] = _map
+        for morphset in [2]:
+            _map  ={
+                11:-1,
+                0:0,
+                1:1,
+                2:2,
+                3:3,
+                4:4,
+                10:5,
+                5:6,
+                6:7,
+                7:8,
+                8:9,
+                99:99,
+                9:100,
+            }
+            map_angleidx_to_finalidx[morphset] = _map
+
+        split_by_morphset = True
+
+    elif (animal, date) in [("Pancho", 240801)]:
+        map_angleidx_to_finalidx = {}
+
+        for morphset in [0,1,2,3]:
+            _map  ={
+                0:0,
+                1:1,
+                2:2,
+                3:3,
+                4:4,
+                5:5,
+                99:99,
+                6:100,
+                7:-1}
+            map_angleidx_to_finalidx[morphset] = _map
+        for morphset in [4]:
+            _map  ={
+                11:-1,
+                0:0,
+                1:1,
+                2:2,
+                3:3,
+                4:4,
+                10:5,
+                5:6,
+                6:7,
+                7:8,
+                8:9,
+                99:99,
+                9:100,
+            }
+            map_angleidx_to_finalidx[morphset] = _map
+
+        split_by_morphset = True
+
+    else:
+        map_angleidx_to_finalidx = None
+        split_by_morphset = None
+
+    return map_angleidx_to_finalidx, split_by_morphset
+
 def params_extract_psycho_groupings_manual_using_tsc_inds(animal, date):
     """
     Store params, manually entred, to be used with psychogood_preprocess_wrapper_using_tsc_inds.
@@ -20,6 +193,8 @@ def params_extract_psycho_groupings_manual_using_tsc_inds(animal, date):
 
     Approach:
     """
+
+    date = int(date)
 
     if (animal, date) == ("Diego", 240802):
         
@@ -54,11 +229,94 @@ def params_extract_psycho_groupings_manual_using_tsc_inds(animal, date):
         ]   
 
         nlocations_expected = 2 # for each LOS. Used for saniyt checi that got all data.
+
+        # Sanity check misses LOS -- these are allowed to fail. Usualyl these are orig base prims.
+        los_allowed_to_exclude = [
+            ('singleprims_psycho', 26, 3),
+            ('singleprims_psycho', 26, 20),
+            ('singleprims_psycho', 26, 4),
+            ('singleprims_psycho', 26, 16),
+            ('singleprims_psycho', 26, 9),
+            ('singleprims_psycho', 26, 10),
+            ('singleprims_psycho', 26, 8),
+            ('singleprims_psycho', 26, 17),
+            ('singleprims_psycho', 26, 5),
+            ('singleprims_psycho', 26, 1),
+            ('singleprims_psycho', 26, 19),
+            ('singleprims_psycho', 26, 11),
+            ('singleprims_psycho', 26, 18),
+            ('singleprims_psycho', 26, 14),
+            ('singleprims_psycho', 26, 7),
+            ('singleprims_psycho', 26, 12),
+            ('singleprims_psycho', 26, 6),
+            ('singleprims_psycho', 26, 2),
+            ('singleprims_psycho', 26, 13),
+            ('singleprims_psycho', 26, 15),
+        ]
+    
+    elif (animal, date) == ("Pancho", 240802):
+
+        # Params for morphs
+        # - Method: Easy: just see the generative code in matlab
+        # - find the indices in tasksetclass_database.m
+        morphs_tsc_n_sets = 8 # jhow many sets
+        morphs_tsc_n_each_set = 7 # n in each set (excluring base prims).
+        morphs_tsc_idx_start = 31 # first index in TSC
+        morphs_tsc_idx_end = 86 # last index in TSC
+        assert morphs_tsc_n_sets * morphs_tsc_n_each_set == morphs_tsc_idx_end - morphs_tsc_idx_start + 1
+
+        # Map from index rank to the final index within. 
+        # morphs_tsc_map_to_these_indices = [1, 2, 3, 4, 5] # This is standard
+        morphs_tsc_map_to_these_indices = [-1, 1, 2, 3, 4, 5, 100] # if the flanking are nbefore and after the base prims (0, 99)
+
+        # Params for base prims.
+        # list is len num morphsets.
+        # Within each morphset, Each is (base1, base2).
+        # Sometimes multkple candidate LOS fore each base prim. If so, enter them as a tuple and will collect all and combine.
+        # - Method: pull up saved images and manaulyl enter them here. To knwo what image sto lok for for each  morphset,
+        # you can iterate by entering this e,mpy, running the preporcess_wrapper_using_tsc, and see it prints the morphsets,
+        # look at those images (morphs) and use thgat to find these base prims.
+        setind = 28
+        list_example_base_los = [
+            [("singleprims_psycho", setind, (6, 28)), ("singleprims_psycho", setind, 9)],
+            [("singleprims_psycho", setind, 7), ("singleprims_psycho", setind, (11, 4, 17, 20))],
+            [("singleprims_psycho", setind, (6, 28)), ("singleprims_psycho", setind, (10, 26, 29))],
+            [("singleprims_psycho", setind, 8), ("singleprims_psycho", setind, (11, 4, 17, 20))],
+            [("singleprims_psycho", setind, 5), ("singleprims_psycho", setind, (11, 4, 17, 20))],
+            [("singleprims_psycho", setind, 3), ("singleprims_psycho", setind, (10, 26, 29))],
+            [("singleprims_psycho", setind, (25, 32)), ("singleprims_psycho", setind, (10, 26, 29))],
+            [("singleprims_psycho", setind, (25, 32)), ("singleprims_psycho", setind, (11, 4, 17, 20))],
+        ]   
+
+        nlocations_expected = 2 # for each LOS. Used for saniyt checi that got all data.
+
+        # Sanity check misses LOS -- these are allowed to fail. Usualyl these are orig base prims.
+        los_allowed_to_exclude = [
+            ('singleprims_psycho', 29, 13),
+            ('singleprims_psycho', 29, 15),
+            ('singleprims_psycho', 29, 12),
+            ('singleprims_psycho', 29, 3),
+            ('singleprims_psycho', 29, 1),
+            ('singleprims_psycho', 29, 18),
+            ('singleprims_psycho', 29, 9),
+            ('singleprims_psycho', 29, 11),
+            ('singleprims_psycho', 29, 7),
+            ('singleprims_psycho', 29, 10),
+            ('singleprims_psycho', 29, 14),
+            ('singleprims_psycho', 29, 5),
+            ('singleprims_psycho', 29, 6),
+            ('singleprims_psycho', 29, 17),
+            ('singleprims_psycho', 29, 8),
+            ('singleprims_psycho', 29, 4),
+            ('singleprims_psycho', 29, 2),
+            ('singleprims_psycho', 29, 16),
+            ]
+
     else:
         print(animal, date)
         assert False
     
-    return morphs_tsc_idx_start, morphs_tsc_idx_end, morphs_tsc_n_sets, morphs_tsc_n_each_set, morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected
+    return morphs_tsc_idx_start, morphs_tsc_idx_end, morphs_tsc_n_sets, morphs_tsc_n_each_set, morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected, los_allowed_to_exclude
 
 
 
@@ -445,9 +703,6 @@ def params_extract_psycho_groupings_manual(animal, date):
             ('singleprims', 86, 47),
             ('singleprims', 86, 48),
         ]   
-
-    elif animal == "Diego" and date == 240802:
-        asdafasdf
     else:
         assert False
 
@@ -474,35 +729,42 @@ def preprocess_and_plot(D, var_psycho, PLOT=True):
             plot_overview(DSlenient, D, f"{SAVEDIR}/lenient_strokes", var_psycho=var_psycho)
 
         #### ADDITIOANL PLOTS, USING DSMORPHSETS
-        DSmorphsets = preprocess_angle_to_morphsets(DSlenient)
+        animal = D.animals(True)[0]
+        date = D.dates(True)[0]
+        map_angleidx_to_finalidx, split_by_morphset = params_remap_angle_to_idx_within_morphset(animal, date)
+        DSmorphsets = preprocess_angle_to_morphsets(DSlenient, map_angleidx_to_finalidx, split_by_morphset)
         # for morphset, idx_within in 
 
-        savedir = f"{SAVEDIR}/drawings_morphsets"
-        os.makedirs(savedir, exist_ok=True)
-        psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, PLOT_EACH_TRIAL=True)        
+        psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR)
+
+        if False:
+            savedir = f"{SAVEDIR}/drawings_morphsets"
+            os.makedirs(savedir, exist_ok=True)
+            psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, PLOT_EACH_TRIAL=True)        
         
         #####################
         # Also make plot of mean_sim_score (trial by trial var)
         savedir = f"{SAVEDIR}/using_primitivenessv2"
         os.makedirs(savedir, exist_ok=True)
 
-        from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline
-        # First, extract all the derived metrics
-        PLOT=True
-        plot_methods = ("tls", "drw")
-        DSnew, _, dfres, grouping = preprocess_plot_pipeline(D, PLOT=PLOT, plot_methods=plot_methods)
-        _apply_psychoparams_to_ds(DSnew.Dat, map_shape_to_psychoparams, var_psycho)
-        _apply_psychoparams_to_ds(dfres, map_shape_to_psychoparams, var_psycho)
+        if False: # This is done in DSmorphset stuff now.
+            from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline
+            # First, extract all the derived metrics
+            PLOT=True
+            plot_methods = ("tls", "drw")
+            DSnew, _, dfres, grouping = preprocess_plot_pipeline(D, PLOT=PLOT, plot_methods=plot_methods)
+            _apply_psychoparams_to_ds(DSnew.Dat, map_shape_to_psychoparams, var_psycho)
+            _apply_psychoparams_to_ds(dfres, map_shape_to_psychoparams, var_psycho)
 
-        # Make plots
-        fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
-            kind="point", sharey=True)
-        savefig(fig, f"{savedir}/mean_sim_score-1.pdf")
-        fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
-            alpha=0.5, sharey=True)
-        savefig(fig, f"{savedir}/mean_sim_score-2.pdf")
+            # Make plots
+            fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
+                kind="point", sharey=True)
+            savefig(fig, f"{savedir}/mean_sim_score-1.pdf")
+            fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
+                alpha=0.5, sharey=True)
+            savefig(fig, f"{savedir}/mean_sim_score-2.pdf")
 
-        plt.close("all")
+            plt.close("all")
 
         return DS, DSlenient, map_shape_to_psychoparams
     
@@ -531,7 +793,8 @@ def _apply_psychoparams_to_ds(df, map_shape_to_psychoparams, var_psycho):
         df[na] = [map_shape_to_psychoparams[sh][i] for sh in df["shape"]]
         # DSlenient.Dat[na] = [map_shape_to_psychoparams[sh][i] for sh in DSlenient.Dat["shape"]]
 
-def preprocess(D, var_psycho="angle", SANITY=True, clean_ver="singleprim_psycho"):
+def preprocess(D, var_psycho="angle", SANITY=True, clean_ver="singleprim_psycho",
+               ):
     """
     For angle morph.
     Determines for each stroke what its original shape is, and 
@@ -562,23 +825,58 @@ def preprocess(D, var_psycho="angle", SANITY=True, clean_ver="singleprim_psycho"
         list_shape_orig.append(P.shape_oriented())
     df["shape_orig"] = list_shape_orig
 
+    # Mark which shapes are base shpaes (i.e. no rotation tform)
+    base_shapes = []
+    for ind in range(len(D.Dat)):
+        # tforms = D.taskclass_extract_prims_extra_params_tforms(ind)
+        # assert isinstance(tforms, list)
+        # assert isinstance(tforms[0], dict)
+        # tform_first_stroke = tforms[0]
+        tform_first_stroke = _extract_extra_tform_params_helper(D, ind)
+        if tform_first_stroke is None or len(tform_first_stroke)==0:
+            # Then this is base shape
+            base_shapes.append(D.taskclass_shapes_extract(ind)[0])
+    base_shapes = list(set(base_shapes))
+    df["is_base_shape"] = df["shape"].isin(base_shapes)
+
+    # For some days, there are three base shapes in a sequence [base1 morph base2 morph base3]. Deal with this by renaming base2 to
+    # morph, with appropriate angle. This is hacky, but ok.
+    if (D.animals(True)[0] in ["Diego", "Pancho"]) and int(D.dates(True)[0])==240801:
+        ###########
+        list_shape_orig = []
+        list_angle = []
+        list_base = []
+        for i, row in df.iterrows():
+            if (row["shape_orig"] == "line-8-1-0") and (row["angle"]==0.0):
+                list_shape_orig.append("line-8-4-0")
+                list_angle.append(pi/4)
+                list_base.append(False)
+            else:
+                list_shape_orig.append(row["shape_orig"])
+                list_angle.append(row["angle"])
+                list_base.append(row["is_base_shape"])
+
+        df["shape_orig"] = list_shape_orig
+        df["angle"] = list_angle
+        df["is_base_shape"] = list_base
+
     # For each shape_orig, get an ordered indices for angle. 
     if True:
         ################### FIND THE ANGLE RELATIVE TO THE BASE_PRIM'S ANGLE. THis will be used for defining the psycho index
         # Get list of all shapes which dont have extra tform
-        base_shapes = []
-        for ind in range(len(D.Dat)):
-            # tforms = D.taskclass_extract_prims_extra_params_tforms(ind)
-            # assert isinstance(tforms, list)
-            # assert isinstance(tforms[0], dict)
-            # tform_first_stroke = tforms[0]
-            tform_first_stroke = _extract_extra_tform_params_helper(D, ind)
-            if tform_first_stroke is None or len(tform_first_stroke)==0:
-                # Then this is base shape
-                base_shapes.append(D.taskclass_shapes_extract(ind)[0])
-        base_shapes = list(set(base_shapes))
+        # base_shapes = []
+        # for ind in range(len(D.Dat)):
+        #     # tforms = D.taskclass_extract_prims_extra_params_tforms(ind)
+        #     # assert isinstance(tforms, list)
+        #     # assert isinstance(tforms[0], dict)
+        #     # tform_first_stroke = tforms[0]
+        #     tform_first_stroke = _extract_extra_tform_params_helper(D, ind)
+        #     if tform_first_stroke is None or len(tform_first_stroke)==0:
+        #         # Then this is base shape
+        #         base_shapes.append(D.taskclass_shapes_extract(ind)[0])
+        # base_shapes = list(set(base_shapes))
 
-        df["is_base_shape"] = df["shape"].isin(base_shapes)
+        # df["is_base_shape"] = df["shape"].isin(base_shapes)
 
         # For each shape_orig, find its one base shape
         from pythonlib.tools.pandastools import find_unique_values_with_indices
@@ -589,10 +887,12 @@ def preprocess(D, var_psycho="angle", SANITY=True, clean_ver="singleprim_psycho"
             dfthis = df[(df["shape_orig"] == shape_orig) & (df["is_base_shape"]==True)]
             dfthis = grp[1][(grp[1]["is_base_shape"]==True)]
 
-            # angle_base = dfthis["angle"].unique()
-            # angle_base
             unique_values, _, _ = find_unique_values_with_indices(dfthis, "angle")
-            assert len(unique_values)==1, "This means there are multiple trials without tform, which are thus called base prims, for this shape_orig"
+            # print(unique_values)
+            if not len(unique_values)==1:
+                print(unique_values)
+                print(len(dfthis))
+                assert False, "This means there are multiple trials without tform, which are thus called base prims, for this shape_orig"
 
             angle_base = unique_values[0]
 
@@ -675,7 +975,7 @@ def preprocess(D, var_psycho="angle", SANITY=True, clean_ver="singleprim_psycho"
 
     return DS, DSlenient, map_shape_to_psychoparams
 
-def preprocess_angle_to_morphsets(DS):
+def preprocess_angle_to_morphsets(DS, map_angleidx_to_finalidx, split_by_morphset):
     """
     Convert DS, which has one datapt for stroke, to DSmorphset, which has indepednent data for each morphset, which is
     (baseprim1, [morph prims], baseprim2).
@@ -693,6 +993,7 @@ def preprocess_angle_to_morphsets(DS):
         'zigzagSq-1-1-1':'zigzagSq-1-2-1',
         'zigzagSq-1-2-1':'zigzagSq-1-1-1',
         'line-8-1-0':'line-8-2-0',
+        'line-8-4-0':'line-8-3-0',
         'arcdeep-4-2-0':'arcdeep-4-3-0',
         'arcdeep-4-3-0':'arcdeep-4-4-0',
         'Lcentered-4-2-0':'Lcentered-4-3-0',
@@ -711,6 +1012,7 @@ def preprocess_angle_to_morphsets(DS):
         'line-8-3-0':'line-8-2-0',
         'V-2-1-0':'V-2-2-0',
         'arcdeep-4-4-0':'arcdeep-4-1-0',
+        'usquare-1-3-0':'usquare-1-4-0',
         }
 
 
@@ -772,6 +1074,25 @@ def preprocess_angle_to_morphsets(DS):
     DSmorphsets = DS.copy()
     DSmorphsets.Dat = DF
 
+    # Add variables to match names across methods.
+    DSmorphsets.Dat["psycho_value"] = DSmorphsets.Dat["angle_unique"]
+
+    # Hacky, remap indices
+    if map_angleidx_to_finalidx is not None:
+        if split_by_morphset:
+            # each morpjhset has different maping
+            tmp = []
+            for _, row in DSmorphsets.Dat.iterrows():
+                morphset = row["morph_set_idx"]
+                idx_within = row["morph_idxcode_within_set"]
+                idx_within_new = map_angleidx_to_finalidx[morphset][idx_within]
+                tmp.append(idx_within_new)
+            DSmorphsets.Dat["morph_idxcode_within_set"] = tmp
+        else:
+            # print(map_angleidx_to_finalidx)
+            # assert False
+            DSmorphsets.Dat["morph_idxcode_within_set"] = [map_angleidx_to_finalidx[idx] for idx in DSmorphsets.Dat["morph_idxcode_within_set"]]
+
     return DSmorphsets
 
 
@@ -794,22 +1115,24 @@ def plot_overview(DS, D, SAVEDIR, var_psycho="angle"):
     savedir = f"{SAVEDIR}/drawings"
     os.makedirs(savedir, exist_ok=True)
 
-    niter = 2
+    niter = 1
     for _iter in range(niter):
 
         print("Plotting drawings...")
-        figholder = DS.plotshape_multshapes_egstrokes("shapeorig_psycho", 6, ver_behtask="beh");
-        for i, (fig, axes) in enumerate(figholder):
-            savefig(fig, f"{savedir}/egstrokes-{i}-iter{_iter}.pdf")
+        if False: # not useful, the other plots are better
+            figholder = DS.plotshape_multshapes_egstrokes("shapeorig_psycho", 6, ver_behtask="beh");
+            for i, (fig, axes) in enumerate(figholder):
+                savefig(fig, f"{savedir}/egstrokes-{i}-iter{_iter}.pdf")
 
-        figholder = DS.plotshape_multshapes_egstrokes("shapeorig_psycho", 6, ver_behtask="task_aligned_single_strok");
-        for i, (fig, axes) in enumerate(figholder):
-            savefig(fig, f"{savedir}/egstrokes-{i}-task-iter{_iter}.pdf")
-        plt.close("all")
+            figholder = DS.plotshape_multshapes_egstrokes("shapeorig_psycho", 6, ver_behtask="task_aligned_single_strok");
+            for i, (fig, axes) in enumerate(figholder):
+                savefig(fig, f"{savedir}/egstrokes-{i}-task-iter{_iter}.pdf")
+            plt.close("all")
 
-        figbeh, figtask = DS.plotshape_row_col_vs_othervar("angle_idx_within_shapeorig", "shapeorig", n_examples_per_sublot=8, plot_task=True);
-        savefig(figbeh, f"{savedir}/shapeorig-vs-idx-{i}-beh-iter{_iter}.pdf")
-        savefig(figtask, f"{savedir}/shapeorig-vs-idx-{i}-task-iter{_iter}.pdf")
+        figbeh, figtask = DS.plotshape_row_col_vs_othervar("angle_idx_within_shapeorig", "shapeorig", 
+                                                           n_examples_per_sublot=8, plot_task=True);
+        savefig(figbeh, f"{savedir}/shapeorig-vs-idx--beh-iter{_iter}.pdf")
+        savefig(figtask, f"{savedir}/shapeorig-vs-idx--task-iter{_iter}.pdf")
         plt.close("all")
 
     ### PLOT COUNTS
@@ -936,21 +1259,6 @@ def preprocess_cont_morph(D, clean_ver="singleprim_psycho"):
     # Check that it is one stroke.
     assert all(D.Dat["task_kind"] == "prims_single"), "assuming this to make things eaiser..."
     
-    # # First, for each token, extract variables that reflect the psycho variable/param.
-    # token_ver = "task"
-    # for i, row in D.Dat.iterrows():
-    #     # for each shape get its concrete params
-    #     Tk = D.taskclass_tokens_extract_wrapper(i, token_ver, return_as_tokensclass=True)
-    #     # Tk.features_extract_wrapper(["loc_on", "angle"], angle_twind=[0, 2])
-    # df = D.tokens_extract_variables_as_dataframe(["shape", "Prim", "gridloc"], token_ver)
-    
-    # # Extract the original shape, which should have been overwritten in rprepovessing, but is useufl as a category
-    # # to anchor the variations.
-    # list_shape_orig = []
-    # for P in df["Prim"]:
-    #     list_shape_orig.append(P.shape_oriented())
-    # df["shape_orig"] = list_shape_orig
-
     _, map_shape_orig_to_shape = D.shapesemantic_taskclass_map_between_shape_and_shape_orig()
 
     ############################################
@@ -1349,6 +1657,8 @@ def _plot_overview_scores(D, DSmorphsets, SAVEDIR, use_task_stroke_or_los, DS=No
     In general, plot scores given DSmorphsets.
     """
     from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline_directly_from_DS
+    from pythonlib.tools.vectools import angle_diff_ccw
+    import pandas as pd
    
 
     # #### ANALYSES (e..,g, timing and velocity)
@@ -1356,55 +1666,60 @@ def _plot_overview_scores(D, DSmorphsets, SAVEDIR, use_task_stroke_or_los, DS=No
     os.makedirs(savedir, exist_ok=True)
     print("Plotting motor analyses...")
 
+    # Get angle relative to  base
+    group_mins = DSmorphsets.Dat[DSmorphsets.Dat["morph_idxcode_within_set"] == 0].groupby(['morph_set_idx'])["angle"].mean().reset_index()
+    group_mins["angle"] = group_mins["angle"] - 1.5 # to make sure ALL trials are now positive.
+    group_mins = group_mins.rename(columns={"angle": f'angle_min'})
+    DSmorphsets.Dat = pd.merge(DSmorphsets.Dat, group_mins, on=["morph_set_idx"], how='left')
+    DSmorphsets.Dat["angle_rel_base0"] = [angle_diff_ccw(row["angle_min"], row["angle"]) for _, row in DSmorphsets.Dat.iterrows()]
 
-    if True:
-        ## First stroke
-        dfthis = DSmorphsets.Dat
-        dfthis = dfthis[dfthis["gap_from_prev_dur"]<5].reset_index(drop=True)
-        for y in ["angle", "loc_on_x", "loc_on_y", "velocity", "gap_from_prev_dur", "dist_beh_task_strok"]:
-            for sharey in [True, False]:
-                fig = sns.catplot(data=dfthis, x="morph_idxcode_within_set", y=y, hue="gridloc", col="morph_set_idx", col_wrap=8,
-                    alpha=0.5, sharey=sharey)
-                savefig(fig, f"{savedir}/{y}-vs-idx-sharey={sharey}-1.pdf")
+    ## First stroke
+    dfthis = DSmorphsets.Dat
+    dfthis = dfthis[dfthis["gap_from_prev_dur"]<5].reset_index(drop=True)
+    for y in ["angle_rel_base0", "angle", "loc_on_x", "loc_on_y", "velocity", "gap_from_prev_dur", "dist_beh_task_strok"]:
+        for sharey in [True, False]:
+            fig = sns.catplot(data=dfthis, x="morph_idxcode_within_set", y=y, hue="gridloc", col="morph_set_idx", col_wrap=8,
+                alpha=0.5, sharey=sharey)
+            savefig(fig, f"{savedir}/{y}-vs-idx-sharey={sharey}-1.pdf")
 
-                fig = sns.catplot(data=dfthis, x="morph_idxcode_within_set", y=y, hue="gridloc", col="morph_set_idx", col_wrap=8,
-                    kind="point", sharey=sharey)
-                savefig(fig, f"{savedir}/{y}-vs-idx-sharey={sharey}-2.pdf")
+            fig = sns.catplot(data=dfthis, x="morph_idxcode_within_set", y=y, hue="gridloc", col="morph_set_idx", col_wrap=8,
+                kind="point", sharey=sharey)
+            savefig(fig, f"{savedir}/{y}-vs-idx-sharey={sharey}-2.pdf")
 
-                plt.close("all")
+            plt.close("all")
 
-        ## Dataset
-        savedir = f"{SAVEDIR}/analyses_dataset_lenient_strokes"
-        os.makedirs(savedir, exist_ok=True)
-        print("Plotting motor analyses...")
-
-
-        # Number of strokes used
-        if "seqc_0_morphed" in D.Dat.columns:
-            D = D.copy()
-            D.extract_beh_features(["num_strokes_beh"])
-            D.preprocessGood(params=["beh_strokes_at_least_one",
-                                        "no_supervision"])
-            
-            dfthis = D.Dat
-            fig = sns.catplot(data=dfthis, x="seqc_0_morphed", y="FEAT_num_strokes_beh", 
-                alpha=0.4, jitter=True)
-            savefig(fig, f"{savedir}/FEAT_num_strokes_beh-1.pdf")
-
-            fig = sns.catplot(data=dfthis, x="seqc_0_morphed", y="FEAT_num_strokes_beh", 
-                kind="boxen")
-            savefig(fig, f"{savedir}/FEAT_num_strokes_beh-2.pdf")
+    ## Dataset
+    savedir = f"{SAVEDIR}/analyses_dataset_lenient_strokes"
+    os.makedirs(savedir, exist_ok=True)
+    print("Plotting motor analyses...")
 
 
-        if DS is not None:
-            grouping = [var, "epoch", "block", "morph_is_morphed"]
-            context = var
-            contrast = "morph_is_morphed"
-            plot_methods = ("grp", "tls", "tl", "tc", "drw")
-            preprocess_plot_pipeline_directly_from_DS(DS, grouping=grouping, 
-                                                    contrast=contrast, context=context,
-                                                    prune_strokes=prune_strokes, 
-                                                    plot_methods=plot_methods)
+    # Number of strokes used
+    if "seqc_0_morphed" in D.Dat.columns:
+        D = D.copy()
+        D.extract_beh_features(["num_strokes_beh"])
+        D.preprocessGood(params=["beh_strokes_at_least_one",
+                                    "no_supervision"])
+        
+        dfthis = D.Dat
+        fig = sns.catplot(data=dfthis, x="seqc_0_morphed", y="FEAT_num_strokes_beh", 
+            alpha=0.4, jitter=True)
+        savefig(fig, f"{savedir}/FEAT_num_strokes_beh-1.pdf")
+
+        fig = sns.catplot(data=dfthis, x="seqc_0_morphed", y="FEAT_num_strokes_beh", 
+            kind="boxen")
+        savefig(fig, f"{savedir}/FEAT_num_strokes_beh-2.pdf")
+
+
+    if DS is not None:
+        grouping = [var, "epoch", "block", "morph_is_morphed"]
+        context = var
+        contrast = "morph_is_morphed"
+        plot_methods = ("grp", "tls", "tl", "tc", "drw")
+        preprocess_plot_pipeline_directly_from_DS(DS, grouping=grouping, 
+                                                contrast=contrast, context=context,
+                                                prune_strokes=prune_strokes, 
+                                                plot_methods=plot_methods)
     plt.close("all")
         
 
@@ -1491,14 +1806,14 @@ def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = Tru
     DS = preprocess_dataset_to_datstrokes(D, clean_ver)
     DS.dataset_append_column("los_info")
     
-    # Map from psycho group to trial info
-    map_group_to_los = {}
-    for morph_group in DFRES["morph_set_idx"].unique().tolist():
-        list_idx = DFRES[DFRES["morph_set_idx"]==morph_group]["morph_idxcode_within_set"].unique().tolist()
-        map_group_to_los[morph_group] = {idx:None for idx in list_idx}
-        for idx_within_group in list_idx:
-            los = DFRES[(DFRES["morph_set_idx"]==morph_group) & (DFRES["morph_idxcode_within_set"]==idx_within_group)]["los"].unique().tolist()
-            map_group_to_los[morph_group][idx_within_group] = los
+    # # Map from psycho group to trial info
+    # map_group_to_los = {}
+    # for morph_group in DFRES["morph_set_idx"].unique().tolist():
+    #     list_idx = DFRES[DFRES["morph_set_idx"]==morph_group]["morph_idxcode_within_set"].unique().tolist()
+    #     map_group_to_los[morph_group] = {idx:None for idx in list_idx}
+    #     for idx_within_group in list_idx:
+    #         los = DFRES[(DFRES["morph_set_idx"]==morph_group) & (DFRES["morph_idxcode_within_set"]==idx_within_group)]["los"].unique().tolist()
+    #         map_group_to_los[morph_group][idx_within_group] = los
 
     ##################################### PLOTS/ANALYSIS
     DSmorphsets = psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR, 
@@ -1513,8 +1828,12 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
     WRapper for all merthods for extracting DFmorphset, scoring and plotting, for structured morphs,
     where the input is the output of the psychogood_preprocess_wrapper... functions.
 
+    PARAMS:
+    - DFRES, each row is single (morphset, idx_within, los, trialcode). Holds meta information mapping between these
+    variables. A giventrial could be multiple rows.
     """
-    
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+
     ### EXTRACT DS
     from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
     DS = preprocess_dataset_to_datstrokes(D, clean_ver)
@@ -1529,9 +1848,88 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
             los = DFRES[(DFRES["morph_set_idx"]==morph_group) & (DFRES["morph_idxcode_within_set"]==idx_within_group)]["los"].unique().tolist()
             map_group_to_los[morph_group][idx_within_group] = los
 
+    ##### GENMERATE DSmorphsets
+    # (1) DS, concatting df where each df is a single morph set, e.g., morphj idnices [0 1 2 3... 99], where 0 and 99 are base prims
+    list_df = []
+    for group, idx_dict in map_group_to_los.items():
+        for idx, list_los in idx_dict.items():
+            df = DS.Dat[DS.Dat["los_info"].isin(list_los)].copy()
+            df["morph_set_idx"] = group
+            df["morph_idxcode_within_set"] = idx
+            df["morph_is_morphed"] = idx not in [0, 99]
+            list_df.append(df)
+    DF = pd.concat(list_df).reset_index(drop=True)
+    DSmorphsets = DS.copy()
+    DSmorphsets.Dat = DF
+
+    ### PLOT
+    DSmorphsets = psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR, PLOT_DRAWINGS, PLOT_SCORES)
+
+    return DSmorphsets
+
+    
+def psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR, PLOT_DRAWINGS=True, PLOT_SCORES=True):
+    """
+    Given DSmorphset, make all the plots. Wrapper.
+    Ideally this is  gthe only plotting function called when using DSmorphsets
+    """
+    from pythonlib.tools.listtools import stringify_list
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_find_tasks_in_this_psycho_group_wrapper, params_extract_psycho_groupings_manual
+    from pythonlib.tools.pandastools import append_col_with_index_of_level_after_grouping, append_col_with_index_of_level
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+    from pythonlib.tools.plottools import savefig
+
+    DSmorphsets.dataset_append_column("los_info")
+    DSmorphsets.Dat["los"] = "los_info"
+    DS.dataset_append_column("los_info")
+    DS.Dat["los"] = "los_info"
+
+    # Hacky, if this isnt angle morph, then might not have psycho continuos value. Just give it something that allows correct ordering.
+    if "psycho_value" not in DSmorphsets.Dat.columns:
+        DSmorphsets.Dat["psycho_value"] = DSmorphsets.Dat["morph_idxcode_within_set"]
+
+    # Plot counts
+    # Print results 
+    # if "shapeorig_psycho" in DSmorphsets.Dat.columns:
+    #     var_each_image = "shape"
+    # else:
+
+    savedir = f"{SAVEDIR}/counts_each_morphset"
+    os.makedirs(savedir, exist_ok=True)
+    for morphset in DSmorphsets.Dat["morph_set_idx"].unique():
+        dfres = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"] == morphset].reset_index(drop=True)
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfres, "los", "morph_idxcode_within_set", ["morph_is_morphed"])
+        savefig(fig, f"{savedir}/morphset={morphset}-counts-los-vs-morph_idxcode_within_set.pdf")
+
+        fig = grouping_plot_n_samples_conjunction_heatmap(dfres, "psycho_value", "morph_idxcode_within_set", ["morph_is_morphed"])
+        savefig(fig, f"{savedir}/morphset={morphset}-counts-psycho_value-vs-morph_idxcode_within_set.pdf")
+
+
+    ######## LWAYS DO THIS
+    savedir = f"{SAVEDIR}/analyses_using_morphsets"
+    os.makedirs(savedir, exist_ok=True)
+    _plot_overview_scores(D, DSmorphsets, savedir, use_task_stroke_or_los="los")
+
+    ################# Plot drawings
+    if PLOT_DRAWINGS:
+
+        # Single plot holding all
+        from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets
+        savedir = f"{SAVEDIR}/drawings_combined"
+        os.makedirs(savedir, exist_ok=True)
+        psychogood_plot_drawings_morphsets(DSmorphsets, savedir)
+
+        # All trials for each morphset,  many plots
+        savedir = f"{SAVEDIR}/drawings_each"
+        os.makedirs(savedir, exist_ok=True)
+        psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, True)
+
 
     ##################################### PLOTS
     if PLOT_SCORES:
+        # THen you need to regenerate DSMorphsets. This is becuase you want to preprocess motor stats in DS, which is much smaller
+        # dataset than DSmorphsets, and then re-split it to DSMorphsets
+
         from pythonlib.tools.pandastools import find_unique_values_with_indices
         from pythonlib.tools.pandastools import append_col_with_grp_index
         from pythonlib.tools.pandastools import append_col_with_index_of_level, append_col_with_index_of_level_after_grouping
@@ -1540,7 +1938,6 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
         from math import pi
         from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_directly_from_DS
         from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline_directly_from_DS
-        from pythonlib.dataset.dataset_analy.psychometric_singleprims import _plot_overview_scores
 
 
         # Also extract motor params for DS (i.e,, primitivenessv2). 
@@ -1560,6 +1957,15 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
         else:
             assert False
         prune_strokes = False
+
+        # Map from psycho group to trial info
+        map_group_to_los = {}
+        for morph_group in DSmorphsets.Dat["morph_set_idx"].unique().tolist():
+            list_idx = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"]==morph_group]["morph_idxcode_within_set"].unique().tolist()
+            map_group_to_los[morph_group] = {idx:None for idx in list_idx}
+            for idx_within_group in list_idx:
+                los = DSmorphsets.Dat[(DSmorphsets.Dat["morph_set_idx"]==morph_group) & (DSmorphsets.Dat["morph_idxcode_within_set"]==idx_within_group)]["los_info"].unique().tolist()
+                map_group_to_los[morph_group][idx_within_group] = los
 
         ##### Two variations on DS
         # (1) DS, concatting df where each df is a single morph set, e.g., morphj idnices [0 1 2 3... 99], where 0 and 99 are base prims
@@ -1634,44 +2040,28 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
                                                 contrast=contrast, context=context,
                                                 prune_strokes=prune_strokes, plot_methods=plot_methods,
                                                 savedir_suffix="MORPH_SETS_EACH_IDX_GLOBAL")
-    else:
-        # Still return a DSmorph.
-        # NOTE: must run again, since above it runs after primitiveness2 stuff, but that takes a while, dont' want to do 
-        # it here.
+    # else:
+    #     # Still return a DSmorph.
+    #     # NOTE: must run again, since above it runs after primitiveness2 stuff, but that takes a while, dont' want to do 
+    #     # it here.
         
-        # (1) DS, concatting df where each df is a single morph set, e.g., morphj idnices [0 1 2 3... 99], where 0 and 99 are base prims
-        list_df = []
-        for group, idx_dict in map_group_to_los.items():
-            for idx, list_los in idx_dict.items():
-                df = DS.Dat[DS.Dat["los_info"].isin(list_los)].copy()
-                df["morph_set_idx"] = group
-                df["morph_idxcode_within_set"] = idx
-                df["morph_is_morphed"] = idx not in [0, 99]
-                list_df.append(df)
-        DF = pd.concat(list_df).reset_index(drop=True)
-        DSmorphsets = DS.copy()
-        DSmorphsets.Dat = DF
-
-    ################# Plot drawings
-    if PLOT_DRAWINGS:
-
-        # Single plot holding all
-        from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets
-        savedir = f"{SAVEDIR}/drawings_combined"
-        os.makedirs(savedir, exist_ok=True)
-        psychogood_plot_drawings_morphsets(DSmorphsets, savedir)
-
-        # All trials for each morphset,  many plots
-        savedir = f"{SAVEDIR}/drawings_each"
-        os.makedirs(savedir, exist_ok=True)
-        psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, True)
-
+    #     # (1) DS, concatting df where each df is a single morph set, e.g., morphj idnices [0 1 2 3... 99], where 0 and 99 are base prims
+    #     list_df = []
+    #     for group, idx_dict in map_group_to_los.items():
+    #         for idx, list_los in idx_dict.items():
+    #             df = DS.Dat[DS.Dat["los_info"].isin(list_los)].copy()
+    #             df["morph_set_idx"] = group
+    #             df["morph_idxcode_within_set"] = idx
+    #             df["morph_is_morphed"] = idx not in [0, 99]
+    #             list_df.append(df)
+    #     DF = pd.concat(list_df).reset_index(drop=True)
+    #     DSmorphsets = DS.copy()
+    #     DSmorphsets.Dat = DF
 
     return DSmorphsets
-        
 
 def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs_tsc_idx_end, morphs_tsc_n_sets, morphs_tsc_n_each_set,
-                                        morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected,
+                                        morphs_tsc_map_to_these_indices, list_example_base_los, nlocations_expected, los_allowed_to_exclude,
                                         print_summary = True,  PLOT_SCORES=True, PLOT_DRAWINGS = True):
     """
     For extraction and plotting of structured morphs (and any morph in general), as alterantive to psychogood_preprocess_wrapper,
@@ -1686,8 +2076,10 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
 
     PARAMS
     [Input params, see params_extract_psycho_groupings_manual_using_tsc_inds]
-
     
+    RETURNS;
+    - DFRES, each row is single trial.
+    - DSmorphsets, concatted DS after first splitting by morphset.
     """
 
     from pythonlib.tools.pandastools import grouping_print_n_samples
@@ -1704,6 +2096,7 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
         """
         Helper function to append data to res. 
         See use within.
+        Datapt is single trial.
         """
         assert isinstance(los_example, tuple)
         assert len(los_example)==3
@@ -1718,13 +2111,16 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
             tsc_ind = map_los_to_tscind[los_example]
             list_los = map_tscind_to_listlos[tsc_ind] # exand to all los that match this inputed los
             for los in list_los:
-                res.append({
-                    "morph_set_idx":morphset,
-                    "morph_idxcode_within_set":morph_idxcode_within_set,
-                    "morph_is_morphed":morph_is_morphed,
-                    "psycho_value":psycho_value,
-                    "los":los
-                })
+                # get all trials
+                for tc in D.Dat[D.Dat["los_info"] == los]["trialcode"].tolist():
+                    res.append({
+                        "trialcode":tc,
+                        "morph_set_idx":morphset,
+                        "morph_idxcode_within_set":morph_idxcode_within_set,
+                        "morph_is_morphed":morph_is_morphed,
+                        "psycho_value":psycho_value,
+                        "los":los
+                    })
 
     ### PREPARE
     # First, get mapping between TSC and los
@@ -1763,10 +2159,10 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
         morphset_tscinds.append(list(range(on,off)))
         on = off
 
+    res = []
     ### (1)  Get all the morphed los
     morph_is_morphed = True
     HACK_PSYCHO_VALUE = True
-    res = []
     for morphset, tscinds in enumerate(morphset_tscinds):
         for _i, _tscind in enumerate(tscinds):
 
@@ -1789,14 +2185,6 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
             for los in list_los:
                 extract_all_los_if_they_exist(los, 
                                                 res, morphset, idx_within, morph_is_morphed, psycho_value)
-
-                # res.append({
-                #     "morph_set_idx":morphset,
-                #     "morph_idxcode_within_set":idx_within,
-                #     "morph_is_morphed":morph_is_morphed,
-                #     "psycho_value":psycho_value,
-                #     "los":los
-                # })
     
     ### (2) Base prim los
     for morphset, (example_los_base_1, example_los_base_2) in enumerate(list_example_base_los):
@@ -1850,6 +2238,13 @@ def psychogood_preprocess_wrapper_using_tsc_inds(D, morphs_tsc_idx_start, morphs
     ntot = len(D.Dat["los_info"])
     print(f"counting for this mnay trials: {n}/{ntot}")
     assert n/ntot<0.2, "why excludd so many? this might be expected"
+
+    if not all([los in los_allowed_to_exclude for los in los_excluded]):
+        print("Los ecluded, but not allowed to: ")
+        for los in los_excluded:
+            if not los in los_allowed_to_exclude:
+                print(f"{los},")
+        assert False, "if is fine to fail, then add them to params"
 
     #################### ANALYSIS
     DSmorphsets = psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR, 
@@ -2227,7 +2622,7 @@ def psychogood_extract_psycho_var(plan, extra_tform_params, morph_info, psycho_p
 
 def psychogood_find_tasks_in_this_psycho_group_wrapper(D, los_within, psycho_params):
     """
-    Good, Return all trials (los) that are in the psycho group that includes this los_within, and
+    Good, Return all trials that are in the psycho group that includes this los_within, and
     with variation consistent with pyscho_params.
     PARAMS:
     - los_within, (str, int, int).

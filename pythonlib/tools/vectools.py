@@ -1,6 +1,6 @@
 """ working with vectors, generally 2d, generally realted to drawing stuff"""
 import numpy as np
-
+import matplotlib.pyplot as plt
 from pythonlib.tools.distfunctools import modHausdorffDistance
 from math import pi
 
@@ -104,6 +104,34 @@ def get_angle(v):
     if v[1]<0:
         a = 2*pi-a
     return a
+
+def angle_clamp_within_range_0_2pi(angle):
+    """
+    Convert any angle in (-inf, inf) to the same angle in [0, 2pi)
+
+    PARAMS:
+    - angle, float
+    RETURNS:
+    - angle, float
+
+    EXMAPEL":
+        x = np.linspace(-10, 10, 100)
+        y = [angle_clamp_within_range_0_2pi(a) for a in x]
+        fig, ax = plt.subplots()
+        ax.plot(x, y, "-x")
+
+    """
+    return angle%(2*pi)
+
+def angle_diff_ccw(a1, a2):
+    """
+    Get difference in angles, i.e., the angle to traverse to get from a1-->a2, 
+    returning in range of (0, 2pi)
+    PARAMS:
+    - a1, a2, angles in radians, in domain (-inf, inf)
+    """
+    a = a2 - a1
+    return angle_clamp_within_range_0_2pi(a)
 
 def angle_diff(a1, a2):
     """ get difference between two angles.
@@ -235,3 +263,72 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
 
     return angles_named
 
+
+def projection_onto_axis_subspace(xmean_base1, xmean_base2, X, doplot=False,
+    plot_color_labels=None):
+    """
+    Project all pts in X onto axis (subspace) between xmean_base1 and xmean_base2, 
+    such that pts close to xmean_base1 are 0 and clsoe to xmean_base2 are 1
+
+    PARAMS:
+    - xmean_base1, (ndims,)
+    - xmean_base2, (ndims,)
+    - X, (ntrials, ndims), the data to project
+    RETURNS:
+    - X_proj_scal_norm, (ntrials,), projected data
+    """
+    import seaborn as sns
+
+    assert X.shape[1] == xmean_base1.shape[0] == xmean_base2.shape[0]
+
+    # - get axis.
+    encoding_axis = xmean_base2 - xmean_base1
+    encoding_axis_unit = unit_vector(encoding_axis)
+    encoding_axis_length = np.linalg.norm(encoding_axis)
+
+    # for any pt
+    # indthis = 100
+    # pt = X[indthis, :]
+
+    # # - subtract base1.
+    # projection_scalar = np.dot((pt - xmean_base1), encoding_axis_unit)
+    # print(projection_scalar)
+    # projection_scalar_norm = projection_scalar/encoding_axis_length
+
+    # vectorized version
+    X_proj_scal = np.dot((X - xmean_base1), encoding_axis_unit) # (ntrials,)
+    X_proj_scal_norm = X_proj_scal/encoding_axis_length
+
+    if doplot:
+        fig, axes = plt.subplots(2,2, figsize=(8, 8), sharex=True, sharey=True)
+        list_dims = [(0,1), (2,3), (4,5), (6,7)]
+        for dims, ax in zip(list_dims, axes.flatten()):
+
+            d1 = dims[0]
+            d2 = dims[1]
+            
+            if d2 > len(xmean_base1)-1:
+                break
+
+            ax.plot(xmean_base1[d1], xmean_base1[d2], "sk")
+            ax.text(xmean_base1[d1], xmean_base1[d2], "base1")
+            ax.plot(xmean_base2[d1], xmean_base2[d2], "sr")
+            ax.text(xmean_base2[d1], xmean_base2[d2], "base2")
+            ax.plot([xmean_base1[d1], xmean_base2[d1]], [xmean_base1[d2], xmean_base2[d2]], "-")
+            if plot_color_labels is None:
+                h = ax.scatter(X[:,d1], X[:,d2], c=X_proj_scal_norm, cmap="plasma")
+                plt.colorbar(h)
+            else:
+                from pythonlib.tools.listtools import sort_mixed_type
+                hue_order = sort_mixed_type(set(plot_color_labels))
+                # make categorical (string)
+                plot_color_labels = [f"{v}" for v in plot_color_labels]
+                hue_order = [f"{v}" for v in hue_order]
+                sns.scatterplot(x=X[:,d1], y=X[:,d2], hue=plot_color_labels, hue_order=hue_order, ax=ax, alpha=0.7)
+            ax.set_title("color=projection along axis between base1 and base2")
+            ax.set_ylabel(f"dims={dims}")
+
+    if doplot:
+        return X_proj_scal_norm, fig
+    else:
+        return X_proj_scal_norm
