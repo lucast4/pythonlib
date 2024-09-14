@@ -274,10 +274,23 @@ def distStrokWrapperMult(stroklist1, stroklist2, distancever="hausdorff_means", 
         stroklist1_processed, stroklist2_processed = stroklists_processed
         return stroklist1_processed, stroklist2_processed
 
+    # print("----- Before processing")
+    # for strok in stroklist1:
+    #     print(strok.shape)
+    # for strok in stroklist2:
+    #     print(strok.shape)
+    # print(DO_PREPROCESS)
+    # # assert False
     if DO_PREPROCESS:
         # Test: for (34 x 17 input) , 7.75 sec
         # print("distStrokWrapperMult with preprocess")
         stroklist1_processed, stroklist2_processed = _preprocess_strokes(stroklist1, stroklist2)
+        # print("----- After processing")
+        # for strok in stroklist1_processed:
+        #     print(strok.shape)
+        # for strok in stroklist2_processed:
+        #     print(strok.shape)
+        # print(DO_PREPROCESS)
         D = distmat_construct_wrapper(stroklist1_processed, stroklist2_processed, dist_func_run, cap_dist,
                                       normalize_rows, normalize_cols_range01, normalize_by_range, range_norm,
                                       convert_to_similarity, similarity_method, DEBUG)
@@ -327,6 +340,27 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
     strok1 = strok1.copy()
     strok2 = strok2.copy()
 
+    ## If want to interpolate to same length (ignore time)
+    def _interp(_strok1, _strok2, base="space", plot_outcome=False):
+        # npts_space = 50
+        # npts_diff = 25
+        # interpolate based on spatial coordinate. This removes temporal
+        # idiosyncracies, but is about shape changes over tinme.
+        # if len(strok1)!=n_interp:
+
+        # NOTE: should run this even if num pts is 50, since this replaces
+        # the "time" dimension with cumulative distance.
+
+        _strok1 = strokesInterpolate2([_strok1],
+            N=["npts", n_interp], base=base, plot_outcome=plot_outcome)[0]
+        _strok2 = strokesInterpolate2([_strok2],
+            N=["npts", n_interp], base=base, plot_outcome=plot_outcome)[0]
+        return _strok1, _strok2
+
+    # Decide if iterpolate, only if shapes are differnet.
+    if (strok1.shape[0]==strok2.shape[0]) and (strok1.shape[0]<n_interp*1.5):
+        auto_interpolate_if_needed = False
+
     if not ALREADY_PROCESSED:
         ## Rescale: apply first
         if rescale_ver is not None:
@@ -348,26 +382,13 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
             strok1 = strokes_centerize([strok1])[0]
             strok2 = strokes_centerize([strok2])[0]
 
-        ## If want to interpolate to same length (ignore time)
-        def _interp(strok1, strok2, base="space", plot_outcome=False):
-            # npts_space = 50
-            # npts_diff = 25
-            # interpolate based on spatial coordinate. This removes temporal
-            # idiosyncracies, but is about shape changes over tinme.
-            # if len(strok1)!=n_interp:
-
-            # NOTE: should run this even if num pts is 50, since this replaces
-            # the "time" dimension with cumulative distance.
-
-            strok1 = strokesInterpolate2([strok1],
-                N=["npts", n_interp], base=base, plot_outcome=plot_outcome)[0]
-            strok2 = strokesInterpolate2([strok2],
-                N=["npts", n_interp], base=base, plot_outcome=plot_outcome)[0]
-            return strok1, strok2
-
         if interp_to_ignore_time:
             strok1, strok2 = _interp(strok1, strok2, plot_outcome=DEBUG)
             auto_interpolate_if_needed = False # no need to redo
+
+        if auto_interpolate_if_needed and (strok1.shape[0]!=strok2.shape[0]):
+            # previosuly this was not here... was within each method below...
+            strok1, strok2 = _interp(strok1, strok2)
     else:
         auto_interpolate_if_needed = False
 
@@ -435,6 +456,8 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
         else:
             if auto_interpolate_if_needed:
                 strok1, strok2 = _interp(strok1, strok2)
+            else:
+                assert strok1.shape==strok2.shape
             dist =  _distStrokTimeptsMatched(strok1, strok2, min_strok_dur=None,
                                        vec_over_spatial_ratio=(1,0))
     elif ver=="euclidian_bidir":
