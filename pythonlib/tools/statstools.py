@@ -562,7 +562,7 @@ def balanced_stratified_resample_kfold(X, y, n_splits):
 
     return inds_folds
 
-def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
+def balanced_stratified_kfold(X, y, n_splits=5, do_print=False, do_balancing_of_train_inds=True, shuffle=False):
     """ 
     Returns k-fold indices, startified (with label y), and then
     ensuring that the number of train indices per class are same within each fold (i.e.
@@ -578,6 +578,8 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
     - n_splits
     --- int, this many folds.
     --- auto, takes n that maximizes n fold s(i.e. like LOO)
+    - do_balancing_of_train_inds, bool, if False, then doesnt balance the train idnices. This is useful if you
+    want to maximize n samples for training (e.g., the trained model is not biased by n samples).
     
     RETURNS:
     - balanced_folds, list of 2-tuples of indices, which are arrays of ints.
@@ -618,28 +620,34 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False):
         # dont take more splits than possible.
         n_splits = min([n_splits, min(Counter(y).values())])
 
-    skf = StratifiedKFold(n_splits=n_splits)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle)
     folds = list(skf.split(X, y)) # folds[0], 2-tuple of arays of ints
 
-    balanced_folds = []
-    
-    for train_idx, test_idx in folds:
-        # print("HER", type(train_idx), train_idx)
-        # y_train = y[train_idx]
-        y_train = [y[i] for i in train_idx]
-        class_counts = Counter(y_train)
-        min_class_count = min(class_counts.values())
-        
-        # Create a balanced train set
-        new_train_idx = []
-        class_indices = {cls: [i for i, ythis in enumerate(y_train) if ythis==cls] for cls in class_counts}
+    if do_balancing_of_train_inds:
+        # Resample inds after shuffling for each class.
+        balanced_folds = []
+        for train_idx, test_idx in folds:
+            # y_train = y[train_idx]
+            y_train = [y[i] for i in train_idx]
+            class_counts = Counter(y_train)
+            min_class_count = min(class_counts.values())
+            
+            # Create a balanced train set. For each class, subsample y_train so that is balanced across calsses.
+            new_train_idx = []
+            class_indices = {cls: [i for i, ythis in enumerate(y_train) if ythis==cls] for cls in class_counts}
 
-        for cls in class_counts:
-            np.random.shuffle(class_indices[cls])
-            cls_indices = class_indices[cls][:min_class_count]
-            new_train_idx.extend(train_idx[cls_indices])
-        
-        balanced_folds.append((np.array(new_train_idx), test_idx))
+            # For each class, shuffle its current inds, then take the first n to subsample.
+            for cls in class_counts:
+                np.random.shuffle(class_indices[cls])
+                cls_indices = class_indices[cls][:min_class_count]
+                new_train_idx.extend(train_idx[cls_indices])
+            
+            # print("HER", type(train_idx), train_idx)
+            # print(new_train_idx)
+            # print("test:", test_idx)
+            balanced_folds.append((np.array(new_train_idx), test_idx))
+    else:
+        balanced_folds = folds
     
     if do_print:
         for i, (train_idx, test_idx) in enumerate(balanced_folds):

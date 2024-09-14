@@ -477,10 +477,10 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         print(len(df))
         raise err
 
-    if len(list_cat_1)<200:
+    if len(list_cat_1)<400:
         # otherwise is too slow, too much text.
         ax.set_yticks([i+lab_add for i in range(len(list_cat_1))], list_cat_1, rotation=rotation_y, fontsize=6)
-    if len(list_cat_2)<200:
+    if len(list_cat_2)<400:
         ax.set_xticks([i+lab_add for i in range(len(list_cat_2))], list_cat_2, rotation=rotation, fontsize=6)
 
     return fig, ax, rgba_values

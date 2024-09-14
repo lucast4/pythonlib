@@ -236,7 +236,6 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
         # Only keep if values are categorical
         categorical_types = [str, tuple, int, bool]
         nonnumercols_exist = [col for col in nonnumercols_exist if type(df[col].tolist()[0]) in categorical_types]
-        print(1, nonnumercols_exist)
 
         # assert "idx_morph_temp" in nonnumercols_exist
         # assert False
@@ -250,9 +249,7 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
                 if len(v)!=1:
                     cols_exclude.append(col)
                     break
-        print(2, cols_exclude)
         nonnumercols_exist = [col for col in nonnumercols_exist if col not in cols_exclude]
-        print(3, nonnumercols_exist)
     else:
         nonnumercols_exist = None
 
@@ -1135,7 +1132,9 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     from pythonlib.tools.snstools import heatmap
 
     assert isinstance(val_name, str)
-
+    if zlims is None:
+        zlims = (None, None)
+        
     # If col2 is None, then give a dummy varaible, so that this code runs
     if col2 is None:
         # then is really a 1d plot
@@ -3572,6 +3571,48 @@ def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
         # sns.barplot(data=dfthisthis, x="bregion", y="same_mean", yerr=dfthisthis["same_sem"])
     return list_hue
 
+def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_lev_manip,
+                                           var_subplot, var_datapt,
+                                           plot_text=True,
+                                           alpha=0.8, SIZE=3, shareaxes=False,
+                                           plot_error_bars=True,
+                                           map_subplot_var_to_new_subplot_var=None,
+                                           fontsize=4, xymin_zero=False):
+    """
+    Runs plot_45scatter_means_flexible_grouping, but this is wrapper that can take in wideform dataframe,
+    does necessary conversion, then calls plot_45scatter_means_flexible_grouping.
+
+    Use this if x_lev_manip, y_lev_manip are actually different columns. THjis first converts
+    so that x_lev_manip, y_lev_manip are different levels of a new single column "scorevar"
+                                           
+    PARAMS:
+        var_datapt = "ani_date_mrp"
+        var_subplot = "bregion"
+        x_lev_manip = "dist_index_diff_mean_notmax"
+        y_lev_manip = "dist_index_diff_max"
+    """
+
+    # Collect two vertical slices taking the two lev_manip                                        
+    list_df = []
+    for scorevar in [x_lev_manip, y_lev_manip]:
+
+        dftmp = dfwide.loc[:, [var_datapt, var_subplot, scorevar]].copy()
+        dftmp["scorevar"] = scorevar
+        dftmp["score"] = dftmp[scorevar]
+        dftmp = dftmp.drop(scorevar, axis=1)
+
+        list_df.append(dftmp)
+
+    dflong = pd.concat(list_df, axis=0).reset_index(drop=True)
+
+    lev_manip = "scorevar"
+    dfres, fig = plot_45scatter_means_flexible_grouping(dflong, lev_manip, x_lev_manip, y_lev_manip, var_subplot, "score", 
+            var_datapt, plot_text, alpha, SIZE, shareaxes, plot_error_bars, map_subplot_var_to_new_subplot_var,
+            fontsize, xymin_zero)
+    
+    return dfres, fig                                                
+
+                                                
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
                                            plot_text=True,

@@ -14,11 +14,8 @@ def check_objects_identical(obj1, obj2, PRINT=False):
             print('obj2',obj2)
         return False
     elif isinstance(obj1, (tuple, list)):
-        # if not len(obj1)==len(obj2):
-        #     if PRINT:
-        #         print('obj1',obj1)
-        #         print('obj2',obj2)
-        #     return False
+        if len(obj1)!=len(obj2):
+            return False
         for x, y in zip(obj1, obj2):
             good = check_objects_identical(x,y)
             if not good:
