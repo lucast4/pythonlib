@@ -10,6 +10,46 @@ from pythonlib.tools.plottools import savefig
 import os
 import seaborn as sns
 
+def params_base_prims_not_separated(animal, date):
+    """ [For smooth morph expts] Those that dont show separation of states of base prims 1 and 2, by eye, using
+    scatterplot, state space, "scalar" version.
+    RETURNS:
+    - list of  morphsets (ints).
+    """
+        
+    date = int(date)
+
+    if (animal, date) == ("Diego", 240515):
+        morphset_bad = []
+    elif (animal, date) == ("Diego", 240517):
+        morphset_bad = []
+    elif (animal, date) == ("Diego", 240521):
+        morphset_bad = []
+    elif (animal, date) == ("Diego", 240523):
+        morphset_bad = []
+    elif (animal, date) == ("Diego", 240731):
+        morphset_bad = []
+    elif (animal, date) == ("Diego", 240801):
+        morphset_bad = [3]
+    elif (animal, date) == ("Diego", 240802):
+        morphset_bad = [0, 4, 7]
+    elif (animal, date) == ("Pancho", 240516):
+        morphset_bad = []
+    elif (animal, date) == ("Pancho", 240521):
+        morphset_bad = [8]
+    elif (animal, date) == ("Pancho", 240524):
+        morphset_bad = [4, 5] # 4: this one has too much changing in stroke onset.
+    elif (animal, date) == ("Pancho", 240801):
+        morphset_bad = []
+    elif (animal, date) == ("Pancho", 240802):
+        # morphset_bad = [0, 6]
+        morphset_bad = [6] 
+    else:
+        print(animal, date)
+        assert False    
+
+    return morphset_bad
+        
 def params_has_intermediate_shape(animal, date):
     """ Within the ones that are smooth (no swithcing), which
     has intermediate shape?
@@ -22,26 +62,30 @@ def params_has_intermediate_shape(animal, date):
     if (animal, date) == ("Diego", 240515):
         morphset_good = []
     elif (animal, date) == ("Diego", 240517):
-        morphset_good = [0, 4, 7]
+        # morphset_good = [0, 4, 7]
+        morphset_good = []
     elif (animal, date) == ("Diego", 240521):
         morphset_good = [] 
     elif (animal, date) == ("Diego", 240523):
         morphset_good = [] # 
     elif (animal, date) == ("Diego", 240731):
-        morphset_good = [2, 6] # 
+        # morphset_good = [2, 6] # 
+        morphset_good = [] # 
     elif (animal, date) == ("Diego", 240801):
         morphset_good = [2] # 
     elif (animal, date) == ("Diego", 240802):
         morphset_good = [] # 
 
     elif (animal, date) == ("Pancho", 240516):
-        morphset_good = [0, 3] # 
+        # morphset_good = [0, 3] # 
+        morphset_good = [] # 
     elif (animal, date) == ("Pancho", 240521):
         morphset_good = [3] # 
     elif (animal, date) == ("Pancho", 240524):
         morphset_good = [] # 
     elif (animal, date) == ("Pancho", 240801):
-        morphset_good = [0, 3, 4] # 
+        # morphset_good = [0, 3, 4] # 
+        morphset_good = [4] # 
     elif (animal, date) == ("Pancho", 240802):
         morphset_good = [] # 
     else:
@@ -88,6 +132,115 @@ def params_good_morphsets_no_switching(animal, date):
         print(animal, date)
         assert False    
     return morphset_good
+
+def params_good_morphsets_switching_ignore_trialcodes(animal, date):
+    """
+    Trials with ambiguous activity that isnt easily assigned to base1 or base 2. 
+    THis is hacky, eventualyl should do this by auto.
+    """
+
+    date = int(date)
+
+    trialcodes_ignore = []
+
+    if (animal, date) == ("Pancho", 240524):
+        trialcodes_ignore = ["240524-1-198", "240524-1-440"] # is messy stroke, half way in between the two bases
+    else:
+        pass # allow defautl to ignore this.
+    return trialcodes_ignore
+    
+
+def params_good_morphsets_switching(animal, date):
+    """
+    By eye, looked thru all trials for all morhsets, and here noting which are the good ones. Also
+    noting whihc indices (within morphset) have at least one trial per base prim.
+    Chosen to satisfy these criteria:
+    - interm strokes look similar to base strokes.
+    - stroke quality good.
+    See spreadsheet "Results table (manuscript 1...)" for detailed notes on each case.
+    """ 
+
+    date = int(date)
+        
+    # Hand modified
+    if (animal, date) == ("Diego", 240515):
+        # Angle rotation
+        map_morphsetgood_to_indices = {
+            # 3:[2,3],
+            3:[], # 2 only has one trial, and it is 2 strokes, so thrown out.
+        }
+    elif (animal, date) == ("Diego", 240517):
+        # Angle rotation
+        map_morphsetgood_to_indices = {
+            1:[2],
+            5:[4],
+        }
+    elif (animal, date) == ("Diego", 240521):
+        # Angle rotation
+        map_morphsetgood_to_indices = {
+            0:[2,3],
+            3:[6],
+            4:[3,4],
+            6:[5,6],
+        }
+    elif (animal, date) == ("Diego", 240523):
+        # Old note.. (dont knw what this means)THis is a garbage morphset, is not actually morphing.
+        map_morphsetgood_to_indices = {
+            # 1:[1,2,3],
+            1:[], # Removed, becuase the intermediatre strokes dont look like the base strokes at all
+            3:[2,3,4, 5],
+            4:[2,3],
+            5:[3,4],
+        }
+    elif (animal, date) == ("Diego", 240730):
+        map_morphsetgood_to_indices = {
+            0:[4, 5], # 5 has one trial.
+            1:[1,2,3,4],
+            2:[1, 2], # 1 has one trial for base 2...
+            5:[2,3,4],
+        }
+            
+    elif (animal, date) == ("Pancho", 240516):
+        map_morphsetgood_to_indices = {
+            2:[4,5],
+            4:[3],
+        }
+            
+    elif (animal, date) == ("Pancho", 240521):
+        map_morphsetgood_to_indices = {
+            # 2:[4],
+            2:[3, 4, 5], # 3 and 5 each have one trial.., so added
+            4:[2,3,4],
+            9:[2, 3,4],
+        }
+            
+    elif (animal, date) == ("Pancho", 240524):
+        map_morphsetgood_to_indices = {
+            1:[1],
+            8:[4],
+        }
+    else:
+        print(animal, date)
+        assert False
+
+    return map_morphsetgood_to_indices
+
+# def params_good_morphsets_switching(animal, date):
+#     # Hand modified
+#     if (animal, date) == ("Diego", 240515):
+#         # Angle rotation
+#         morphsets_ignore = [2] # Did most with two strokes...
+#     if (animal, date) == ("Diego", 240523):
+#         # THis is a garbage morphset, is not actually morphing.
+#         morphsets_ignore = [0]
+#     elif (animal, date) == ("Pancho", 240521):
+#         morphsets_ignore = [0] # one base prim is garbage
+#     elif (animal, date) == ("Pancho", 240524):
+#         morphsets_ignore = [4] # doesnt actually vaciallte across tirals
+#     else:
+#         print(animal, date)
+#         assert False
+#     return morphsets_ignore
         
 def params_remap_angle_to_idx_within_morphset(animal, date):
     """
@@ -1215,7 +1368,6 @@ def plot_overview(DS, D, SAVEDIR, var_psycho="angle"):
     ## Dataset
     savedir = f"{SAVEDIR}/analyses_dataset_lenient_strokes"
     os.makedirs(savedir, exist_ok=True)
-    print("Plotting motor analyses...")
 
     D = D.copy()
     # D.extract_beh_features(["num_strokes_beh"])
@@ -1454,7 +1606,7 @@ def preprocess_cont_morph(D, clean_ver="singleprim_psycho"):
     return DS, DSmorphsets, map_morph_set_idx_to_shapes, map_shape_to_base_prims, map_base_prims_to_morphed_shape, SAVEDIR
 
 
-def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL = True):
+def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL = True, list_psycho_group=None):
     """
     All drawing-related plots that separate out fore ach morphset. i.e, not the plots that 
     combine all morphsetse intoa  single grid.
@@ -1466,7 +1618,13 @@ def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL =
     """
     from pythonlib.tools.plottools import savefig
     # if PLOT_DRAWINGS:
-    for psycho_group in DSmorphsets.Dat["morph_set_idx"].unique().tolist():
+
+    if "morph_assigned_to_which_base" not in DSmorphsets.Dat:
+        assert False, "you need to first run psychogood_decide_if_tasks_are_ambiguous -- make this part of the prperocess wrapper. this is already part of neural wrapper, so just appply that to beh analysis (assume you are doing beh analy)"
+    if list_psycho_group is None:
+        list_psycho_group = DSmorphsets.Dat["morph_set_idx"].unique().tolist()
+
+    for psycho_group in list_psycho_group:
     # Plot drawings of all morphsets
 
         dfres_all = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"] == psycho_group].reset_index(drop=True)
@@ -1496,9 +1654,12 @@ def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL =
                 assert False
 
             SIZE = 4
-            list_morph_idx = sorted(dfres_all["morph_idxcode_within_set"].unique())
+            # list_morph_idx = sorted(dfres_all["morph_idxcode_within_set"].unique())
+            from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+            grpdict = grouping_append_and_return_inner_items_good(dfres_all, ["morph_idxcode_within_set", "morph_assigned_to_which_base"])
 
-            n = len(list_morph_idx) + 2
+            # n = len(list_morph_idx) + 2
+            n = len(grpdict) + 2
             ncols = 6
             nrows = int(np.ceil(n/ncols))
 
@@ -1522,7 +1683,8 @@ def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL =
             # inds_base2 = dfres_base_2["idx_dat"].tolist()
 
             ct = 1
-            for morph_idx in list_morph_idx:
+            for (morph_idx, assignment), _inds in grpdict.items():
+            # for morph_idx in list_morph_idx:
                 ax = axes.flatten()[ct]
 
                 if ver == "task":
@@ -1530,26 +1692,25 @@ def psychogood_plot_morphset_drawings(D, DSmorphsets, SAVEDIR, PLOT_EACH_TRIAL =
                     D.plot_mult_trials_overlaid_on_axis(inds_base1, ax, ver=ver, single_color="b", alpha=0.25, nrand=10)
                     D.plot_mult_trials_overlaid_on_axis(inds_base2, ax, ver=ver, single_color="r", alpha=0.25, nrand=10)
 
-                # inds = dfres_all[dfres_all["morph_idxcode_within_set"] == morph_idx]["idx_dat"].tolist()
-                inds = D.Dat[D.Dat["trialcode"].isin(dfres_all[dfres_all["morph_idxcode_within_set"] == morph_idx]["trialcode"].tolist())].index.tolist()
+                # inds = D.Dat[D.Dat["trialcode"].isin(dfres_all[dfres_all["morph_idxcode_within_set"] == morph_idx]["trialcode"].tolist())].index.tolist()
+                inds = D.Dat[D.Dat["trialcode"].isin(dfres_all.iloc[_inds]["trialcode"].tolist())].index.tolist()
                 D.plot_mult_trials_overlaid_on_axis(inds, ax, ver=ver, single_color="k")
 
-                ax.set_title(f"morph_idx: {morph_idx}")
+                ax.set_title(f"idx:{morph_idx},assign:{assignment}")
                 ct += 1
 
                 if PLOT_EACH_TRIAL:
                     # - also plot individual trials
                     fig, _, _  = D.plotMultTrials2(inds, "strokes_beh")
-                    savefig(fig, f"{savedir}/indivtrials-morph_idx_{morph_idx}-beh.pdf")
+                    savefig(fig, f"{savedir}/indivtrials-morph_idx={morph_idx}-assign={assignment}-beh.pdf")
                     if False: # not needed, since tasks are already plot in the overlaid plot
                         fig, _, _  = D.plotMultTrials2(inds, "strokes_task")
-                        savefig(fig, f"{savedir}/indivtrials-morph_idx_{morph_idx}-task.pdf")
+                        savefig(fig, f"{savedir}/indivtrials-morph_idx={morph_idx}-assign={assignment}-task.pdf")
         
                 plt.close("all")
 
             # base 2
             ax = axes.flatten()[ct]
-            # inds = dfres_base_2["idx_dat"].tolist()
             D.plot_mult_trials_overlaid_on_axis(inds_base2, ax, ver=ver, single_color="r", nrand=nrand)
             ax.set_title(f"base_prim 2")
 
@@ -1693,7 +1854,6 @@ def _plot_overview_scores(D, DSmorphsets, SAVEDIR, use_task_stroke_or_los, DS=No
     os.makedirs(savedir, exist_ok=True)
     print("Plotting motor analyses...")
 
-
     # Number of strokes used
     if "seqc_0_morphed" in D.Dat.columns:
         D = D.copy()
@@ -1722,6 +1882,156 @@ def _plot_overview_scores(D, DSmorphsets, SAVEDIR, use_task_stroke_or_los, DS=No
                                                 plot_methods=plot_methods)
     plt.close("all")
         
+
+def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=None, NEURAL_PLOT_DRAWINGS=None):
+    """
+    [The final wrapper for all kinds of psycho, morphing expts].
+    Does preprocess, plots,a nd extarction of data for neural analyse.
+    
+    This used to be in decode_moment, for prepping neural data, but realized it should be genreal across neur and beh.
+
+    PARAMS:
+    - NEURAL_VERSION, switches whether does neural or beh plots. These are just different codes that I refactord to be here.
+    SHould actualyl just be same stuff.
+    """
+
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_preprocess_wrapper, psychogood_plot_drawings_morphsets, params_remap_angle_to_idx_within_morphset
+
+    assert NEURAL_VERSION is not None, "have to give false or true."
+    if NEURAL_VERSION:
+        assert NEURAL_SAVEDIR is not None
+        assert NEURAL_PLOT_DRAWINGS is not None, "bool"
+    date = int(D.dates(True)[0])
+    animal = D.animals(True)[0]
+
+    if NEURAL_VERSION:
+        # Clean up first --> only trials with one beh stroke
+        # - one stroke, so that it can be assigned to base 1 or 2 accurately.
+        D.preprocessGood(params=["beh_strokes_one", "remove_online_abort"])
+
+    ### Extract all psycho prims stuff
+    # How to map back to neural data?
+    # -- trialcode
+
+    # Code: given a (morphset, idx), get all sets of trialcodes
+    # def find_morphset_morphidx(DSmorphsets, morphset, idx_in_morphset, return_as_trialcodes=True):
+    #     """ Return indices in DSmorphsets that match morphset and idx_in_morphset
+    #     """
+    #     from pythonlib.tools.pandastools import _check_index_reseted
+    #     # _check_index_reseted(DSmorphsets.Dat)
+    #     inds = DSmorphsets.Dat[
+    #         (DSmorphsets.Dat["morph_set_idx"] == morphset) & 
+    #         (DSmorphsets.Dat["morph_idxcode_within_set"] == idx_in_morphset)].index.tolist()
+        
+    #     if return_as_trialcodes:
+    #         return DSmorphsets.Dat.iloc[inds]["trialcode"].tolist()
+    #     else:
+    #         return inds
+
+    if (animal, date) in [("Diego", 240523), ("Diego", 240730),
+                          ("Pancho", 240524)]:
+        # Structured morphs -- e.g., modify angle of one arm gradaully
+        if NEURAL_VERSION:
+            DFRES, DSmorphsets, PARAMS, los_allowed_to_miss = psychogood_preprocess_wrapper(D, PLOT_DRAWINGS=False, 
+                                                                                        PLOT_EACH_TRIAL=False, PLOT_SCORES=False,
+                                                                                        clean_ver="singleprim_psycho_noabort")
+        else:
+            DFRES, DSmorphsets, PARAMS, los_allowed_to_miss = psychogood_preprocess_wrapper(D)
+
+    elif (animal, date) in [("Diego", 240802), ("Pancho", 240802)]:
+        # Structured morphs -- new method, using hand inputed tsc inds
+        from pythonlib.dataset.dataset_analy.psychometric_singleprims import params_extract_psycho_groupings_manual_using_tsc_inds, psychogood_preprocess_wrapper_using_tsc_inds
+        if NEURAL_VERSION:
+            DFRES, DSmorphsets = psychogood_preprocess_wrapper_using_tsc_inds(D, 
+                                            *params_extract_psycho_groupings_manual_using_tsc_inds(animal, date), 
+                                            print_summary=True, PLOT_SCORES=False, PLOT_DRAWINGS = False)
+        else:
+            DFRES, DSmorphsets = psychogood_preprocess_wrapper_using_tsc_inds(D, 
+                                            *params_extract_psycho_groupings_manual_using_tsc_inds(animal, date), 
+                                            print_summary=True, PLOT_SCORES=True, PLOT_DRAWINGS = True)
+
+    elif (animal, date) in [("Diego", 240522), ("Pancho", 240523)]:
+        # [Novel prims] Continuous morphs -- i.e., take onset and offset of two base prims to form one single middle prim.
+        # Option: continuous morph between two base sets (e.g. take onset of one, and offset of other)
+        
+        if NEURAL_VERSION:
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess_cont_morph
+            _, DSmorphsets, _, _, _, _ = preprocess_cont_morph(D, clean_ver="singleprim_psycho_noabort")        
+            # Recode to follow convention.
+            map_old_to_new = {
+                0:0, # base1
+                1:99, # base2
+                -1:1, # morph
+            }
+            DSmorphsets.Dat["morph_idxcode_within_set"] = [map_old_to_new[morph_idxcode_within_set] for morph_idxcode_within_set in DSmorphsets.Dat["morph_idxcode_within_set"]]
+        else:
+            # I have no idea why neural and beh are different
+            DS, SAVEDIR, dfres, grouping = preprocess_and_plot(D, PLOT=True)
+
+    elif (animal, date) in [
+        ("Diego", 240515), ("Diego", 240517), ("Diego", 240521), ("Diego", 240731), ("Diego", 240801),  
+        ("Pancho", 240516), ("Pancho", 240521), ("Pancho", 240801),
+        ]:
+        if NEURAL_VERSION:
+            # Angle morphs
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess, plot_overview, preprocess_angle_to_morphsets, psychogood_prepare_for_neural_analy
+            _, DSlenient, _ = preprocess(D, clean_ver="singleprim_psycho_noabort")
+
+            if False:
+                savedir = "/tmp/pshychjo"
+                os.makedirs(savedir, exist_ok=True)
+                plot_overview(DS, D, savedir)
+
+            map_angleidx_to_finalidx, split_by_morphset = params_remap_angle_to_idx_within_morphset(animal, date)
+            DSmorphsets = preprocess_angle_to_morphsets(DSlenient, map_angleidx_to_finalidx, split_by_morphset)
+        else:
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess_and_plot
+            preprocess_and_plot(D, var_psycho="angle", PLOT=True)
+
+    else:
+        print(animal, date)
+        assert False
+
+    if DSmorphsets is None:
+        print(animal, date)
+        assert False
+
+    # Plot the morphsets
+    if NEURAL_VERSION:
+        savedir_this = f"{NEURAL_SAVEDIR}/{animal}-{date}"
+        os.makedirs(savedir_this, exist_ok=True)
+
+        if NEURAL_PLOT_DRAWINGS:
+            psychogood_plot_drawings_morphsets(DSmorphsets, savedir=savedir_this)
+
+        from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_prepare_for_neural_analy
+        DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, \
+            map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_prepare_for_neural_analy(D, DSmorphsets)
+
+        # Save things
+        from pythonlib.tools.expttools import writeDictToTxtFlattened
+        path = f"{NEURAL_SAVEDIR}/map_tc_to_morph_info.txt"
+        writeDictToTxtFlattened(map_tc_to_morph_info, path, sorted_by_keys=True)
+
+        path = f"{NEURAL_SAVEDIR}/map_morphset_to_basemorphinfo.txt"
+        writeDictToTxtFlattened(map_morphset_to_basemorphinfo, path, sorted_by_keys=True)
+
+        path = f"{NEURAL_SAVEDIR}/map_tcmorphset_to_idxmorph.txt"
+        writeDictToTxtFlattened(map_tcmorphset_to_idxmorph, path, sorted_by_keys=True)
+
+        path = f"{NEURAL_SAVEDIR}/map_tcmorphset_to_info.txt"
+        writeDictToTxtFlattened(map_tcmorphset_to_info, path, sorted_by_keys=True)
+
+        path = f"{NEURAL_SAVEDIR}/map_morphsetidx_to_assignedbase_or_ambig.txt"
+        writeDictToTxtFlattened(map_morphsetidx_to_assignedbase_or_ambig, path, sorted_by_keys=True)
+
+        path = f"{NEURAL_SAVEDIR}/map_tc_to_morph_status.txt"
+        writeDictToTxtFlattened(map_tc_to_morph_status, path, sorted_by_keys=True)
+
+        return DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status
+    else:
+        return
+
 
 def psychogood_preprocess_wrapper(D, PLOT_DRAWINGS = True, PLOT_EACH_TRIAL = True,  PLOT_SCORES=True,
     clean_ver="singleprim_psycho"):
@@ -2860,15 +3170,37 @@ def psychogood_find_tasks_in_this_psycho_group_wrapper_manual_helper(D, example_
     print(f"'los_base_1': ('singleprims_psycho', FILL_IN, FILL_IN), 'los_base_2': ('singleprims_psycho', FILL_IN, FILL_IN), 'los_within': {example_los_1}, 'psycho_params': {psycho_params}")
 
     
-def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
+def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None,
+    manual_params_overwrite_label=True, manual_animal=None, manual_date=None,
+    specific_morphset_idx = None):
     """
     Decide whether task is ambiguous, in that it is matched with eitehr base 1 or base 2 on different
-    trials. 
-    
+    trials --> assign that task a label.
+
+    To do so, this assigns each trial a label.
+
+    Rule is that if a given idx within morph has even just one trial diff from otheres (i.e, matched to base 1 or 2), then
+    it is a candidate to be called ambig. In addition, it needs manual params calling it ambig too (if manual_params_overwrite_label==True).
+
+    PARAMS:
+    - manual_params_overwrite_label=False, manual_animal=None, manual_date=None
+    - manual_params_overwrite_label, if True, then uses manual params to decide whether
+    each idx is ambig or not. Must pass in animal and date    
+    - specific_morphset_idx, (morphset, idx), to skip everything and get here quickly. ONLY FOR DEBUGGING
+
+    NOTE:
+        # if manual_params_overwrite_label:
+        #     if manual inptu exists, then uses it (i..e, calls it "ambig"), and the auto detect is asserted to detect ambig.
+        #     if doesnt exist, then uses auto.
+        # if not, uses auto.
             
     """
     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
-    
+
+    if manual_params_overwrite_label is not None:
+        assert manual_animal is not None
+        assert manual_date is not None
+        
     def find_morphset_morphidx(DSmorphsets, morphset, idx_in_morphset):
         return DSmorphsets.Dat[
             (DSmorphsets.Dat["morph_set_idx"] == morphset) & 
@@ -2878,8 +3210,14 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
     assignments = ["null" for _ in range(len(DSmorphsets.Dat))]
     min_trials = 5
     min_frac = 0.3
-
+    min_trials_to_call_ambig = 1
+    DEBUG = specific_morphset_idx is not None
+        
     for (morphset, idx_in_morphset), _inds_this in grpdict.items():
+
+        if specific_morphset_idx is not None:
+            if not specific_morphset_idx==(morphset, idx_in_morphset):
+                continue
 
         # if PLOT_SAVEDIR is not None:
         #     savedir = f"{PLOT_SAVEDIR}/morphset={morphset}--idx_in_morphset={idx_in_morphset}"
@@ -2928,22 +3266,47 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
         strokmean_base1, _ = strokes_average(strokes_base1, center_at_onset=True)
         strokmean_base2, _ = strokes_average(strokes_base2, center_at_onset=True)
 
-        if False:
+        if DEBUG:
             DSmorphsets.plot_multiple_strok([strokmean_base1, strokmean_base2])
 
+        # Use two distances, becuase someitmes dtw_vels_2d fails, e.g., Vs at different angel, where the arms are similar, but locations diff.
         # DSmorphsets._dist_strok_pair(strokes[0], strokes[1], recenter_to_onset=True)
-        Cl = DSmorphsets._cluster_compute_sim_matrix(strokes, [strokmean_base1, strokmean_base2], "dtw_vels_2d", return_as_Clusters=True)
+        Cl1 = DSmorphsets._cluster_compute_sim_matrix(strokes, [strokmean_base1, strokmean_base2], "dtw_vels_2d", return_as_Clusters=True)
         if PLOT_SAVEDIR:
-            fig, X, labels_col, labels_row, ax = Cl.plot_heatmap_data()
-            savefig(fig, f"{PLOT_SAVEDIR}/morphset={morphset}--idx_in_morphset={idx_in_morphset}--simmat_heatmap.pdf")
+            fig, X, labels_col, labels_row, ax = Cl1.plot_heatmap_data()
+            savefig(fig, f"{PLOT_SAVEDIR}/morphset={morphset}--idx_in_morphset={idx_in_morphset}--simmat_heatmap-dtw_vels_2d.pdf")
+        
+        Cl2 = DSmorphsets._cluster_compute_sim_matrix(strokes, [strokmean_base1, strokmean_base2], "euclidian", return_as_Clusters=True)
+        if PLOT_SAVEDIR:
+            fig, X, labels_col, labels_row, ax = Cl2.plot_heatmap_data()
+            savefig(fig, f"{PLOT_SAVEDIR}/morphset={morphset}--idx_in_morphset={idx_in_morphset}--simmat_heatmap-euclidian.pdf")
+
+        # Take average of dtw and eucl (downweighted, since it overwhelms)
+        if True:
+            X = Cl1.Xinput + 0.4*Cl2.Xinput
+        else:
+            X = Cl1.Xinput
+
+        if False: # INPROGRESS
+            # Label cases that fail to match etiehr base prim well --> failure to match
+            # This works fine with code and params below.
+            # But I didnt implement beucase this would affect dowbnstream code, if have a third label...
+            # TODO: incorporate this.
+            fails1 = np.max(Cl1.Xinput, axis=1) < 0.4
+            fails2 = np.max(Cl2.Xinput, axis=1) < 0.5
+
+            Xmax = np.stack([np.max(Cl1.Xinput, axis=1), np.max(Cl2.Xinput, axis=1)], axis=1)
+            print(Xmax, fails1, fails2)
+            inds_fail = (fails1 & fails2) # cases that dont match either base prim well.
+
+            # TODO: have a third label, based on where inds_fail is True.
 
         # Assign whether is base1 or base 2 aligned
-        indmax = np.argmax(Cl.Xinput, axis=1)
+        indmax = np.argmax(X, axis=1)
         inds_assigned_to_base1 = [x[0] for x in np.argwhere(indmax==0).tolist()]
         inds_assigned_to_base2 = [x[0] for x in np.argwhere(indmax==1).tolist()]
 
-            
-        # Plot 
+        # Plot  
         if PLOT_SAVEDIR:
             fig, axes = plt.subplots(2,2, sharex=True, sharey=True, figsize=(10,10))
 
@@ -2967,11 +3330,40 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
         # Save the assignemnets 
         # - call this ambiguous only if it shows bimodal matching to base prims.
         bimodal_by_frac = min([len(inds_assigned_to_base1), len(inds_assigned_to_base2)])/len(strokes) >= min_frac
-        bimodal_by_count = min([len(inds_assigned_to_base1), len(inds_assigned_to_base2)])>=2
-
+        bimodal_by_count = min([len(inds_assigned_to_base1), len(inds_assigned_to_base2)])>=min_trials_to_call_ambig      
 
         enough_trials = len(strokes)>=min_trials
+
+        # manually say that this is ambiguous.
+        if manual_params_overwrite_label:
+            try:
+                map_morphsetgood_to_indices = params_good_morphsets_switching(manual_animal, manual_date)
+                if morphset not in map_morphsetgood_to_indices:
+                    overwrite_is_ambiguous = False
+                else:
+                    overwrite_is_ambiguous = idx_in_morphset in map_morphsetgood_to_indices[morphset]
+            except AssertionError as err:
+                # Then this (animal, date) doesnt exist in params. Assume it is not a switching day.. Go with auto mode.
+                overwrite_is_ambiguous = False
+
+            if overwrite_is_ambiguous:
+                if not min([len(inds_assigned_to_base1), len(inds_assigned_to_base2)])>=1:
+                    # note: In some cases, it is a switching morphset, but no particular 
+                    print("morphset, idx_in_morphset:", morphset, idx_in_morphset)
+                    print(f"inds assigned to base1: {inds_assigned_to_base1}, to base2: {inds_assigned_to_base2}")
+                    print("This is probably a case where morphset is switching, but this index doesnt have swithc")
+                    assert False, "manual label says is ambig, but did not detect cases for one of the base prims... mistake in manual label?"
+        else:
+            overwrite_is_ambiguous = False
         
+        # if idx_in_morphset == 4 and morphset==5:
+        #     print(manual_params_overwrite_label)
+        #     print(manual_animal, manual_date)
+        #     print(overwrite_is_ambiguous)
+        #     print(inds_assigned_to_base1, inds_assigned_to_base2)
+        #     print(map_morphsetgood_to_indices)
+        #     assert False
+
         ### Are strokes variable across trials.
         if False: # stop doing this, as it fails for circles, and also you don't have to flip to be ambiguous, so thistt
             # throws too much stuff out.
@@ -2982,6 +3374,8 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
             flips_are_variable = min([nflips, nnotflips])>=2
             
             is_ambigious = (bimodal_by_frac or bimodal_by_count) and enough_trials and flips_are_variable
+        elif overwrite_is_ambiguous:
+            is_ambigious = True
         else:
             print("TODO: best method is to test bimodality in distnaces to base prims..")
             is_ambigious = (bimodal_by_frac or bimodal_by_count) and enough_trials
@@ -3017,7 +3411,6 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None):
         print(f"inds assigned to base1: {inds_assigned_to_base1}, to base2: {inds_assigned_to_base2}")
         print("is_ambigious:", is_ambigious)
 
-
         plt.close("all")    
 
     assert sum([a=="null" for a in assignments])==0, "not sure why, failed to assign some trials."
@@ -3049,6 +3442,7 @@ def psychogood_prepare_for_neural_analy(D, DSmorphsets):
     NOTE:
     - should first preprocess to just one beh stroke per trial, or else will fail.
     """
+    from pythonlib.tools.pandastools import grouping_print_n_samples
 
     assert all(DSmorphsets.Dat["stroke_index"])==0, "or else teh following will fail -- should first preprocess to just one stroke per trial"
 
@@ -3067,16 +3461,15 @@ def psychogood_prepare_for_neural_analy(D, DSmorphsets):
         else:
             return inds
 
-
     from pythonlib.tools.pandastools import _check_index_reseted
     _check_index_reseted(DSmorphsets.Dat)
 
     # PLOT_SAVEDIR = "/tmp"
     PLOT_SAVEDIR = None
-    assignments = psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR)
-
-    from pythonlib.tools.pandastools import grouping_print_n_samples
-
+    animal = D.animals(True)[0]
+    date = D.dates(True)[0]
+    _ = psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR, 
+        manual_params_overwrite_label=True, manual_animal=animal, manual_date=date)
 
     # for morphset in sorted(DSmorphsets.Dat["morph_set_idx"].unique().tolist()):
     #     df = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"] == morphset]
