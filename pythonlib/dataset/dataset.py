@@ -10938,7 +10938,7 @@ class Dataset(object):
 
         def _dist(x1, x2):
             """ Compute scalar distance between pairs of trials's sequences"""
-            assert len(x1)==len(x2)
+            assert len(x1)==len(x2), f"you proibably did not clean up data to include only successful trials -- sequence lengths are different (online abort?) -- {x1} -- {x2}"
             if isinstance(x1[0], int) and isinstance(x2[0], int):
                 # e.g., (-1,1, 10), (1,2, 1)
                 # l2 distance
@@ -10993,7 +10993,7 @@ class Dataset(object):
                 print(var_behorder, ".. Using this min/max n clusters: ", n_clusters_min_max)
                 # Get cluster labels.
                 if len(set(vals))==1 or len(vals) < MIN_TRIALS:
-                    # Then all are same cluster
+                    # Then all are same cluster.
                     cluster_labels = ["0" for _ in range(len(vals))]
                     # If there are only a few unique cases, then just call those clusters
                 else:
@@ -11030,7 +11030,10 @@ class Dataset(object):
                 for labget, ax in zip(sorted(set(cluster_labels)), axes.flatten()):
                     valsthis = [vals[i] for i, lab in enumerate(cluster_labels) if lab == labget]
                     for v in valsthis:
-                        if isinstance(v[0], int):
+                        if isinstance(v, tuple) and len(v)==0:
+                            # This is the case for var_behorder=="behseq_locs_diff" and groupby=='FEAT_num_strokes_task'. It is ok.
+                            ax.plot(range(len(v)), v, "-o", label=labget, color=pcols[int(labget)], alpha=0.1)
+                        elif isinstance(v[0], int):
                             v_jitter = np.array(v) + 0.25*np.random.rand(len(v))
                             ax.plot(range(len(v)), v_jitter, "-o", label=labget, color=pcols[int(labget)], alpha=0.1)
                         elif isinstance(v[0], tuple) and isinstance(v[0][0], int):
@@ -11041,10 +11044,14 @@ class Dataset(object):
                             ax.scatter(v_jitter[:, 0], v_jitter[:,1], c=range(v_jitter.shape[0]), label=labget, alpha=0.4, cmap="plasma")
                             for i, pt in enumerate(np.array(v)):
                                 ax.text(pt[0], pt[1], i, alpha=0.2, fontsize=15)
-                        elif isinstance(v[0], str):
+                        elif isinstance(v, tuple) and isinstance(v[0], str):
                             ax.plot(range(len(v)), v, "-o", label=labget, color=pcols[int(labget)], alpha=0.1)
                         else:
-                            assert False
+                            print(v)
+                            print(type(v))
+                            print(cluster_labels)
+                            print(var_behorder, groupby)
+                            assert False, "probably they are all same cluster labels? pathological case like nstrokes=1 and location_diff?"
                     # ax.plot(valsthis, "-o", label=labget, color=pcols[int(labget)])
                     ax.set_title(f"cluster lab: {labget}")
                     ax.set_xlabel("index in trial")
