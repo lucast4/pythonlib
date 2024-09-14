@@ -2677,7 +2677,7 @@ class DatStrokes(object):
 
     ################################ SIMILARITY/CLUSTERING
     def cluster_compute_mean_stroke(self, inds, center_at_onset=True,
-        check_same_direction=True, Npts = 70, ver="mean"):
+        check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None):
         """Compute the mean stroke across these inds, after linear time warping to align them
         PARAMS:
         - inds, indices into self.Dat
@@ -2694,6 +2694,10 @@ class DatStrokes(object):
         if check_same_direction:
             assert self._strokes_check_all_aligned_direction(strokes, plot_failure=True), "same shape done in multipel directions?"
 
+        if rescale_strokes_ver is not None:
+            from pythonlib.tools.stroketools import rescaleStrokes
+            strokes = rescaleStrokes(strokes, rescale_strokes_ver)
+            
         strokmean, strokstacked = strokes_average(strokes, 
             center_at_onset=center_at_onset, Ninterp=Npts, ver=ver)
         return strokmean, strokstacked    
@@ -2877,12 +2881,16 @@ class DatStrokes(object):
     #     return list_simmat
 
     def _cluster_compute_sim_matrix_aggver(self, strokes_data, strokes_basis,
-                                           list_ver=["euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered"],
-                                           labels_rows_dat=None, labels_cols_feats=None):
-        from ..cluster.clustclass import Clusters
+                                           labels_rows_dat, labels_cols_feats,
+                                           labels_var_tuple, 
+                                           list_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered")):
         """ Low-level code to compute multiple similarity matrices (diff distance vers)
         and average them, to return a single sim mat
+        PARAMS:
+        - labels_rows_dat, labels_cols_feats, list of labels for each row,
+        - labels_var_tuple, e.g., ("shape", "gridloc"), if each item in labels_rows_dat is like (circle, (0,1))
         """
+        from ..cluster.clustclass import Clusters
 
         # collect
         list_simmat = []
@@ -2900,9 +2908,13 @@ class DatStrokes(object):
 
         if labels_rows_dat is None:
             labels_rows_dat = [i for i in range(len(strokes_data))]
-
+        
+        params = {
+            "version_distance":tuple(list_ver),
+            "label_vars":labels_var_tuple,
+        }
         Cl = Clusters(X = simmat, labels_rows=labels_rows_dat,
-                      labels_cols=labels_cols_feats)
+                      labels_cols=labels_cols_feats, ver="dist", params=params)
 
         return Cl
 
@@ -2915,6 +2927,8 @@ class DatStrokes(object):
         Given dataset, projects data to a chosen feature space (out of a variety
          of possible feature spaces), where data is usualyl self.Dat with added
          columns if needed. Returns A Cluster() object with (ndat, nfeatures).
+
+        Feature spaces are usually based on comparison to basis strokes.
         """
 
         params = {}
@@ -2947,9 +2961,11 @@ class DatStrokes(object):
                 list_distance_ver  = ["dtw_vels_2d"]
 
             # Compute similarity
-            Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, list_distance_ver,
+            Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, 
                                                          labels_rows_dat= list_shape,
-                                                         labels_cols_feats= list_shape_basis)
+                                                         labels_cols_feats= list_shape_basis,
+                                                         labels_var_tuple=("shape",),
+                                                         list_distance_ver = list_distance_ver)
 
             params["list_strok_basis"] = list_strok_basis
             params["list_shape_basis"] = list_shape_basis

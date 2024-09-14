@@ -18,7 +18,7 @@ import pandas as pd
 
 class Clusters(object):
     """docstring for Clusters"""
-    def __init__(self, X, labels_rows=None, labels_cols=None, ver=None, params=None):
+    def __init__(self, X, labels_rows=None, labels_cols=None, ver=None, params=None, trialcodes=None):
         """ 
         PARAMS;
         - X, (N, D) data, where N is num datpts, and D is dimensionality, 
@@ -57,6 +57,11 @@ class Clusters(object):
         else:
             assert len(labels_cols)==self.Ndim
         self.LabelsCols = labels_cols
+
+        if trialcodes is not None:
+            # Assumed to be matching the Labels
+            assert len(trialcodes)==len(self.Labels)
+        self.Trialcodes = trialcodes
 
         self.Params = params
 
@@ -927,7 +932,7 @@ class Clusters(object):
             "version_distance":version_distance,
             "Clraw":self,
         }
-        return Clusters(D, self.Labels, self.Labels, ver="dist", params=params)
+        return Clusters(D, self.Labels, self.Labels, ver="dist", params=params, trialcodes=self.Trialcodes)
 
     ################# RSA
     def _rsa_check_compatible(self):
@@ -940,9 +945,13 @@ class Clusters(object):
         #     print(self.Version)
         #     print(self.Params)
         #     assert False
-        if self.Version=="dist" and isinstance(self.Labels[0], tuple):
+        elif self.Version=="dist" and isinstance(self.Labels[0], tuple):
             return True
-        return False
+        elif self.Labels == self.LabelsCols:
+            # Then is symmetric.
+            return True
+        else:
+            return False
 
     def rsa_plot_points_split_by_var_flex(self, var_x_axis_each_subplot, yvar,
                                           var_lines_within_subplots,
@@ -1518,6 +1527,157 @@ class Clusters(object):
             return MASKS, fig, axes
         else:
             return MASKS, None, None
+
+    def rsa_distmat_score_all_pairs_of_label_groups_datapts(self, get_only_one_direction=True, label_vars=None,
+            return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff",
+            list_grps_get=None):
+        """
+        See rsa_distmat_score_all_pairs_of_label_groups, except here gets pairs of (datapt vs. group) whereas there was
+        (group vs group).
+        PARAMS:
+        - list_grps_get, list of grp labels, if not None, then restricts analyses to just these. Will still use all trials 
+        for single datapts, but this restricts which grps those datapts are compared to. This is useful for making this quiker, and
+        also to make sure doesnt fail if you ahve grps with only 1 datapt (it will fail).
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+
+        if return_as_clustclass:
+            get_only_one_direction = False
+
+        assert self.Labels == self.LabelsCols, "assumes so for soem of below"
+
+        # Get dataframe of labels for each trial
+        dflabels = self.rsa_labels_return_as_df()
+
+        # Get all label groupings and their trial indices.
+        if label_vars is None:
+            label_vars= self.rsa_labels_extract_label_vars()
+        grpdict = grouping_append_and_return_inner_items_good(dflabels, label_vars)
+
+        # Prune grps, if desired.
+        if list_grps_get is not None:
+            grpdict = {grp:inds for grp, inds in grpdict.items() if grp in list_grps_get}
+
+        if len(grpdict)==0:
+            print(list_grps_get)
+            grpdict = grouping_append_and_return_inner_items_good(dflabels, label_vars)
+            print(grpdict.keys())
+            assert False, "your input list_grps_get doesnt iunclude any items in grpdict"
+
+        # Get distance between each pair or grps
+        res = []
+        for idx1 in range(len(self.Labels)):
+            inds1 = [idx1]
+            grp1 = self.Labels[idx1]
+            for j, (grp2, inds2) in enumerate(grpdict.items()):
+                
+                if inds2 == inds1:
+                    # Then this is bad -- both are 1 item, so this is distance to itself
+
+                    assert False, "how deal with this"
+                
+                # make sure never take distance between pt and itself
+                inds2 = [_i for _i in inds2 if _i!=idx1]
+                    
+                # Should include below lower and upper triangle, to make sure get all pairs.
+                ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
+                X = self.Xinput[ma]
+                # no need to exclude diagonal, becuase above step ensures no overlap in inds.
+
+                res.append({
+                    "idx_row_datapt":idx1,
+                    "labels_1_datapt":grp1,
+                    "labels_2_grp":grp2,
+                    "dist_mean":np.mean(X)
+                })
+                
+                # Expand, to get each variable in label.
+                for _ivar, _var in enumerate(label_vars):
+                    res[-1][f"{_var}_1"] = grp1[_ivar]
+                    res[-1][f"{_var}_2"] = grp2[_ivar]
+
+                    res[-1][f"{_var}"] = grp1[_ivar] # Give a new colum which is the class of the datapt
+                
+                if self.Trialcodes is not None:
+                    res[-1]["trialcode"] = self.Trialcodes[idx1]
+
+        # Also get 98th percentile between pairs of pts.
+        ma = self._rsa_matindex_generate_upper_triangular()
+        DIST_50, DIST_98 = np.percentile(self.Xinput[ma], [50, 98])
+
+        dfres = pd.DataFrame(res)
+        dfres["DIST_50"] = DIST_50
+        dfres["DIST_98"] = DIST_98
+
+        # normalize the distances
+        dfres["dist_norm"] = dfres["dist_mean"]/dfres["DIST_98"]
+
+        # Convert scores to dist_yue_diff
+        def _get_within_group_dist(grp, var_score):
+            """ return scalar avearge distance wtihin this group"""
+            tmp = dfres[(dfres["labels_1_datapt"]==grp) & (dfres["labels_2_grp"]==grp)] # len n datapts for this group.
+            return tmp[var_score].mean() # get the mean over all (datapt, group), which is equivalent to all pairs within group
+
+        var_score = "dist_norm"
+        list_dist_yue_diff = []
+        for i, row in dfres.iterrows():
+            
+            # - get average within-group score for the two groups
+            dist_within_group = _get_within_group_dist(row["labels_2_grp"], var_score)
+            dist_across = row[var_score] # dist between this datapt and the group.
+
+            dist_yue_diff = dist_across - dist_within_group
+
+            list_dist_yue_diff.append(dist_yue_diff)
+
+        dfres["dist_yue_diff"] = list_dist_yue_diff
+
+        ### Return as a ClustClass object
+        if return_as_clustclass:
+            assert False, "not coded yet -- see rsa_distmat_score_all_pairs_of_label_groups"
+            # assert get_only_one_direction==False
+
+
+            # labels = sorted(set(dfres["labels_1"].tolist() + dfres["labels_2"].tolist()))
+            # # labels = sorted(set(self.Labels))
+            # map_label_to_idx = {lab:i for i, lab in enumerate(labels)}
+
+            # indsgotten = []
+            # X = np.zeros((len(labels), len(labels)))-np.inf
+            # for i, row in dfres.iterrows():
+            #     indrow = map_label_to_idx[row["labels_1"]]
+            #     indcol = map_label_to_idx[row["labels_2"]]
+            #     X[indrow, indcol] = row[return_as_clustclass_which_var_score]
+
+            #     assert (indrow, indcol) not in indsgotten
+            #     indsgotten.append((indrow, indcol))
+            # assert not np.any(X==-np.inf), "did not fill in all indices..."
+
+            # # Alternative, mucgh slower method
+            # # import numpy as np
+            # # var_score = "dist_yue_diff"
+            # # labels = sorted(set(self.Labels))
+            # # X = np.zeros((len(labels), len(labels)))
+            # # for i, labrow in enumerate(labels):
+            # #     print(i)
+            # #     for j, labcol in enumerate(labels):
+            # #         tmp = dfres[(dfres["labels_1"] == labrow) & (dfres["labels_2"] == labcol)]
+            # #         assert len(tmp)==1
+            # #         X[i, j] = tmp[var_score].values[0]
+
+            # # fig, ax = plt.subplots()
+            # # ax.imshow(X)
+
+            # params = {
+            #     "label_vars":self.Params["label_vars"],
+            #     "version_distance":self.Params["version_distance"],
+            #     "Clraw":None,
+            # }
+            # Cldist = Clusters(X, labels, labels, ver="dist", params=params)
+
+            # return dfres, Cldist
+        else:
+            return dfres
 
 
     def rsa_distmat_score_all_pairs_of_label_groups(self, get_only_one_direction=True, label_vars=None,
@@ -2147,7 +2307,7 @@ class Clusters(object):
         # No: instead keep the labels as in self, to allow plotting self and
         # Cltheor using similar sort indices.
         Cltheor = Clusters(D, self.Labels, self.LabelsCols, ver="dist",
-                           params={"var":var, "version_distance":None})
+                           params={"var":var, "version_distance":None, "label_vars":(var,)})
         # plot
         if PLOT:
             fig = Cltheor.plot_heatmap_data()[0]
