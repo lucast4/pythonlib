@@ -425,6 +425,7 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
         mapper_auto_rename_probe_taskgroups = True            
+        label_as_novel_if_shape_semantic_fails = True
 
     elif "dirshape" in expt:
         # 10/17/22 - e..g, dircolro3b    
@@ -583,7 +584,10 @@ def _groupingParams(D, expt):
         # # one of the base prims used in the morph (as a hack).
         reclassify_shape_using_stroke_version = "cluster_by_sim"
         # reclassify_shape_using_stroke_version = "default" NO - cannnot use this.
-# 
+    elif expt=="priminvar3g":        
+        # Also included some ZZ on this day -- this is not base prim.
+        label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
+
     elif "priminvar" in expt:
         # e.g., priminvar5
         # Is just single prims
@@ -1076,8 +1080,14 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     def _index_to_rule(ind):
         tp = D.blockparams_extract_single_taskparams(ind)
         # new, post 9/19/22 - using taskparams
-        ver = tp["task_objectclass"]["tasksequencer_ver"]
-        prms = tp["task_objectclass"]["tasksequencer_params"] # list.
+
+        try:
+            ver = tp["task_objectclass"]["tasksequencer_ver"]
+            prms = tp["task_objectclass"]["tasksequencer_params"] # list.
+        except Exception as err:
+            print(tp)
+            print(tp["task_objectclass"])
+            raise err
 
         if len(ver)==0 and len(prms)==0:
             # Then no supervision
@@ -1189,6 +1199,7 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
     list_rule =[]
     for ind in range(len(D.Dat)):
         list_rule.append(_index_to_rule(ind))
+        
     # Assign rule back into D.Dat
     D.Dat["epoch"] = list_rule
     D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
