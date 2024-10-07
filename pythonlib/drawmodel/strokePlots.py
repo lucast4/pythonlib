@@ -260,7 +260,7 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
         pcol = [[0.3, 0.2, 0.2]]
         alpha = 1
         plotver="onecolor"
-
+    
 
     if strokenums_to_plot is not None:
         each_stroke_separate=True

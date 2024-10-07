@@ -894,7 +894,7 @@ class Dataset(object):
                 pathlist = findPath(sdir, [], "Tasks", "pkl")
 
             if len(pathlist)!=1:
-                print(pathlist)
+                print(pathlist,'meow')
                 assert False
             # assert len(pathlist)==1
             print("--- Loading tasks pkl file: ", pathlist[0])
