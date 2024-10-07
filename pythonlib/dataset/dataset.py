@@ -784,7 +784,7 @@ class Dataset(object):
         assert trialcode in trialcodes_included
         return blockparams
 
-    def blockparams_extract_single_taskparams(self, ind):
+    def blockparams_extract_single_taskparams(self, ind, also_return_index=False):
         """ Extract the taskparams fro this trail, only after
         ~9/19/22, when moved task params from BlockPrams to TaskParams
         RETURNS:
@@ -806,13 +806,20 @@ class Dataset(object):
             # if index>1:
             #     print("lenght: ", len(BP["TaskParams"]))
             #     assert False, "confirm length >1"
-            return BP["TaskParams"][index-1] # index is 1-index
+
+            if also_return_index:
+                return BP["TaskParams"][index-1], index
+            else:
+                return BP["TaskParams"][index-1] # index is 1-index
         else:
             # Then is old version, just extract blockparams in entirety
 
             # prune to just those fields that are in TaskParams.
             BP = {k:v for k,v in BP.items() if k in fields_in_taskparams}
-            return BP
+            if also_return_index:
+                return BP, None
+            else:
+                return BP
 
     def blockparams_extract_single_combined_task_and_block(self, ind):
         """ Extracts a single dict combining taskparams and blockparams.
@@ -1144,7 +1151,7 @@ class Dataset(object):
 
     def taskcharacter_find_plot_sorted_by_score(self, scorename, plot=False,
                                                 sdir=None, n_iter=3, nmax=60,
-                                                path_prefix=None):
+                                                path_prefix=None, list_char=None):
         """ Get list of characters sorted by their avreage score across trials.
         PARAMS:
         - scorename, str name of score to use. 
@@ -1155,7 +1162,9 @@ class Dataset(object):
         - list_score, list of num, scores matching the char. 
         """
 
-        list_char = self.Dat["character"].unique().tolist()
+        if list_char is None:
+            list_char = self.Dat["character"].unique().tolist()
+
         list_score = []
         list_n = []
         for char in list_char:
@@ -1611,13 +1620,8 @@ class Dataset(object):
         for ind in range(len(self.Dat)):
             tmp.append(self.taskclass_extract_los_info(ind))
         self.Dat["los_info"] = tmp
-        print("Appended column: los_info")
-
-        # i
-
-        # tmp_sorted = sorted(set(tmp))
-        # for x in tmp_sorted:
-        #     print(x)        
+        self.Dat["los_set"] = [(los[0], los[1]) for los in self.Dat["los_info"]]
+        print("Appended column: los_info and los_set ")
 
     def taskclass_gridsize_assign_column(self):
         """ Extract gridsize (string) and assign to new column in self.Dat
@@ -10614,7 +10618,7 @@ class Dataset(object):
 
         # First, get all the strokes.
         DS = preprocess_dataset_to_datstrokes(self, "all_no_clean") # get all strokes.
-        DS = DS.clustergood_load_saved_cluster_shape_classes(
+        DS, params_clust = DS.clustergood_load_saved_cluster_shape_classes(
             skip_if_labels_not_found=skip_if_labels_not_found)
         if DS is None:
             # Then no data found
