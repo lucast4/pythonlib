@@ -928,8 +928,8 @@ class DatStrokes(object):
         if "dist_beh_task_strok" not in self.Dat.columns:
             list_inds = list(range(len(self.Dat)))
 
-            list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
-            list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
+            # list_strok_beh = self.extract_strokes(inds=list_inds, ver_behtask="beh")
+            # list_strok_task = self.extract_strokes(inds=list_inds, ver_behtask="task_aligned_single_strok")
             
             # compute distances    
             dists = self._dist_alignedtask_to_beh(list_inds)   
@@ -1733,44 +1733,34 @@ class DatStrokes(object):
 
         return fig, axes
 
-
     def plot_single_strok_bare(self, strok, ax, color=None, alpha=0.5):
         """ Very bare, low-level
         """
+        self.plot_single_strok(strok, ver="bare", ax=ax, color=color, alpha_beh=alpha)
 
-        ax.plot(strok[:,0], strok[:,1], "-", color=color, alpha=alpha)
 
     def plot_single_strok(self, strok, ver="beh", ax=None, 
-            color=None, alpha_beh=None):
+            color=None, alpha_beh=None, label_onset=None, label_color=None):
         """ plot a single inputed strok on axis.
         INPUT:
         - strok, np array,
         """
 
-        if alpha_beh is None:
-            alpha_beh = 0.55
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
-        if ver=="beh":
-            plotDatStrokesWrapper([strok], ax, color=color, add_stroke_number=False, 
-                mark_stroke_onset=True, alpha=alpha_beh)
-        elif ver=="task_dots":
-            plotDatStrokes([strok], ax, clean_unordered=True, alpha=0.2)
-        elif ver=="task":
-            plotDatStrokes([strok], ax, clean_task=True, alpha=0.2)
-        else:
-            assert False
+        from pythonlib.drawmodel.strokePlots import plot_single_strok
+        plot_single_strok(strok, ver, ax, color, alpha_beh, label_onset=label_onset, label_color=label_color)
 
 
     def plot_single_overlay_entire_trial(self, ind, ax=None, 
-            overlay_beh_or_task="beh", SIZE=2):
+            overlay_beh_or_task="beh", SIZE=2, 
+            separate_axis_image=None, suppress_stroke=False):
         """
         Plot a single stroke, overlaying it on all the strokes from this trial, colored
         and numbered, where the trial's data is extracted from self.Dataset.
         PARAMS
         - overlay_beh_or_task, str, whether to overlay the entire trial;s' beh or task.
+        or None, to skip that.
+        - separate_axis_image, eiter None (overlay beh on task) or is axis object, in which case
+        this holds the task image, and ax holds beh
         """
 
         if ax is None:
@@ -1778,19 +1768,47 @@ class DatStrokes(object):
         else:
             fig = None
 
+        if separate_axis_image is None:
+            separate_axis_image = ax
+
         # plot trial
         inddat = self._dataset_index(ind)
         if overlay_beh_or_task=="beh":
-            self.Dataset.plot_single_trial(inddat, ax, single_color="k")
+            self.Dataset.plot_single_trial(inddat, separate_axis_image, single_color="k")
         elif overlay_beh_or_task=="task":
-            self.Dataset.plot_single_trial(inddat, ax, single_color="k", ver="task")
+            self.Dataset.plot_single_trial(inddat, separate_axis_image, single_color="k", ver="task")
         else:
             assert False
 
         # overlay the stroke
-        self.plot_single(ind, ax, color="r")
+        if not suppress_stroke:
+            self.plot_single(ind, ax, color="r")
 
-        return inddat, fig, ax
+        return inddat, fig, ax  
+    
+    def plot_multiple_overlay_entire_trial_single_plot(self, ax, list_inds, separate_axis_image=None,
+                                                       color="r", list_colors=None):
+        """ [GOOD, e.g., for comparing chars to images]
+        Plot Multipel strokes on either one subplot, overlying, and also overlaying the netire
+        trial underneathj (the task)
+        PARAMS:
+        - separate_axis_image, eiter None (overlay beh on task) or is axis object, in which case
+        this holds the task image, and ax holds beh
+        - list_colors, list of colors to give each beh stroke.
+        """ 
+
+        for i, _ind in enumerate(list_inds):
+
+            # Plot task image
+            if i==0:
+                self.plot_single_overlay_entire_trial(_ind, ax, "task", separate_axis_image=separate_axis_image, suppress_stroke=True)
+
+            # Plot strokes.
+            if list_colors is not None:
+                _color = list_colors[i]
+            else:
+                _color = color
+            self.plot_single(_ind, ax, color=_color)
 
 
     def plot_multiple_overlay_entire_trial(self, list_inds, ncols=5, 
@@ -1817,13 +1835,15 @@ class DatStrokes(object):
         return fig, axes, inds_trials_dataset
 
 
-    def plot_single(self, ind, ax=None, color=None):
+    def plot_single(self, ind, ax=None, color=None, label_onset=None, label_color=None):
         """ Plot a single stroke, based on index into self.Dat
+        PARAMS:
+        - if not None, then pass in string that will label stroke onset.
         """
         if ax==None:
             fig, ax = plt.subplots(1,1)
         S = self.Dat.iloc[ind]["Stroke"]
-        self.plot_single_strok(S(), ver="beh", ax=ax, color=color)
+        self.plot_single_strok(S(), ver="beh", ax=ax, color=color, label_onset=label_onset, label_color=label_color)
         return ax
 
     def plot_multiple_after_slicing_within_range_values(self, colname, minval, 
@@ -2122,6 +2142,33 @@ class DatStrokes(object):
             n_examples_per_sublot=n_examples_per_sublot, sort_colvar=True, plot_task=plot_task)
         return figbeh, figtask
 
+    def plotshape_row_figure_axis(self, strokes, axis="x", centerize=True, title_shapes=None):
+        """
+        For making plots to place on x and y axis of figure.
+        """
+        # Plot strokes for axes
+        from pythonlib.tools.plottools import naked_erase_axes
+
+        if centerize: # cenerize
+            from pythonlib.tools.stroketools import strokes_centerize
+            strokes = strokes_centerize(strokes)
+
+        if axis=="x":
+            ncols = len(strokes)
+        elif axis=="y":
+            ncols = 1
+        else:
+            assert False
+
+        fig, axes = self.plot_multiple_strok(strokes, overlay=False, ncols = ncols, titles=title_shapes)
+        
+        # fig.tight_layout()
+        if title_shapes is None:
+            for ax in axes.flatten():
+                naked_erase_axes(ax)
+        # plt.subplots_adjust(wspace=-0.8, hspace=0)
+        return fig
+
     def plotshape_row_col_vs_othervar(self, rowvar, colvar="shape", n_examples_per_sublot=1,
         plot_task=False, ver_behtask="task_aligned_single_strok"):
         """ Plot shapes on columns and othervar as rows, each slot an example stroke 
@@ -2289,7 +2336,7 @@ class DatStrokes(object):
         
 
     def plotshape_multshapes_trials_grid(self, col_grp="shape_oriented", col_levels=None, 
-            nrows=2, flip_plot=False):
+            nrows=2, flip_plot=False, sort_rows_by_this_feature=None):
     # def plot_examples_grid(self, col_grp="shape_oriented", col_levels=None, nrows=2,
     #         flip_plot=False):
         """ 
@@ -2304,15 +2351,24 @@ class DatStrokes(object):
         from pythonlib.drawmodel.strokePlots import plotDatStrokes
 
         outdict = extract_trials_spanning_variable(self.Dat, col_grp,
-            col_levels, n_examples=nrows, return_as_dict=True)[0]
+            col_levels, n_examples=nrows, return_as_dict=True, sort_by_feature=sort_rows_by_this_feature)[0]
         list_row = []
         list_col = []
         list_inds = []
+        list_vals = []
         for col, (shape, inds) in enumerate(outdict.items()):
-            for row, index in enumerate(inds):
+
+            # Optiaonlly sort by a feature
+            if sort_rows_by_this_feature is not None:
+                inds, values = self.indices_sort_by_feature(inds, sort_rows_by_this_feature)
+            else:
+                values = [None for _ in range(len(inds))]
+
+            for row, (index, val) in enumerate(zip(inds, values)):
                 list_inds.append(index)
                 list_row.append(row)
                 list_col.append(col)
+                list_vals.append(val)
 
         strokes = self.Dat.iloc[list_inds]["strok"].values
         def plotfunc(strok, ax):
@@ -2327,7 +2383,65 @@ class DatStrokes(object):
         return fig
 
 
+    def plotshape_multshapes_trials_grid_sort_by_feature(self, col_grp="shape_oriented", col_levels=None, 
+                                                         nrows=2, sort_rows_by_this_feature=None, SIZE=2.5,
+                                                         recenter_strokes=False):
+        """ 
+        Plot grid of strokes (sublots), where cols are (e.g.) shapes and rows are
+        example trials, with the trials sorted by <sort_rows_by_this_feature> and uniformly downsampled after sorting.
+        PARAMS:
+        - flip_plot, bool, if True, then cols are actually plotted as rows
+        - nrows, num examples for each shape, each will be a row.
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good, indices_sort_by_feature
+        from pythonlib.tools.listtools import random_inds_uniformly_distributed
+        from pythonlib.tools.plottools import plotGridWrapper
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes
 
+
+        grpdict = grouping_append_and_return_inner_items_good(self.Dat, [col_grp])
+        if col_levels is not None:
+            assert isinstance(col_levels, list)
+            grpdict = {k:v for k,v in grpdict.items() if k[0] in col_levels}
+        
+        def _get_sorted_inds(inds):
+            inds, values = indices_sort_by_feature(self.Dat, inds, sort_rows_by_this_feature)
+            _idxs = random_inds_uniformly_distributed(inds, dosort=False, ntoget=nrows)
+            inds = [inds[i] for i in _idxs]
+            values = values[_idxs]
+            return inds, values
+        
+        grpdict = {grp:_get_sorted_inds(inds)[0] for grp, inds in grpdict.items()}
+        grp_to_values = {grp:_get_sorted_inds(inds)[1] for grp, inds in grpdict.items()}
+
+        list_row = []
+        list_col = []
+        list_inds = []
+        list_vals = []
+        for col, (grp, inds) in enumerate(grpdict.items()):
+            values = grp_to_values[grp]
+
+            for row, (index, val) in enumerate(zip(inds, values)):
+                list_inds.append(index)
+                list_row.append(row)
+                list_col.append(col)
+                list_vals.append(val)
+
+        if len(list_inds)==0:
+            return None
+        else:
+            strokes = self.Dat.iloc[list_inds]["strok"].values
+            def plotfunc(strok, ax):
+                plotDatStrokes([strok], ax)
+
+            if recenter_strokes:
+                from pythonlib.tools.stroketools import strokes_centerize
+                strokes = strokes_centerize(strokes)
+
+            col_labels = [x[0] for x in grpdict.keys()]
+            fig = plotGridWrapper(strokes, plotfunc, list_col, list_row, titles=list_vals, titles_on_x=True, SIZE=SIZE,
+                                col_labels=col_labels)
+            return fig
 
     def plotStrokOrderedByLabel(labels, SF, labels_in_order=None):
         """ plot example (rows) of each label(cols), ordred as in 
@@ -2676,8 +2790,9 @@ class DatStrokes(object):
             self.print_n_samples_per_combo_grouping(["shape_is_novel", "shape_semantic", "shape"])
 
     ################################ SIMILARITY/CLUSTERING
-    def cluster_compute_mean_stroke(self, inds, center_at_onset=True,
-        check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None):
+    def _cluster_compute_mean_stroke(self, strokes, center_at_onset=True,
+        check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None,
+        centerize=False):
         """Compute the mean stroke across these inds, after linear time warping to align them
         PARAMS:
         - inds, indices into self.Dat
@@ -2690,19 +2805,48 @@ class DatStrokes(object):
 
         from pythonlib.tools.stroketools import strokes_average
         
-        strokes = self.extract_strokes("list_arrays", inds)
         if check_same_direction:
             assert self._strokes_check_all_aligned_direction(strokes, plot_failure=True), "same shape done in multipel directions?"
 
-        if rescale_strokes_ver is not None:
-            from pythonlib.tools.stroketools import rescaleStrokes
-            strokes = rescaleStrokes(strokes, rescale_strokes_ver)
+        # if rescale_strokes_ver is not None:
+        #     from pythonlib.tools.stroketools import rescaleStrokes
+        #     strokes = rescaleStrokes(strokes, rescale_strokes_ver)
             
         strokmean, strokstacked = strokes_average(strokes, 
-            center_at_onset=center_at_onset, Ninterp=Npts, ver=ver)
+            center_at_onset=center_at_onset, Ninterp=Npts, ver=ver, rescale_strokes_ver=rescale_strokes_ver,
+            centerize=centerize)
         return strokmean, strokstacked    
 
-    def cluster_compute_mean_stroke_thisshape(self, shape, best_n_by_dist=None):
+    def cluster_compute_mean_stroke(self, inds, center_at_onset=True,
+        check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None,
+        ver_behtask=None, centerize=False):
+        """Compute the mean stroke across these inds, after linear time warping to align them
+        PARAMS:
+        - inds, indices into self.Dat
+        - check_same_direction, bool, only continues if strokes are same direction
+        movements.
+        RETURNS:
+        - strokmean, (npts, 3), the mean stroke, where npts is by default 50
+        - strokstacked, (n_inds, npts, 3), all trials.
+        """
+        # from pythonlib.tools.stroketools import strokes_average        
+        strokes = self.extract_strokes("list_arrays", inds, ver_behtask=ver_behtask)
+        return self._cluster_compute_mean_stroke(strokes, center_at_onset,
+                                                 check_same_direction, Npts, ver, rescale_strokes_ver,
+                                                 centerize=centerize)
+        # if check_same_direction:
+        #     assert self._strokes_check_all_aligned_direction(strokes, plot_failure=True), "same shape done in multipel directions?"
+
+        # if rescale_strokes_ver is not None:
+        #     from pythonlib.tools.stroketools import rescaleStrokes
+        #     strokes = rescaleStrokes(strokes, rescale_strokes_ver)
+            
+        # strokmean, strokstacked = strokes_average(strokes, 
+        #     center_at_onset=center_at_onset, Ninterp=Npts, ver=ver)
+        # return strokmean, strokstacked    
+
+    def cluster_compute_mean_stroke_thisshape(self, shape, best_n_by_dist=None, 
+                                              center_at_onset=True, ver_behtask=None, centerize=False):
         """ Compute mean stroke by averaging all trials for this shape
         """
         
@@ -2714,7 +2858,17 @@ class DatStrokes(object):
 
         # inds = self.Dat[self.Dat["shape_oriented"]==shape].index.tolist()
         assert len(inds)>0, f"why empty?, {shape}"
-        return self.cluster_compute_mean_stroke(inds, center_at_onset=True)
+
+        if ver_behtask=="task":
+            check_same_direction=False
+            # centerize=True
+            # center_at_onset=False
+        else:
+            check_same_direction = True
+            # centerize=False
+            # center_at_onset=True
+        return self.cluster_compute_mean_stroke(inds, center_at_onset=center_at_onset, ver_behtask=ver_behtask,
+                                                check_same_direction=check_same_direction, centerize=centerize)
 
 
     def _cluster_compute_sim_matrix(self, strokes_data, strokes_basis, distancever="euclidian_diffs",
@@ -2841,6 +2995,12 @@ class DatStrokes(object):
                                                      rescale_ver=rescale_strokes_ver,
                                                      align_to_center=True)
 
+        elif distancever == "hausdorff_means":
+            # Visual distance -- identical to how done in DS.__dist_strok_pair (i thnk)
+            similarity_matrix = distStrokWrapperMult(strokes_data, strokes_basis, distancever="hausdorff_means",
+                                                     convert_to_similarity=False, DEBUG=DEBUG,
+                                                     rescale_ver=rescale_strokes_ver)
+
         elif distancever == "hausdorff_max":
             # Hausdorff (spatial), after centering strokes in space
 
@@ -2882,13 +3042,14 @@ class DatStrokes(object):
 
     def _cluster_compute_sim_matrix_aggver(self, strokes_data, strokes_basis,
                                            labels_rows_dat, labels_cols_feats,
-                                           labels_var_tuple, 
-                                           list_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered")):
+                                           label_var, 
+                                           list_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset", "hausdorff_centered"),
+                                           clustclass_rsa_mode=False):
         """ Low-level code to compute multiple similarity matrices (diff distance vers)
         and average them, to return a single sim mat
         PARAMS:
         - labels_rows_dat, labels_cols_feats, list of labels for each row,
-        - labels_var_tuple, e.g., ("shape", "gridloc"), if each item in labels_rows_dat is like (circle, (0,1))
+        - label_var, e.g., "shape", if labels are list ofs tr (sahpe)
         """
         from ..cluster.clustclass import Clusters
 
@@ -2909,12 +3070,15 @@ class DatStrokes(object):
         if labels_rows_dat is None:
             labels_rows_dat = [i for i in range(len(strokes_data))]
         
-        params = {
-            "version_distance":tuple(list_ver),
-            "label_vars":labels_var_tuple,
-        }
-        Cl = Clusters(X = simmat, labels_rows=labels_rows_dat,
-                      labels_cols=labels_cols_feats, ver="dist", params=params)
+        # Can work with rectangle (usualyl nrows > ncols)
+        Cl = Clusters(X = simmat, labels_rows=labels_rows_dat, labels_cols=labels_cols_feats)
+
+        if clustclass_rsa_mode:
+            # params = {
+            #     "version_distance":tuple(list_ver),
+            #     "label_vars":labels_var_tuple,
+            # }
+            Cl = Cl.convert_copy_to_rsa_dist_version(label_var, list_ver)
 
         return Cl
 
@@ -2964,8 +3128,8 @@ class DatStrokes(object):
             Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, 
                                                          labels_rows_dat= list_shape,
                                                          labels_cols_feats= list_shape_basis,
-                                                         labels_var_tuple=("shape",),
-                                                         list_distance_ver = list_distance_ver)
+                                                         label_var="shape",
+                                                         list_ver= list_distance_ver)
 
             params["list_strok_basis"] = list_strok_basis
             params["list_shape_basis"] = list_shape_basis
@@ -3184,51 +3348,153 @@ class DatStrokes(object):
                 
                 plt.close("all")
 
+    def clustergood_load_saved_cluster_shape_classes_input_basis_set(self, WHICH_BASIS=None, WHICH_LEVEL="trial"):
+        """ [NOTE: is like clustergood_load_saved_cluster_shape_classes, but loads saved DS, which was saved
+        separately based on which_basis. Is identical, just dumb forgeting when saving] 
+        Laod cluster labels, make copy of self, and append labels
+        to rows if those rows are found in the loaded data. I.,e, usualyl I
+        only save thius for subset of data (e.g., chars), and so anything not
+        loaded will have a "IGNORE" in that column.
+        PARAMS:
+        - WHICH_BASIS, str, usualyl which animal's basis set was used.
+        RETURNS DS,a copy that includes ONLY those rows that found shape label.
+        """
+        self.Dat = self.datamod_append_unique_indexdatapt_copy()
+        DS = self.copy()
+
+        ANIMAL = DS.animal()
+        DATE = DS.date()
+
+        if WHICH_BASIS is None:
+            WHICH_BASIS = ANIMAL
+
+        # First, try loading the DS, which has information about which basis set.
+        DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
+        path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
+        
+        import glob
+        list_dir = glob.glob(path)
+        if len(list_dir)==1:
+            path = list_dir[0]
+            _ds = pd.read_pickle(path)
+            df = _ds.Dat
+            df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+            DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
+            return DS, params_dict
+        elif len(list_dir)>1:
+            print(list_dir)
+            assert False
+        else:
+            return None, None
+
+
     def clustergood_load_saved_cluster_shape_classes(self, skip_if_labels_not_found=False):
         """ Laod cluster labels, make copy of self, and append labels
         to rows if those rows are found in the loaded data. I.,e, usualyl I
         only save thius for subset of data (e.g., chars), and so anything not
         loaded will have a "IGNORE" in that column.
-        RETURNS DS that includes ONLY those rows that found shape label.
+        RETURNS DS, a copy, that includes ONLY those rows that found shape label.
         """
         self.Dat = self.datamod_append_unique_indexdatapt_copy()
         DS = self.copy()
 
-        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/{DS.animal()}/{DS.date()}"
+        # # First, try loading the DS, which has information about which basis set.
+        # DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
+        # path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
+
+        basis_animal = DS.animal()
+        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={basis_animal}/{DS.date()}"
         path = f"{PATHDIR}/DS_data.pkl"
         if os.path.exists(path):
             df = pd.read_pickle(path)
             df = DS.datamod_append_unique_indexdatapt_copy(df=df)
 
-            # Only keep indices that exist in both self and loaded DS_data
-            indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
-            print("Len DS: ", len(DS.Dat))
-            print("Len loaded DS: ", len(df))
-            print("Len DS: ", len(indices))
-            assert len(indices)>0
+            DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
+            # # Only keep indices that exist in both self and loaded DS_data
+            # indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
+            # print("Len DS: ", len(DS.Dat))
+            # print("Len loaded DS: ", len(df))
+            # print("Len DS: ", len(indices))
+            # assert len(indices)>0
 
-            # slice both so they match
-            DS.Dat = DS.dataset_slice_by("index_datapt", indices)
-            df = DS.dataset_slice_by("index_datapt", indices, df=df)
+            # # slice both so they match
+            # DS.Dat = DS.dataset_slice_by("index_datapt", indices)
+            # df = DS.dataset_slice_by("index_datapt", indices, df=df)
 
-            assert len(df)>0
-            assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
+            # assert len(df)>0
+            # assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
 
-            # Replace all shape labels...
-            # Replace shape_label, beucase I had grouped shapes but decided best not to do that here.
-            df["shape_label"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
-            df["shape_oriented"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
-            df["shape"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+            # # Replace all shape labels...
+            # # Replace shape_label, beucase I had grouped shapes but decided best not to do that here.
+            # df["shape_label"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+            # df["shape_oriented"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+            # df["shape"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
 
-            # Combine them
-            cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
-            for col in cols_take:
-                assert col not in DS.Dat.columns
-                DS.Dat[col] = df[col]
-                print("Merged this column: ", col)
-            return DS
+            # # Combine them
+            # cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
+            # for col in cols_take:
+            #     assert col not in DS.Dat.columns
+            #     DS.Dat[col] = df[col]
+            #     print("Merged this column: ", col)
+
+            # # Also load params
+            # try:
+            #     from pythonlib.tools.expttools import load_yaml_config
+            #     params_dict = load_yaml_config(f"{PATHDIR}/params.txt")
+            # except Exception as err:
+            #     # mistake, saved np arary as text... cant parse
+            #     params_dict = None
+            return DS, params_dict
         else:
-            return None
+            return None, None
+
+    def _clustergood_load_saved_cluster_shape_classes_inner(self, df):
+        """
+        """
+
+        DS = self.copy()
+        DS.datamod_append_unique_indexdatapt_copy()
+        df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+
+        # Only keep indices that exist in both self and loaded DS_data
+        indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
+        print("Len DS: ", len(DS.Dat))
+        print("Len loaded DS: ", len(df))
+        print("Len DS: ", len(indices))
+        assert len(indices)>0
+
+        # slice both so they match
+        DS.Dat = DS.dataset_slice_by("index_datapt", indices)
+        df = DS.dataset_slice_by("index_datapt", indices, df=df)
+
+        assert len(df)>0
+        assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
+
+        # Replace all shape labels...
+        # Replace shape_label, beucase I had grouped shapes but decided best not to do that here.
+        df["shape_label"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+        df["shape_oriented"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+        df["shape"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
+
+        # Combine them
+        # cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
+        cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label"]
+        for col in ["velmean_th", "velmean_thbin"]:
+            if col in df:
+                cols_take.append(col)
+        for col in cols_take:
+            assert col not in DS.Dat.columns
+            DS.Dat[col] = df[col]
+            print("Merged this column: ", col)
+
+        # Also load params
+        try:
+            from pythonlib.tools.expttools import load_yaml_config
+            params_dict = load_yaml_config(f"{PATHDIR}/params.txt")
+        except Exception as err:
+            # mistake, saved np arary as text... cant parse
+            params_dict = None
+        return DS, params_dict
 
     def clustergood_extract_saved_clusterobject(self, WHICH_FEATURE="beh_motor_sim"):
         # WHICH_FEATURE = "beh_motor_sim" 
@@ -3660,7 +3926,7 @@ class DatStrokes(object):
 
 
     ############################### DISTANCES (scoring)
-    def _strokes_check_all_aligned_direction(self, strokes, plot_failure =False):
+    def _strokes_check_all_aligned_direction(self, strokes, plot_failure =False, thresh = 0.75):
         """ Check that strokes are all aligned. For each adjacent pair in list (strokes),
         if their distance decreases after flipping one, then this means they are NOT aligned.
         Useful if strokes are all of same sahpe, and want to make sure they are same direction
@@ -3679,6 +3945,9 @@ class DatStrokes(object):
             d_orig = self._cluster_compute_sim_matrix([strok1], [strok2])[0].item() # float
             d_rev = self._cluster_compute_sim_matrix([strok1], [strok2[::-1]])[0].item() # float
 
+            # if d_orig<d_rev:
+            #     print(d_orig, d_rev, " --- ", d_orig/d_rev)
+
             # print(d_rev.shape)
             # print(d_orig<d_rev)
             # assert False
@@ -3687,12 +3956,13 @@ class DatStrokes(object):
 
             # d_orig = self._dist_strok_pair(strok1, strok2, recenter_to_onset=True)
             # d_rev = self._dist_strok_pair(strok1, strok2[::-1], recenter_to_onset=True)
-            if d_orig<0.75*d_rev: # 0.75 allows for some noise.
+            if d_orig<thresh*d_rev: # 0.75 allows for some noise.
                 # if d_orig<d_rev: # 0.75 allows for some noise.
                 if plot_failure:
                     # Plot these strokes
                     print("d_orig", d_orig)
                     print("d_rev", d_rev)
+                    print(0.75*d_rev)
                     self.plot_multiple_strok([strok1, strok2], ver="beh", 
                         overlay=False, titles=None, ncols=5, size_per_sublot=2)
                 return False
@@ -3872,8 +4142,10 @@ class DatStrokes(object):
                 assert False, "why identical?"
 
     def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False):
-        """ compute doistance between strok1 and 2
-        uses by defaiult hausdorff mean
+        """ compute *visual* doistance between strok1 and 2
+        uses by defaiult hausdorff mean.
+        
+        Default does not recenter or anything like that.
         """
         if recenter_to_onset:
             strok1 = strok1 - strok1[0,:]
@@ -4089,6 +4361,18 @@ class DatStrokes(object):
 
         return sdir, path
 
+    def stroke_database_prune_to_basis_prims(self):
+        """
+        Keep only the shapes which are in this animal's basis set
+        RETURNS:
+        - modifies self.Dat, so that only shapes in basis shapes are kept
+        """
+        dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper()
+        print("Starting len dat: ", len(self.Dat))
+        shapes_removed = self.Dat[~self.Dat["shape"].isin(list_shape_basis)]["shape"].tolist()
+        self.Dat = self.Dat[self.Dat["shape"].isin(list_shape_basis)].reset_index(drop=True)
+        print("Ending len dat: ", len(self.Dat))
+        print("Shapes removed: ", shapes_removed)
 
     def stroke_shape_cluster_database_save(self, suffix=None, overwrite_ok=False,
         plot_each_shape=True, best_n_by_dist=15):
@@ -4160,7 +4444,6 @@ class DatStrokes(object):
             flip = d1>d2
 
         return flip
-
 
     def stroke_shape_cluster_database_load(self, animal, expt, date, suffix):
         """ Load set of strokes, one for each sahpe, previously saved 
@@ -4282,12 +4565,14 @@ class DatStrokes(object):
         RETURNS:
             - inds, dists
         """
-        dists = self.Dat.iloc[inds][feature]
-        this = [(i, d) for i, d in zip(inds, dists)]
-        this = sorted(this, key=lambda x:x[1]) # increasing dists
-        inds = [t[0] for t in this]
-        dists = [t[1] for t in this]
-        return inds, dists
+        from pythonlib.tools.pandastools import indices_sort_by_feature
+        return indices_sort_by_feature(self.Dat, inds, feature)
+        # dists = self.Dat.iloc[inds][feature]
+        # this = [(i, d) for i, d in zip(inds, dists)]
+        # this = sorted(this, key=lambda x:x[1]) # increasing dists
+        # inds = [t[0] for t in this]
+        # dists = [t[1] for t in this]
+        # return inds, dists
 
     def shape_extract_indices_sorted_by_behtaskdist(self, shape,
         feature="dist_beh_task_strok", epoch=None):
@@ -4389,7 +4674,8 @@ class DatStrokes(object):
         """
 
         ds = DatStrokes()
-        ds.Dataset = self.Dataset.copy(just_df=False)
+        if self.Dataset is not None:
+            ds.Dataset = self.Dataset.copy(just_df=False)
         ds.Dat = self.Dat.copy()
         ds.Params = self.Params.copy()
         ds.Version = self.Version
@@ -4406,8 +4692,9 @@ class DatStrokes(object):
         print("saved self.Dat to :", path)
 
         if params_dict is not None:
-            from pythonlib.tools.expttools import writeDictToTxt
+            from pythonlib.tools.expttools import writeDictToTxt, writeDictToYaml
             writeDictToTxt(params_dict, f"{pathdir}/params.txt")
+            writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
 
     def save(self, pathdir, columns_keep_in_dataset=None):
         """ saves self, incluind gall things, including self.Dataset.
@@ -4437,9 +4724,23 @@ class DatStrokes(object):
     def date(self):
         return self.Dataset.dates(force_single=True)[0]
 
+def concat_dataset_strokes_minimal(list_DS):
+    """
+    COncat, minially, means just concat the dataframes. useful, if do that
+    and have DS for methods.
+    """
+    
+    # note the origin.
+    for i, ds in enumerate(list_DS):
+        ds.Dat["idx_ds_concat"] = i
+    
+    DS = DatStrokes()
+    DS.Dat = pd.concat([ds.Dat for ds in list_DS]).reset_index(drop=True)
+
+    return DS
+        
 def concat_dataset_strokes(list_DS):
     """ Returns a copy, concatenated, of multiple DS instances.
-
     """
     from pythonlib.dataset.analy_dlist import concatDatasets
     DS = DatStrokes()

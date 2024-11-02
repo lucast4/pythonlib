@@ -1697,6 +1697,8 @@ class Clusters(object):
         - df, with one column for each variable in self.Labels, separtely for labels 1 vs 2, appending "_1" to 
         name of column
 
+        NOTE:
+        - all rows with same (labels_1, labels_2) will have idnetical values for all distances, as distances are symetric.
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
 
@@ -1742,25 +1744,6 @@ class Clusters(object):
                 for _ivar, _var in enumerate(label_vars):
                     res[-1][f"{_var}_1"] = grp1[_ivar]
                     res[-1][f"{_var}_2"] = grp2[_ivar]
-
-        # Also get pairwise distance for each level with itself
-        # for grp, inds in grpdict.items():
-        #     ma = self._rsa_matindex_convert_to_mask_rect(inds, inds)
-        #     # - exclude diagonal
-        #     ma_ut = self._rsa_matindex_generate_upper_triangular()
-
-        #     X = self.Xinput[ma & ma_ut]
-
-            # res.append({
-            #     "labels_1":grp,
-            #     "labels_2":grp,
-            #     "dist_mean":np.mean(X)
-            # })
-            
-            # # Expand, to get each variable in label.
-            # for _ivar, _var in enumerate(label_vars):
-            #     res[-1][f"{_var}_1"] = grp[_ivar]
-            #     res[-1][f"{_var}_2"] = grp[_ivar]
 
         # Also get 98th percentile between pairs of pts.
         ma = self._rsa_matindex_generate_upper_triangular()
@@ -2806,3 +2789,20 @@ class Clusters(object):
         vals_diff = self.Xinput[(list_i, list_j)]
 
         return vals_same, vals_diff
+    
+    def convert_copy_to_rsa_dist_version(self, label_var, version_distance):
+        """
+        Returns copy of self, formatted to be RSA/distmat version.
+        Reequres square ditance mat.
+        Only works with single (not conjunctive) lbel vary
+        """
+        labels_var_tuple = tuple([label_var])
+        params = {
+            "version_distance":version_distance,
+            "label_vars":labels_var_tuple,
+        }
+
+        labels = [tuple([x]) for x in self.Labels]
+        Cl = Clusters(X = self.Xinput, labels_rows=labels,
+                        labels_cols=labels, ver="dist", params=params)
+        return Cl
