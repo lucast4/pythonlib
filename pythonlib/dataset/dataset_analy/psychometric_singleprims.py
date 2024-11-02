@@ -883,45 +883,26 @@ def preprocess_and_plot(D, var_psycho, PLOT=True):
 
         #### ADDITIOANL PLOTS, USING DSMORPHSETS
         animal = D.animals(True)[0]
-        date = D.dates(True)[0]
+        date = int(D.dates(True)[0])
         map_angleidx_to_finalidx, split_by_morphset = params_remap_angle_to_idx_within_morphset(animal, date)
         DSmorphsets = preprocess_angle_to_morphsets(DSlenient, map_angleidx_to_finalidx, split_by_morphset)
         # for morphset, idx_within in 
 
-        psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR)
+        ### Decide if tasks are ambiguous
+        psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, SAVEDIR,
+                                                manual_params_overwrite_label=True, manual_animal=animal, manual_date=date)
 
-        if False:
-            savedir = f"{SAVEDIR}/drawings_morphsets"
-            os.makedirs(savedir, exist_ok=True)
-            psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, PLOT_EACH_TRIAL=True)        
+        psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR)
         
         #####################
         # Also make plot of mean_sim_score (trial by trial var)
         savedir = f"{SAVEDIR}/using_primitivenessv2"
         os.makedirs(savedir, exist_ok=True)
 
-        if False: # This is done in DSmorphset stuff now.
-            from pythonlib.dataset.dataset_analy.primitivenessv2 import preprocess_plot_pipeline
-            # First, extract all the derived metrics
-            PLOT=True
-            plot_methods = ("tls", "drw")
-            DSnew, _, dfres, grouping = preprocess_plot_pipeline(D, PLOT=PLOT, plot_methods=plot_methods)
-            _apply_psychoparams_to_ds(DSnew.Dat, map_shape_to_psychoparams, var_psycho)
-            _apply_psychoparams_to_ds(dfres, map_shape_to_psychoparams, var_psycho)
-
-            # Make plots
-            fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
-                kind="point", sharey=True)
-            savefig(fig, f"{savedir}/mean_sim_score-1.pdf")
-            fig = sns.catplot(data=dfres, x="angle_idx_within_shapeorig", y="mean_sim_score", col="shapeorig", 
-                alpha=0.5, sharey=True)
-            savefig(fig, f"{savedir}/mean_sim_score-2.pdf")
-
-            plt.close("all")
-
         return DS, DSlenient, map_shape_to_psychoparams
     
     elif var_psycho == "cont_morph":
+        # [Novel prims]
         DS, DSmorphsets, map_morph_set_idx_to_shapes, _, _, SAVEDIR = preprocess_cont_morph(D)
         plot_overview_cont_morph(D, DS, DSmorphsets, map_morph_set_idx_to_shapes, SAVEDIR)
 
@@ -1752,7 +1733,7 @@ def _plot_contmorph_drawings_each_morph_set(DS, map_morph_set_idx_to_shapes, sav
 def plot_overview_cont_morph(D, DS, DSmorphsets, map_morph_set_idx_to_shapes, SAVEDIR,
                              use_task_stroke_or_los="stroke"):
     """
-    [GOOD] All plots for continuous morph (betwene two shapes)
+    [GOOD] [NOVEL PRIMS] All plots for continuous morph (betwene two shapes)
     This should be folded into psychogood code. and here should subsuming the angle stuff. 
     Here is based on that but shoudl be more general.
     """
@@ -2172,6 +2153,10 @@ def psychogood_preprocess_generate_DSmorphset_and_plot(D, DFRES, SAVEDIR,
     DSmorphsets = DS.copy()
     DSmorphsets.Dat = DF
 
+    ### Decide if tasks are ambiguous
+    psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, SAVEDIR,
+                                             manual_params_overwrite_label=True, manual_animal=D.animals(True)[0], manual_date=D.dates(True)[0])
+        
     ### PLOT
     DSmorphsets = psychogood_plot_morphset_wrapper(D, DS, DSmorphsets, SAVEDIR, PLOT_DRAWINGS, PLOT_SCORES)
 
@@ -3200,6 +3185,7 @@ def psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR=None,
     if manual_params_overwrite_label is not None:
         assert manual_animal is not None
         assert manual_date is not None
+        manual_date = int(manual_date)
         
     def find_morphset_morphidx(DSmorphsets, morphset, idx_in_morphset):
         return DSmorphsets.Dat[
@@ -3468,7 +3454,7 @@ def psychogood_prepare_for_neural_analy(D, DSmorphsets):
     PLOT_SAVEDIR = None
     animal = D.animals(True)[0]
     date = D.dates(True)[0]
-    _ = psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR, 
+    psychogood_decide_if_tasks_are_ambiguous(DSmorphsets, PLOT_SAVEDIR, 
         manual_params_overwrite_label=True, manual_animal=animal, manual_date=date)
 
     # for morphset in sorted(DSmorphsets.Dat["morph_set_idx"].unique().tolist()):
