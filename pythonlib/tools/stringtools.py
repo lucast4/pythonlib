@@ -22,6 +22,34 @@ def decompose_string(s, sep="-"):
         substrings.append(s[i1+1:i2])
     return substrings
 
+def trialcode_to_scalar(tc):
+    """
+    Convert trialcode to a scalar that is sortable (globally, within a subject, guaranteed to be currect)
+
+    date.1
+    240115.28 means
+    date = 240115
+    sess = 2
+    trial = 800
+    
+    """
+    from pythonlib.tools.stringtools import decompose_string
+    
+    tc_tuple = trialcode_to_tuple(tc)
+    if tc_tuple is None:
+        return None
+    else:
+        assert tc_tuple[1] < 10, "then divide by more, so that is mapped to max 0.,000 is mapped to 0.01"
+        assert tc_tuple[2] < 10000, "then divide by more, so that 100,000 is mapped to 0.01"
+
+        a = tc_tuple[0]
+        b =  tc_tuple[1]/10
+        c = tc_tuple[2]/10000
+        # mainting the code...
+        assert b<1
+        assert c<0.1
+        return a+b+c
+    
 def trialcode_to_tuple(tc):
     """
     PARAMS:

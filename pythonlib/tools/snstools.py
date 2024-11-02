@@ -314,18 +314,19 @@ def get_xticklabels(fig):
 
 def heatmap_mat(datamat, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False, labels_row=None, labels_col=None,
-                rotation=90, rotation_y=0):
+                rotation=90, rotation_y=0, cbar=True):
     """
     Plot heatmap, given datamat shape (nrow, ncols).
     """
     df = pd.DataFrame(datamat)
-
     return heatmap(df, ax, annotate_heatmap, zlims,
-                   robust, diverge, labels_row, labels_col, rotation, rotation_y)
+                   robust, diverge, labels_row, labels_col, rotation, rotation_y,
+                   cbar=cbar)
 
 def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False, labels_row=None, labels_col=None,
-            rotation=90, rotation_y=0, SHAPE="square", norm_method=None):
+            rotation=90, rotation_y=0, SHAPE="square", norm_method=None,
+            cbar=True):
     """ 
     Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
     in df
@@ -346,6 +347,8 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     # sns.heatmap(X, ax=ax, cbar=False, cbar_kws = dict(use_gridspec=False,location=barloc), 
     #    robust=robust, vmin=zlims[0], vmax=zlims[1])
 
+    if zlims is None:
+        zlims = (None, None)
     # make a copy, with these columns
     if labels_row is None:
         list_cat_1 = df.index.tolist()
@@ -464,8 +467,7 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         lab_add = 0.5
 
     sns.heatmap(df, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
-        robust=robust, cmap=cmap)
-
+        robust=robust, cmap=cmap, cbar=cbar)
     # Return the colors
     from matplotlib.colors import Normalize
     # Normalize data

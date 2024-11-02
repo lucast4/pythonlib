@@ -115,7 +115,7 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
     'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
 
-for scale in [8, 6, 11, 14, 15]:
+for scale in [8, 6, 11, 13, 14, 15]:
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-1-0'] = 'line-LL-LL'
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-2-0'] = 'line-UU-UU'
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-3-0'] = 'line-UR-UR'

@@ -40,6 +40,22 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
     if fill:
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
+def add_secondary_axis_label_nested(ax, locations, labels, which="x"):
+    """
+    Add a secondary axis label offset from the main axis
+    """
+    if not isinstance(labels, (list, tuple)):
+        labels = list(labels)
+        
+    if which=="y":
+        sec = ax.secondary_yaxis(location=0)
+        sec.set_yticks(locations, labels=labels, fontsize=8)
+    elif which=="x":
+        sec = ax.secondary_xaxis(location=0)
+        sec.set_xticks(locations, labels=labels, fontsize=8)
+    else:
+        assert False
+
 def rotate_x_labels(ax, rotation=45):
     # draw the figure (update)
     ax.figure.canvas.draw_idle()
@@ -677,7 +693,7 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
     means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None,
-                  fontsize=4):
+                  fontsize=4, jitter_value=None, color=None):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -685,6 +701,7 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     - means, overlay dot for mean
     - labels, list, same len as x and y, to overlay on dots (text), takes 
     precedence over plot_string_ind
+    - jitter_value, mult, entire range of jitter.
     """
 
 
@@ -696,10 +713,17 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
         y_errors = y_errors.copy()
         y_errors[np.isnan(y_errors)] = 0
 
+    if jitter_value is not None:
+        # Add a jitter
+        x = x + jitter_value*np.random.random(len(x))
+        y = y + jitter_value*np.random.random(len(y))
+        
     # if np.all(x==0.)
     # print(x, y, y_errors, x_errors)
     # ax.plot(x, y, marker, alpha=alpha)
-    ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha)
+    if color is None:
+        color = "b"
+    ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color)
 
     # ax.set_axis("square")
     minimum = np.min([np.min(x), np.min(y)])
@@ -828,13 +852,20 @@ def getHistBinEdges(vals, nbins):
 #     plt.figure(figsize=(15,5))
 #     sns.histplot(data=SF, x="label", hue="animal_dset", stat="probability", multiple="dodge", element="bars", shrink=1.5)
 
-
+def naked_erase_axes(ax):
+    """
+    Remove axes labels
+    """
+    ax.set_yticklabels([])
+    ax.set_xticklabels([])
+    ax.set_title(None)
+    ax.tick_params(axis='both', which='both',length=0)
 
 def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5, 
                    origin="lower_left", max_n_per_grid=None, 
                    col_labels = None, row_labels=None, tight=True,
                    aspect=0.8, ncols=6, titles=None, naked_axes=False, 
-                   titles_on_y=False, return_axes =False, fig_axes=None,
+                   titles_on_y=False, titles_on_x=False, return_axes =False, fig_axes=None,
                    xlabels = None):
     """ wrapper to plot each datapoint at a given
     col and row.
@@ -876,12 +907,17 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         for i in range(n):
             cols.append(i%ncols)
             rows.append(int(np.floor(i/ncols)))
-
+    
+    if len(cols)==0 or len(rows)==0:
+        if return_axes:
+            return None, None
+        else:
+            return None
+    
     if isinstance(cols, list):
         cols = np.array(cols)
     if isinstance(rows, list):
         rows = np.array(rows)
-
 
     # if lost row=0, then shift all values down. this could happen if removed datapts becuase of 
     # column pruning. subsequent code needs first row to be 0.
@@ -968,11 +1004,15 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
             if isinstance(titles[i], str):
                 if titles_on_y:
                     ax.set_ylabel(f"{titles[i]}")
+                elif titles_on_x:
+                    ax.set_xlabel(f"{titles[i]}")
                 else:
                     ax.set_title(f"{titles[i]}")
             else:
                 if titles_on_y:
                     ax.set_ylabel(f"{titles[i]:.2f}")
+                elif titles_on_x:
+                    ax.set_xlabel(f"{titles[i]:.2f}")
                 else:
                     ax.set_title(f"{titles[i]:.2f}")
         # else:
@@ -995,7 +1035,7 @@ def plotGridWrapper(data, plotfunc, cols=None, rows=None, SIZE=2.5,
         for row in range(max(rows)+1):
 
             ax = axes[row][col]
-            if titles is None:
+            if titles is None or titles_on_y==True or titles_on_x==True:
                 # then labels and columns titles, not panel specific.
                 if col_labels:
                     if row==0:
@@ -1106,6 +1146,9 @@ def share_axes(axes, which="x"):
     if which=="x":
         axes.flatten()[0].get_shared_x_axes().join(axes.flatten()[0], *axes.flatten()[1:])
     elif which=="y":
+        axes.flatten()[0].get_shared_y_axes().join(axes.flatten()[0], *axes.flatten()[1:])
+    elif which=="both":
+        axes.flatten()[0].get_shared_x_axes().join(axes.flatten()[0], *axes.flatten()[1:])
         axes.flatten()[0].get_shared_y_axes().join(axes.flatten()[0], *axes.flatten()[1:])
     else:
         print(which)

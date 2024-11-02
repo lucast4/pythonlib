@@ -212,10 +212,14 @@ def plotall_summary(animal, expt, rulelist=None, savelocation="main"):
     D.grouping_print_n_samples(["aborted", "character", "epoch"], savepath = path)
 
     # Print char_seq (useful for checking "correct" seq per char)
-    path = f"{SDIR_MAIN}/trialcount-char_seq.txt"
-    D.sequence_char_taskclass_assign_char_seq()
-    D.grouping_print_n_samples(["aborted", "epoch_superv", "char_seq"], savepath=path)
-
+    try:
+        path = f"{SDIR_MAIN}/trialcount-char_seq.txt"
+        D.sequence_char_taskclass_assign_char_seq()
+        D.grouping_print_n_samples(["aborted", "epoch_superv", "char_seq"], savepath=path)
+    except KeyError as err:
+        # This is becuase it is looking for grid tasks..
+        pass
+    
     #### PLOT OVERVIEW OF EXPERIMENT
     if PLOT_OVERVIEW:
         print("DOING: PLOT_OVERVIEW")

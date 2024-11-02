@@ -399,6 +399,7 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 31, tuple([1,3,6])): "heldout_I", # novel shape order x spatial config
             ("neuralbiasdir", 31, tuple([8,9])): "heldout_E_config"} # novel spatial config.
         mapper_auto_rename_probe_taskgroups = True
+        label_as_novel_if_shape_semantic_fails = True
 
     elif "dirshapecolor2" in expt:
         # 10/21/22 - 3 rules.
@@ -412,6 +413,7 @@ def _groupingParams(D, expt):
             ("neuralbiasdir", 31, tuple([2, 12])):"train_test_same_LShape", 
             ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # heldout, diff across all 3 rules.
         mapper_auto_rename_probe_taskgroups = True
+        label_as_novel_if_shape_semantic_fails = True
 
     elif "dirshapecolor" in expt:
         # 10/17/22 - e..g, dircolro3b    

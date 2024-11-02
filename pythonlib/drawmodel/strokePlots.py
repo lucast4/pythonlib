@@ -194,16 +194,68 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
         strokes=strokes, strokes_cols=color_list, markersize=markersize)
     
 
+def plot_single_strok(strok, ver="beh", ax=None, 
+        color=None, alpha_beh=None, label_onset=None, label_size=10, label_color=None):
+    """ [GOOD - actual clean wrapper that is easy to understand]
+    plot a single inputed strok on axis. 
+    INPUT:
+    - strok, np array,
+    """
+
+    if ver=="task" and color is not None:
+        ver = "task_colored"
+
+    if alpha_beh is None:
+        alpha_beh = 0.55
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
+    if ver=="beh":
+        plotDatStrokesWrapper([strok], ax, color=color, add_stroke_number=False, 
+            mark_stroke_onset=True, alpha=alpha_beh)
+    elif ver=="task_dots":
+        plotDatStrokes([strok], ax, clean_unordered=True, alpha=0.2)
+    elif ver=="task":
+        plotDatStrokes([strok], ax, clean_task=True, alpha=0.2)
+    elif ver=="task_colored":
+        plotDatStrokesWrapper([strok], ax, mark_stroke_onset=False, add_stroke_number=False, alpha=alpha_beh, color=color)
+    elif ver=="bare":
+        # Very bare, low-level
+        ax.plot(strok[:,0], strok[:,1], "-", color=color, alpha=alpha_beh)
+    else:
+        print(ver)
+        assert False
+
+    if label_onset is not None:
+        # Add a text label to the onset.
+        if label_color is None:
+            _color = color
+        else:
+            _color = label_color
+        ax.text(strok[0,0], strok[0,1], f"{label_onset}", color=_color, fontsize=label_size, alpha=1)
+
 def plotDatStrokesWrapper(strokes, ax, color=None, mark_stroke_onset=True, 
-    add_stroke_number=True, mark_stroke_center=False, alpha=0.55):
+    add_stroke_number=True, mark_stroke_center=False, alpha=0.55,
+    n_rand = None):
     """ [GOOD] WRapper to plot strokes a single color
     PARAMS:
     - color, either None (ordinal) or single color string code.
     """
 
-    if color is None:
-        # Use default colors.
+    if n_rand is not None and len(strokes)>n_rand:
+        import random
+        inds = random.sample(range(len(strokes)), n_rand)
+        strokes = [strokes[i] for i in inds]
+
+    if color is None or color=="ordered":
+        # Color by order
         plotDatStrokes(strokes, ax, clean_ordered_ordinal=True, add_stroke_number=add_stroke_number, 
+            mark_stroke_onset=mark_stroke_onset, number_from_zero=True,
+                       mark_stroke_center=mark_stroke_center, alpha=alpha)
+    elif color=="random":
+        # Give each stroke a different color
+        plotDatStrokes(strokes, ax, clean_ordered=True, add_stroke_number=add_stroke_number, 
             mark_stroke_onset=mark_stroke_onset, number_from_zero=True,
                        mark_stroke_center=mark_stroke_center, alpha=alpha)
     else:
@@ -260,7 +312,6 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
         pcol = [[0.3, 0.2, 0.2]]
         alpha = 1
         plotver="onecolor"
-
 
     if strokenums_to_plot is not None:
         each_stroke_separate=True
@@ -358,7 +409,10 @@ def plotDatStrokes(strokes, ax, plotver="strokes", fraction_of_stroke=None,
             elif plotver in ["order_gradient"]:
                 color_order, pcol = getStrokeColorsGradient(strokes2)
             elif plotver in ["onecolor", "randcolor"]:
-                color_order = [pcol[0] for _ in range(len(strokes2))]
+                if isinstance(pcol, list) and isinstance(pcol[0], (list, tuple)): # to avoid, if pcol is array
+                    color_order = [pcol[0] for _ in range(len(strokes2))]
+                else:
+                    color_order = [pcol for _ in range(len(strokes2))]
             else:
                 color_order, pcol = getStrokeColors(strokes2, CMAP)            
         else:

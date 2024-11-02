@@ -5,6 +5,30 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 
+import numpy as np
+
+def compute_d_prime(dist1, dist2):
+    """
+    Compute d-prime (d') between two univariate distributions.
+
+    EXAMPLE:
+    # Example distributions (samples)
+    dist1 = [2.1, 2.5, 3.3, 2.8, 3.0]
+    dist2 = [4.2, 4.8, 5.1, 4.5, 4.9]
+
+    # Compute d-prime
+    d_prime_value = compute_d_prime(dist1, dist2)
+    print(f"d-prime: {d_prime_value:.4f}")
+    """
+    # Calculate means and standard deviations
+    mean1, mean2 = np.mean(dist1), np.mean(dist2)
+    std1, std2 = np.std(dist1, ddof=1), np.std(dist2, ddof=1)  # ddof=1 for sample std
+
+    # Calculate d-prime
+    d_prime = abs(mean1 - mean2) / np.sqrt(0.5 * (std1**2 + std2**2))
+    return d_prime
+
+
 def signrank_wilcoxon(x1, x2=None):
     return stats.wilcoxon(x1, y=x2) 
 

@@ -1991,8 +1991,8 @@ def timepoint_extract_features_continuous(strokes, twind, list_feature=["mean_xy
     return features
         
 
-def strokes_average(strokes, Ninterp=70, center_at_onset=False,
-                    ver="mean"):
+def strokes_average(strokes, Ninterp=70, center_at_onset=False, centerize=False,
+                    ver="mean", rescale_strokes_ver = None):
     """ Get average of trajs in strokes, after linearly interpolating them
     to all be the same
     PARAMS:
@@ -2001,6 +2001,13 @@ def strokes_average(strokes, Ninterp=70, center_at_onset=False,
     - strokes, list of np array
     = strokes_stacked, np array, shape (n strokes, Ninterp, 3)
     """
+
+    # Do this first, since that's what i have been doing in DS._cluster_compute_mean_stroke
+    if rescale_strokes_ver is not None:
+        strokes = rescaleStrokes(strokes, rescale_strokes_ver)
+
+    if centerize:
+        strokes = strokes_centerize(strokes)
 
     if center_at_onset:
         strokes = strokes_alignonset(strokes)

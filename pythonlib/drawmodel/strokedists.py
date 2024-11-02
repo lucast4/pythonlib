@@ -357,9 +357,11 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
             N=["npts", n_interp], base=base, plot_outcome=plot_outcome)[0]
         return _strok1, _strok2
 
-    # Decide if iterpolate, only if shapes are differnet.
-    if (strok1.shape[0]==strok2.shape[0]) and (strok1.shape[0]<n_interp*1.5):
-        auto_interpolate_if_needed = False
+    if False: # Acutlaly, always interpaolte (for preprocess), e.g, if want to rebase to space, but npts is time.
+        # Decide if iterpolate, only if shapes are differnet.
+        # if (strok1.shape[0]==strok2.shape[0]) and (strok1.shape[0]<n_interp*1.5):
+        if (strok1.shape[0]==strok2.shape[0]) and strok1.shape[0]==n_interp: # This is better, as you want all pairs of strokes to have same length (if this is used for prepropsing all strokes)
+            auto_interpolate_if_needed = False
 
     if not ALREADY_PROCESSED:
         ## Rescale: apply first
@@ -386,7 +388,8 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
             strok1, strok2 = _interp(strok1, strok2, plot_outcome=DEBUG)
             auto_interpolate_if_needed = False # no need to redo
 
-        if auto_interpolate_if_needed and (strok1.shape[0]!=strok2.shape[0]):
+        # if auto_interpolate_if_needed and (strok1.shape[0]!=strok2.shape[0]):
+        if auto_interpolate_if_needed:
             # previosuly this was not here... was within each method below...
             strok1, strok2 = _interp(strok1, strok2)
     else:

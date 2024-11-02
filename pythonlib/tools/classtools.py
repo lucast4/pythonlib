@@ -43,6 +43,7 @@ def concat_objects_attributes_flexible(obj_new, list_obj, concat_dicts_keyed_by_
                 if check_objects_identical(items[i], items[j], PRINT=True)==False:
                     print("These items are different across object you are trying to concat:")
                     print(items)
+                    print("For this attribute: ", attr)
                     assert False
         item_take = items[0]
         print(f"- Assigning to D.{attr} this value:", item_take)

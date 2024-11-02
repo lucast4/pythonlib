@@ -1922,7 +1922,8 @@ def extract_resample_balance_by_var(df, var, n_samples="min", method_if_not_enou
                                          
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                                     F = None, return_as_dict=False, 
-                                    method_if_not_enough_examples="prune_subset"):
+                                    method_if_not_enough_examples="prune_subset",
+                                    sort_by_feature=None):
     """ To uniformly sample rows so that spans levels of a given variable (column)
     e..g, if a col is "shape" and you want to get one example random trial of each shape,
     then varname="shape" and varlevels = list of shape names, or None to get all.
@@ -1933,12 +1934,16 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     - n_examples, how many to get of each (random)
     - F, dict for filtering. will use this and append the varname:varlevel.
     - return_as_dict, then returns as out[level] = <list of indices>
+    - sort_by_feature, if str, then sorts indices by this scalar values feature, getting
+    uniform sample (within each level of <varname> doing this first, before subsampling)
     RETURNS:
     - list_inds, list of ints or None (for cases where can't get this many examples, 
     will fail all examples, not just the excess... (should fix this)). if n_examples >1, then
     adjacnet inds will be for the same example.
     - varlevels
     """
+
+    _check_index_reseted(df)
     import random
     if F is None:
         F = {}
@@ -1979,6 +1984,22 @@ def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
     else:
         return list_inds, varlevels
 
+def indices_sort_by_feature(df, inds, feature):
+    """
+    Return new indices, which are the input indices but sorted to be 
+    increasing by the value of feature
+    RETURNS:
+    - list of indices into df.
+    - np array of values matching the inds.
+    """
+    _check_index_reseted(df)
+
+    dfsort = df.iloc[inds][feature].sort_values()
+
+    inds = dfsort.index.tolist()
+    values = dfsort.values
+    
+    return inds, values
 
 def grouping_get_inner_items(df, groupouter="task_stagecategory", 
     groupinner="index", groupouter_levels=None, nrand_each=None, 
@@ -2065,18 +2086,28 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     return groupdict
 
 def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_vars,
-                                                groupouter_levels=None, sort_keys=True):
+                                                groupouter_levels=None, sort_keys=True,
+                                                must_get_all_groupouter_levels=True):
     """ Quicker version of grouping_append_and_return_inner_items
+    PARAMS:
+    - groupouter_levels, levels to get. fails if any one of these is not found. ie output is guaranteed ot have these in
+    the order.
     RETURNS:
     - groupdict, grptuple:list_indices_into_df
     """
+    if isinstance(list_groupouter_grouping_vars, tuple):
+        list_groupouter_grouping_vars = list(list_groupouter_grouping_vars)
+
+    if groupouter_levels is not None:
+        assert len(list_groupouter_grouping_vars)==1, "this assumes so, that grp is tuple()"
+
     _check_index_reseted(df)
     groupdict = {}
-    assert groupouter_levels is None, "implementation fails below"
+    # assert groupouter_levels is None, "dont set groupouter_levels is None. implementation fails below"
     try:
         for grp in df.groupby(list_groupouter_grouping_vars):
-            if (groupouter_levels is not None) and (grp not in groupouter_levels):
-                continue
+            # if (groupouter_levels is not None) and (grp not in groupouter_levels):
+            #     continue
             groupdict[grp[0]] = grp[1].index.tolist()
     except Exception as err:
         print(list_groupouter_grouping_vars)
@@ -2091,6 +2122,13 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
         keys = sort_mixed_type(keys)
         groupdict = {k:groupdict[k] for k in keys}
 
+    if not must_get_all_groupouter_levels:
+        # Keep just those that you have
+        groupouter_levels = [lev for lev in groupouter_levels if (lev,) in groupdict.keys()]
+
+    if groupouter_levels is not None:
+        groupdict = {(lev,):groupdict[(lev,)] for lev in groupouter_levels}
+    
     return groupdict
 
 def stringify_values(df):
@@ -2840,7 +2878,8 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
 
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
                                                    plot_counts_heatmap_savepath=None,
-                                                    lenient_allow_data_if_has_n_levels=2):
+                                                    lenient_allow_data_if_has_n_levels=2,
+                                                    levels_var=None):
     """
     Heloper, setting params I usualyl use for simple task of pruning df to get just tjhose levels
     opf vars_others which have at least 2 levels of var, with <n_min_per_level> trials at least, per
@@ -2851,7 +2890,7 @@ def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_p
     :return:
     """
     # lenient_allow_data_if_has_n_levels = 2
-    dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, n_min_across_all_levs_var=n_min_per_lev,
+    dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var, n_min_across_all_levs_var=n_min_per_lev,
                     PRINT=False, lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels, DEBUG=False,
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
                     balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
@@ -3086,12 +3125,17 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
             list_s = []
         writeStringsToFile(PRINT_AND_SAVE_TO, list_s)
 
-    if len(dfout)>0 and plot_counts_heatmap_savepath:
-        if False:
-            fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
+    if plot_counts_heatmap_savepath is not None:
+        if len(dfout)>0:
+            if False:
+                fig = convert_to_2d_dataframe(dfout, var, "vars_others", plot_heatmap=True)[1]
+            else:
+                fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
+                    vars_others=None)
         else:
-            fig = grouping_plot_n_samples_conjunction_heatmap(dfout, var, "vars_others", 
-                vars_others=None)
+            # Plot something to note that there wasnt enough data
+            fig, ax = plt.subplots()
+            ax.set_title("Lost all data from taking conjucntions!!")
         savefig(fig, plot_counts_heatmap_savepath)
 
     # Finalyl, extract each sub df
@@ -3446,12 +3490,40 @@ def shuffle_dataset_singlevar(df, var, maintain_block_temporal_structure=True,
     
     return dfthis_shuff
     
+def plot_bar_stacked_histogram_counts(df, x_var, hue_var, ax):
+    """ 
+    Plots 1d stacked barplot, where x are the levels of <x_var> and hue_var are teh categoreis
+    coloring teh stack. 
 
+    Is like sns.histplot(data=DS.Dat, x=shape_var, stat="count", multiple="stack", hue=matches_var,
+             order=order)
+    but orders the x axis by counts
+
+    https://stackoverflow.com/questions/72645600/ordering-a-stacked-histplot-based-on-total-counts
+    """
+    # df = DS.Dat
+    # x_var = "clust_sim_max_colname"
+    # hue_var = "matches_base_prim"
+
+    # 1. frequency counts
+    dfc = pd.crosstab(df[x_var], df[hue_var])
+
+    # 2. add total column
+    dfc['tot_A'] = dfc.sum(axis=1)
+
+    # 3. sort
+    dfc = dfc.sort_values('tot_A', axis=0, ascending=False)
+
+    # 4. plot the columns except `tot_A`
+    dfc.iloc[:, :-1].plot(kind='bar', stacked=True, figsize=(10, 5), rot=0, width=1, ec='k', ax=ax)
+    # sns.histplot(data=dfc.iloc[:, :-1],  multiple="stack")
+
+    
 def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
                           ZLIMS=None, title_size=6, ncols=3,
-                        row_values= None, col_values=None, W=5):
+                        row_values= None, col_values=None, W=5, agg_method="mean"):
     """ 
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
@@ -3459,6 +3531,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     :param df:
     :param varcol:
     :param varrow:
+    :param val_name: only needed if agg_method is "mean"
     :param var_subplot:
     :param ZLIMS: overwrite the zmin and max independently, 2-tuple, an item use None to 
     use the auto value. e.g,., (0., None) means fiz min to 0, but use auto for max.
@@ -3493,8 +3566,6 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         maxs = []
         groupmeans = []
         for grp, inds in grpdict.items():
-            # mins.append(np.min(df.iloc[inds][val_name]))
-            # maxs.append(np.max(df.iloc[inds][val_name]))
             groupmeans.append(np.mean(df.iloc[inds][val_name])) 
         zmin = min(groupmeans)
         zmax = max(groupmeans)
@@ -3502,10 +3573,6 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         zmax += 0.1*delta
         zmin -= 0.1*delta
         
-        # print([varrow, varcol, var_subplot])
-        # df_agg = aggregGeneral(df.loc[:, [varrow, varcol, var_subplot, val_name]], [varrow, varcol, var_subplot], [val_name])
-        # zmin = np.min(df_agg[val_name])
-        # zmax = np.max(df_agg[val_name])
         zlims = [zmin, zmax]
     else:
         zlims = [None, None]
@@ -3530,7 +3597,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         dfthis = df[(a)]
         df2d, _, _, rgba_values = convert_to_2d_dataframe(dfthis, varrow, varcol,
                                 True,
-                                "mean",
+                                agg_method,
                                 val_name,
                                 ax=ax, annotate_heatmap=annotate_heatmap,
                                 diverge=diverge, zlims=zlims, norm_method=norm_method,
@@ -3571,13 +3638,38 @@ def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
         # sns.barplot(data=dfthisthis, x="bregion", y="same_mean", yerr=dfthisthis["same_sem"])
     return list_hue
 
+def convert_wide_to_long(dfwide, list_columns_to_fold, vars_extra=None):
+    """
+    Returns df with 2x n rows of dfwide, beucase each row of dfwide contributes a value each 
+    taken from the columns <x_lev_manip>, <y_lev_manip>
+    PARAMS:
+    - list_columns_to_fold, list of colymns in dfwide. each of these will be a level of new column <col_from_wide>
+    """
+    if vars_extra is None:
+        vars_extra = []
+    # Collect two vertical slices taking the two lev_manip                                        
+    list_df = []
+    for scorevar in list_columns_to_fold:
+
+        dftmp = dfwide.loc[:, [scorevar]+vars_extra].copy()
+        dftmp["col_from_wide"] = scorevar
+        dftmp["col_from_wide_value"] = dftmp[scorevar]
+        dftmp = dftmp.drop(scorevar, axis=1)
+
+        list_df.append(dftmp)
+
+    dflong = pd.concat(list_df, axis=0).reset_index(drop=True)
+
+    return dflong
+
 def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_lev_manip,
                                            var_subplot, var_datapt,
                                            plot_text=True,
                                            alpha=0.8, SIZE=3, shareaxes=False,
                                            plot_error_bars=True,
                                            map_subplot_var_to_new_subplot_var=None,
-                                           fontsize=4, xymin_zero=False):
+                                           fontsize=4, xymin_zero=False,
+                                           jitter_value=None):
     """
     Runs plot_45scatter_means_flexible_grouping, but this is wrapper that can take in wideform dataframe,
     does necessary conversion, then calls plot_45scatter_means_flexible_grouping.
@@ -3592,23 +3684,23 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
         y_lev_manip = "dist_index_diff_max"
     """
 
-    # Collect two vertical slices taking the two lev_manip                                        
-    list_df = []
-    for scorevar in [x_lev_manip, y_lev_manip]:
+    dflong = convert_wide_to_long(dfwide, [x_lev_manip, y_lev_manip], [var_datapt, var_subplot])
+    # # Collect two vertical slices taking the two lev_manip                                        
+    # list_df = []
+    # for scorevar in [x_lev_manip, y_lev_manip]:
 
-        dftmp = dfwide.loc[:, [var_datapt, var_subplot, scorevar]].copy()
-        dftmp["scorevar"] = scorevar
-        dftmp["score"] = dftmp[scorevar]
-        dftmp = dftmp.drop(scorevar, axis=1)
+    #     dftmp = dfwide.loc[:, [var_datapt, var_subplot, scorevar]].copy()
+    #     dftmp["scorevar"] = scorevar
+    #     dftmp["score"] = dftmp[scorevar]
+    #     dftmp = dftmp.drop(scorevar, axis=1)
 
-        list_df.append(dftmp)
+    #     list_df.append(dftmp)
 
-    dflong = pd.concat(list_df, axis=0).reset_index(drop=True)
-
-    lev_manip = "scorevar"
-    dfres, fig = plot_45scatter_means_flexible_grouping(dflong, lev_manip, x_lev_manip, y_lev_manip, var_subplot, "score", 
+    # dflong = pd.concat(list_df, axis=0).reset_index(drop=True)
+    lev_manip = "col_from_wide"
+    dfres, fig = plot_45scatter_means_flexible_grouping(dflong, lev_manip, x_lev_manip, y_lev_manip, var_subplot, "col_from_wide_value", 
             var_datapt, plot_text, alpha, SIZE, shareaxes, plot_error_bars, map_subplot_var_to_new_subplot_var,
-            fontsize, xymin_zero)
+            fontsize, xymin_zero, jitter_value)
     
     return dfres, fig                                                
 
@@ -3619,7 +3711,8 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                            alpha=0.8, SIZE=3, shareaxes=False,
                                            plot_error_bars=True,
                                            map_subplot_var_to_new_subplot_var=None,
-                                           fontsize=4, xymin_zero=False):
+                                           fontsize=4, xymin_zero=False, jitter_value=None,
+                                           color_by_var_datapt=False, force_all_on_same_axis=False):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -3639,7 +3732,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         "preSMA_a":"preSMA_a",
         "preSMA_p":"preSMA_p",
             }
-
+    - color_by_var_datapt, bool, if True, then diff color for each lev of var_datapt
     EXAMPLE:
     - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
     separate subplot for each epoch_orig...
@@ -3718,10 +3811,17 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
  # sharex=sharex, sharey=sharey)
 
+    from pythonlib.tools.plottools import color_make_map_discrete_labels
+    _map_lev_to_color, _, _ = color_make_map_discrete_labels(list_lev)
+
     list_xs = []
     list_ys = []
     verbose_done=False
     for ax, lev in zip(axes.flatten(), list_lev):
+
+        if force_all_on_same_axis:
+            # Hacky, to get diff colors on same plot
+            ax = axes.flatten()[0]
 
         # Collect data
         dftmp_x = dfres[(dfres[var_subplot]==lev) & (dfres[var_manip]==x_lev_manip)]
@@ -3744,12 +3844,15 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
             labels = list_date
         else:
             labels = None
-        try:
-            plotScatter45(xs, ys, ax, labels=labels, marker="o",
-                          x_errors=x_errors, y_errors=y_errors, alpha=alpha, fontsize=fontsize)
-        except Exception as err:
-            raise err
         
+        if color_by_var_datapt and len(list_lev)<80:
+            pcol = _map_lev_to_color[lev]
+        else:
+            pcol = None
+        plotScatter45(xs, ys, ax, labels=labels, marker="o",
+                        x_errors=x_errors, y_errors=y_errors, alpha=alpha, fontsize=fontsize, jitter_value=jitter_value,
+                        color=pcol)
+    
         if verbose_done:
             ax.set_title(lev, fontsize=8)
             ax.set_xlabel(x_lev_manip)
@@ -3765,6 +3868,16 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
         ax.axhline(0, color="k", alpha=0.25)
         ax.axvline(0, color="k", alpha=0.25)
+
+        if force_all_on_same_axis:
+            # Then remove title
+            ax.set_title(None)
+
+
+    if color_by_var_datapt:
+        # add legend to last axis
+        from pythonlib.tools.plottools import legend_add_manual
+        legend_add_manual(axes.flatten()[-1], _map_lev_to_color.keys(), _map_lev_to_color.values(), alpha=0.7)
 
     if shareaxes and len(list_xs)>0:
         MIN = min(list_xs + list_ys)
@@ -3845,3 +3958,82 @@ def find_unique_values_with_indices(df, col, tolerance = 1e-3,
 
     # print("Unique values and their indices:")
     # print(unique_indices)
+
+
+def group_continuous_blocks_of_rows(df, var_group, var_sort, new_col = "group",
+                                    PRINT=False, do_sort=True,
+                                    savedir=None):
+    """
+    Assign a new column that groups continuous trials that have same
+    value of <var_group> into the same value that new column. Useful to 
+    find blocks of trials with same feature, if there are separtaed
+    blocks during the day.
+    PARAMS:
+    - var_group, the grouping variable.
+    - var_sort, first sorts df before grouping. 
+    - do_sort, if True, then sorts by var_sort. if False, then cheks that is already sorted.
+    RETURNS:
+    - df_sort, copy of df, sorted adn with new column <new_col>
+    - the indices to sort df to match the output df
+    - group_boundaries, df with rows for each <new_col> value, and columns "Start" and "End" as the indices of the
+    boundaries, in the output sorted df.
+    EG returns this, if var_group is "Group" and var_sort is "Value"
+        Sorted DataFrame with Groups:
+        Category  Value  Group
+        0        A      5      1
+        1        C      5      2
+        2        C      5      2
+        3        A     10      3
+        4        A     10      3
+        5        B     15      4
+        6        B     15      4
+        7        B     20      4
+        8        A     25      5
+        9        B     30      6    
+    """
+    import pandas as pd
+
+    if savedir is not None:
+        PRINT=True
+    # # Example DataFrame
+    # data = {'Category': ['A', 'A', 'B', 'B', 'B', 'A', 'A', 'C', 'C', 'B'],
+    #         'Value': [10, 5, 15, 15, 20, 25, 10, 5, 5, 30]}
+    # df = pd.DataFrame(data)
+
+    # Step 1: Sort by 'Value' and get the sort indices
+    if do_sort:
+        sort_indices = df[var_sort].argsort()
+        df_sorted = df.iloc[sort_indices].reset_index(drop=True)
+    else:
+        assert np.all(np.diff(df[var_sort])>=0), "need to sort"
+        sort_indices = list(range(len(df)))
+        df_sorted = df.copy()
+
+    # Step 2: Group contiguous rows with the same 'Category'
+    df_sorted[new_col] = (df_sorted[var_group] != df_sorted[var_group].shift()).cumsum()
+
+    if False:
+        # Step 3: Optionally, return the DataFrame back to the original order
+        df_original_order = df_sorted.sort_index()
+
+    # Display results
+    if PRINT:
+        print("Sort Indices:\n", sort_indices)
+        print(f"\nSorted DataFrame with {new_col}s:\n", df_sorted)
+        fig = sns.relplot(data=df_sorted, x=var_sort, y=new_col, hue=var_group)        
+
+        if savedir is not None:
+            savefig(fig, f"{savedir}/{var_group}-bloques.pdf")
+
+    # Get the indices of the group boundaries
+    # group_boundaries = (
+    #     df_sorted.groupby(var_group)
+    #     .agg(Start=(var_group, 'first'), End=(var_group, 'last'))
+    #     .reset_index()
+    # )
+    group_boundaries = (
+        df_sorted.groupby(new_col, as_index=False)
+        .agg(Start=(new_col, lambda x: x.index.min()), End=(new_col, lambda x: x.index.max()))
+    )
+
+    return df_sorted, sort_indices, group_boundaries
