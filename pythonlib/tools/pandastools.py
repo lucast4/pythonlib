@@ -209,6 +209,9 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     - aggmethod, list of str, applies each of these agg methods.
     """
 
+    # check that there are no nones... any cells with None will be left out erroneously.
+    assert df.isnull().values.any() == False, "replace Nones using replace_values_with_this"
+
     if len(df)==0:
         return df
 

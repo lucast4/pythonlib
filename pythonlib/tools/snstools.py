@@ -314,19 +314,19 @@ def get_xticklabels(fig):
 
 def heatmap_mat(datamat, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False, labels_row=None, labels_col=None,
-                rotation=90, rotation_y=0, cbar=True):
+                rotation=90, rotation_y=0, cbar=True, continuous_axes=False):
     """
     Plot heatmap, given datamat shape (nrow, ncols).
     """
     df = pd.DataFrame(datamat)
     return heatmap(df, ax, annotate_heatmap, zlims,
                    robust, diverge, labels_row, labels_col, rotation, rotation_y,
-                   cbar=cbar)
+                   cbar=cbar, continuous_axes=continuous_axes)
 
 def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         robust=False, diverge=False, labels_row=None, labels_col=None,
             rotation=90, rotation_y=0, SHAPE="square", norm_method=None,
-            cbar=True):
+            cbar=True, continuous_axes=False):
     """ 
     Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
     in df
@@ -337,6 +337,8 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     to this wideform.
     - annotate_heatmap, bool, whether puyt text in cell indicating the values
     - diverge, if True, then centers the heat
+    - continuous_axes, bool, if True, then axes values match the x and y va;lues (they are not just labels). 
+    This requires numerical labels_row and labels_col
     RETURNS:
     - fig, 
     - ax, 
@@ -466,8 +468,36 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         # cmap = sns.color_palette
         lab_add = 0.5
 
-    sns.heatmap(df, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
-        robust=robust, cmap=cmap, cbar=cbar)
+    if not continuous_axes:
+        # Original, categorical axes.
+        sns.heatmap(df, annot=annotate_heatmap, ax=ax, vmin=z1, vmax=z2,
+            robust=robust, cmap=cmap, cbar=cbar)
+        
+        # Categorical balues
+        if len(list_cat_1)<400:
+            # otherwise is too slow, too much text.
+            ax.set_yticks([i+lab_add for i in range(len(list_cat_1))], list_cat_1, rotation=rotation_y, fontsize=6)
+        if len(list_cat_2)<400:
+            ax.set_xticks([i+lab_add for i in range(len(list_cat_2))], list_cat_2, rotation=rotation, fontsize=6)
+    else:
+        # Continuous axes.
+        # If x and y are numerical and evenly spaced, then plot using actual values on x and y axis.
+        # NOte: y starts from -1, so that is top to bottom, matching sns.heatmap
+        X = df.values
+        img = ax.imshow(X, aspect='auto', extent=[list_cat_2[0], list_cat_2[-1], list_cat_1[-1], list_cat_1[0]], 
+                  cmap=cmap, vmin=zlims[0], vmax=zlims[1], interpolation="none")
+        _ = plt.colorbar(img, orientation='vertical')
+
+        # Alteramntive, but the above worked, so this is ignroed
+        # img = ax.pcolormesh(list_cat_2, list_cat_1, X, cmap=cmap, vmin=zlims[0], vmax=zlims[1], shading='auto')
+        # cbar1 = plt.colorbar(img, orientation='vertical', ax=ax)
+
+        # print(list_cat_2)
+        # ax.axvline(0)
+        # ax.axvline(0.05)
+        # ax.plot(0, 4, "ok")
+        # assert False
+
     # Return the colors
     from matplotlib.colors import Normalize
     # Normalize data
@@ -478,11 +508,5 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         print(df)
         print(len(df))
         raise err
-
-    if len(list_cat_1)<400:
-        # otherwise is too slow, too much text.
-        ax.set_yticks([i+lab_add for i in range(len(list_cat_1))], list_cat_1, rotation=rotation_y, fontsize=6)
-    if len(list_cat_2)<400:
-        ax.set_xticks([i+lab_add for i in range(len(list_cat_2))], list_cat_2, rotation=rotation, fontsize=6)
 
     return fig, ax, rgba_values
