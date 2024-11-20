@@ -32,6 +32,76 @@ def compute_d_prime(dist1, dist2):
 def signrank_wilcoxon(x1, x2=None):
     return stats.wilcoxon(x1, y=x2) 
 
+def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, value_var,
+                              PLOT=False, save_text_path=None, assert_no_na_rows=False):
+    """
+    Helper to pull out paired values and compute sign rank p value.
+    
+    PARAMS:
+    - df, long-form, where 
+    - datapt_vars, list of str, each datap will be unique conjunction of these vars 
+    (i.e., each row)
+    - contrast_var, str, the var whose 2 levesl you want to contrast.
+    - contrast_levels, list of 2 levels of contrast var, which you want to comapre.
+    - value_var, str, the var holding the numerical values.
+    - assert_no_na_rows, if True, then fails if any rows (datapt_vars) are thrown out, which 
+    can occur if any column (contrast_levels) are missing.
+    """
+    from pythonlib.tools.pandastools import pivot_table 
+    from pythonlib.tools.statstools import signrank_wilcoxon, plotmod_pvalues
+    assert len(contrast_levels)==2
+
+    for lev in contrast_levels:
+        assert lev in df[contrast_var].tolist(), f"Misentered contrast_levels. Maybe typo? {contrast_var} -- {contrast_levels}"
+
+    var1 = f"{value_var}-{contrast_levels[0]}"
+    var2 = f"{value_var}-{contrast_levels[1]}"
+
+    dfpivot = pivot_table(df, datapt_vars, [contrast_var], [value_var], flatten_col_names=True)
+
+    dfpivot = dfpivot.loc[:, list(datapt_vars)+[var1, var2]] # keep just the vars you care about, before removing na rows, or you might remove supriosuly. 
+    n1 = len(dfpivot)
+    dfpivot = dfpivot.dropna()
+    n2 = len(dfpivot)
+    if assert_no_na_rows and n1!=n2:
+        dfpivot = pivot_table(df, datapt_vars, [contrast_var], [value_var], flatten_col_names=True)
+        print(dfpivot)
+        dfpivot = dfpivot.dropna()
+        print(dfpivot)
+        assert False, "probably dont have all conjucntiosn... of (datapt_vars, contrast_var)"
+
+    if len(dfpivot)==0:
+        return None
+    
+    # display(dfpivot)
+    res = signrank_wilcoxon(dfpivot[var1], dfpivot[var2])
+
+    if PLOT:
+        fig, ax = plt.subplots()
+        for i, row in dfpivot.iterrows():
+            ax.plot([0, 1], [row[var1], row[var2]], "-ok", alpha=0.5)
+        ax.set_ylim(0)
+        ax.set_xlim([-0.5, 1.5])
+        plotmod_pvalues(ax, [0.5], [res.pvalue])
+        ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. {var2}")
+        ax.set_ylabel(value_var)
+    else:
+        fig = None
+    
+    out = {
+        "res":res,
+        "p":res.pvalue,
+        "dfpivot":dfpivot,
+        "var1":var1,
+        "var2":var2
+    }
+
+    if save_text_path is not None:
+        from pythonlib.tools.expttools import writeDictToTxtFlattened, writeDictToTxt
+        writeDictToTxt(out, save_text_path)
+
+    return out, fig
+
 def ttest_paired(x1, x2=None, ignore_nan=False):
     """ x1, x2 arrays, with same lenght
     if x2 is None, then assumes is comparing to 0s.
@@ -333,15 +403,20 @@ def empiricalPval(stat_actual, stats_shuff, side="two"):
     """ p value, useful for permutation tests.
     - side, if "two" then two sided (uses absolute value), 
     if "left" then hypothesize that actual is small, if 'right' then large.
-    """    
+    """     
+
+    # How many shuffled cases are stronger in the "effect directio" compared to actual data?
     if side=="two":
-        n = sum(np.abs(stats_shuff)<=np.abs(stat_actual)) + 1
+        # n = sum(np.abs(stats_shuff)<=np.abs(stat_actual)) + 1 # THIS WAS BUG
+        n = sum(np.abs(stats_shuff)>np.abs(stat_actual)) + 1
     elif side=="left":
+        # n = sum(stats_shuff<=stat_actual) + 1
         n = sum(stats_shuff<=stat_actual) + 1
     elif side=="right":
         n = sum(stats_shuff>=stat_actual) + 1
     else:
         assert False, "not coded"
+    
     nn = len(stats_shuff) + 1
     p = n/nn
 
@@ -427,7 +502,7 @@ def permutationTest(data, funstat, funshuff, N, plot=True, side="two"):
         print(sum(np.array(pvals)<0.05)/500)
 
 
-def plotmod_pvalues(ax, xvals, pvals, pthresh=0.05):
+def plotmod_pvalues(ax, xvals, pvals, pthresh=0.05, y_loc_frac=0.75, prefix=None, fontsize=8):
     """ Plot values on top of plots where each x locaiton is a 
     distribution with its own p value
     """
@@ -435,15 +510,20 @@ def plotmod_pvalues(ax, xvals, pvals, pthresh=0.05):
     assert len(xvals)==len(pvals)
 
     YLIM = ax.get_ylim()
-    y = YLIM[0] + 0.75*YLIM[1]-YLIM[0]
+    y = YLIM[0] + y_loc_frac*YLIM[1]-YLIM[0]
     # xrang = XLIM[1] - XLIM[0]
+
+
 
     for x, p in zip(xvals, pvals):
         if p<pthresh:
             col = "r"   
         else:
             col = "k"
-        ax.text(x, y, f"{p:.2E}", color=col, rotation=45, alpha=0.5)
+        if prefix is None:
+            ax.text(x, y, f"{p:.2E}", color=col, rotation=45, alpha=0.5, fontsize=fontsize)
+        else:
+            ax.text(x, y, f"{prefix} : {p:.2E}", color=col, rotation=45, alpha=0.5, fontsize=fontsize)
 
 def crossval_folds_indices(n1, n2, nfold=None):
     """ Return the indices for partitioning

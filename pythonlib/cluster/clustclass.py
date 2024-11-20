@@ -32,6 +32,10 @@ class Clusters(object):
         - params, dict of params, here just in case future proofings.
         """ 
 
+        if X is None:
+            # then is just for methods
+            return
+        
         if params is None:
             params = {}
 
@@ -1032,6 +1036,10 @@ class Clusters(object):
             X = X.copy()
             X[~mask] = -1.
 
+        if sort_order is None:
+            # go (0,1, 2....)
+            sort_order = tuple(range(len(labels_rows[0])))
+
         # Sort
         if sort_order is not None:
             key =lambda x:tuple([x[i] for i in sort_order])
@@ -1528,6 +1536,11 @@ class Clusters(object):
         else:
             return MASKS, None, None
 
+    def rsa_distmat_score_all_pairs_of_label_groups_datapts_datapts():
+        """
+        """
+        assert False, "this is done in rsa_dataextract_with_labels_as_flattened_df"
+
     def rsa_distmat_score_all_pairs_of_label_groups_datapts(self, get_only_one_direction=True, label_vars=None,
             return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff",
             list_grps_get=None):
@@ -1593,8 +1606,10 @@ class Clusters(object):
                 
                 # Expand, to get each variable in label.
                 for _ivar, _var in enumerate(label_vars):
-                    res[-1][f"{_var}_1"] = grp1[_ivar]
-                    res[-1][f"{_var}_2"] = grp2[_ivar]
+
+                    # Skip, this is done below.
+                    # res[-1][f"{_var}_1"] = grp1[_ivar]
+                    # res[-1][f"{_var}_2"] = grp2[_ivar]
 
                     res[-1][f"{_var}"] = grp1[_ivar] # Give a new colum which is the class of the datapt
                 
@@ -1631,6 +1646,13 @@ class Clusters(object):
             list_dist_yue_diff.append(dist_yue_diff)
 
         dfres["dist_yue_diff"] = list_dist_yue_diff
+
+        ### OTHER columns added
+        dfres = self.rsa_distmat_population_columns_label_relations(dfres, label_vars)
+        # from pythonlib.tools.pandastools import append_col_with_grp_index
+        # for var in label_vars:
+        #     dfres = append_col_with_grp_index(dfres, [f"{var}_1", f"{var}_2"], f"{var}_12")
+        #     dfres[f"{var}_same"] = dfres[f"{var}_1"] == dfres[f"{var}_2"]
 
         ### Return as a ClustClass object
         if return_as_clustclass:
@@ -1681,7 +1703,8 @@ class Clusters(object):
 
 
     def rsa_distmat_score_all_pairs_of_label_groups(self, get_only_one_direction=True, label_vars=None,
-            return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff"):
+            return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff",
+            labels_get=None):
         """
         Get mean distance between all conjucntions of labels, returning dataframe where each row is distance between a levbel of
         labels_1 and labels_2, where labels_1 is tuple, conjunction of self.Labels
@@ -1720,7 +1743,11 @@ class Clusters(object):
         # Get distance between each pair or grps
         res = []
         for i, (grp1, inds1) in enumerate(grpdict.items()):
+            if labels_get is not None and grp1 not in labels_get:
+                continue
             for j, (grp2, inds2) in enumerate(grpdict.items()):
+                if labels_get is not None and grp2 not in labels_get:
+                    continue
                 if get_only_one_direction and i<j:
                     continue
                 if i==j:
@@ -1741,9 +1768,10 @@ class Clusters(object):
                 })
                 
                 # Expand, to get each variable in label.
-                for _ivar, _var in enumerate(label_vars):
-                    res[-1][f"{_var}_1"] = grp1[_ivar]
-                    res[-1][f"{_var}_2"] = grp2[_ivar]
+                if False: # done below
+                    for _ivar, _var in enumerate(label_vars):
+                        res[-1][f"{_var}_1"] = grp1[_ivar]
+                        res[-1][f"{_var}_2"] = grp2[_ivar]
 
         # Also get 98th percentile between pairs of pts.
         ma = self._rsa_matindex_generate_upper_triangular()
@@ -1780,6 +1808,14 @@ class Clusters(object):
 
         dfres["dist_yue_diff"] = list_dist_yue_diff
 
+        # Add column names reflecting the "sameness" state of variables.
+        ### OTHER columns added
+        dfres = self.rsa_distmat_population_columns_label_relations(dfres, label_vars)
+        # else:
+        #     from pythonlib.tools.pandastools import append_col_with_grp_index
+        #     for var in label_vars:
+        #         dfres = append_col_with_grp_index(dfres, [f"{var}_1", f"{var}_2"], f"{var}_12")
+        #         dfres[f"{var}_same"] = dfres[f"{var}_1"] == dfres[f"{var}_2"]
 
         ### Return as a ClustClass object
         if return_as_clustclass:
@@ -1827,6 +1863,78 @@ class Clusters(object):
             return dfres, Cldist
         else:
             return dfres
+
+    def rsa_distmat_population_columns_label_relations(self, dfdists, label_vars):
+        """
+        Automatically populates new columns reflecting the relations between the columns in 
+        label_vars (which can be any length), such as same_shape
+        PARAMS:
+        - dfdists, output from things like rsa_distmat_score_all_pairs_of_label_groups
+        - label_vars, list of n strings
+        e.g., label_vars = [shape, loc]
+        RETURNS:
+        - copy of dfdists
+        """
+        from pythonlib.tools.pandastools import append_col_with_grp_index
+
+        dfdists = dfdists.copy()
+        
+        # Replace columns which are now incorrect
+        # label_vars = ["seqc_0_shape", "seqc_0_loc"]
+        assert isinstance(label_vars[0], str)
+
+        # e..g, seqc_0_shape_1
+        for i, var in enumerate(label_vars):
+            dfdists[f"{var}_1"] = [x[i] for x in dfdists["labels_1"]]
+            dfdists[f"{var}_2"] = [x[i] for x in dfdists["labels_2"]]
+            dfdists = append_col_with_grp_index(dfdists, [f"{var}_1", f"{var}_2"], f"{var}_12")
+            dfdists[f"{var}_same"] = dfdists[f"{var}_1"] == dfdists[f"{var}_2"]
+
+        if len(label_vars)==2:
+            for i, var in enumerate(label_vars):
+                dfdists = append_col_with_grp_index(dfdists, [f"{label_vars[0]}_same", f"{label_vars[1]}_same"], f"same-{label_vars[0]}|{label_vars[1]}")
+
+        return dfdists
+
+    def rsa_distmat_convert_from_triangular_to_full(self, dfdists, label_vars, PLOT=False):
+        """
+        Given a dfdists that is triangular (inclues diagonmal usually), convert to 
+        full matrix by copying and swapping labels 1 and 2, assuming that
+        distances are symmetric.
+        
+        RETURNS:
+        - copy of dfdists, but more rows.
+        """
+        from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+
+        if PLOT:
+            grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
+
+        dftmp = dfdists.copy()
+
+        # Flip labels
+        dftmp["labels_1"] = dfdists["labels_2"]
+        dftmp["labels_2"] = dfdists["labels_1"]
+        
+        # Remove diagonal
+        dftmp = dftmp[dftmp["labels_1"]!=dftmp["labels_2"]]
+        
+        # concat
+        dfdists = pd.concat([dfdists, dftmp]).reset_index(drop=True)
+        
+        # Repopulation all label columns
+        # label_vars = ["seqc_0_shape", var_other]
+        # from pythonlib.cluster.clustclass import Clusters
+        # cl = Clusters(None)
+        dfdists = self.rsa_distmat_population_columns_label_relations(dfdists, label_vars)
+
+        if PLOT:
+            grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
+
+        # Sanity check that populated all cells in distance matrix
+        assert dfdists.groupby(["labels_2"]).size().min() == dfdists.groupby(["labels_2"]).size().max()
+
+        return dfdists
 
     def rsa_distmat_score_same_diff_by_context(self, var_effect, var_others, context_input,
                                                dat_level, PLOT_MASKS=False, plot_mask_path=None, 
@@ -2293,7 +2401,8 @@ class Clusters(object):
                            params={"var":var, "version_distance":None, "label_vars":(var,)})
         # plot
         if PLOT:
-            fig = Cltheor.plot_heatmap_data()[0]
+            fig = Cltheor.rsa_plot_heatmap()[0]
+            # fig = Cltheor.plot_heatmap_data()[0]
         else:
             fig = None
 
@@ -2319,7 +2428,8 @@ class Clusters(object):
         elif self.Version == "dist":
             label_vars = self.Params["Clraw"].Params["label_vars"]
         else:
-            assert False
+            print("self.Params: ", self.Params)
+            assert False, "input the params"
         return label_vars
 
     def rsa_matindex_print_mask_labels(self, ma, savepath,
@@ -2453,12 +2563,13 @@ class Clusters(object):
         return self.Xinput[(rows, cols)]
 
     # _rsa_matindex_slice_rect_copy
-    def rsa_index_sliceX_rect_copy(self, rows, cols):
+    def rsa_index_sliceX_rect_copy(self, rows, cols, allow_copy=False):
         """ Helper to pull out rectangle slice of self.Xinput,
             - np array, (len(rows), len(cols)) shape.  This is a copy, which
             means modifications will NOT affect oriingal array
         """
-        assert False, "avoid using this, it is a copy..."
+        if allow_copy==False:
+            assert False, "avoid using this, it is a copy..."
         return self.Xinput[rows,:][:,cols]
 
     # def rsa_index_indvar_for_this_var(self, varstr):
@@ -2479,20 +2590,25 @@ class Clusters(object):
         levs = self.rsa_labels_return_as_df().iloc[inds_row][var].tolist()
         return levs
 
-    def rsa_index_cols_with_this_level(self, var, level):
+    def rsa_index_cols_with_this_level(self, var, level, level_is_list_of_levels=False):
         """ Return columsn with this level of this var
         """
         assert self.LabelsCols==self.Labels
-        inds = self.rsa_index_rows_with_this_level(var, level)
+        inds = self.rsa_index_rows_with_this_level(var, level, level_is_list_of_levels)
         return inds
 
-    def rsa_index_rows_with_this_level(self, var, level):
+    def rsa_index_rows_with_this_level(self, var, level, level_is_list_of_levels=False):
         """ return list of ints in to self.Labels (rows) whcih
         have this level for this var
         e.g, self.Labels[inds[0]]==level will be True
         """
         dflab = self.rsa_labels_return_as_df()
-        return dflab[dflab[var]==level]["row_index"].tolist()
+        if level_is_list_of_levels:
+            # passed in levels that are acceptable
+            return dflab[dflab[var].isin(level)]["row_index"].tolist()
+        else:
+            # passed in a single level.
+            return dflab[dflab[var]==level]["row_index"].tolist()
 
     def rsa_matindex_plot_bounding_box(self, x1, x2, y1, y2, ax,
                                        edgecolor="r", facecolor="none"):
@@ -2796,13 +2912,129 @@ class Clusters(object):
         Reequres square ditance mat.
         Only works with single (not conjunctive) lbel vary
         """
-        labels_var_tuple = tuple([label_var])
+
+        if isinstance(label_var, (list, tuple)):
+            # then self is already rsa mode...
+            assert len(label_var)==len(self.Labels[0])
+            labels_var_tuple = tuple(label_var)
+            labels = self.Labels
+        else:
+            assert isinstance(label_var, str)
+            labels_var_tuple = tuple([label_var])
+            labels = [tuple([x]) for x in self.Labels]
+
         params = {
             "version_distance":version_distance,
             "label_vars":labels_var_tuple,
         }
 
-        labels = [tuple([x]) for x in self.Labels]
         Cl = Clusters(X = self.Xinput, labels_rows=labels,
                         labels_cols=labels, ver="dist", params=params)
         return Cl
+    
+    def copy_with_slicing(self, rows=None, cols=None):
+        """
+        Copy self, optionally slicing to rectangle decinde by rows and cosl (which are indices)
+        """
+        if rows is None:
+            rows = list(range(len(self.Labels)))
+        if cols is None:
+            cols = list(range(len(self.LabelsCols)))
+        
+        labels = [self.Labels[i] for i in rows]
+        labels_cols = [self.LabelsCols[i] for i in cols]
+        X = self.rsa_index_sliceX_rect_copy(rows, cols, allow_copy=True)
+        Cl = Clusters(X = X, labels_rows=labels,
+                        labels_cols=labels_cols, ver="dist", params=self.Params)
+        return Cl
+
+    ############# CLASSIFY
+    def scalar_score_convert_to_classification_accuracy(self, dfdist, var_datapt = "idx_row_datapt", 
+                                                        var_score="dist_mean",
+                                                        plot_savedir=None, higher_score_better=True):
+        """
+        Use distance matrix to discretize and get classifier score.
+        i.e, for each row (var_datapt) ask which column is best score, and label that row by the label
+        of that column.
+
+        Can them compute classification accuracy which is for each row class, fraction of cases correctly clasifed.
+        PARAMS:
+        - dfdist, can get this from rsa_distmat_score_all_pairs_of_label_groups_datapts
+        - higher_score_better, if True, then is "similarity", else is "distance."
+        RETURNS:
+        - score, score_adjusted, dfclasses, dfaccuracy
+
+        NOTE:
+        - this ported from decode_moment.py --> scalar_score_convert_to_classification_accuracy
+        """
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+        from sklearn.metrics import balanced_accuracy_score
+
+        if higher_score_better==False:
+            dfdist = dfdist.copy()
+            dfdist[var_score] = -dfdist[var_score]
+
+        grpdict = grouping_append_and_return_inner_items_good(dfdist, [var_datapt])
+
+        labels_test = [] # Correct label
+        labels_predicted = [] # which decoder won?
+        # Collect labels across each test datapt (i.e., row in dflab in pa)
+        res = []
+        for grp, inds in grpdict.items():
+
+            dfthis = dfdist.iloc[inds]
+            # dfthis = dfscores[dfscores["pa_idx"] == pa_idx]
+
+            decoder_class_max = dfthis.iloc[np.argmax(dfthis[var_score])]["labels_2_grp"]
+            labels_predicted.append(decoder_class_max)
+            
+            tmp = dfthis["labels_1_datapt"].unique().tolist()
+            if not len(tmp)==1:
+                print(tmp)
+                assert False, "each datapt (pa_idx) is assumed to have its only duplication be due to time windows. "
+            label_actual = tmp[0]
+            labels_test.append(label_actual)
+
+            print()
+            # Collect, to get scores for diff slices of data
+            res.append({
+                "var_datapt":grp[0],
+                "label_predicted":decoder_class_max,
+                "label_actual":label_actual,
+            })
+        
+        score = balanced_accuracy_score(labels_test, labels_predicted, adjusted=False)
+        score_adjusted = balanced_accuracy_score(labels_test, labels_predicted, adjusted=True)
+
+        dfclasses = pd.DataFrame(res)
+
+        ### Also get scores for each pa label
+        # score separately for each ground truth label
+        grpdict = grouping_append_and_return_inner_items_good(dfclasses, ["label_actual"])
+
+        accuracy_each = []
+        for grp, inds in grpdict.items():
+            label_actual = grp[0]
+            labels_predicted = dfclasses.iloc[inds]["label_predicted"]
+
+            n_correct = sum([lab==label_actual for lab in labels_predicted])
+            n_tot = len(labels_predicted)
+            accuracy = n_correct/n_tot
+
+            accuracy_each.append({
+                "label_actual":label_actual,
+                "accuracy":accuracy
+            })
+
+        dfaccuracy = pd.DataFrame(accuracy_each)        
+        annotate_heatmap = len(dfclasses["label_actual"].unique())<16
+        if plot_savedir is not None:
+            # Plot summaries of accuracy
+            from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+            for norm_method in [None, "row_sub", "col_sub"]:
+                fig = grouping_plot_n_samples_conjunction_heatmap(dfclasses, "label_actual", 
+                                                                  "label_predicted", None,
+                                                                  norm_method=norm_method, annotate_heatmap=annotate_heatmap)            
+                savefig(fig, f"{plot_savedir}/accuracy_heatmap-norm={norm_method}.pdf")
+
+        return score, score_adjusted, dfclasses, dfaccuracy

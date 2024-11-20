@@ -262,9 +262,15 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
 
         assert "charclust_shape_seq_scores" in D.Dat.columns, "you must have already loaded this into Dataset"
         columns_to_append = {} # one value for each (substroke)
-        for column in ["charclust_shape_seq_scores"]:
+        for column in ["charclust_shape_seq", "charclust_shape_seq_scores"]:
             columns_to_append[column] = D.Dat[column].tolist()
         DS = DatStrokes(D, columns_to_append=columns_to_append)
+
+        # 11/5/24 - Hacky, but this makes sure the names I usualyl use (csm, csmc) are
+        # present, e.g., for neural data. i.e., this is used for populating Snippets,
+        # and I include these two columns as features to extract. 
+        DS.Dat["clust_sim_max"] = DS.Dat["charclust_shape_seq_scores"]
+        DS.Dat["clust_sim_max_colname"] = DS.Dat["charclust_shape_seq"]
 
         # These values empriically chosen (see primitivenessv2 preprocessing).
         methods = ["stroke_too_short", "stroke_too_quick"]
@@ -919,6 +925,55 @@ class DatStrokes(object):
 
 
     ######################### PREP THE DATASET
+    def distgood_compute_beh_beh_strok_distances(self, strokes1, strokes2, 
+                                                 list_distance_ver = None,
+                                                 labels_rows_dat= None,
+                                                 labels_cols_feats= None,
+                                                 label_var=None):
+        """
+        GOOD - compute pairwise distance between all pairs across 1 and 2.
+        This is motor distnace, the method used for clustreing strokes from 
+        characters.
+        PARAMS:
+        - 
+        """
+
+        # Which distance score
+        if list_distance_ver is None:
+            # if False:
+            # Before 1/15/24
+            # list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+            # 1/15/24 - This is much better
+            list_distance_ver  = ["dtw_vels_2d"]
+        Cl = self._cluster_compute_sim_matrix_aggver(strokes1, strokes2, 
+                                                        labels_rows_dat= labels_rows_dat,
+                                                        labels_cols_feats= labels_cols_feats,
+                                                        label_var=label_var,
+                                                        list_ver= list_distance_ver)
+        return Cl
+        
+    def _distgood_compute_image_strok_distances(self, strokes1, strokes2, labels1=None, labels2=None, 
+                                                do_centerize=False):
+        """ COmpute and return distances between all pairs of (strokes1, strokes2), but using
+        image distnace, which ignore the motor trajectory
+
+        RETURNS:
+        - ClustClass object holding all pairwise distances.
+        """
+        from ..cluster.clustclass import Clusters        
+        from pythonlib.tools.distfunctools import distmat_construct_wrapper
+        def _dist_strok(strok1, strok2):
+            """ 
+            The low-level image-distance. Higher is worse
+            """
+            return self._dist_strok_pair(strok1, strok2, do_centerize=do_centerize)
+
+        # Get difference 
+        distmat = distmat_construct_wrapper(strokes1, strokes2, _dist_strok)
+        Cl = Clusters(X = distmat, labels_rows=labels1, labels_cols=labels2)
+
+        return Cl
+
     def distgood_compute_beh_task_strok_distances(self):
         """ For each beh stroke, get its distance to matching single task strok
         RETURNS:
@@ -937,8 +992,7 @@ class DatStrokes(object):
             # Save it
             self.Dat["dist_beh_task_strok"] = dists
             print("Added column: dist_beh_task_strok")
-
-
+    
     ######################### MOTOR TIMING
     def motor_velocity_timing_extract(self, rerun=False, do_binning=True,
                                       plot_dist_angle_distributions=False):
@@ -1130,6 +1184,8 @@ class DatStrokes(object):
     def extract_strokes_as_velocity(self, inds, PLOT=False, 
         version="vel", fs_downsample=None, DEBUG=False, lowpass_freq_force=None):
         """ Returns teh default stroeks (in self.Version) as velocity profiles
+        PARAMS:
+        - version, either "vel" or "speed"
         RETURNS:
         - list of strok (np array), each (N,3) where columns are (xvel, yvel, time)
         (or strok can be None, if too short to get velocity)
@@ -2142,6 +2198,15 @@ class DatStrokes(object):
             n_examples_per_sublot=n_examples_per_sublot, sort_colvar=True, plot_task=plot_task)
         return figbeh, figtask
 
+    def plotshape_row_figure_axis_shapes(self, shapes, axis="x", centerize=True, title_shapes=None):
+        """
+        Helper to plot a row of subplots, each holding a shape, matching the order of shapes inputed, which 
+        is useful as an icon on a larger axis.
+        """
+        _, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper(which_shapes=shapes)
+        fig = self.plotshape_row_figure_axis(list_strok_basis, axis=axis, title_shapes=title_shapes)
+        return fig
+
     def plotshape_row_figure_axis(self, strokes, axis="x", centerize=True, title_shapes=None):
         """
         For making plots to place on x and y axis of figure.
@@ -2789,6 +2854,50 @@ class DatStrokes(object):
             print("PRINTING (shape_is_novel, shape_semantic, shape)")
             self.print_n_samples_per_combo_grouping(["shape_is_novel", "shape_semantic", "shape"])
 
+    def shapesemantic_map_shapesem_to_shape(self, shapesem):
+        from pythonlib.drawmodel.tokens import MAP_SHAPE_TO_SHAPESEMANTIC
+        # def map_shapesemgrp_to_shape(shapesemgrp):
+        #     shapesem = MAP_SHAPE_TO_SHAPESEMANTIC[shape]
+        #     shapesemgrp = MAP_SHAPESEM_TO_SHAPESEMGROUP[shapesem]
+        #     return shapesemgrp
+        
+        for s, ss in MAP_SHAPE_TO_SHAPESEMANTIC.items():
+            if ss == shapesem:
+                return s
+        print(MAP_SHAPE_TO_SHAPESEMANTIC.keys())
+        print(MAP_SHAPE_TO_SHAPESEMANTIC.values())            
+        print(shapesem)
+        assert False
+
+    def shapesemantic_map_shapesemgrp_to_shapesem(self, shapesemgrp):
+        from pythonlib.drawmodel.tokens import MAP_SHAPESEM_TO_SHAPESEMGROUP
+        # def map_shapesemgrp_to_shape(shapesemgrp):
+        #     shapesem = MAP_SHAPE_TO_SHAPESEMANTIC[shape]
+        #     shapesemgrp = MAP_SHAPESEM_TO_SHAPESEMGROUP[shapesem]
+        #     return shapesemgrp
+        
+        for ss, ssg in MAP_SHAPESEM_TO_SHAPESEMGROUP.items():
+            if ssg == shapesemgrp:
+                return ss
+        print(MAP_SHAPESEM_TO_SHAPESEMGROUP.keys())
+        print(MAP_SHAPESEM_TO_SHAPESEMGROUP.values())
+        print(shapesemgrp)
+        assert False
+
+    def shapesemantic_map_shapesemgrp_to_shape(self, shapesemgrp):
+        """
+        """
+
+        # from pythonlib.drawmodel.tokens import MAP_SHAPE_TO_SHAPESEMANTIC, MAP_SHAPESEM_TO_SHAPESEMGROUP
+        # def map_shapesemgrp_to_shape(shapesemgrp):
+        #     shapesem = MAP_SHAPE_TO_SHAPESEMANTIC[shape]
+        #     shapesemgrp = MAP_SHAPESEM_TO_SHAPESEMGROUP[shapesem]
+        #     return shapesemgrp
+        
+        shapesem = self.shapesemantic_map_shapesemgrp_to_shapesem(shapesemgrp)
+        shape = self.shapesemantic_map_shapesem_to_shape(shapesem)
+        return shape
+
     ################################ SIMILARITY/CLUSTERING
     def _cluster_compute_mean_stroke(self, strokes, center_at_onset=True,
         check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None,
@@ -3073,6 +3182,9 @@ class DatStrokes(object):
         # Can work with rectangle (usualyl nrows > ncols)
         Cl = Clusters(X = simmat, labels_rows=labels_rows_dat, labels_cols=labels_cols_feats)
 
+        # Cl.rsa_plot_heatmap()
+        # print(Cl.Params)
+        # assert False
         if clustclass_rsa_mode:
             # params = {
             #     "version_distance":tuple(list_ver),
@@ -3117,19 +3229,24 @@ class DatStrokes(object):
                 assert len(dfbasis)>0
                 
             # Which distance score
-            if list_distance_ver is None:
-                # if False:
-                # Before 1/15/24
-                list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
-                # 1/15/24 - This is much better
-                list_distance_ver  = ["dtw_vels_2d"]
+            # if list_distance_ver is None:
+            #     # if False:
+            #     # Before 1/15/24
+            #     # list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+            #     # 1/15/24 - This is much better
+            #     list_distance_ver  = ["dtw_vels_2d"]
 
-            # Compute similarity
-            Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, 
+            # # Compute similarity
+            # Cl = self._cluster_compute_sim_matrix_aggver(list_strok, list_strok_basis, 
+            #                                              labels_rows_dat= list_shape,
+            #                                              labels_cols_feats= list_shape_basis,
+            #                                              label_var="shape",
+            #                                              list_ver= list_distance_ver)
+            
+            Cl = self.distgood_compute_beh_beh_strok_distances(list_strok, list_strok_basis, 
                                                          labels_rows_dat= list_shape,
                                                          labels_cols_feats= list_shape_basis,
-                                                         label_var="shape",
-                                                         list_ver= list_distance_ver)
+                                                         label_var="shape")
 
             params["list_strok_basis"] = list_strok_basis
             params["list_shape_basis"] = list_shape_basis
@@ -3348,7 +3465,8 @@ class DatStrokes(object):
                 
                 plt.close("all")
 
-    def clustergood_load_saved_cluster_shape_classes_input_basis_set(self, WHICH_BASIS=None, WHICH_LEVEL="trial"):
+    def clustergood_load_saved_cluster_shape_classes_input_basis_set(self, WHICH_BASIS=None, WHICH_LEVEL="trial",
+                                                                     ANIMAL=None, DATE=None, merge_with_self=True):
         """ [NOTE: is like clustergood_load_saved_cluster_shape_classes, but loads saved DS, which was saved
         separately based on which_basis. Is identical, just dumb forgeting when saving] 
         Laod cluster labels, make copy of self, and append labels
@@ -3359,11 +3477,12 @@ class DatStrokes(object):
         - WHICH_BASIS, str, usualyl which animal's basis set was used.
         RETURNS DS,a copy that includes ONLY those rows that found shape label.
         """
-        self.Dat = self.datamod_append_unique_indexdatapt_copy()
-        DS = self.copy()
+        import glob
 
-        ANIMAL = DS.animal()
-        DATE = DS.date()
+        if ANIMAL is None:
+            ANIMAL = DS.animal()
+        if DATE is None:
+            DATE = DS.date()
 
         if WHICH_BASIS is None:
             WHICH_BASIS = ANIMAL
@@ -3372,15 +3491,20 @@ class DatStrokes(object):
         DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
         path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
         
-        import glob
         list_dir = glob.glob(path)
         if len(list_dir)==1:
             path = list_dir[0]
             _ds = pd.read_pickle(path)
             df = _ds.Dat
-            df = DS.datamod_append_unique_indexdatapt_copy(df=df)
-            DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
-            return DS, params_dict
+
+            if merge_with_self:
+                self.Dat = self.datamod_append_unique_indexdatapt_copy()
+                DS = self.copy()
+                df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+                DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
+                return DS, params_dict
+            else:
+                return df, None
         elif len(list_dir)>1:
             print(list_dir)
             assert False
@@ -3450,6 +3574,7 @@ class DatStrokes(object):
 
     def _clustergood_load_saved_cluster_shape_classes_inner(self, df):
         """
+        Take loaded df and merge into self.
         """
 
         DS = self.copy()
@@ -4141,16 +4266,21 @@ class DatStrokes(object):
                 print(d1, d2)
                 assert False, "why identical?"
 
-    def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False):
+    def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False, do_centerize=False):
         """ compute *visual* doistance between strok1 and 2
         uses by defaiult hausdorff mean.
         
         Default does not recenter or anything like that.
         """
+        from pythonlib.drawmodel.strokedists import distStrokWrapperMult
+        if do_centerize:
+            assert recenter_to_onset==False
+            from pythonlib.tools.stroketools import strokes_centerize
+            strok1, strok2 = strokes_centerize([strok1, strok2])
         if recenter_to_onset:
+            assert do_centerize==False
             strok1 = strok1 - strok1[0,:]
             strok2 = strok2 - strok2[0,:]
-        from pythonlib.drawmodel.strokedists import distStrokWrapperMult
         return distStrokWrapperMult([strok1], [strok2], convert_to_similarity=False).squeeze().item()
 
 

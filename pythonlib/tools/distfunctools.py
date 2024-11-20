@@ -8,7 +8,9 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
                               normalize_cols_range01=False, normalize_by_range=False, range_norm=None,
                               convert_to_similarity=False, similarity_method=None, DEBUG=False,
                               accurately_estimate_diagonal=False,
-                              inds_skip_rows_or_cols=None, PLOT=False):
+                              inds_skip_rows_or_cols=None, PLOT=False,
+                              return_as_clustclass=False, clustclass_labels_1=None, clustclass_labels_2=None,
+                              clustclass_label_vars=None):
     """ Wrapper to generate distance matrix.
     Assumes this is symetric. Only computes upper triangle copies to lower.
     PARAMS:
@@ -101,6 +103,8 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
     else:
         # Not symmetric..
         for i, v1 in enumerate(vals1):
+            if i%50==0:
+                print("distmat_construct_wrapper: ", i)
             for j, v2 in enumerate(vals2):
                 if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):
                     d = np.nan
@@ -175,7 +179,14 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
     if PLOT:
         from pythonlib.tools.snstools import heatmap_mat
         fig, ax, rgba_values = heatmap_mat(D, annotate_heatmap=False)
-    return D
+
+    if return_as_clustclass:
+        from pythonlib.cluster.clustclass import Clusters
+        Cl = Clusters(X = D, labels_rows=clustclass_labels_1, labels_cols=clustclass_labels_2)
+        Cl = Cl.convert_copy_to_rsa_dist_version(label_var=clustclass_label_vars, version_distance="unspecified")
+        return Cl
+    else:
+        return D
 
 def closest_pt_twotrajs(traj1, traj2):
     """ returns closest pt between these
@@ -549,3 +560,38 @@ def dist_vs_self_split_compute_agg(X, dist_func, nfold=10):
         d = dist_func(X1, X2)
         ds.append(d)
     return np.mean(ds)
+
+def compute_euclidian_dist_yue_diff(Xthis, labels_rows, label_vars):        
+    """
+    Get dist_yue_diff, based on pairwise distances between each pt in Xthis,
+    and then grouping into unique conjunctive levels of labels_rows.
+    i.e, is a distance between two distributions.
+    
+    PARAMS:
+    - Xthis, (ndat, ndims)
+    - labels_rows, list of tuples, len ndat
+    - label_vars, tuple of strings, each the name of the variable
+    RETURNS:
+    - 
+    """
+    from pythonlib.cluster.clustclass import Clusters
+
+    assert len(labels_rows)==Xthis.shape[0]
+    assert len(label_vars) == len(labels_rows[0])
+    assert isinstance(labels_rows[0], tuple)
+    assert isinstance(label_vars, tuple)
+    assert isinstance(label_vars[0], str)
+
+    # using dist yue diff score
+    version_distance = "euclidian"
+
+    params = {
+        "label_vars":label_vars,
+    }
+    Cl = Clusters(Xthis, labels_rows, ver="rsa", params=params)
+                
+    # convert to distance matrix
+    Cldist = Cl.distsimmat_convert(version_distance)
+    dfdists = Cldist.rsa_distmat_score_all_pairs_of_label_groups()
+
+    return dfdists

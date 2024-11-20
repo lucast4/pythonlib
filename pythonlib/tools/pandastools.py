@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 from pythonlib.tools.plottools import savefig
 import seaborn as sns
 
+# pd.set_option('display.max_rows', 20)
+pd.set_option('display.max_columns', None)
+
 def _check_index_reseted(df):
     """
     Assert that indices are 0, 1, 2....
@@ -1114,7 +1117,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         norm_method=None,
         annotate_heatmap=True, zlims=(None, None),
         diverge=False, dosort_colnames=False,
-        list_cat_1 = None, list_cat_2 = None):
+        list_cat_1 = None, list_cat_2 = None,
+        sort_rows_by_mean_col_value=False):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
@@ -1126,6 +1130,9 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     - val_name, str name of column, optional if the agg function requires this (e,g. mean)
     - annotate_heatmap, bool, to put numerical values in each cell as text.
     - diverge, bool, if True, then centers the heat values.
+    - sort_rows_by_mean_col_value, bool, if True, then sorts the order of rows so that the
+    top row has densitiy towards left (x coords). This only makes sense if column labels are 
+    numerical.
     RETURNS:
     - 2d dataframne,
     - fig, 
@@ -1154,6 +1161,11 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     if dosort_colnames:
         list_cat_1 = sort_mixed_type(list_cat_1)
         list_cat_2 = sort_mixed_type(list_cat_2)
+
+    if sort_rows_by_mean_col_value:
+        dfsort = df.groupby([col1])[col2].mean().reset_index()
+        inds_sorted = dfsort.sort_values(col2).index.tolist()
+        list_cat_1 = dfsort.iloc[inds_sorted][col1].tolist()
 
     arr = np.zeros((len(list_cat_1), len(list_cat_2)))
     for i, val1 in enumerate(list_cat_1):
@@ -2228,7 +2240,8 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     return nmin, nmax
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
-    norm_method=None, annotate_heatmap=True):
+    norm_method=None, annotate_heatmap=True, row_levels=None,
+    sort_rows_by_mean_col_value=False, also_return_df=False):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2256,7 +2269,11 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         df["dummy"] = 0
     list_dummy = sort_mixed_type(df["dummy"].unique().tolist())
 
-    list_var1 = sort_mixed_type(df[var1].unique().tolist())
+    if row_levels is None:
+        list_var1 = sort_mixed_type(df[var1].unique().tolist())
+    else:
+        list_var1 = row_levels
+
     list_var2 = sort_mixed_type(df[var2].unique().tolist())
 
     if len(list_var1)>30 or len(list_var2)>30:
@@ -2269,16 +2286,24 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     nrows = int(np.ceil(len(list_dummy)/ncols))
 
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*FIGSIZE, nrows*FIGSIZE), squeeze=False)
+    list_df_plotted = []
     for ax, dum in zip(axes.flatten(), list_dummy):
         dfthis = df[df["dummy"]==dum]
 
         # plot 2d
-        convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
+        _df, _, _, _ = convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
             list_cat_1 = list_var1, list_cat_2 = list_var2,
-            norm_method=norm_method, annotate_heatmap=annotate_heatmap)
+            norm_method=norm_method, annotate_heatmap=annotate_heatmap,
+            sort_rows_by_mean_col_value=sort_rows_by_mean_col_value)
 
         ax.set_title(dum)
-    return fig
+
+        list_df_plotted.append(_df)
+
+    if also_return_df:
+        return fig, list_df_plotted
+    else:
+        return fig
 
 # def plot_
 
@@ -3285,6 +3310,60 @@ def sort_rows_by_trialcode(dfthis):
     # 2) sort
     return dfthis.sort_values(by="trialcode_tuple").reset_index(drop=True)
 
+def shuffle_dataset_hierarchical_remap(df, var_shuff, grouping_column, col_name_shuffed=None,
+                                       use_same_mapping_across_groups=False):
+    """
+    Is like shuffle_dataset_hierarchical, but here var_shuff is not shuffled 
+    by permuting al row,s but instead is by remapping each unique levle of var_shuff
+    to a new unique level.
+    
+    Does this separtedly for each level of grouping_column (i.e,, each level has 
+    unique remapping of var_shuff)
+
+    RETURNS:
+    - modifes df, adding a column: f'{var_shuff}_remapped' if col_name_shuffed is None
+
+    TO TEST:
+    import pandas as pd
+    import numpy as np
+
+    # Sample DataFrame
+    df = pd.DataFrame({
+        'B': ['a', 'a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c'],
+        'A': [1, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+    })
+
+    display(df)
+    # Column names as variables
+    column_to_remap = 'B'
+    grouping_column = 'A'
+    
+    shuffle_dataset_hierarchical_remap(df, column_to_remap, grouping_column)
+
+    """
+    # Function to remap values within each level of the grouping column
+
+    if use_same_mapping_across_groups:
+        unique_vals = df[var_shuff].unique()
+        new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
+        mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
+
+        def remap_values(group, col):
+            return group[col].map(mapping)
+    else:
+        def remap_values(group, col):
+            unique_vals = group[col].unique()
+            new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
+            mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
+            return group[col].map(mapping)
+
+    # Apply the remapping function group-wise
+    if col_name_shuffed is None:
+        col_name_shuffed =  f'{var_shuff}_remapped'
+    df[col_name_shuffed] = df.groupby(grouping_column, group_keys=False).apply(remap_values, col=var_shuff)
+
+    return df
+
 # shuffle_dataset_singlevar_hierarchical
 def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
                           maintain_block_temporal_structure=False, shift_level="datapt",
@@ -3715,7 +3794,10 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                            plot_error_bars=True,
                                            map_subplot_var_to_new_subplot_var=None,
                                            fontsize=4, xymin_zero=False, jitter_value=None,
-                                           color_by_var_datapt=False, force_all_on_same_axis=False):
+                                           color_by_var_datapt=False, force_all_on_same_axis=False,
+                                           color=None,
+                                           map_datapt_lev_to_colorlev=None,
+                                           colorlevs_that_exist=None):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -3736,6 +3818,9 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         "preSMA_p":"preSMA_p",
             }
     - color_by_var_datapt, bool, if True, then diff color for each lev of var_datapt
+    - map_datapt_lev_to_colorlev, dict, mapping from level of var_datapt to a cateorical vriable that defines color.
+    in this code, will make those colors.
+    - colorlevs_that_exist, list of colorlevs, which are used to define the colors that exist.
     EXAMPLE:
     - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
     separate subplot for each epoch_orig...
@@ -3746,8 +3831,13 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                    plot_text=plot_label, alpha=0.2, SIZE=4)
 
     """
+
+    assert color_by_var_datapt == False, "this didnt do antyhing. it was wrong. it colored by subplot.."
+    
     from scipy.stats import sem
     from pythonlib.tools.plottools import plotScatter45
+    from pythonlib.tools.plottools import color_make_map_discrete_labels
+    from pythonlib.tools.plottools import legend_add_manual
 
     if isinstance(var_datapt, (list, tuple)):
         dfthis = append_col_with_grp_index(dfthis, var_datapt, "_var_datapt")
@@ -3814,8 +3904,16 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE))
  # sharex=sharex, sharey=sharey)
 
-    from pythonlib.tools.plottools import color_make_map_discrete_labels
-    _map_lev_to_color, _, _ = color_make_map_discrete_labels(list_lev)
+    # if color_by_var_datapt:
+    #     _map_lev_to_color, _, _ = color_make_map_discrete_labels(list_lev)
+
+    # Color each datapt by anotther category
+    if map_datapt_lev_to_colorlev is not None:
+        assert colorlevs_that_exist is not None
+        map_colorlev_to_color, _, _ = color_make_map_discrete_labels(colorlevs_that_exist)
+        map_dataptlev_to_color = {dataptlev:map_colorlev_to_color[colorlev] for dataptlev, colorlev in map_datapt_lev_to_colorlev.items()}
+    else:
+        map_dataptlev_to_color = None
 
     list_xs = []
     list_ys = []
@@ -3848,14 +3946,21 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         else:
             labels = None
         
-        if color_by_var_datapt and len(list_lev)<80:
-            pcol = _map_lev_to_color[lev]
+        # if color_by_var_datapt and len(list_lev)<80:
+        #     pcol = _map_lev_to_color[lev]
+        # else:
+        pcol = color
+
+        if map_dataptlev_to_color is not None:
+            colors_each_pt = [map_dataptlev_to_color[lab] for lab in labels]
         else:
-            pcol = None
+            colors_each_pt = None
+
         plotScatter45(xs, ys, ax, labels=labels, marker="o",
                         x_errors=x_errors, y_errors=y_errors, alpha=alpha, fontsize=fontsize, jitter_value=jitter_value,
-                        color=pcol)
-    
+                        color=pcol, colors_each_pt=colors_each_pt)
+        
+
         if verbose_done:
             ax.set_title(lev, fontsize=8)
             ax.set_xlabel(x_lev_manip)
@@ -3876,11 +3981,12 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
             # Then remove title
             ax.set_title(None)
 
-
-    if color_by_var_datapt:
-        # add legend to last axis
-        from pythonlib.tools.plottools import legend_add_manual
-        legend_add_manual(axes.flatten()[-1], _map_lev_to_color.keys(), _map_lev_to_color.values(), alpha=0.7)
+    # Add  legend to last axis
+    # if color_by_var_datapt:
+    #     # add legend to last axis
+    #     legend_add_manual(axes.flatten()[-1], _map_lev_to_color.keys(), _map_lev_to_color.values(), alpha=0.7)
+    if map_colorlev_to_color is not None:
+        legend_add_manual(ax, map_colorlev_to_color.keys(), map_colorlev_to_color.values())
 
     if shareaxes and len(list_xs)>0:
         MIN = min(list_xs + list_ys)
@@ -4040,3 +4146,19 @@ def group_continuous_blocks_of_rows(df, var_group, var_sort, new_col = "group",
     )
 
     return df_sorted, sort_indices, group_boundaries
+
+
+def remove_outlier_values(df, thresh_zscore=3):
+    """
+    Remove rows that have at least one column whos std z-score (relative to the
+    column) is greater than thresh_zscore
+    RETURNS:
+    - Return indices (rows) into df to keep.  
+    """
+    # Remove trials with outlier interval durations
+    from scipy import stats
+    df_z = stats.zscore(df)
+    assert ~np.any(df_z.isna()), "any column with all same value?"
+    inds_good = df[(np.abs(stats.zscore(df)) < thresh_zscore).all(axis=1)].index.tolist()
+    return inds_good
+
