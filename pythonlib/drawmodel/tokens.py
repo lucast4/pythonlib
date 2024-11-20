@@ -113,7 +113,15 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'zigzagSq-1-1-0': 'zigzagSq-LL-1.0',
     'zigzagSq-1-1-1': 'zigzagSq-LL-0.0',
     'zigzagSq-1-2-0': 'zigzagSq-UU-1.0',
-    'zigzagSq-1-2-1': 'zigzagSq-UU-0.0'}
+    'zigzagSq-1-2-1': 'zigzagSq-UU-0.0',
+
+    'Lzigzag1-3-5-1':'zigzagSq-LL-0.0', # These, below, are for Panchom, such as 220718
+    'Lzigzag1-3-5-0':'zigzagSq-UU-1.0',
+    'Lzigzag1-3-6-0':'zigzagSq-LL-1.0',
+    'Lcentered-5-5-0': 'arcdeep-LL-LL',
+    'Lcentered-5-6-0': 'arcdeep-DD-DD',
+    'Lcentered-5-8-0': 'arcdeep-UU-UU',
+    }
 
 for scale in [8, 6, 11, 13, 14, 15]:
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-1-0'] = 'line-LL-LL'
@@ -130,7 +138,7 @@ for orient in ["UU", "LL"]:
     for reflect in ["0.0",  "1.0"]:
         map_shapesemgroup_to_shapesem[f"ZZ-{orient}-{reflect}"] = [f"{sh}-{orient}-{reflect}" for sh in ["squiggle3", "zigzagSq", "Lzigzag1"]]
 print("TODO: Pancho -- combine circles with the tohers")
-for sh in ['circle-XX-XX', 'Lcentered-UL-UL', 'Lcentered-DL-DL', 'Lcentered-DR-DR', 'Lcentered-UR-UR', 'line-LL-LL', 'line-UU-UU', 'line-UR-UR', 'line-UL-UL']:
+for sh in ['dot-XX-XX', 'circle-XX-XX', 'Lcentered-UL-UL', 'Lcentered-DL-DL', 'Lcentered-DR-DR', 'Lcentered-UR-UR', 'line-LL-LL', 'line-UU-UU', 'line-UR-UR', 'line-UL-UL']:
     map_shapesemgroup_to_shapesem[sh] = [sh]
 map_shapesemgroup_to_shapesem["NOVEL-X-X-X"] = ["NOVEL-X-X-X"]
 MAP_SHAPESEMGROUP_TO_SHAPESEM = map_shapesemgroup_to_shapesem

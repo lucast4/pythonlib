@@ -379,6 +379,9 @@ class PrimitiveClass(object):
 
             if shcat in ["circle"]:
                 label = (shcat, scale, "XX" , "XX")
+            elif shcat in ["dot"]:
+                # Scaleless...
+                label = (shcat, 1, "XX" , "XX")
             elif shcat in ["V2"]:
                 # is more like 90deg (not sure if it is)
                 a1 = features["angle_midpt_to_onset_arm"]
