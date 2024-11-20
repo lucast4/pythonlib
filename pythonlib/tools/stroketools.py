@@ -1183,7 +1183,12 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
         assert False, "not codede"
     return strokes
 
-    
+def getCentersOfMass(strokes):
+    """
+    """
+    from pythonlib.drawmodel.features import getCentersOfMass
+    return getCentersOfMass(strokes, method="use_median")
+
 def getCenter(strokes, method="extrema"):
     """ get center of strokes (all strok at once), with methods:
     --- "extrema", based on x and y max edges, then

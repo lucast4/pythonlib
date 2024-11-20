@@ -484,7 +484,19 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         # If x and y are numerical and evenly spaced, then plot using actual values on x and y axis.
         # NOte: y starts from -1, so that is top to bottom, matching sns.heatmap
         X = df.values
-        img = ax.imshow(X, aspect='auto', extent=[list_cat_2[0], list_cat_2[-1], list_cat_1[-1], list_cat_1[0]], 
+        extent=[list_cat_2[0], list_cat_2[-1], list_cat_1[-1], list_cat_1[0]] 
+        # print(extent)
+        # print(X.shape)
+        
+        # add 1, so that the min and max aspects are OUTSIDE the heatmap        
+        # e.g, if you have 28 rows, you want the y lims on plot to be 0, 29. By fdefault it would be
+        # (0, 28)
+        if list_cat_1[0] == X.shape[0]-1:
+            extent[3] = extent[3]+1
+        if list_cat_1[-1] == X.shape[0]-1:
+            extent[2] = extent[2]+1
+
+        img = ax.imshow(X, aspect='auto', extent=extent, 
                   cmap=cmap, vmin=zlims[0], vmax=zlims[1], interpolation="none")
         _ = plt.colorbar(img, orientation='vertical')
 

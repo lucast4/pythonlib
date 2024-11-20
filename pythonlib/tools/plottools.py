@@ -40,6 +40,20 @@ def radar_plot(ax, thetas, values, color="k", fill=True):
     if fill:
         ax.fill(thetas, values, '-k', color=color, alpha=0.5)
 
+def set_y_tick_labels(ax, labels):
+    """
+    Labels are list of strings
+    """
+    ax.set_yticks(list(range(len(labels))))
+    ax.set_yticklabels(labels)
+
+def set_x_tick_labels(ax, labels):
+    """
+    Labels are list of strings
+    """
+    ax.set_xticks(list(range(len(labels))))
+    ax.set_xticklabels(labels)
+
 def add_secondary_axis_label_nested(ax, locations, labels, which="x"):
     """
     Add a secondary axis label offset from the main axis
@@ -435,6 +449,7 @@ def get_correlated_dataset(n, dependency, mu, scale):
 def savefig(fig, path):
     """ helper to save without clipping axis labels
     """
+    fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")
     #plt.show(fig, block=False) # can uncomment if bugs with memory leak
 
@@ -693,7 +708,7 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
     means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None,
-                  fontsize=4, jitter_value=None, color=None):
+                  fontsize=4, jitter_value=None, color=None, colors_each_pt=None):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -723,8 +738,16 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     # ax.plot(x, y, marker, alpha=alpha)
     if color is None:
         color = "b"
-    ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color)
-
+    if colors_each_pt is None:
+        # Solid color
+        ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color)
+    else:
+        # Use scatter. need error for the errorbars
+        ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color, mfc="none", mec="none")
+        # colors_each_pt = makeColors(len(x))
+        # ax.scatter(x, y, c=pcols)
+        ax.scatter(x, y, color=colors_each_pt, alpha=alpha, marker=marker)
+        # assert False
     # ax.set_axis("square")
     minimum = np.min([np.min(x), np.min(y)])
     maximum = np.max([np.max(x), np.max(y)])
@@ -1190,3 +1213,66 @@ def plot_beh_codes(codes, times, ax=None, codenames=False,
         ax.plot(t, yval, "o", mfc=color, mec=color)
         ax.text(t, yval, c, color="m", fontsize=8)
         
+def plot_patch_rectangle_filled(ax, x1, x2, color="r", alpha=0.5, YLIM=None):
+    """
+    Fill a patch between x1 and x2 (values along x axis), heiight will span YLIMS, 
+    unless input YLIM = [ymin, ymax]
+    """
+    from matplotlib.patches import Rectangle
+
+    if YLIM is None:
+        YLIM = ax.get_ylim()
+
+    rect = Rectangle((x1, YLIM[0]), x2-x1, YLIM[1]-YLIM[0], 
+        linewidth=1, edgecolor=color,facecolor=color, alpha=alpha)
+    ax.add_patch(rect)
+    
+
+
+def plot_2d_binned_smoothed_heatmap(data, x_min, x_max, y_min, y_max, 
+                                    ax = None, num_bins=10, sigma=1.0,
+                                    plot_colorbar=False, skip_plot=False):
+    """
+    Plots a smoothed 2D heatmap of given 2D coordinates within a specified bounding box.
+    
+    Parameters:
+    - data: array-like, shape (n, 2), list of 2D coordinates.
+    - x_min, x_max: float, x-axis limits of the bounding box.
+    - y_min, y_max: float, y-axis limits of the bounding box.
+    - num_bins: int, number of bins in each dimension.
+    - sigma: float, standard deviation for Gaussian kernel, in units of bins (controls smoothness).
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy.ndimage import gaussian_filter
+
+    # Extract x and y coordinates
+    x, y = data[:, 0], data[:, 1]
+
+    # Create bin edges based on the bounding box and number of bins
+    x_edges = np.linspace(x_min, x_max, num_bins + 1)
+    y_edges = np.linspace(y_min, y_max, num_bins + 1)
+    
+    # Create a 2D histogram with specified bin edges
+    heatmap, _, _ = np.histogram2d(x, y, bins=[x_edges, y_edges])
+
+    # Apply Gaussian smoothing
+    smoothed_heatmap = gaussian_filter(heatmap, sigma=sigma)
+
+    if skip_plot:
+        fig = None
+    else:
+        # Plot the smoothed heatmap
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = None
+        im = ax.imshow(smoothed_heatmap.T, origin='lower', extent=[x_min, x_max, y_min, y_max],
+                cmap='plasma', interpolation='nearest')
+        if plot_colorbar:
+            plt.colorbar(im, label="Smoothed Frequency")
+        # ax.set_xlabel("X axis (discretized)")
+        # ax.set_ylabel("Y axis (discretized)")
+        # ax.set_title("Smoothed 2D Frequency Heatmap of Coordinates")
+
+    return heatmap, smoothed_heatmap, fig

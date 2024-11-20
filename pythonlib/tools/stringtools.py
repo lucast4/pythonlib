@@ -40,15 +40,20 @@ def trialcode_to_scalar(tc):
         return None
     else:
         assert tc_tuple[1] < 10, "then divide by more, so that is mapped to max 0.,000 is mapped to 0.01"
-        assert tc_tuple[2] < 10000, "then divide by more, so that 100,000 is mapped to 0.01"
+        assert tc_tuple[2] < 100000, "then divide by more, so that 100,000 is mapped to 0.01"
 
         a = tc_tuple[0]
         b =  tc_tuple[1]/10
-        c = tc_tuple[2]/10000
+        c = tc_tuple[2]/100000
         # mainting the code...
-        assert b<1
-        assert c<0.1
-        return a+b+c
+        try:
+            assert b<1
+            assert c<0.1
+            return a+b+c
+        except Exception as err:
+            print(tc)
+            print(a, b, c)
+            raise err
     
 def trialcode_to_tuple(tc):
     """
