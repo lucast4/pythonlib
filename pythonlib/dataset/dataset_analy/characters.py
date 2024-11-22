@@ -11,6 +11,250 @@ import seaborn as sns
 from pythonlib.tools.plottools import savefig
 from pythonlib.tools.listtools import sort_mixed_type
 
+def analy_preprocess_dataset(D, Dc, SAVEDIR):
+    """
+    
+    """
+    ##### Label characters, novel, perfblocky, etc.
+
+    # (1) Novel chars
+    savedir = f"{SAVEDIR}/preprocess"
+    os.makedirs(savedir, exist_ok=True)
+
+    # for Dthis in [D, Dc]:
+    for Dthis in [D]:
+        list_los = params_novel_chars_tasksets(Dthis, savedir)
+
+        ### perfblocky chars.
+        # For each los_set, check which are the task prims
+        params_perfblocky_chars(Dthis, savedir)
+
+    # Preprocess both same way
+    for Dthis in [D, Dc]:
+        Dthis.preprocessGood(params=["no_supervision", "remove_online_abort"])
+
+    # Final image accuracy (append, i.e, each char, convert to pts)
+    D.score_visual_distance()
+    if False: # Plot
+        list_char = D.Dat[D.Dat["task_kind"]=="character"]["character"].unique().tolist()
+        D.taskcharacter_find_plot_sorted_by_score("hdoffline", True, "/tmp", 1, 20, list_char=list_char)
+
+    # Group chars by complexity
+    D.Dat["los_set"] = [x[:2] for x in D.Dat["los_info"]] # (setnum, setind), without taskind.
+
+    D.extract_beh_features()
+
+
+def params_perfblocky_chars(D, savedir):
+    """
+    Are there perfblocky chars this date? 
+    Will find them automatically
+
+    RETURNS:
+    - map_los_set_to_perfblocky
+    (ALso modifies D.Dat, adding column <is_perfblocky>)
+    """
+
+    animal = D.animals(True)[0]
+    date = int(D.dates(True)[0])
+    if (animal, date) == ("Diego", 231204):
+        perfblocky_exists = True
+    elif (animal, date) == ("Diego", 231205):
+        # NOTE: confirmed (compared to traingetterv2 Notes) that this works!
+        perfblocky_exists = True
+    elif (animal, date) == ("Pancho", 230122):
+        # Didnt plan this...
+        perfblocky_exists = True
+    elif (animal, date) == ("Pancho", 230125):
+        # NOTE: confirmed (compared to traingetterv2 Notes) that this works!
+        perfblocky_exists = True
+    elif (animal, date) == ("Pancho", 230126):
+        # Did plan this
+        perfblocky_exists = True
+    elif (animal, date) == ("Pancho", 230127):
+        # Did plan this
+        perfblocky_exists = True
+    else:
+        # Just assume true, and then check that final results (text file below), since it is strict criteria for calling
+        # it perfblocky
+        perfblocky_exists = True
+        # print(animal, date)
+        # assert False
+
+    if perfblocky_exists:
+        map_los_set_to_perfblocky = {}
+        for los_set in D.Dat["los_set"].unique().tolist():
+
+            # collect all shapes for these los_set
+            inds = D.Dat[D.Dat["los_set"] == los_set].index.tolist()
+            shapes = []
+            for i in inds:
+                shapes.extend(D.taskclass_shapes_extract(i))
+
+            # count how many are lines
+            n_lines = sum([sh[:5]=="line-" for sh in shapes])
+            n_tot = len(shapes)
+
+            # many lines --> this is perfblocky
+            is_perfblocky = n_lines>0.98*n_tot
+
+            # Save
+            map_los_set_to_perfblocky[los_set] = is_perfblocky
+        
+        D.Dat["is_perfblocky"] = [map_los_set_to_perfblocky[los_set] for los_set in D.Dat["los_set"]]
+    else:
+        D.Dat["is_perfblocky"] = False
+
+    # Save list of novel chars
+    D.grouping_print_n_samples(["is_perfblocky", "probe", "los_info", "block"], savepath=f"{savedir}/perfblocky_assignments-1.txt")
+    D.grouping_print_n_samples(["block", "probe", "is_perfblocky", "los_info"], savepath=f"{savedir}/perfblocky_assignments-2.txt")
+    D.grouping_print_n_samples(["block", "probe", "is_perfblocky", "los_set"], savepath=f"{savedir}/perfblocky_assignments-3.txt")
+    D.grouping_print_n_samples(["block", "probe", "is_perfblocky", "task_kind"], savepath=f"{savedir}/perfblocky_assignments-4.txt")
+    
+    return map_los_set_to_perfblocky
+
+def params_novel_chars_tasksets(D, savedir):
+    """
+    For each character, label whether it is a novel char, based on hand written notes in gslides for this experiment.
+    This is the best way, since otherwise hard to auto detect across previuos days.
+    RETURNS;
+    - list_los
+    ALSO modifies D.Dat, adding column: "novel_char"
+
+    INSTRUCTION: find the list_los in probeGetterv2.m in dragmonkey. Then
+    convert to strings to paste here using stringify_list_code_for_python(list_code)
+    """
+
+    # This allows for not manually inputing what is novel. Instaed, take probes, then take first trial of
+    # that across all datasets and call that novel.
+    HACK_CALL_PROBES_NOVEL = True 
+
+    animal = D.animals(True)[0]
+    date = int(D.dates(True)[0])
+
+    if (animal, date) == ("Diego", 231130):
+        list_los = []
+    elif (animal, date) == ("Diego", 231122):
+        # Somewhat confident these are novel.
+        list_los = [
+            (14, [ 176, 174, 161, 21, 182, 42, 124, 10, 137, 27, 104], "character"),
+            (15, [ 85, 161, 157, 145, 91, 191, 55, 99, 146, 115, 185, 1, 31, 13, 42, 15, 43, 37], "character"),
+        ]
+    elif (animal, date) == ("Diego", 231128):
+        list_los = []
+    elif (animal, date) == ("Diego", 231129):
+        list_los = []
+    elif (animal, date) == ("Diego", 231201):
+        # Lenient -- included all probes
+        list_los = [
+            (18, [ 11, 53, 18, 59, 25, 2, 36, 51, 14, 27, 56, 47, 22, 6, 50, 60, 13, 9, 49, 3, 20], "charstrokeseq"),
+            (18, [ 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 80], "charstrokeseq"),
+            (18, [ 8, 21, 24, 33, 34, 48, 52, 55, 57, 78, 1, 19, 35, 38, 58, 79], "charstrokeseq"),
+            (19, [ 60, 74, 16, 51, 45, 33, 69, 48, 84, 73, 88, 44], "charstrokeseq"),
+            (20, [ 19, 173, 191, 26, 11, 194, 199, 189, 35, 179], "charstrokeseq"),
+            (19, [ 97, 98, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 117, 118, 119, 120], "charstrokeseq"),
+            (20, [ 173, 176, 179, 183, 185, 187, 189, 191, 192, 194, 196, 197, 199, 200], "charstrokeseq"),
+            (19, [ 1, 2, 3, 6, 7, 9, 10, 11, 12, 18, 19, 20, 21, 22], "charstrokeseq"),
+            (20, [ 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95], "charstrokeseq"),
+        ]
+    elif (animal, date) == ("Diego", 231204):
+        list_los = [
+            (34, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59], "charstrokeseq"),
+            (35, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50], "charstrokeseq"),
+            (37, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33], "charstrokeseq"),
+        ]
+    elif (animal, date) == ("Diego", 231211):
+        list_los = [
+            (63, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64], "charstrokeseq"),
+            (64, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], "charstrokeseq"),
+            (65, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64], "charstrokeseq"),
+            (66, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], "charstrokeseq"),
+        ]
+
+    elif (animal, date) == ("Diego", 231205):
+        list_los = [
+            (41, None, 'charstrokeseq'),
+            (42, None, 'charstrokeseq'),
+            (43, None, 'charstrokeseq'),
+            (44, None, 'charstrokeseq'),
+            (45, None, 'charstrokeseq'),
+            (46, None, 'charstrokeseq'),
+            (47, None, 'charstrokeseq')
+        ]
+    elif (animal, date) == ("Pancho", 230122):
+        # None listed
+        list_los = []
+    elif (animal, date) == ("Pancho", 230125):
+        # These are thes ones I called:
+        # 2. Blocky tasks done only by Diego. [Generated by lines (char star and reg), done across all epochs.]
+        # 3. (Any) tasks done by Diego only (all epoch, all prims tasks).
+        # (in the gslides). I assume that the other ones were previously done by Pancho a long time ago (80% confident),
+        # Otherwise should consider including them too.
+        list_los = [
+            (9, [ 2, 14], "charstrokeseq"),
+            (10, [ 14, 24], "charstrokeseq"),
+            (12, [ 19, 45], "charstrokeseq"),
+            (13, [ 9, 8, 61, 28, 84, 31], "charstrokeseq"),
+            (14, [ 6, 89, 59, 100, 70, 12, 34, 49, 88, 50, 47, 52, 20, 48], "charstrokeseq"),
+            (15, [ 13, 99, 43, 80], "charstrokeseq"),
+            (16, [ 7, 11], "singleprims"),
+            (17, [ 45, 11, 35, 16, 55, 58], "singleprims"),
+            (18, [ 1, 42, 3], "singleprims"),
+            (20, [ 43, 6, 8], "singleprims"),
+            (21, [ 45, 96, 24, 21, 42, 74, 22, 54, 86, 2], "singleprims"),
+            (22, [ 20, 68, 93, 51, 32, 47, 90, 61, 17, 84, 38, 8], "singleprims"),
+        ]
+    elif (animal, date) == ("Pancho", 230126):
+        # None listed
+        list_los = []
+    elif (animal, date) == ("Pancho", 230127):
+        # None listed -- note there are some but those he did long time ago
+        list_los = []
+    else:
+        if HACK_CALL_PROBES_NOVEL:
+            list_los = "probes_equals_novel"
+        else:
+            print(animal, date)
+            assert False
+
+    if HACK_CALL_PROBES_NOVEL:
+        D.Dat["novel_char"] = D.Dat["probe"]==1
+    else:
+        def f(x):
+            """ Any inds with None, this signifies get all indices, so
+            so replace with very large list
+            """
+            if isinstance(x, (list, tuple)) and isinstance(x[0], int):
+                return x
+            elif x is None:
+                return list(range(1, 10000))
+            else:
+                print(x)
+                assert False
+        # Convert each los to format (setname, setind, taskind)
+        list_los = [[x[2], x[0], f(x[1])] for x in list_los]
+
+        ### modify D.Dat.
+        # (1) Novel chars
+        def _check_if_los_in_list(los, list_los):
+            for los_check in list_los:
+                if los[0]==los_check[0]: # Setname
+                    if los[1]==los_check[1]: # set ind
+                        if los[2] in los_check[2]: # this ind, los[2], in list of inds, los_check[2]?
+                            return True
+            return False
+
+        D.Dat["novel_char"] = [_check_if_los_in_list(los, list_los) for los in D.Dat["los_info"]]
+
+    # Save list of novel chars
+    D.grouping_print_n_samples(["novel_char", "probe", "los_info", "block"], savepath=f"{savedir}/novel_char_assignments-1.txt")
+    D.grouping_print_n_samples(["block", "probe", "novel_char", "los_info"], savepath=f"{savedir}/novel_char_assignments-2.txt")
+    D.grouping_print_n_samples(["block", "probe", "novel_char", "los_set"], savepath=f"{savedir}/novel_char_assignments-3.txt")
+    D.grouping_print_n_samples(["block", "probe", "novel_char", "task_kind"], savepath=f"{savedir}/novel_char_assignments-4.txt")
+
+    return list_los
+
+                
 def debug_eyeball_distance_metric_goodness(D):
     """ Script to comapre distnaces by eye to what loloks good. Iterates over distance metrics,
     and for eahc plots example strokes along with printing their scores. See that the scores
@@ -33,14 +277,14 @@ def debug_eyeball_distance_metric_goodness(D):
 
 
 def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "character",
-    list_distance_ver=None, suffix=None):
+    suffix=None):
     """
     Full pipeline to generate and plot and save all, for character analysis.
     """
     
-    if list_distance_ver is None:
-        # list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
-        list_distance_ver = ["dtw_vels_2d"]
+    # if list_distance_ver is None:
+    #     # list_distance_ver=("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
+    #     list_distance_ver = ["dtw_vels_2d"]
 
     savedir = D.make_savedir_for_analysis_figures("character_strokiness")
     if suffix is not None:
@@ -49,7 +293,7 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
     assert len(D.Dat)>0
 
     RES = generate_data(D, filter_taskkind=filter_taskkind,
-        list_distance_ver=list_distance_ver,
+        # list_distance_ver=list_distance_ver,
         which_features="beh_motor_sim")
 
     if do_plots and RES is not None:
@@ -74,7 +318,6 @@ def pipeline_generate_and_plot_all(D, do_plots=True, filter_taskkind = "characte
 
 def generate_data(D, version_trial_or_shapemean="trial", 
         trial_summary_score_ver="clust_sim_max",
-        list_distance_ver=None, 
         plot_score_hist=False, filter_taskkind = None,
         ds_clean_methods = None, ds_clean_params = None,
         ds_filterdict = None,
@@ -95,7 +338,7 @@ def generate_data(D, version_trial_or_shapemean="trial",
     """
     from pythonlib.dataset.dataset_strokes import DatStrokes
 
-    assert list_distance_ver is None, "does nothing.."
+    # assert list_distance_ver is None, "does nothing.."
 
     ### Generate Strokes data
     Dthis = D.copy()
@@ -160,7 +403,7 @@ def generate_data(D, version_trial_or_shapemean="trial",
         "which_features":which_features,
         "list_strok_basis":ParamsDict[which_features]["list_strok_basis"],
         "list_shape_basis":ParamsDict[which_features]["list_shape_basis"],
-        "list_distance_ver":list_distance_ver
+        # "list_distance_ver":list_distance_ver
         # "which_shapes":which_shapes,
         # "Cl":Cl,
     }
@@ -968,3 +1211,734 @@ def plot_prim_sequences(RES, D, savedir, MIN_SCORE = 0., sorted_unique_shapes=Fa
         fig.savefig(f"{sdir}/waterfall_hist-Nprims_{Nprims}.pdf")
 
         plt.close("all")
+
+
+def analy_score_base_prim_reuse_score_match(DS, savedir, shape_var="clust_sim_max_colname", 
+                                      dist_var="clust_sim_max", match_better_if_dist_high=True,
+                                      map_shape_to_mindist_input=None):
+    """
+    Score how likely a stroke is to be assigned to a base prim. 
+    Modifies by adding column: DS.Dat[matches_base_prim]
+
+    Determines threshold to use to call "match" by taking a percentile of SP/PIG strokes, with assumption that
+    those are ground-truth how close you would expect if he were indeed matching the base prims.
+
+    RETURNS:
+    - modifies DS.Dat. see note above.
+    """
+    from pythonlib.tools.plottools import savefig
+
+    # (1) Load basis shapes
+    if False:
+        dfbasis, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(plot_examples=True)
+    else:
+        # Better. doesnt require DS and Dataset
+        list_shape_basis = sorted(DS.Dat[shape_var].unique().tolist())
+
+    ### Give binary score to each stroke, whether it matches base prim, based on score distribgtuion during SP and PIG trials.
+    # For each shape, what fraction are within the bounds based on SP and PIG
+    def _label_whether_stroke_matches_baseprim(MIN_PRCTILE = 2.5, HACK=False):
+        """
+        Modifies DS.Dat
+        """
+        task_kinds_control = ["prims_single", "prims_on_grid"]
+
+        if map_shape_to_mindist_input is None:
+            # Get it auto, from SP/PIG tasks.
+            map_shape_to_mindist = {}
+            for sh in list_shape_basis:
+                df = DS.Dat[(DS.Dat[shape_var] == sh) & (DS.Dat["task_kind"].isin(task_kinds_control))]
+                if len(df)<8:
+                    print("WARNING, too few trials for controls: ", sh)
+                    map_shape_to_mindist[sh] = np.nan
+                else:
+                    map_shape_to_mindist[sh] = np.percentile(df[dist_var], [MIN_PRCTILE])[0]
+
+            # Also add unique shapes from dataset
+            for sh in DS.Dat[shape_var].unique():
+                df = DS.Dat[(DS.Dat[shape_var] == sh) & (DS.Dat["task_kind"].isin(task_kinds_control))]
+                if len(df)<8:
+                    print("WARNING, too few trials for controls: ", sh)
+                    map_shape_to_mindist[sh] = np.nan
+                else:
+                    map_shape_to_mindist[sh] = np.percentile(df[dist_var], [MIN_PRCTILE])[0]
+        else:
+            # Use inputed mapping
+            map_shape_to_mindist = map_shape_to_mindist_input
+
+            # Any shapes in dataset that are not presnet, give them nan
+            for sh in DS.Dat[shape_var].unique():
+                if sh not in map_shape_to_mindist:
+                    map_shape_to_mindist[sh] = np.nan
+
+        if HACK:
+            # Cases without neough SP or PIG, replace with avbearger over others.
+            val_replacement = np.mean([x for x in map_shape_to_mindist.values() if not np.isnan(x)])        
+            map_shape_to_mindist = {sh:val if ~np.isnan(val) else val_replacement for sh, val in map_shape_to_mindist.items()}
+
+        DS.Dat["match_thresh"] = [map_shape_to_mindist[sh] for sh in DS.Dat[shape_var]]
+        if match_better_if_dist_high:
+            DS.Dat["matches_base_prim"] = DS.Dat[dist_var]>=DS.Dat["match_thresh"]
+        else:
+            DS.Dat["matches_base_prim"] = DS.Dat[dist_var]<=DS.Dat["match_thresh"]
+        
+        return map_shape_to_mindist
+
+    # Collect frac match
+    LIST_MIN_PRCTILE = np.linspace(0, 100, 30)
+    list_frac_match = []
+    for THRESH_PRCTILE in LIST_MIN_PRCTILE:
+        _label_whether_stroke_matches_baseprim(THRESH_PRCTILE, HACK=True)
+        frac_match = 100*np.mean(DS.Dat[DS.Dat["task_kind"] == "character"]["matches_base_prim"])
+        list_frac_match.append(frac_match)
+    # Pick a single min threshold to define "good match" and make plots.
+    if match_better_if_dist_high:
+        THRESH_PRCTILE_FINAL = 2.5
+    else:
+        THRESH_PRCTILE_FINAL = 97.5
+    # Plot
+    fig, ax = plt.subplots(1,1, figsize=(6, 6))
+    ax.set_title("task_kind=character")
+    ax.set_xlabel("Threshold score (percentile of SP/PIG)")
+    ax.set_ylabel("Frac char strokes match base prim")
+    ax.plot(LIST_MIN_PRCTILE, list_frac_match, "-ok")
+    ax.axvline(THRESH_PRCTILE_FINAL, color="r")
+
+    # - overlay expected, if is SP/PIG
+    if match_better_if_dist_high:
+        ax.plot(LIST_MIN_PRCTILE, 100-LIST_MIN_PRCTILE)
+    else:
+        ax.plot(LIST_MIN_PRCTILE, LIST_MIN_PRCTILE, "-ok")
+
+    savefig(fig, f"{savedir}/frac_match-vs-chosen_threshold.pdf")
+
+    ### Pick a single min threshold to define "good match" and make plots.
+    # NOTE: this modifies DS in place.
+    map_shape_to_mindist = _label_whether_stroke_matches_baseprim(THRESH_PRCTILE_FINAL, HACK=True)
+
+    plt.close("all")
+
+    return map_shape_to_mindist
+
+def analy_score_base_prim_reuse_plots(DS, savedir, shape_var="clust_sim_max_colname", 
+                                      dist_var="clust_sim_max", matches_var="matches_base_prim", PLOT_DRAWINGS=True,
+                                      n_rows_plots=8):
+    """
+    All plots scoring, across all strokes, similarity to base prims, or to image prims, depending
+    on the values of inputs.
+    PARAMS:
+    - 
+    """
+    from pythonlib.tools.pandastools import aggregGeneral
+    from pythonlib.tools.snstools import rotateLabel
+
+    list_shape_basis = sorted(DS.Dat[shape_var].unique().tolist())
+
+    ### SAVe DS for each task kind
+    DS_dict_task_kind = {}
+    for task_kind in DS.Dat["task_kind"].unique():
+        ds = DS.copy()
+        ds.Dat = ds.Dat[ds.Dat["task_kind"]==task_kind].reset_index(drop=True)
+        DS_dict_task_kind[task_kind] = ds
+
+    if PLOT_DRAWINGS:
+        ### Plot example strokes, cols = shapes, rows = sorted by feature score.
+        col_levels = list_shape_basis + ["IGN"]
+        recenter_strokes = True
+        for task_kind, ds in DS_dict_task_kind.items():
+            fig = ds.plotshape_multshapes_trials_grid_sort_by_feature(shape_var, 
+                col_levels=col_levels, nrows=n_rows_plots, sort_rows_by_this_feature=dist_var, SIZE=2, 
+                recenter_strokes=recenter_strokes)
+            if fig is not None:
+                savefig(fig, f"{savedir}/drawings-sort_by_{dist_var}-taskkind={task_kind}-recenter={recenter_strokes}.pdf")
+        plt.close("all")
+
+    # Frac strokes which are assigned as "match" to base prims
+    fig = sns.catplot(data=DS.Dat, x="task_kind", y=matches_var, kind="bar")
+    for ax in fig.axes.flatten():
+        ax.set_ylim([0, 1])
+    savefig(fig, f"{savedir}/frac_match-task_kind.pdf")
+    
+    # What fraction of trials are "good match"
+    fig = sns.catplot(data=DS.Dat, x=shape_var, y=matches_var, kind="bar", row="task_kind")
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/frac_match-task_kind-shape.pdf")
+
+    # ### Distribution of scores across all strokes    
+    # - for each shape, compare its distribution across PIG, SP, and char
+    fig = sns.catplot(data=DS.Dat, x="task_kind", y=dist_var, col=shape_var, hue=matches_var, 
+                col_wrap=6, jitter=True, alpha=0.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot-dist_vs_shape-1.pdf")
+
+    fig = sns.catplot(data=DS.Dat, x=shape_var, y=dist_var, row="task_kind", hue=matches_var, 
+                jitter=True, alpha=0.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot-dist_vs_shape-2.pdf")
+
+    fig = sns.catplot(data=DS.Dat, x="task_kind", y=dist_var, hue=matches_var, jitter=True, alpha=0.35)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot-dist_vs_shape-3.pdf")
+
+    fig = sns.catplot(data=DS.Dat, hue="task_kind", y=dist_var, x=shape_var, kind="bar", aspect=2.5, height=4)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot-dist_vs_shape-4.pdf")
+
+    # [GOOD] stacked frequency plot
+    from pythonlib.tools.pandastools import plot_bar_stacked_histogram_counts
+    from pythonlib.tools.plottools import rotate_x_labels
+    fig, ax = plt.subplots()
+    plot_bar_stacked_histogram_counts(DS.Dat, shape_var, matches_var, ax)
+    rotate_x_labels(ax, 90)
+    ax.set_ylabel("Counts")
+    savefig(fig, f"{savedir}/stackedbar-shapes_matches.pdf")
+
+    ### Plot frac match vs. num cases (one dot for each shape)
+    # vs. number of trials that exist
+    shape_N_var = f"{shape_var}_N"
+    for task_kind, ds in DS_dict_task_kind.items():
+        dfchar = ds.Dat
+        _dfcounts = dfchar.groupby(shape_var).size().reset_index()
+        _dfcounts= _dfcounts.rename(columns={0:shape_N_var})
+        dfchar = pd.merge(dfchar, _dfcounts, on=shape_var)
+        dfchar_agg = aggregGeneral(dfchar, [shape_var], [matches_var, dist_var, shape_N_var])
+
+        fig, ax = plt.subplots()
+        sns.scatterplot(dfchar_agg, x=shape_N_var, y=matches_var, hue=dist_var, ax=ax)    
+        savefig(fig, f"{savedir}/scatter-matches-vs-n_counts-taskkind={task_kind}.pdf")
+
+    plt.close("all")
+
+def analy_score_match_baseprim_vs_matchimage_strokes(DS, savedir):
+    """
+    For each stroke, compare whether is matched to base prim and/or ot image. 
+
+    """
+    from pythonlib.tools.pandastools import plot_subplots_heatmap
+
+    # (1) [dat=strokes] Match to base prims is higher than match to images
+    fig, axes = plt.subplots(2,2, figsize=(10,10), sharex=True, sharey=True)
+    for ax, matchkind in zip(axes.flatten(), ["exclmatch_prim_image", "exclmatch_prim", "exclmatch_image", "exclmatch_none"]):
+        sns.barplot(data=DS.Dat, x="task_kind", y=matchkind, ax=ax)
+        ax.set_title(matchkind)
+    savefig(fig, f"{savedir}/catplot-matches.pdf")
+
+    fig, _ = plot_subplots_heatmap(DS.Dat, "matches_base_prim", "IMAGE_matches", "val", "task_kind", agg_method="counts", 
+                        row_values=[True, False], col_values=[False, True], annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatplot-matches-1.pdf")
+    
+    fig, _ = plot_subplots_heatmap(DS.Dat, "task_kind", "match_prim_imag_LABEL", "val", None, agg_method="counts", annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatplot-matches-2.pdf")
+
+    plt.close("all")
+
+def analy_score_match_baseprim_vs_matchimage_trials(DS, savedir,  just_get_dfcounts=False):
+    """
+    For each trial(i.e., baseiclaly character), compare how mnay of its beh strokes are matched
+    to base prim vs. to the task image.
+    
+    Also include stuff related to beahvior-image distnace (taking into account entire drawing, not strokes)
+    """
+    from pythonlib.tools.pandastools import aggregGeneral, append_col_with_grp_index
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping_from_wideform
+    from pythonlib.tools.pandastools import plot_subplots_heatmap
+    from pythonlib.tools.pandastools import extract_with_levels_of_var_good
+    from pythonlib.tools.pandastools import plot_subplots_heatmap
+
+    if False:
+        # Visaulize characters with diff visual distancse
+        list_char = D.Dat[D.Dat["task_kind"]=="character"]["character"].unique().tolist()
+        D.taskcharacter_find_plot_sorted_by_score("hdoffline", True, "/tmp", 1, 20, list_char=list_char)
+
+    # Get dataframe where each trialcode is a single row -- with n matches as columns
+    dfcounts = aggregGeneral(DS.Dat, ["trialcode"], ["FEAT_num_strokes_beh", "IMAGE_matches", "matches_base_prim", "hdoffline"], aggmethod=["sum", "mean"], nonnumercols=["character", "task_kind", "los_set"])
+    dfcounts = append_col_with_grp_index(dfcounts, ["task_kind_Nbeh_first", "los_set_first"], "tkset")
+    dfcounts = append_col_with_grp_index(dfcounts, ["matches_base_prim_sum", "IMAGE_matches_sum"], "n_matches_mot_imag")
+    dfcounts["IMAGE_matches_sum_str"] = [str(x) for x in dfcounts["IMAGE_matches_sum"]]
+    dfcounts["matches_base_prim_sum_str"] = [str(x) for x in dfcounts["matches_base_prim_sum"]]
+
+    # use this for visaul distance stuff -- clean.
+    dfcounts_clean, _ = extract_with_levels_of_var_good(dfcounts, 
+                                                        ["matches_base_prim_sum", "IMAGE_matches_sum","task_kind_Nbeh_first"], 5)
+
+    if not just_get_dfcounts:
+        
+        ### Plot - 
+        _, fig = plot_45scatter_means_flexible_grouping_from_wideform(dfcounts, "IMAGE_matches_sum", "matches_base_prim_sum", 
+                                                            "task_kind_Nbeh_first", "trialcode", shareaxes=True, plot_error_bars=False, 
+                                                            plot_text=False, SIZE=4, alpha=0.1, jitter_value=0.2)
+        savefig(fig, f"{savedir}/scatter-matches.pdf")
+
+        ### Plot heatmap
+        nmax = max([dfcounts["matches_base_prim_sum"].max(), dfcounts["IMAGE_matches_sum"].max()])
+        row_values = list(range(nmax, -1, -1))
+        col_values = list(range(0, nmax+1))
+        for annotate_heatmap in [False, True]:
+            fig, axes = plot_subplots_heatmap(dfcounts, "matches_base_prim_sum", "IMAGE_matches_sum", "val", "task_kind_Nbeh_first", 
+                                            agg_method="counts", row_values=row_values, col_values=col_values, annotate_heatmap=annotate_heatmap)
+            savefig(fig, f"{savedir}/heatmap-matches-splitby_tk_n-annotate={annotate_heatmap}.pdf")
+        plt.close("all")
+
+        ### Scatterplot vs. image distance
+        # for col in ["task_kind_Nbeh_first", "tkset"]:
+        for col in ["task_kind_Nbeh_first"]:
+
+            # for xvar in ["matches_base_prim_sum", "IMAGE_matches_sum"]:
+            #     fig = sns.catplot(data=dfcounts, x=xvar, y="hdoffline_mean", col="tkset", col_wrap = 6, alpha=0.2, jitter=True)
+            #     savefig(fig, f"{savedir}/visual_score-catplot-x={xvar}-colvar={col}-1.pdf")
+
+            #     fig = sns.catplot(data=dfcounts, x=xvar, y="hdoffline_mean", col="tkset", col_wrap = 6, kind="point")
+            #     savefig(fig, f"{savedir}/visual_score-catplot-x={xvar}-colvar={col}-2.pdf")
+
+            # Plot, overlaying two stroke-prim distances
+            xlim = [-2, dfcounts_clean["hdoffline_mean"].max()+2]
+            ylim = [-1, dfcounts_clean["matches_base_prim_sum"].max()+1]
+
+            fig = sns.FacetGrid(dfcounts_clean, col=col, col_wrap = 6, xlim=xlim, ylim=ylim)
+            fig.map(sns.kdeplot, "hdoffline_mean", "IMAGE_matches_sum", alpha=0.2)
+            fig.map(sns.kdeplot, "hdoffline_mean", "matches_base_prim_sum", alpha=0.2, color="r")
+            for ax in fig.axes.flatten():
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+            savefig(fig, f"{savedir}/visual_score-overlaid-colvar={col}-1.pdf")
+
+            fig = sns.FacetGrid(dfcounts_clean, col=col, col_wrap = 6, xlim=xlim, ylim=ylim)
+            fig.map(sns.stripplot, "hdoffline_mean", "IMAGE_matches_sum", alpha=0.15, jitter=True, orient="h")
+            fig.map(sns.stripplot, "hdoffline_mean", "matches_base_prim_sum", alpha=0.15, jitter=True, color="r", orient="h")
+            for ax in fig.axes.flatten():
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+            savefig(fig, f"{savedir}/visual_score-overlaid-colvar={col}-2.pdf")
+
+            # Regression
+            fig = sns.FacetGrid(dfcounts_clean, col=col, col_wrap = 6, xlim=xlim, ylim=ylim)
+            fig.map(sns.regplot, "hdoffline_mean", "IMAGE_matches_sum")
+            savefig(fig, f"{savedir}/visual_score-regr-IMAGE_matches_sum.pdf")
+
+            fig = sns.FacetGrid(dfcounts_clean, col=col, col_wrap = 6, xlim=xlim, ylim=ylim)
+            fig.map(sns.regplot, "hdoffline_mean", "matches_base_prim_sum", color="r")
+            savefig(fig, f"{savedir}/visual_score-regr-matches_base_prim_sum.pdf")
+
+            plt.close("all")
+
+            # Key points:
+            # (1) Even without matching task components, is still getting decent image similarity
+            fig = sns.catplot(data=dfcounts_clean, x="matches_base_prim_sum", y="hdoffline_mean", hue="IMAGE_matches_sum_str", col=col, 
+                        col_wrap=6, jitter=True, alpha=0.5)
+            savefig(fig, f"{savedir}/visual_score-catplot-matches_base_prim_sum=colvar={col}-1.pdf")
+
+            fig = sns.catplot(data=dfcounts_clean, x="IMAGE_matches_sum", y="hdoffline_mean", hue="matches_base_prim_sum_str", col=col, 
+                        col_wrap=6, jitter=True, alpha=0.5)
+            savefig(fig, f"{savedir}/visual_score-catplot-IMAGE_matches_sum=colvar={col}-1.pdf")
+
+            fig = sns.catplot(data=dfcounts_clean, x="matches_base_prim_sum", y="hdoffline_mean", hue="IMAGE_matches_sum_str", col=col, 
+                        col_wrap=6, kind="point")
+            savefig(fig, f"{savedir}/visual_score-catplot-matches_base_prim_sum=colvar={col}-2.pdf")
+
+            fig = sns.catplot(data=dfcounts_clean, x="IMAGE_matches_sum", y="hdoffline_mean", hue="matches_base_prim_sum_str", col=col, 
+                        col_wrap=6, kind="point")
+            savefig(fig, f"{savedir}/visual_score-catplot-IMAGE_matches_sum=colvar={col}-2.pdf")
+
+            plt.close("all")
+
+        # Good.
+        nmax = max([dfcounts_clean["matches_base_prim_sum"].max(), dfcounts_clean["IMAGE_matches_sum"].max()])
+        row_values = list(range(nmax, -1, -1))
+        col_values = list(range(0, nmax+1))
+        fig, _ = plot_subplots_heatmap(dfcounts_clean, "matches_base_prim_sum", "IMAGE_matches_sum", "hdoffline_mean", "task_kind_Nbeh_first", 
+                            agg_method="mean", row_values=row_values, col_values=col_values, annotate_heatmap=False, share_zlim=True);
+        savefig(fig, f"{savedir}/heatmap-matches_vs_visualdist.pdf")
+
+        plt.close("all")
+
+    return dfcounts, dfcounts_clean
+
+
+def analy_score_combined_animals_bases(DictDS, savedir):
+    """
+    Combining animals and basis prims into a single dataset, and plots to directly compare them.
+    
+    Also finds common characters across aniamls,a nd plots just those.
+
+    """
+    from pythonlib.dataset.dataset_strokes import concat_dataset_strokes_minimal, concat_dataset_strokes
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+    from pythonlib.tools.pandastools import aggregGeneral, append_col_with_grp_index
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+
+
+    def _plot(DFTHIS, savesuff):
+        sdir = f"{savedir}/{savesuff}"
+        os.makedirs(sdir, exist_ok=True)
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
+                    row="animal", jitter=True, alpha=0.2)
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-1.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", 
+                        row="animal", jitter=True, alpha=0.2)
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-2.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
+                    row="animal", kind="violin")
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-3.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="matches_base_prim", col="task_kind", hue="novel|blocky", 
+                    row="animal", kind="bar")
+        savefig(fig, f"{sdir}/catplot-matches_base_prim-all-3.pdf")
+
+        # Scatterplot, for each stroke, compare its score against the two base prims
+        if False: # TOo slow.
+            for animal_data in ["Diego", "Pancho"]:
+                task_kind = "character"
+                dfthis = DFTHIS[(DFTHIS["animal"] == animal_data) & (DFTHIS["task_kind"] == task_kind)].reset_index(drop=True)
+                _, fig = plot_45scatter_means_flexible_grouping(dfthis, "FINAL_basis", "Diego", "Pancho", "novel|blocky", 
+                                                                "FINAL_dist", "index_datapt", plot_text=False, 
+                                                                plot_error_bars=False, alpha=0.05, SIZE=3.5)
+                savefig(fig, f"{sdir}/scatter-vs-basis-animal_data={animal_data}.pdf")
+
+        plt.close("all")
+
+    ### Genreate single combined dataset
+    list_ds = []
+    for animal_data in ["Diego", "Pancho"]:
+        ### (1) Collect df, across bases, and concat as new orjggt
+        # for basis in ["Diego", "Pancho", "image"]:
+        for basis in ["Diego", "Pancho"]:
+            ds = DictDS[(animal_data, basis)]
+            ds.Dat["FINAL_basis"] = basis
+            
+            if basis in ["Diego", "Pancho"]:
+                ds.Dat["FINAL_shape"] = ds.Dat["clust_sim_max_colname"]
+                ds.Dat["FINAL_dist"] = ds.Dat["clust_sim_max"]
+                ds.Dat["FINAL_match"] = ds.Dat["matches_base_prim"]
+            elif basis == "image":
+                ds.Dat["FINAL_shape"] = ds.Dat["shape"]
+                ds.Dat["FINAL_dist"] = ds.Dat["dist_beh_task_strok"]
+                ds.Dat["FINAL_match"] = ds.Dat["IMAGE_matches"]
+                # sanity
+                assert ds.Dat["dist_beh_task_strok"] == ds.Dat["IMAGE_dist"]
+            else:
+                assert False
+            list_ds.append(ds)
+    DScomb = concat_dataset_strokes_minimal(list_ds)
+    DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["novel_char", "is_perfblocky"], "novel|blocky")
+
+    # Find characters that are tested for both animals
+    task_kind = "character"
+    dfchar = DScomb.Dat[(DScomb.Dat["task_kind"] == task_kind)].reset_index(drop=True)
+    levels_var = ["Diego", "Pancho"]
+    dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(dfchar,
+                                                "animal", ["character"], 
+                                                lenient_allow_data_if_has_n_levels=2, 
+                                                levels_var=levels_var)
+    print("after pruning to shared cahracters between subects: ", len(dfchar), " --> ",  len(dfchar_shared))
+
+    #### PLOTS
+    for DFTHIS, savesuff in [(DScomb.Dat, "all_chars"), (dfchar_shared, "shared_chars")]:
+        _plot(DFTHIS, savesuff)
+
+
+    #### Pairwise plots, specifically just for shared chars
+    # (1) Agg, so los_info is single datapt
+    dfcounts_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], aggmethod=["mean"], nonnumercols=["task_kind", "los_set"])
+    from pythonlib.tools.pandastools import stringify_values
+    dfchar_shared_str = stringify_values(dfchar_shared)
+    assert pd.crosstab(dfchar_shared_str["los_info"], dfchar_shared_str["animal"]).min(axis=1).min()>0, "failure means a los_info was not done by all the animals."
+
+    for var_data, var_value, plot_error_bars in [
+        ("los_info", "FINAL_match", False),
+        ("los_set", "FINAL_match", True),
+        ("los_info", "FINAL_dist", False),
+        ("los_set", "FINAL_dist", True),
+        ]:
+        for alpha in [0.1, 0.3]:
+            _, fig = plot_45scatter_means_flexible_grouping(dfcounts_shared, "FINAL_basis", "Diego", "Pancho", "animal", 
+                                                            var_value, var_data, False, shareaxes=True, plot_error_bars=plot_error_bars, 
+                                                            alpha=alpha, SIZE=3.5)
+            savefig(fig, f"{savedir}/SHAREDCHAR-scatter-data={var_data}-value={var_value}-alpha={alpha}.pdf")
+    plt.close("all")
+
+    if False:
+        # based on FINAL_Basis
+        
+        # each subplot is a basis set.
+        # plot histograms for each (animal, task_kind)
+        fig, ax = plt.subplots()
+        dfthis = DScomb.Dat
+        col = "k"
+        nbins = 25
+
+
+        grpvars = ["animal", "task_kind", "FINAL_basis"]
+        grpdict = grouping_append_and_return_inner_items_good(DScomb.Dat, grpvars)
+
+        from pythonlib.tools.plottools import makeColors
+        pcols = makeColors(len(grpdict))
+
+        for (grp, inds), pcol in zip(grpdict.items(), pcols):
+            dfthis = DScomb.Dat.iloc[inds]
+            # sns.histplot(data=dfthis, x="clust_sim_max", stat="probability", color=col,
+            #                 ax=ax, bins=np.linspace(0, 1, nbins+1), element="step", alpha=0.1, label="test")
+            sns.histplot(data=dfthis, x="clust_sim_max", stat="probability", color=pcol,
+                            ax=ax, bins=np.linspace(0, 1, nbins+1), element="step", alpha=0.1, label=grp)
+            ax.legend()
+
+        # Plot means. Do it here so that it is at the ymax
+        YMAX = ax.get_ylim()[1]
+        i=0
+        for (grp, inds), pcol in zip(grpdict.items(), pcols):
+            dfthis = DScomb.Dat.iloc[inds]
+            # Place marker for mean
+            valmean = np.mean(dfthis["clust_sim_max"])
+            ax.plot(valmean, YMAX, "v", color=pcol)
+
+    return DScomb, dfchar_shared
+
+    
+def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, SAVEDIR):
+    """
+    To Make all plots of single trial characters, here iterates over each animal x basis prims,
+    and does relevant preprocessing and data extraction.
+    """
+    from pythonlib.tools.plottools import color_make_map_discrete_labels
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    from pythonlib.dataset.dataset_analy.characters import plot_drawing_task_colorby_matches
+    from pythonlib.tools.plottools import share_axes
+
+    def plot_icon_heatmap_base_prims_used(base_prim_shapes, ax):
+        from pythonlib.tools.snstools import heatmap_mat
+        list_index = [list_shape_basis.index(sh) for sh in base_prim_shapes]
+        ma = np.zeros((nrows, ncols))
+
+        for idx in list_index:
+            y = int(np.floor(idx/ncols)) # from top
+            x = idx%ncols
+            ma[y, x] = 1
+
+        # sns.heatmap(ma, ax=ax)
+        heatmap_mat(ma, ax=ax, annotate_heatmap=False, cbar=False)
+
+        # plot the index text
+        if False: # Too large
+            for idx in list_index:
+                y = int(np.floor(idx/ncols)) # from top
+                x = idx%ncols
+                print(x,y, nrows-y-1)
+                ax.text(x+0.25, y+0.625, f"#{idx}", color="k", fontsize=15)
+
+
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.tick_params(axis='both', which='both',length=0)
+        
+
+    # This requires original dataset -- maybe best to run separately for each day.
+    n_examples = 10
+
+    for animal, basis in [
+        ("Pancho", "Pancho"),
+        ("Diego", "Diego")]:
+    # for animal, basis in [
+    #     ("Pancho", "Pancho")]:
+
+        if animal!=basis:
+            # Just to speed things up.
+            continue
+        
+        # Get the dataset
+        DSorig = DictDS[(animal, basis)]
+        DS = DSorig.copy()
+
+        # Keep just chars
+        DS.Dat = DS.Dat[DS.Dat["task_kind"] == "character"].reset_index(drop=True)
+
+        # Go thru each date
+        for date in DSorig.Dat["date"].unique().tolist():
+            
+            DS.Dat = DSorig.Dat[DSorig.Dat["date"] == date].reset_index(drop=True)
+
+            savedir = f"{SAVEDIR}/match_prim-vs-match_image-DRAWINGS-data={animal}-basis={basis}-date={date}"
+            os.makedirs(savedir, exist_ok=True)
+            print(savedir)
+
+            dfcounts, dfcounts_clean = analy_score_match_baseprim_vs_matchimage_trials(DS, None, just_get_dfcounts=True)
+            
+            if False:
+                fig, ax = plt.subplots()
+                plot_icon_heatmap_base_prims_used(prim_matches_shape, ax)
+
+            # (1) First, Plot all the base prims in a grid
+            dfbasis, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(which_basis_set=basis, plot_examples=False)
+            map_baseprim_to_color, _, _ = color_make_map_discrete_labels(list_shape_basis)
+
+            ncols = 5
+            nrows = int(np.ceil(len(list_shape_basis)/ncols))
+            SIZE = 1.7
+            fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE), sharex=True, sharey=True)
+            for i, (ax, shape, strok) in enumerate(zip(axes.flatten(), list_shape_basis, list_strok_basis)):
+                color = map_baseprim_to_color[shape]
+                DS.plot_single_strok(strok, "beh", ax=ax, color=color, alpha_beh=1)
+                from pythonlib.drawmodel.strokePlots import formatDatStrokesPlot
+                formatDatStrokesPlot(ax, naked_axes=True)
+                ax.set_title(f"#{i}")
+            fig.tight_layout()
+            # from matplotlib.pyplot import subplots_adjust
+            # plt.subplots_adjust(wspace=-0.2, hspace=0.2)
+            savefig(fig, f"{savedir}/base_prims.pdf")
+
+            # (2) Plot example trials
+            grpdict = grouping_append_and_return_inner_items_good(dfcounts_clean, ["task_kind_Nbeh_first", "matches_base_prim_sum", "IMAGE_matches_sum"])
+
+            # plot_beh_and_aligned_task_strokes
+            color_nonmatch = [0.3, 0.3, 0.3]
+            SIZE = 3
+            color_task_by_matches = False
+
+            for grp, inds_dfcounts in grpdict.items():
+                # print(inds_dfcounts)
+                
+                trialcodes = dfcounts_clean.iloc[inds_dfcounts]["trialcode"].tolist()
+                np.random.shuffle(trialcodes)
+                trialcodes = trialcodes[:n_examples]
+
+                # fig, axes = plt.subplots(4, n_examples, figsize=(SIZE*n_examples, SIZE*3), sharex=True, sharey=True)
+                fig, axes = plt.subplots(4, n_examples, figsize=(SIZE*n_examples, SIZE*3))
+
+                for i_col, tc in enumerate(trialcodes):
+
+
+                    # inddat = 456
+                    # D.plotSingleTrial(inddat)
+                    # tc = D.Dat.iloc[inddat]["trialcode"]
+                    inds = DS.Dat[DS.Dat["trialcode"]==tc].index.tolist()
+                    if False:
+                        DS.plot_multiple_overlay_entire_trial(inds)
+                    
+                    # Append Dataset back to DS
+                    animal = DS.Dat.iloc[inds]["animal"].unique()[0]
+                    date = str(DS.Dat.iloc[inds]["date"].unique()[0])
+                    idx = LIST_ANIMAL_DATE.index((animal, date))
+                    Dthis = LIST_D[idx]
+                    DS.dataset_replace_dataset(Dthis)
+
+                    # Determine if strokes match base prims
+                    prim_matches = DS.Dat.iloc[inds]["matches_base_prim"].tolist()
+                    prim_matches_shape = DS.Dat.iloc[inds]["clust_sim_max_colname"].tolist()
+                    if False:
+                        prim_matches_index = [list_shape_basis.index(sh) for sh in prim_matches_shape]
+                    else:
+                        # Dont plot text on strokes.
+                        prim_matches_index= None
+                    colors_prim = [map_baseprim_to_color[sh] for sh in prim_matches_shape]
+
+                    # colors_match_prim = [map_baseprim_to_color[sh] if match else color_nonmatch for match, sh in zip(prim_matches, prim_matches_shape)]
+                    image_matches = DS.Dat.iloc[inds]["IMAGE_matches"].tolist()
+                    image_matches_shape = DS.Dat.iloc[inds]["shape"].tolist()
+
+                    ax_task = axes[0][i_col]
+                    ax_beh_prim = axes[1][i_col]
+                    ax_beh_task = axes[2][i_col]
+                    ax_base_prims_icon = axes[3][i_col]
+
+                    plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
+                                                            prim_matches, image_matches, colors_prim, prim_matches_index,
+                                                            color_nonmatch=color_nonmatch,
+                                                            color_task_by_matches=False)
+
+                    tmp = dfcounts[dfcounts["trialcode"] == tc]
+                    assert len(tmp)==1
+                    n_match_prim = tmp["matches_base_prim_sum"].values[0]
+                    n_match_image = tmp["IMAGE_matches_sum"].values[0]
+                    n_strokes_beh = tmp["FEAT_num_strokes_beh_mean"].values[0]
+
+                    ax_task.set_title(tc)
+                    ax_beh_prim.set_title(f"n match prim: {n_match_prim}/{n_strokes_beh}")
+                    ax_beh_task.set_title(f"n match task: {n_match_image}/{n_strokes_beh}")
+
+                    # Add icon of which base prims are gotten
+                    prim_matches_shape_good = [sh for sh, ismatch in zip(prim_matches_shape, prim_matches) if ismatch]
+                    plot_icon_heatmap_base_prims_used(prim_matches_shape_good, ax_base_prims_icon)
+
+                    # Share the drawing axes
+                    share_axes(np.array([ax_task, ax_beh_prim, ax_beh_task]), which="both")
+
+                # fig.tight_layout()
+                savefig(fig, f"{savedir}/example_drawings-grp={grp}.pdf")
+                # assert False
+                plt.close("all")
+
+def plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
+                                        prim_matches, image_matches, colors_prim, prim_matches_index=None,
+                                        color_nonmatch="k",
+                                        color_task_by_matches=False):
+    """
+    Create plot of beh and task image, showing matches., comparing match to base prims vs. match to image.
+    PARAMS:
+    - inds, indices into DS.Dat -- the strokes that will plot
+    - ax_task, ax_beh_prim, ax_beh_task, axes where will plot (i) task, (ii) beh, colored by match to base prims and (iii)
+    beh, colored by whether match to image stroke.
+    - prim_matches, list len(inds) of bools, whether this stroke matches a base prim
+    - image_matcheslist len(inds) of bools, whether this stroke matches an image stroke.
+    - colors_prim, list of colors for each beh stroke. These are usually the canonical colors for the base prims that are matched.
+    - prim_matches_index, list of int indices that are simply labels on the plot, indicating which base prim it is.
+    - color_task_by_matches, bool, if True, then the image will have color on strokes that are matched by beh.
+    """
+    # Plot beh strokes, coloring only if match base prims
+    # DS.plot_multiple_overlay_entire_trial_single_plot(ax_beh, inds, separate_axis_image=ax_task, list_colors=colors_match_prim)
+
+    if prim_matches_index is None:
+        prim_matches_index = [None for _ in range(len(prim_matches))]
+
+    # number the beh strokes
+    # Plot beh strokes, coloring only if match task image
+    for i, _ind in enumerate(inds):
+        if prim_matches[i]:
+            _color = colors_prim[i]
+            idx_prim = prim_matches_index[i]
+        else:
+            _color = color_nonmatch
+            idx_prim = None
+        DS.plot_single(_ind, ax_beh_prim, color=_color, label_onset=idx_prim, label_color=[0.2, 0.2, 0.2])
+    # Number the stroke by their prim?
+
+
+    # Plot image, coloring image strokes same as beh strokes, if they match
+    # inddat = DS._dataset_index(ind)
+    # strokes_task = DS.Dataset.Dat.iloc[inddat]["strokes_task"]
+    # strokes_task_ordered_by_beh = [strokes_task[i] for i in DS.Dat.iloc[inds]["ind_taskstroke_orig"]]
+
+    strokes_task = DS.dataset_extract("strokes_task", inds[0])
+    map_idxtaskorig_to_color = {}
+    for idx_task_orig, ismatch, color in zip(DS.Dat.iloc[inds]["ind_taskstroke_orig"].tolist(), image_matches, colors_prim):
+        if ismatch:
+            map_idxtaskorig_to_color[idx_task_orig] = color
+        else:
+            map_idxtaskorig_to_color[idx_task_orig] = color_nonmatch
+
+    for i, st in enumerate(strokes_task):
+        if color_task_by_matches and (i in map_idxtaskorig_to_color):
+            color = map_idxtaskorig_to_color[i]
+        else:
+            color = color_nonmatch
+        DS.plot_single_strok(st, "task_colored", ax=ax_task, color=color, alpha_beh=1)
+
+
+    # strokes_task_ordered_by_beh = DS.extract_strokes(inds =inds, ver_behtask="task_aligned_single_strok")
+    # for i, st in enumerate(strokes_task_ordered_by_beh):
+    #     if color_task_by_matches and image_matches[i]:
+    #         color = colors_match_task[i]
+    #     else:
+    #         color="k" 
+    #     DS.plot_single_strok(st, "task_colored", ax=ax_task, color=color, alpha_beh=1)
+
+    # Plot beh strokes, coloring only if match task image
+    for i, _ind in enumerate(inds):
+        if image_matches[i]:
+            _color = colors_prim[i]
+        else:
+            _color = color_nonmatch
+        DS.plot_single(_ind, ax_beh_task, color=_color)
+
