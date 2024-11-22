@@ -2,3 +2,4 @@
 log_parse.txt
 .DS_Store
 globals.py
+*logs/*
