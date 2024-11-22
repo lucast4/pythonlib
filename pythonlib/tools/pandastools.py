@@ -215,6 +215,9 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     # check that there are no nones... any cells with None will be left out erroneously.
     assert df.isnull().values.any() == False, "replace Nones using replace_values_with_this"
 
+    for v in values:
+        assert v in df.columns, f"entered a value that doesnt exist, {v}"
+        
     if len(df)==0:
         return df
 

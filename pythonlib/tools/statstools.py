@@ -80,10 +80,14 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
         fig, ax = plt.subplots()
         for i, row in dfpivot.iterrows():
             ax.plot([0, 1], [row[var1], row[var2]], "-ok", alpha=0.5)
+
+        # Overlay means
+        ax.plot([-0.05, 1.05], [dfpivot[var1].mean(), dfpivot[var2].mean()], "sr", alpha=0.5)
+
         ax.set_ylim(0)
         ax.set_xlim([-0.5, 1.5])
         plotmod_pvalues(ax, [0.5], [res.pvalue])
-        ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. {var2}")
+        ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. {var2}", fontsize=6)
         ax.set_ylabel(value_var)
     else:
         fig = None

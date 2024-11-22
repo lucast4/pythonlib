@@ -929,7 +929,9 @@ class DatStrokes(object):
                                                  list_distance_ver = None,
                                                  labels_rows_dat= None,
                                                  labels_cols_feats= None,
-                                                 label_var=None):
+                                                 label_var=None,
+                                                 clustclass_rsa_mode=False,
+                                                 PLOT=False, savedir=None, savesuff=None):
         """
         GOOD - compute pairwise distance between all pairs across 1 and 2.
         This is motor distnace, the method used for clustreing strokes from 
@@ -949,11 +951,28 @@ class DatStrokes(object):
                                                         labels_rows_dat= labels_rows_dat,
                                                         labels_cols_feats= labels_cols_feats,
                                                         label_var=label_var,
-                                                        list_ver= list_distance_ver)
+                                                        list_ver= list_distance_ver, 
+                                                        clustclass_rsa_mode=clustclass_rsa_mode)
+        
+        if PLOT:
+            if len(strokes1)<200 and len(strokes2)<200:
+                fig, _ = Cl.rsa_plot_heatmap()
+                if fig is not None:
+                    savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
+
+            ### Aggregate to get distance between groups (shapes)
+            _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+                                                                    return_as_clustclass_which_var_score="dist_mean")
+
+            # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+            fig, _ = Clagg.rsa_plot_heatmap()
+            savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
         return Cl
         
-    def _distgood_compute_image_strok_distances(self, strokes1, strokes2, labels1=None, labels2=None, 
-                                                do_centerize=False):
+    def distgood_compute_image_strok_distances(self, strokes1, strokes2, labels1=None, labels2=None, 
+                                               label_var="shape",
+                                                do_centerize=False, clustclass_rsa_mode=False,
+                                                PLOT=False, savedir=None, savesuff=None):
         """ COmpute and return distances between all pairs of (strokes1, strokes2), but using
         image distnace, which ignore the motor trajectory
 
@@ -971,6 +990,24 @@ class DatStrokes(object):
         # Get difference 
         distmat = distmat_construct_wrapper(strokes1, strokes2, _dist_strok)
         Cl = Clusters(X = distmat, labels_rows=labels1, labels_cols=labels2)
+
+        ### Additional stuff
+        if clustclass_rsa_mode:
+            Cl = Cl.convert_copy_to_rsa_dist_version(label_var, "image")
+
+        if PLOT:
+            if len(strokes1)<200 and len(strokes2)<200:
+                fig, _ = Cl.rsa_plot_heatmap()
+                if fig is not None:
+                    savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
+
+            ### Aggregate to get distance between groups (shapes)
+            _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True,
+                                                                    return_as_clustclass_which_var_score="dist_mean")
+
+            # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+            fig, _ = Clagg.rsa_plot_heatmap()
+            savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
 
         return Cl
 
@@ -1782,7 +1819,7 @@ class DatStrokes(object):
         for strok, ax in zip(list_strok, axes):
             self.plot_single_strok(strok, ver=ver, ax=ax, alpha_beh=alpha)
 
-        if titles is not None:
+        if titles is not None and overlay==False:
             assert len(titles)==len(list_strok)
             for ax, tit in zip(axes, titles):
                 ax.set_title(tit)
@@ -4499,7 +4536,7 @@ class DatStrokes(object):
         """
         dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper()
         print("Starting len dat: ", len(self.Dat))
-        shapes_removed = self.Dat[~self.Dat["shape"].isin(list_shape_basis)]["shape"].tolist()
+        shapes_removed = self.Dat[~(self.Dat["shape"].isin(list_shape_basis))]["shape"].tolist()
         self.Dat = self.Dat[self.Dat["shape"].isin(list_shape_basis)].reset_index(drop=True)
         print("Ending len dat: ", len(self.Dat))
         print("Shapes removed: ", shapes_removed)

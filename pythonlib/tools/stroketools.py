@@ -1189,6 +1189,24 @@ def getCentersOfMass(strokes):
     from pythonlib.drawmodel.features import getCentersOfMass
     return getCentersOfMass(strokes, method="use_median")
 
+def get_centers_strokes_list(strokes, method="bounding_box"):
+    """
+    Retrun list of (x,y) centers at same length of strokes
+    RETURNS:
+    - centers, list of (x,y) tuples
+    """ 
+
+    if method=="bounding_box":
+        def _get_center(strok):
+            xmin, xmax, ymin, ymax = strokes_bounding_box([strok])
+            center = (xmin+(xmax-xmin)/2, ymin+(ymax-ymin)/2)
+            return center
+    else:
+        assert False, "coode it"
+
+    centers = [_get_center(strok) for strok in strokes]
+    return centers
+
 def getCenter(strokes, method="extrema"):
     """ get center of strokes (all strok at once), with methods:
     --- "extrema", based on x and y max edges, then
@@ -1293,7 +1311,6 @@ def convertFlatToStrokes(strokes, flatvec):
         tmp.append(np.array(flatvec[on1:on2]))
     return tmp
 
-
 def strokes_bounding_box_dimensions(strokes):
     """ Return (w, h, d)
     """
@@ -1310,7 +1327,7 @@ def strokes_bounding_box_dimensions(strokes):
 
 def strokes_bounding_box(strokes):
     """ returns [minx, maxx, miny, maxy] that
-    bounds strokes"""
+    bounds strokes (all strokes concatted)"""
     return getMinMaxVals(strokes)
 
 def getMinMaxVals(strokes):
@@ -2033,18 +2050,28 @@ def strokes_average(strokes, Ninterp=70, center_at_onset=False, centerize=False,
     return strok_mean, strokes_stacked
 
 
-def strokes_centerize(strokes):
+def strokes_centerize(strokes, method="center_of_mass"):
     """ Return list ofs trokes (copy) which are 
-    cetnred in xy coord"""
+    cetnred in xy coord, using the mean (i.e, center of mass)"""
 
-    def F(strok):
-        # c = np.mean(strok[:,:2], axis=0)
-        # s = strok.copy()
-        # s[:,:2] = s[:,:2] - c
-        s = strok.copy()
-        s[:,:2] = s[:,:2] - np.mean(s[:,:2], axis=0)
-        return s
-    strokes = [F(strok) for strok in strokes]
+    if method=="center_of_mass":
+        def _centerize(strok):
+            # c = np.mean(strok[:,:2], axis=0)
+            # s = strok.copy()
+            # s[:,:2] = s[:,:2] - c
+            s = strok.copy()
+            s[:,:2] = s[:,:2] - np.mean(s[:,:2], axis=0)
+            return s
+        strokes = [_centerize(strok) for strok in strokes]
+    elif method=="bounding_box":
+        strokes = [s.copy() for s in strokes]
+        centers = get_centers_strokes_list(strokes, method="bounding_box")
+        for cen, strok in zip(centers, strokes):
+            strok[:,0] -= cen[0]
+            strok[:,1] -= cen[1]
+    else:
+        assert False
+        
     return strokes
 
 def strokes_alignonset(strokes):

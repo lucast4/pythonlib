@@ -10,6 +10,43 @@ from pythonlib.tools.plottools import savefig
 import os
 import seaborn as sns
 
+def params_image_distance_progression_not_linear():
+    """
+    Cases where the successive distances between images in the progression is not
+    linera,
+    
+    Reasons:
+    Some morphsets, by eye, have image distances that are not linear, e.g.
+    due to coding hack where 0 and 99 are different from interior. e.g, V, which 
+    I coded differtly.
+
+    These I derived by eye, looking at each expt for both smothig and switching, 
+    for beh figure, see:
+        smoothing expts: /lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/smooth/MULT/smooth/eachexpt-x_var=morph_idxcode_within_set-y=dist_index_norm-2.pdf
+        switching: /lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/switching/MULT/eachexpt-x_var=morph_idxcode_within_set-y=dist_index_norm.pdf
+    I think this includes ALL good expts (used in both recoridngs and beh)
+
+    RETURNS:
+    -  list of expts, each (animal, date, morphst)
+    """
+    
+    bad_expts = [
+        # Switching expts
+        ("Diego", 240730, 0),
+        ("Pancho", 240521, 4),
+        
+        # Smooth expts
+        ("Diego", 240731, 1),
+        # ("Diego", 240802, 2),
+        ("Diego", 240517, 3), 
+        # ("Diego", 240731, 3), # minor
+        ("Diego", 240801, 4),
+        ("Pancho", 240801, 1),
+        ("Pancho", 240524, 2),
+        ("Pancho", 240521, 7),
+        ]
+    return bad_expts
+
 def params_base_prims_not_separated(animal, date):
     """ [For smooth morph expts] Those that dont show separation of states of base prims 1 and 2, by eye, using
     scatterplot, state space, "scalar" version.
@@ -147,6 +184,8 @@ def params_good_morphsets_switching_ignore_trialcodes(animal, date):
         trialcodes_ignore = ["240524-1-198", "240524-1-440"] # is messy stroke, half way in between the two bases
     else:
         pass # allow defautl to ignore this.
+
+    print("For ", animal, date, " ignoring these trialcodes: ", trialcodes_ignore)
     return trialcodes_ignore
     
 
@@ -223,6 +262,9 @@ def params_good_morphsets_switching(animal, date):
         print(animal, date)
         assert False
 
+    # Keep only those without empty inds (note: keeping empty is ueful note for me)
+    map_morphsetgood_to_indices = {k:v for k, v in map_morphsetgood_to_indices.items() if len(v)>0}
+    
     return map_morphsetgood_to_indices
 
 # def params_good_morphsets_switching(animal, date):
@@ -1864,7 +1906,8 @@ def _plot_overview_scores(D, DSmorphsets, SAVEDIR, use_task_stroke_or_los, DS=No
     plt.close("all")
         
 
-def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=None, NEURAL_PLOT_DRAWINGS=None):
+def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=None, NEURAL_PLOT_DRAWINGS=None,
+                                       remove_flankers=True, cetegory_expt_version=None):
     """
     [The final wrapper for all kinds of psycho, morphing expts].
     Does preprocess, plots,a nd extarction of data for neural analyse.
@@ -1923,13 +1966,13 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
         # Structured morphs -- new method, using hand inputed tsc inds
         from pythonlib.dataset.dataset_analy.psychometric_singleprims import params_extract_psycho_groupings_manual_using_tsc_inds, psychogood_preprocess_wrapper_using_tsc_inds
         if NEURAL_VERSION:
-            DFRES, DSmorphsets = psychogood_preprocess_wrapper_using_tsc_inds(D, 
-                                            *params_extract_psycho_groupings_manual_using_tsc_inds(animal, date), 
-                                            print_summary=True, PLOT_SCORES=False, PLOT_DRAWINGS = False)
+            PLOT_SCORES, PLOT_DRAWINGS = False, False
         else:
-            DFRES, DSmorphsets = psychogood_preprocess_wrapper_using_tsc_inds(D, 
-                                            *params_extract_psycho_groupings_manual_using_tsc_inds(animal, date), 
-                                            print_summary=True, PLOT_SCORES=True, PLOT_DRAWINGS = True)
+            PLOT_SCORES, PLOT_DRAWINGS = True, True
+
+        DFRES, DSmorphsets = psychogood_preprocess_wrapper_using_tsc_inds(D, 
+                                        *params_extract_psycho_groupings_manual_using_tsc_inds(animal, date), 
+                                        print_summary=True, PLOT_SCORES=PLOT_SCORES, PLOT_DRAWINGS = PLOT_DRAWINGS)
 
     elif (animal, date) in [("Diego", 240522), ("Pancho", 240523)]:
         # [Novel prims] Continuous morphs -- i.e., take onset and offset of two base prims to form one single middle prim.
@@ -2008,6 +2051,71 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
 
         path = f"{NEURAL_SAVEDIR}/map_tc_to_morph_status.txt"
         writeDictToTxtFlattened(map_tc_to_morph_status, path, sorted_by_keys=True)
+
+        ########## Further cleaning
+        # Remove flankers
+        if remove_flankers:
+            DSmorphsets.Dat = DSmorphsets.Dat[(DSmorphsets.Dat["morph_idxcode_within_set"]>=0) & (DSmorphsets.Dat["morph_idxcode_within_set"]<=99)].reset_index(drop=True)
+
+        if cetegory_expt_version=="switching":
+            # Prune neural data to keep only good triacldoes.
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import params_good_morphsets_switching_ignore_trialcodes
+            trialcodes_ignore = params_good_morphsets_switching_ignore_trialcodes(animal, date)
+            DSmorphsets.Dat = DSmorphsets.Dat[~DSmorphsets.Dat["trialcode"].isin(trialcodes_ignore)].reset_index(drop=True)
+
+            ### Give a few more useful labels
+            # New column of assigned label
+            # Another one
+            def map_to_simple(x):
+                a = "base1" in x
+                b  = "base2" in x
+                if a and not b:
+                    return "base1"
+                elif b and not a:
+                    return "base2"
+                elif x=="not_enough_trials":
+                    return "not_enough_trials"
+                else:
+                    print(x, a, b)
+                    assert False
+            DSmorphsets.Dat["assigned_base_simple"] = [map_to_simple(x) for x in DSmorphsets.Dat["morph_assigned_to_which_base"]]
+
+            def f(x):
+                if x in ["base1", "base2"]:
+                    return "base"
+                elif x in ["not_ambig_base1", "not_ambig_base2"]:
+                    return "not_ambig"
+                elif x in ["ambig_base1", "ambig_base2"]:
+                    return "ambig"
+                elif x in ["not_enough_trials"]:
+                    return "not_enough_trials"
+                else:
+                    print(x)
+                    assert False
+            DSmorphsets.Dat["morph_assigned_label"] = [f(x) for x in DSmorphsets.Dat["morph_assigned_to_which_base"]]
+
+            # Another.
+            from pythonlib.tools.pandastools import append_col_with_grp_index
+            DSmorphsets.Dat = append_col_with_grp_index(DSmorphsets.Dat, ["morph_idxcode_within_set", "assigned_base_simple"], "idxmorph_assigned")
+
+            # Print, useful to confirm the labels.
+            from pythonlib.tools.pandastools import grouping_print_n_samples
+            saveas = f"{NEURAL_SAVEDIR}/groupings.txt"
+            grouping_print_n_samples(DSmorphsets.Dat, 
+                                    ["morph_set_idx", "morph_idxcode_within_set", "assigned_base_simple", "idxmorph_assigned", "morph_assigned_label", "morph_is_morphed", "morph_assigned_to_which_base"],
+                                    save_as=saveas)
+
+            ### Specific for expts with switching morpjs
+            # Confirm that hand-entered labels for morphset and switching indices are correct.
+            map_morphsetgood_to_indices = params_good_morphsets_switching(animal, date)
+            for morphset, inds_keep in map_morphsetgood_to_indices.items():
+                dfthis = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"]==morphset]
+                # Check that only inds_keep (and all indskeep) are "ambig"
+                assert all(dfthis[dfthis["morph_idxcode_within_set"].isin(inds_keep)]["morph_assigned_label"] == "ambig")
+                assert not any(dfthis[~dfthis["morph_idxcode_within_set"].isin(inds_keep)]["morph_assigned_label"] == "ambig")
+
+                # Check that all labels exist which are required for this to be switching morphset
+                assert all([x in dfthis["morph_assigned_to_which_base"].unique().tolist() for x in ['base1', 'ambig_base1', 'ambig_base2', 'base2']]), "this is not a complete switching morphset.. exclude?"
 
         return DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status
     else:

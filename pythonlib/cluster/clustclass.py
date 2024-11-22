@@ -1536,14 +1536,53 @@ class Clusters(object):
         else:
             return MASKS, None, None
 
+    def rsa_dfdist_to_dfproj_index_datapts(self, dfdist_pts, var_score="dist_mean", var_effect = "idx_morph_temp",
+                            effect_lev_base1=0, effect_lev_base2=99):
+        """Like dfdist_to_dfproj_index, but here dfdist rows to represent datapts/trials (So this would be trial vs. group of tirals), 
+        as oposed to there, whihc is rows are distances between groups of trials. 
+
+        PARAMS:
+        - var_score, which scoree to use. By default, use dist_mean, which is the most raw. Simply the eucl distance.
+        - var_effect, the variable whose 2 levels will form the "endpoints"
+        """
+
+        list_idx_datapt = sorted(dfdist_pts["idx_row_datapt"].unique())
+
+        res_dist_index = []
+        for idx_datapt in list_idx_datapt:
+            tmp = dfdist_pts[(dfdist_pts["idx_row_datapt"] == idx_datapt) & (dfdist_pts[f"{var_effect}_2"]==effect_lev_base1)]
+            if not len(tmp)==1:
+                print(idx_datapt)
+                print(tmp)
+                assert False, "prob need to set get_only_one_direction==False or version_datapts==True"
+            d1 = tmp[var_score].values[0]
+
+            tmp = dfdist_pts[(dfdist_pts["idx_row_datapt"] == idx_datapt) & (dfdist_pts[f"{var_effect}_2"]==effect_lev_base2)]
+            if not len(tmp)==1:
+                print(idx_datapt)
+                print(tmp)
+                assert False, "prob need to set get_only_one_direction==False or version_datapts==True"
+            d2 = tmp[var_score].values[0]
+
+            dist_index = d1/(d1+d2)
+
+            res_dist_index.append({
+                "idx_row_datapt":idx_datapt,
+                "labels_1_datapt":tmp["labels_1_datapt"].values[0],
+                f"{var_effect}":tmp[f"{var_effect}_1"].values[0],
+                "dist_index":dist_index,
+            })
+        dfproj_index = pd.DataFrame(res_dist_index)
+
+        return dfproj_index
+
     def rsa_distmat_score_all_pairs_of_label_groups_datapts_datapts():
         """
         """
         assert False, "this is done in rsa_dataextract_with_labels_as_flattened_df"
 
-    def rsa_distmat_score_all_pairs_of_label_groups_datapts(self, get_only_one_direction=True, label_vars=None,
-            return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff",
-            list_grps_get=None):
+    def rsa_distmat_score_all_pairs_of_label_groups_datapts(self, label_vars=None,
+            return_as_clustclass=False, list_grps_get=None):
         """
         See rsa_distmat_score_all_pairs_of_label_groups, except here gets pairs of (datapt vs. group) whereas there was
         (group vs group).
@@ -1554,8 +1593,6 @@ class Clusters(object):
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
 
-        if return_as_clustclass:
-            get_only_one_direction = False
 
         assert self.Labels == self.LabelsCols, "assumes so for soem of below"
 
@@ -1877,6 +1914,13 @@ class Clusters(object):
         """
         from pythonlib.tools.pandastools import append_col_with_grp_index
 
+        if "labels_1_datapt" in dfdists.columns:
+            var1 = "labels_1_datapt"
+            var2 = "labels_2_grp"
+        else:
+            var1 = "labels_1"
+            var2 = "labels_2"
+
         dfdists = dfdists.copy()
         
         # Replace columns which are now incorrect
@@ -1885,8 +1929,8 @@ class Clusters(object):
 
         # e..g, seqc_0_shape_1
         for i, var in enumerate(label_vars):
-            dfdists[f"{var}_1"] = [x[i] for x in dfdists["labels_1"]]
-            dfdists[f"{var}_2"] = [x[i] for x in dfdists["labels_2"]]
+            dfdists[f"{var}_1"] = [x[i] for x in dfdists[var1]]
+            dfdists[f"{var}_2"] = [x[i] for x in dfdists[var2]]
             dfdists = append_col_with_grp_index(dfdists, [f"{var}_1", f"{var}_2"], f"{var}_12")
             dfdists[f"{var}_same"] = dfdists[f"{var}_1"] == dfdists[f"{var}_2"]
 

@@ -25,6 +25,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from pythonlib.tools.plottools import savefig
 from pythonlib.tools.snstools import rotateLabel
+import pandas as pd
 
 
 def load_pair_of_datasets(animal1, date1, animal2, date2):
@@ -132,7 +133,6 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
     os.makedirs(savedir, exist_ok=True)
     print(savedir)
 
-    import pandas as pd
     DFDIST = pd.concat(list_dfdist).reset_index(drop=True)
     DFACCURACY = pd.concat(list_dfaccuracy).reset_index(drop=True)
 
@@ -199,7 +199,8 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
 
     return DFDIST, DFACCURACY
 
-def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff):
+def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff,
+                          label_var="shape"):
     """
     """
     print("Scoring motor distance....")
@@ -209,23 +210,26 @@ def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir,
     # Before 1/15/24
     # list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
     # 1/15/24 - This is much better
-    list_distance_ver  = ["dtw_vels_2d"]
+    # list_distance_ver  = ["dtw_vels_2d"]
     # list_distance_ver  = ["euclidian"]
 
     # Compute similarity
-    Cl = DSthis._cluster_compute_sim_matrix_aggver(strokes1, strokes2, shapes1, shapes2, "shape", list_distance_ver,
-                                                clustclass_rsa_mode=True)
-    if len(strokes1)<200 and len(strokes2)<200:
-        fig, _ = Cl.rsa_plot_heatmap()
-        if fig is not None:
-            savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
+    Cl = DSthis.distgood_compute_beh_beh_strok_distances(strokes1, strokes2, labels_rows_dat=shapes1, 
+                                                         labels_cols_feats=shapes2, label_var=label_var, 
+                                                         clustclass_rsa_mode=True,
+                                                         PLOT=True, savedir=savedir, savesuff=savesuff)
+    # if len(strokes1)<200 and len(strokes2)<200:
+    #     fig, _ = Cl.rsa_plot_heatmap()
+    #     if fig is not None:
+    #         savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
 
-    ### Aggregate to get distance between groups (shapes)
-    _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
+    # ### Aggregate to get distance between groups (shapes)
+    # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+    #                                                           return_as_clustclass_which_var_score="dist_mean")
 
-    # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-    fig, _ = Clagg.rsa_plot_heatmap()
-    savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
+    # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+    # fig, _ = Clagg.rsa_plot_heatmap()
+    # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
 
     return Cl
 
@@ -248,21 +252,22 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
         """
         print("Scoring image distance....")
 
-        Cl = DSthis._distgood_compute_image_strok_distances(strokes1, strokes2, shapes1, shapes2, do_centerize=True)
-        Cl = Cl.convert_copy_to_rsa_dist_version("shape", "image")
+        Cl = DSthis.distgood_compute_image_strok_distances(strokes1, strokes2, shapes1, shapes2, do_centerize=True,
+                                                            clustclass_rsa_mode=True, PLOT=True, savedir=savedir, savesuff=savesuff)
+        # Cl = Cl.convert_copy_to_rsa_dist_version("shape", "image")
 
 
-        if N_TRIALS<12:
-            fig, _ = Cl.rsa_plot_heatmap()
-            if fig is not None:
-                savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
+        # if N_TRIALS<12:
+        #     fig, _ = Cl.rsa_plot_heatmap()
+        #     if fig is not None:
+        #         savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
 
-        ### Aggregate to get distance between groups (shapes)
-        _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
+        # ### Aggregate to get distance between groups (shapes)
+        # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
 
-        # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-        fig, _ = Clagg.rsa_plot_heatmap()
-        savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
+        # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+        # fig, _ = Clagg.rsa_plot_heatmap()
+        # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
 
         return Cl
 
@@ -271,29 +276,6 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
         """
         print("Scoring motor distance....")
         Cl = score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff)
-
-        # # Which distance score
-        # # if False:
-        # # Before 1/15/24
-        # # list_distance_ver  =("euclidian_diffs", "euclidian", "hausdorff_alignedonset")
-        # # 1/15/24 - This is much better
-        # list_distance_ver  = ["dtw_vels_2d"]
-        # # list_distance_ver  = ["euclidian"]
-
-        # # Compute similarity
-        # Cl = DSthis._cluster_compute_sim_matrix_aggver(strokes1, strokes2, shapes1, shapes2, "shape", list_distance_ver,
-        #                                             clustclass_rsa_mode=True)
-        # if N_TRIALS<12:
-        #     fig, _ = Cl.rsa_plot_heatmap()
-        #     if fig is not None:
-        #         savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
-
-        # ### Aggregate to get distance between groups (shapes)
-        # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
-
-        # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-        # fig, _ = Clagg.rsa_plot_heatmap()
-        # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
 
         return Cl
 
@@ -640,8 +622,9 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
 
     print("Scoring motor distance....")
     list_distance_ver  = ["dtw_vels_2d"]
-    Cl = DS._cluster_compute_sim_matrix_aggver(strokes, strokes, labels, labels, grpvars, list_distance_ver,
-                                                clustclass_rsa_mode=True)
+    # Cl = DS._cluster_compute_sim_matrix_aggver(strokes, strokes, labels, labels, grpvars, list_distance_ver,
+    #                                             clustclass_rsa_mode=True)
+    Cl = DS.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, grpvars, clustclass_rsa_mode=True)
     
     # Save, since this takes a long time.
     import pickle
@@ -662,7 +645,7 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     # fig, ax = Cl.rsa_plot_heatmap()
     # savefig(fig, f"{savedir}/heatmap-trials.pdf")
 
-    dfdist = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts(get_only_one_direction=True)
+    dfdist = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
     dfdist = dfdist.drop("dist_yue_diff", axis=1)
     dfdist = dfdist.dropna()
     from pythonlib.tools.pandastools import append_col_with_grp_index
@@ -1397,10 +1380,195 @@ def fig3_charsyntax_transition_matrix_graph_plot(df, threshold, map_node_to_inse
     
     return fig
 
+def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="switching"):
+    """
+    Extract pairiwse distances for all morphsets in DSmorphsets.Dat
+
+    Ensures that those morphsets that are "switching" wil have accurate label for each index within
+    (e.g., ambig, not-ambig). Does not guarantee that for "smototh" but that's ok since there
+    I don't use this label info.
+
+    """
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.dataset.scripts.analy_manuscript_figures import score_motor_distances
+    from pythonlib.tools.stroketools import get_centers_strokes_list, strokes_centerize
+    from pythonlib.tools.pandastools import stringify_values
+    from pythonlib.tools.pandastools import extract_with_levels_of_var_good
+
+    ### Extract task strokes
+    inds = list(range(len(DSmorphsets.Dat)))
+    DSmorphsets.Dat["strok_task"]= DSmorphsets.extract_strokes(inds=inds, ver_behtask="task_entire")
+    if cetegory_expt_version == "switching":
+        DSmorphsets.Dat = append_col_with_grp_index(DSmorphsets.Dat, ["morph_idxcode_within_set", "assigned_base_simple"], 
+                                                    "idxmorph_assigned", False) # To make this tuple, same as in Cl below.
+
+    ### Collect distances
+    DEBUG = False
+    list_df = []
+    list_df_index = []
+    for morphset in DSmorphsets.Dat["morph_set_idx"].unique():
+        dfdat = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"]==morphset].reset_index(drop=True)
+        
+        # Need at least 2 trials, or else distances will fail
+        if cetegory_expt_version == "switching":
+            dfdat, _ = extract_with_levels_of_var_good(dfdat, ["morph_idxcode_within_set", "assigned_base_simple"], 2)
+        elif cetegory_expt_version == "smooth":
+            dfdat, _ = extract_with_levels_of_var_good(dfdat, ["morph_idxcode_within_set"], 2)
+        else:
+            assert False
+
+        for version in ["beh", "beh_imagedist", "task"]:
+            savedir = f"{SAVEDIR}/extraction/morphset={morphset}-ver={version}"
+            os.makedirs(savedir, exist_ok=True)
+
+            # label
+            if cetegory_expt_version == "switching":
+                label_var = ["morph_idxcode_within_set", "assigned_base_simple"]
+            elif cetegory_expt_version == "smooth":
+                label_var = ["morph_idxcode_within_set"]
+            else:
+                assert False
+            labels = [tuple(x) for x in dfdat.loc[:, label_var].values.tolist()]
+
+            if version == "beh":
+                strokes = dfdat["strok"].tolist()
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                Cl = DSmorphsets.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, label_var, 
+                                                                        clustclass_rsa_mode=True, PLOT=True, 
+                                                                        savedir=savedir, savesuff=version)
+                # Cl = score_motor_distances(DSmorphsets, strokes, strokes, labels, labels, "/tmp", "TEST", label_var=label_var)
+            elif version == "task":
+                strokes = dfdat["strok_task"].tolist()
+                strokes = strokes_centerize(strokes, method="bounding_box")
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
+                                                                do_centerize=True, clustclass_rsa_mode=True,
+                                                                PLOT=True, savedir=savedir, savesuff=version)
+            elif version == "beh_imagedist":
+                strokes = dfdat["strok"].tolist()
+                strokes = strokes_centerize(strokes, method="bounding_box")
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
+                                                                do_centerize=True, clustclass_rsa_mode=True,
+                                                                PLOT=True, savedir=savedir, savesuff=version)
+            else:
+                assert False
+
+            # Plot example strokes
+            inds = sorted(set(labels))
+            strokes_this = [strokes[labels.index(i)] for i in inds]
+            for overlay in [False, True]:
+                fig, _ = DSmorphsets.plot_multiple_strok(strokes_this, overlay=overlay, titles=inds)
+                savefig(fig, f"{savedir}/example_drawings-overlay={overlay}.pdf")
+            plt.close("all")
+
+            ### Compute distances
+            dfdists = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
+            dfproj_index = Cl.rsa_dfdist_to_dfproj_index_datapts(dfdists, var_effect="morph_idxcode_within_set", 
+                                                                effect_lev_base1=0, effect_lev_base2=99)
+            
+            # Condition the data, i.e,, adding labels as newc olumns.
+            if cetegory_expt_version == "switching":
+                from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_switching_condition_dfdists
+                fig2_categ_switching_condition_dfdists(dfdat, dfdists, dfproj_index)
+
+            ### Plot
+            if cetegory_expt_version == "switching":
+                list_x_var = ["labels_1_datapt", "morph_idxcode_within_set", "assigned_base_simple"]
+            elif cetegory_expt_version == "smooth":
+                list_x_var = ["morph_idxcode_within_set"]
+            else:
+                assert False
+
+            from pythonlib.tools.snstools import rotateLabel
+            dfdists_str = stringify_values(dfdists)
+            for x_var in list_x_var:
+                x_order = sorted(dfdists_str[x_var].unique())
+                
+                fig = sns.catplot(data=dfdists_str, x=x_var, y="dist_mean", col="labels_2_grp", order=x_order)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfdists-x={x_var}-1.pdf")
+                
+                fig = sns.catplot(data=dfdists_str, x=x_var, y="dist_mean", col="labels_2_grp", order=x_order, kind="point", errorbar=("ci", 68))
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfdists-x={x_var}-2.pdf")
+
+            dfproj_index_str = stringify_values(dfproj_index)
+            for x_var in ["labels_1_datapt", "morph_idxcode_within_set"]:
+                x_order = sorted(dfproj_index_str[x_var].unique())
+                
+                fig = sns.catplot(data=dfproj_index_str, x=x_var, y="dist_index", order=x_order)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfproj_index-x={x_var}-1.pdf")
+                
+                fig = sns.catplot(data=dfproj_index_str, x=x_var, y="dist_index", order=x_order, kind="point", errorbar=("ci", 68))
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfproj_index-x={x_var}-2.pdf")
+            plt.close("all")
+
+            ## Collect results
+            dfdists["morphset"] = morphset
+            dfdists["version"] = version
+            dfproj_index["morphset"] = morphset
+            dfproj_index["version"] = version
+
+            list_df.append(dfdists)
+            list_df_index.append(dfproj_index)
+
+    DFDISTS = pd.concat(list_df).reset_index(drop=True)
+    DFINDEX = pd.concat(list_df_index).reset_index(drop=True)
+    pd.to_pickle(DFDISTS, f"{SAVEDIR}/DFDISTS.pkl")
+    pd.to_pickle(DFINDEX, f"{SAVEDIR}/DFINDEX.pkl")
+
+    return DFDISTS, DFINDEX
+
+def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
+    """
+    Run this separately for each morphset.
+    PARAMS:
+    - ds_dat, slice of DSmorphsets for this morphset.
+    RETURNS:
+    - modifies dfdists and dfproj_index, adding columns.
+    """
+
+    #  Map from idx|assign to label
+    # idxmorph_assigned = (1, base1)...
+    
+    #################### ADD LABELS
+    map_idxassign_to_label = {}
+    map_idxassign_to_assignedbase = {}
+    # map_idxassign_to_assignedbase_simple = {}
+    # map_idxassign_to_idx_morph = {}
+    for i, row in ds_dat.iterrows():
+        if row["idxmorph_assigned"] not in map_idxassign_to_label:
+            map_idxassign_to_label[row["idxmorph_assigned"]] = row["morph_assigned_label"]
+            map_idxassign_to_assignedbase[row["idxmorph_assigned"]] = row["morph_assigned_to_which_base"]
+
+            # map_idxassign_to_assignedbase_simple[row["idxmorph_assigned"]] = row["assigned_base_simple"]
+            # map_idxassign_to_idx_morph[row["idxmorph_assigned"]] = row["idx_morph_temp"]
+        else:
+            assert map_idxassign_to_label[row["idxmorph_assigned"]] == row["morph_assigned_label"]
+            assert map_idxassign_to_assignedbase[row["idxmorph_assigned"]] == row["morph_assigned_to_which_base"]
+
+            # assert map_idxassign_to_assignedbase_simple[row["idxmorph_assigned"]] == row["assigned_base_simple"]
+            # assert map_idxassign_to_idx_morph[row["idxmorph_assigned"]] == row["idx_morph_temp"]
+
+    for df in [dfdists, dfproj_index]:
+        # df["assigned_base_simple"] = [map_idxassign_to_assignedbase_simple[x] for x in df["idxmorph_assigned"]]
+        df["morph_assigned_to_which_base"] = [map_idxassign_to_assignedbase[x] for x in df["labels_1_datapt"]] # (base, ambig, notambig)
+        df["morph_assigned_label"] = [map_idxassign_to_label[x] for x in df["labels_1_datapt"]] # (base1, ambig1, ..., base2)
+        # df["idx_morph_temp"] = [map_idxassign_to_idx_morph[x] for x in df["idxmorph_assigned"]]
+
 if __name__=="__main__":
     import sys
 
-    PLOTS_DO = [3]
+    PLOTS_DO = [4.2]
     
     ###
     for plot_do in PLOTS_DO:
@@ -1448,5 +1616,59 @@ if __name__=="__main__":
             os.makedirs(SAVEDIR, exist_ok=True)
 
             fig3_charsyntax_wrapper(animal, date, SAVEDIR)
+        
+        elif plot_do==4.1:
+            # Categories (switching), plotting motor distances of each index vs. endpoint (base prims), and doing
+            # analyses/stats of that.
+            # - To make final (MULT) plots, load the results from here and make plots, using notebook, section:
+            # "### [Categorization, switching] Summary plots", notebook:
+            # /home/lucas/code/drawmonkey/notebooks_datasets/240912_MANUSCRIPT_FIGURES_1_shapes.ipynb
+
+            ### Load a daily dataset
+            animal = sys.argv[1]
+            DATE = sys.argv[2]
+            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{animal}-{DATE}"
+
+            D = load_dataset_daily_helper(animal, DATE)
+
+            ### Preprocess
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_preprocess_wrapper_GOOD
+            savedir = f"{SAVEDIR}/preprocess"
+            os.makedirs(savedir, exist_ok=True)
+            NEURAL_PLOT_DRAWINGS = False
+            DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, 
+                                                                                                                                                                                                                            NEURAL_VERSION=True, 
+                                                                                                                                                                                                                            NEURAL_SAVEDIR=savedir,
+                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS)
+            
+            from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
+            DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR)
+
+        elif plot_do==4.2:
+            # Categories (smooth), plotting motor distances of each index vs. endpoint (base prims), and doing
+            # analyses/stats of that
+
+            cetegory_expt_version = "smooth"
+
+            ### Load a daily dataset
+            animal = sys.argv[1]
+            DATE = sys.argv[2]
+            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/smooth/{animal}-{DATE}"
+
+            D = load_dataset_daily_helper(animal, DATE)
+
+            ### Preprocess
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_preprocess_wrapper_GOOD
+            savedir = f"{SAVEDIR}/preprocess"
+            os.makedirs(savedir, exist_ok=True)
+            NEURAL_PLOT_DRAWINGS = False
+            DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, 
+                                                                                                                                                                                                                            NEURAL_VERSION=True, 
+                                                                                                                                                                                                                            NEURAL_SAVEDIR=savedir,
+                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS)
+            
+            from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
+            DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
+
         else:
             assert False
