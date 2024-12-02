@@ -495,7 +495,7 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     # Clean up
     from pythonlib.tools.pandastools import extract_with_levels_of_var_good
     from pythonlib.tools.pandastools import append_col_with_grp_index
-    dfthis, inds_keep = extract_with_levels_of_var_good(DS.Dat, grpvars, min([4, N_TRIALS]))
+    dfthis, inds_keep = extract_with_levels_of_var_good(DS.Dat, grpvars, min([3, N_TRIALS]))
     DS.Dat = dfthis
 
     DS.Dat = append_col_with_grp_index(DS.Dat, ["gridloc", "gridsize"], "locsize")
@@ -1568,7 +1568,7 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
 if __name__=="__main__":
     import sys
 
-    PLOTS_DO = [4.2]
+    PLOTS_DO = [4.1]
     
     ###
     for plot_do in PLOTS_DO:
@@ -1624,6 +1624,8 @@ if __name__=="__main__":
             # "### [Categorization, switching] Summary plots", notebook:
             # /home/lucas/code/drawmonkey/notebooks_datasets/240912_MANUSCRIPT_FIGURES_1_shapes.ipynb
 
+            cetegory_expt_version = "switching"
+
             ### Load a daily dataset
             animal = sys.argv[1]
             DATE = sys.argv[2]
@@ -1639,10 +1641,11 @@ if __name__=="__main__":
             DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, 
                                                                                                                                                                                                                             NEURAL_VERSION=True, 
                                                                                                                                                                                                                             NEURAL_SAVEDIR=savedir,
-                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS)
+                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS,
+                                                                                                                                                                                                                            cetegory_expt_version=cetegory_expt_version)
             
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
-            DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR)
+            DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
 
         elif plot_do==4.2:
             # Categories (smooth), plotting motor distances of each index vs. endpoint (base prims), and doing
@@ -1665,7 +1668,8 @@ if __name__=="__main__":
             DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, 
                                                                                                                                                                                                                             NEURAL_VERSION=True, 
                                                                                                                                                                                                                             NEURAL_SAVEDIR=savedir,
-                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS)
+                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS,
+                                                                                                                                                                                                                            cetegory_expt_version=cetegory_expt_version)
             
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
             DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
