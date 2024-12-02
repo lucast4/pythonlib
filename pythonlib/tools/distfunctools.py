@@ -92,7 +92,11 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
                         # print(DID)
                         # print(v1.shape, v2.shape)
                         # print(dist_func(v1, v2))
-                        assert not np.isnan(d)
+                        if np.isnan(d):
+                            print(i, v1)
+                            print(j, v2)
+                            print(d)
+                            assert False
                     D[i, j] = d
 
         # populate the other half of matrix.

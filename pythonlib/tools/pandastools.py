@@ -2501,7 +2501,7 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
 
     if prune_to_values_that_exist_in_df:
         assert assert_exactly_one_each==False, "incompatible"
-        print(" prune_to_values_that_exist_in_df")
+        # print(" prune_to_values_that_exist_in_df")
         rowvalues = [v for v in rowvalues if v in df[colname].tolist()]
 
     # the dataframe must have each value in rowvalues.
@@ -3916,6 +3916,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         map_colorlev_to_color, _, _ = color_make_map_discrete_labels(colorlevs_that_exist)
         map_dataptlev_to_color = {dataptlev:map_colorlev_to_color[colorlev] for dataptlev, colorlev in map_datapt_lev_to_colorlev.items()}
     else:
+        map_colorlev_to_color = None
         map_dataptlev_to_color = None
 
     list_xs = []
@@ -4131,7 +4132,7 @@ def group_continuous_blocks_of_rows(df, var_group, var_sort, new_col = "group",
     # Display results
     if PRINT:
         print("Sort Indices:\n", sort_indices)
-        print(f"\nSorted DataFrame with {new_col}s:\n", df_sorted)
+        # print(f"\nSorted DataFrame with {new_col}s:\n", df_sorted)
         fig = sns.relplot(data=df_sorted, x=var_sort, y=new_col, hue=var_group)        
 
         if savedir is not None:
