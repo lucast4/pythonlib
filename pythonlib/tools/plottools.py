@@ -446,10 +446,11 @@ def get_correlated_dataset(n, dependency, mu, scale):
     # return x and y of the new, correlated dataset
     return scaled_with_offset[:, 0], scaled_with_offset[:, 1]
 
-def savefig(fig, path):
+def savefig(fig, path, tight_layout=True):
     """ helper to save without clipping axis labels
     """
-    fig.tight_layout()
+    if tight_layout:
+        fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")
     #plt.show(fig, block=False) # can uncomment if bugs with memory leak
 
