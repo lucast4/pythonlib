@@ -670,6 +670,110 @@ def balanced_stratified_resample_kfold(X, y, n_splits):
 
     return inds_folds
 
+def stratified_kfold_single_test(X, y, n_splits, shuffle=False, random_state=None,
+                                 PRINT=False):
+    """
+    Stratified K-Fold cross-validator where each sample appears only once in the test set across folds.
+    Handles cases where classes have fewer samples than n_splits.
+
+    Train indices will be balanced across folds, wheras test indices will reflect the frequency in the
+    data.
+
+    NOTES:
+    - Places more test inds in the first folds.
+    
+    Parameters:
+    - X: Feature array.
+    - y: Target array.
+    - n_splits: Number of folds.
+    - shuffle: Whether to shuffle the data before splitting.
+    - random_state: Random state for reproducibility.
+    
+    Returns:
+    - List of (train_indices, test_indices) for each fold.
+
+    # Example usage
+    X = np.random.rand(10, 5)  # 10 samples, 5 features
+    y = np.array([0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4])  # Some classes have < n_splits samples
+
+    n_splits = 3
+    shuffle = True
+    random_state = None
+
+    folds = stratified_kfold_single_test(X, y, n_splits, shuffle, random_state)
+    for i, (train_idx, test_idx) in enumerate(folds):
+        print(f"Fold {i+1}:")
+        print(f"  Train indices: {train_idx}")
+        print(f"  Test indices: {test_idx}")
+
+    --->
+        Fold 1:
+        Train indices: [0 2 4 5 7 9]
+        Test indices: [ 1  3  6  8 10]
+        Fold 2:
+        Train indices: [ 1  2  3  5  6  8 10]
+        Test indices: [0 4 7 9]
+        Fold 3:
+        Train indices: [ 0  1  3  4  6  7  8  9 10]
+        Test indices: [2 5]
+    """
+    if n_splits < 2:
+        raise ValueError("n_splits must be at least 2.")
+
+    y = np.array(y)
+    unique_classes = np.unique(y)
+
+    # Initialize the folds
+    folds = [[] for _ in range(n_splits)]
+
+    for cls in unique_classes:
+        cls_indices = np.where(y == cls)[0]
+        if shuffle:
+            rng = np.random.RandomState(random_state)
+            rng.shuffle(cls_indices)
+        
+        # Assign samples to folds in a round-robin fashion
+        for i, idx in enumerate(cls_indices):
+            fold_idx = i % n_splits
+            folds[fold_idx].append(idx)
+
+    # Build train/test indices for each fold
+    all_indices = set(range(len(y)))
+    fold_indices = []
+    for k in range(n_splits):
+        test_indices = np.array(folds[k])
+        train_indices = np.array(sorted(all_indices - set(test_indices)))
+        fold_indices.append((train_indices, test_indices))
+
+    ### Sanity check
+    # print(folds)
+    # assert False
+    train_inds = []
+    test_inds = []
+    for f in fold_indices:
+        if len(f[1])==0:
+            for f in fold_indices:
+                print(f)
+            assert False, "you want too many splits. it should be less than the max group size"
+        train_inds.extend(f[0])
+        test_inds.extend(f[1])
+
+    if PRINT:
+        for i, (train_idx, test_idx) in enumerate(fold_indices):
+            print(f"Fold {i+1}:")
+            print(f"  Train indices: {train_idx}")
+            print(f"  Test indices: {test_idx}")
+
+        # train_inds = []
+        # test_inds = []
+        # for f in folds:
+        #     train_inds.extend(f[0])
+        #     test_inds.extend(f[1])
+        print(sorted(train_inds))
+        print(sorted(test_inds))        
+
+    return fold_indices
+
 def balanced_stratified_kfold(X, y, n_splits=5, do_print=False, do_balancing_of_train_inds=True, shuffle=False):
     """ 
     Returns k-fold indices, startified (with label y), and then
@@ -721,15 +825,24 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False, do_balancing_of_
 
         # Cap it
         max_n_splits = 15
-        n_splits = min([n_splits, max_n_splits])
+        n_splits = min([n_splits, max_n_splits]) 
+
 
         print(f"[Auto] Doing {n_splits} splits")
     else:
         # dont take more splits than possible.
         n_splits = min([n_splits, min(Counter(y).values())])
 
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle)
-    folds = list(skf.split(X, y)) # folds[0], 2-tuple of arays of ints
+    if n_splits==1:
+        # Or else will fail
+        n_splits = 2
+        
+    try:
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle)
+        folds = list(skf.split(X, y)) # folds[0], 2-tuple of arays of ints
+    except Exception as err:
+        # This deals with cases where a group has fewer items than n_splits.
+        folds = stratified_kfold_single_test(X, y, n_splits, shuffle=shuffle)
 
     if do_balancing_of_train_inds:
         # Resample inds after shuffling for each class.
