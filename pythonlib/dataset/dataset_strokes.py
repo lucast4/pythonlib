@@ -925,6 +925,49 @@ class DatStrokes(object):
 
 
     ######################### PREP THE DATASET
+    def _distgood_plot_heatmap_helper(self, Cl, savedir, dist_kind_for_label, savesuff):
+        """
+        Help plot heatmap of distance matrix stored in Cl, and then save.
+        Helps plot with colors flipped as well, autmoatically.
+        PARAMS:
+        - dist_kind_for_label, e..g, "motor", "image"
+        """
+        
+        # also plot with colors flipped.
+        Clflip = Cl.copy_with_slicing()
+        xmin, xmax = np.percentile(Clflip.Xinput.flatten(), [1, 99])
+        Clflip._Xinput = 1 - (Clflip.Xinput - xmin)/(xmax - xmin)
+
+        n1 = len(Cl.Labels)
+        n2 = len(Cl.LabelsCols)
+
+        if n1<200 and n2<200:
+            
+            fig, _ = Cl.rsa_plot_heatmap()
+            if fig is not None:
+                savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}.pdf")  
+            
+            fig, _ = Clflip.rsa_plot_heatmap()
+            if fig is not None:
+                savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}-FLIPPED.pdf")  
+
+            plt.close("all")
+
+        ### Aggregate to get distance between groups (shapes)
+        _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+                                                                return_as_clustclass_which_var_score="dist_mean")
+        # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+        fig, _ = Clagg.rsa_plot_heatmap()
+        savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-{dist_kind_for_label}-{savesuff}.pdf")  
+
+        _, Clagg = Clflip.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+                                                                return_as_clustclass_which_var_score="dist_mean")
+        # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+        fig, _ = Clagg.rsa_plot_heatmap()
+        savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-{dist_kind_for_label}-{savesuff}-FLIPPED.pdf")  
+
+
+
     def distgood_compute_beh_beh_strok_distances(self, strokes1, strokes2, 
                                                  list_distance_ver = None,
                                                  labels_rows_dat= None,
@@ -955,18 +998,38 @@ class DatStrokes(object):
                                                         clustclass_rsa_mode=clustclass_rsa_mode)
         
         if PLOT:
-            if len(strokes1)<200 and len(strokes2)<200:
-                fig, _ = Cl.rsa_plot_heatmap()
-                if fig is not None:
-                    savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
+            self._distgood_plot_heatmap_helper(Cl, savedir, "motor", savesuff)
 
-            ### Aggregate to get distance between groups (shapes)
-            _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
-                                                                    return_as_clustclass_which_var_score="dist_mean")
+            # # also plot with colors flipped.
+            # Clflip = Cl.copy_with_slicing()
+            # xmin, xmax = np.percentile(Clflip.Xinput.flatten(), [1, 99])
+            # Clflip.Xinput = 1 - (Clflip.Xinput - xmin)/(xmax - xmin)
 
-            # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-            fig, _ = Clagg.rsa_plot_heatmap()
-            savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
+            # if len(strokes1)<200 and len(strokes2)<200:
+                
+            #     fig, _ = Cl.rsa_plot_heatmap()
+            #     if fig is not None:
+            #         savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}.pdf")  
+                
+            #     fig, _ = Clflip.rsa_plot_heatmap()
+            #     if fig is not None:
+            #         savefig(fig, f"{savedir}/TRIAL_DISTS-motor-{savesuff}-FLIPPED.pdf")  
+
+            #     plt.close("all")
+
+            # ### Aggregate to get distance between groups (shapes)
+            # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+            #                                                         return_as_clustclass_which_var_score="dist_mean")
+            # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+            # fig, _ = Clagg.rsa_plot_heatmap()
+            # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}.pdf")  
+
+            # _, Clagg = Clflip.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
+            #                                                         return_as_clustclass_which_var_score="dist_mean")
+            # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+            # fig, _ = Clagg.rsa_plot_heatmap()
+            # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-motor-{savesuff}-FLIPPED.pdf")  
+
         return Cl
         
     def distgood_compute_image_strok_distances(self, strokes1, strokes2, labels1=None, labels2=None, 
@@ -995,19 +1058,21 @@ class DatStrokes(object):
         if clustclass_rsa_mode:
             Cl = Cl.convert_copy_to_rsa_dist_version(label_var, "image")
 
+        # if PLOT:
+        #     if len(strokes1)<200 and len(strokes2)<200:
+        #         fig, _ = Cl.rsa_plot_heatmap()
+        #         if fig is not None:
+        #             savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
+
+        #     ### Aggregate to get distance between groups (shapes)
+        #     _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True,
+        #                                                             return_as_clustclass_which_var_score="dist_mean")
+
+        #     # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+        #     fig, _ = Clagg.rsa_plot_heatmap()
+        #     savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
         if PLOT:
-            if len(strokes1)<200 and len(strokes2)<200:
-                fig, _ = Cl.rsa_plot_heatmap()
-                if fig is not None:
-                    savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
-
-            ### Aggregate to get distance between groups (shapes)
-            _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True,
-                                                                    return_as_clustclass_which_var_score="dist_mean")
-
-            # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-            fig, _ = Clagg.rsa_plot_heatmap()
-            savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
+            self._distgood_plot_heatmap_helper(Cl, savedir, "image", savesuff)
 
         return Cl
 
@@ -2241,10 +2306,13 @@ class DatStrokes(object):
         is useful as an icon on a larger axis.
         """
         _, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper(which_shapes=shapes)
-        fig = self.plotshape_row_figure_axis(list_strok_basis, axis=axis, title_shapes=title_shapes)
+        fig = self.plotshape_row_figure_axis(list_strok_basis, axis=axis, centerize=centerize, title_shapes=title_shapes)
+        # plt.subplots_adjust(wspace=0, hspace=0) # make them touching.
+
         return fig
 
-    def plotshape_row_figure_axis(self, strokes, axis="x", centerize=True, title_shapes=None):
+    def plotshape_row_figure_axis(self, strokes, axis="x", centerize=True, title_shapes=None,
+        ver="beh"):
         """
         For making plots to place on x and y axis of figure.
         """
@@ -2253,7 +2321,7 @@ class DatStrokes(object):
 
         if centerize: # cenerize
             from pythonlib.tools.stroketools import strokes_centerize
-            strokes = strokes_centerize(strokes)
+            strokes = strokes_centerize(strokes, method="bounding_box")
 
         if axis=="x":
             ncols = len(strokes)
@@ -2262,13 +2330,16 @@ class DatStrokes(object):
         else:
             assert False
 
-        fig, axes = self.plot_multiple_strok(strokes, overlay=False, ncols = ncols, titles=title_shapes)
+        fig, axes = self.plot_multiple_strok(strokes, ver=ver, overlay=False, ncols = ncols, titles=title_shapes)
         
         # fig.tight_layout()
         if title_shapes is None:
             for ax in axes.flatten():
                 naked_erase_axes(ax)
         # plt.subplots_adjust(wspace=-0.8, hspace=0)
+
+        plt.subplots_adjust(wspace=0, hspace=0) # make them touching.
+        
         return fig
 
     def plotshape_row_col_vs_othervar(self, rowvar, colvar="shape", n_examples_per_sublot=1,

@@ -1546,7 +1546,7 @@ class Clusters(object):
         - var_effect, the variable whose 2 levels will form the "endpoints"
         """
 
-        list_idx_datapt = sorted(dfdist_pts["idx_row_datapt"].unique())
+        list_idx_datapt = sort_mixed_type(dfdist_pts["idx_row_datapt"].unique())
 
         res_dist_index = []
         for idx_datapt in list_idx_datapt:
@@ -1574,6 +1574,19 @@ class Clusters(object):
             })
         dfproj_index = pd.DataFrame(res_dist_index)
 
+        if "trialcode" in dfdist_pts.columns:
+            map_idx_tc = {row["idx_row_datapt"]:row["trialcode"] for _, row in dfdist_pts.iterrows()}
+            dfproj_index["trialcode"] = [map_idx_tc[idx] for idx in dfproj_index["idx_row_datapt"]]
+
+            # from pythonlib.tools.pandastools import merge_subset_indices_prioritizing_second, slice_by_row_label
+            # inds = dfproj_index["idx_row_datapt"].tolist()
+            # dftmp = slice_by_row_label(dfdist_pts, "idx_row_datapt", inds, assert_exactly_one_each=False)
+            # dfproj_index["trialcode"] = dftmp["trialcode"]
+            
+            # dfproj_index = merge_subset_indices_prioritizing_second(dfproj_index, dfdist_pts.loc[:, ["idx_row_datapt", "trialcode"]], "idx_row_datapt")
+            # # dfproj_index = pd.merge(dfproj_index, , "left", on="idx_row_datapt")
+
+            assert set(dfproj_index["trialcode"]) == set(dfdist_pts["trialcode"])
         return dfproj_index
 
     def rsa_distmat_score_all_pairs_of_label_groups_datapts_datapts():
@@ -1638,7 +1651,7 @@ class Clusters(object):
                     "idx_row_datapt":idx1,
                     "labels_1_datapt":grp1,
                     "labels_2_grp":grp2,
-                    "dist_mean":np.mean(X)
+                    "dist_mean":np.mean(X),
                 })
                 
                 # Expand, to get each variable in label.
@@ -1660,6 +1673,10 @@ class Clusters(object):
         dfres = pd.DataFrame(res)
         dfres["DIST_50"] = DIST_50
         dfres["DIST_98"] = DIST_98
+
+        if self.Trialcodes is not None:
+            assert len(self.Labels)==len(self.Trialcodes)
+            dfres["trialcode"] = [self.Trialcodes[i] for i in dfres["idx_row_datapt"]]
 
         # normalize the distances
         dfres["dist_norm"] = dfres["dist_mean"]/dfres["DIST_98"]
@@ -1860,7 +1877,7 @@ class Clusters(object):
             assert get_only_one_direction==False
 
 
-            labels = sorted(set(dfres["labels_1"].tolist() + dfres["labels_2"].tolist()))
+            labels = sort_mixed_type(set(dfres["labels_1"].tolist() + dfres["labels_2"].tolist()))
             # labels = sorted(set(self.Labels))
             map_label_to_idx = {lab:i for i, lab in enumerate(labels)}
 
@@ -2409,7 +2426,7 @@ class Clusters(object):
         return c_diff_context, c_same_context
 
     def rsa_distmat_construct_theoretical(self, var, PLOT = False,
-                                          dist_mat_manual=None):
+                                          dist_mat_manual=None, sort_order=None):
         """Construct theoretical dsitances matrices based on the varaibles
         for each row. Does not use the data in self.Xinput, just the labels
         cols and rows.
@@ -2445,7 +2462,7 @@ class Clusters(object):
                            params={"var":var, "version_distance":None, "label_vars":(var,)})
         # plot
         if PLOT:
-            fig = Cltheor.rsa_plot_heatmap()[0]
+            fig = Cltheor.rsa_plot_heatmap(sort_order=sort_order)[0]
             # fig = Cltheor.plot_heatmap_data()[0]
         else:
             fig = None
