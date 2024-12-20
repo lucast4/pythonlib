@@ -1595,7 +1595,7 @@ class Clusters(object):
         assert False, "this is done in rsa_dataextract_with_labels_as_flattened_df"
 
     def rsa_distmat_score_all_pairs_of_label_groups_datapts(self, label_vars=None,
-            return_as_clustclass=False, list_grps_get=None):
+            return_as_clustclass=False, list_grps_get=None, ignore_self_distance=False):
         """
         See rsa_distmat_score_all_pairs_of_label_groups, except here gets pairs of (datapt vs. group) whereas there was
         (group vs group).
@@ -1631,12 +1631,17 @@ class Clusters(object):
         res = []
         for idx1 in range(len(self.Labels)):
             inds1 = [idx1]
-            grp1 = self.Labels[idx1]
+            grp1 = self.Labels[idx1] # tuple
             for j, (grp2, inds2) in enumerate(grpdict.items()):
                 
+                if ignore_self_distance and grp1==grp2:
+                    continue
+
                 if inds2 == inds1:
                     # Then this is bad -- both are 1 item, so this is distance to itself
-
+                    print(label_vars)
+                    print(grp1)
+                    print(grp2)
                     assert False, "how deal with this"
                 
                 # make sure never take distance between pt and itself
@@ -1682,24 +1687,36 @@ class Clusters(object):
         dfres["dist_norm"] = dfres["dist_mean"]/dfres["DIST_98"]
 
         # Convert scores to dist_yue_diff
-        def _get_within_group_dist(grp, var_score):
-            """ return scalar avearge distance wtihin this group"""
-            tmp = dfres[(dfres["labels_1_datapt"]==grp) & (dfres["labels_2_grp"]==grp)] # len n datapts for this group.
-            return tmp[var_score].mean() # get the mean over all (datapt, group), which is equivalent to all pairs within group
+        if ignore_self_distance == False: # Otherwise dist_yue_diff is not defined.
 
-        var_score = "dist_norm"
-        list_dist_yue_diff = []
-        for i, row in dfres.iterrows():
-            
-            # - get average within-group score for the two groups
-            dist_within_group = _get_within_group_dist(row["labels_2_grp"], var_score)
-            dist_across = row[var_score] # dist between this datapt and the group.
+            cached_distances = {} # Otherwise can get very slow
+            def _get_within_group_dist(grp, var_score):
+                """ return scalar avearge distance wtihin this group"""
+                if grp not in cached_distances:
+                    tmp = dfres[(dfres["labels_1_datapt"]==grp) & (dfres["labels_2_grp"]==grp)] # len n datapts for this group.
+                    cached_distances[grp] = tmp[var_score].mean()
+                return cached_distances[grp]
 
-            dist_yue_diff = dist_across - dist_within_group
+            # def _get_within_group_dist(grp, var_score):
+            #     """ return scalar avearge distance wtihin this group"""
+            #     tmp = dfres[(dfres["labels_1_datapt"]==grp) & (dfres["labels_2_grp"]==grp)] # len n datapts for this group.
+            #     return tmp[var_score].mean() # get the mean over all (datapt, group), which is equivalent to all pairs within group
 
-            list_dist_yue_diff.append(dist_yue_diff)
+            var_score = "dist_norm"
+            list_dist_yue_diff = []
+            for i, row in dfres.iterrows():
+                
+                # - get average within-group score for the two groups
+                dist_within_group = _get_within_group_dist(row["labels_2_grp"], var_score)
+                dist_across = row[var_score] # dist between this datapt and the group.
 
-        dfres["dist_yue_diff"] = list_dist_yue_diff
+                dist_yue_diff = dist_across - dist_within_group
+
+                list_dist_yue_diff.append(dist_yue_diff)
+
+            dfres["dist_yue_diff"] = list_dist_yue_diff
+        else:
+            dfres["dist_yue_diff"] = -999 # just to avoid breaking downstream code.
 
         ### OTHER columns added
         dfres = self.rsa_distmat_population_columns_label_relations(dfres, label_vars)
@@ -1814,6 +1831,12 @@ class Clusters(object):
                     # Should include below lower and upper triangle, to make sure get all pairs.
                     ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
                     X = self.Xinput[ma]
+                
+                if np.isnan(np.mean(X)):
+                    print(X)
+                    print(i, grp1, inds1)
+                    print(j, grp2, inds2)
+                    assert False, "fix bug"
 
                 res.append({
                     "labels_1":grp1,
@@ -1839,12 +1862,15 @@ class Clusters(object):
         dfres["dist_norm"] = dfres["dist_mean"]/dfres["DIST_98"]
 
         # Convert scores to dist_yue_diff
+        cached_distances = {} # Otherwise can get very slow
         def _get_within_group_dist(grp, var_score):
             """ return scalar avearge distance wtihin this group"""
-            tmp = dfres[(dfres["labels_1"]==grp) & (dfres["labels_2"]==grp)]
-            assert len(tmp)==1
-            return tmp[var_score].values[0]
-
+            if grp not in cached_distances:
+                tmp = dfres[(dfres["labels_1"]==grp) & (dfres["labels_2"]==grp)]
+                assert len(tmp)==1
+                cached_distances[grp] = tmp[var_score].values[0]
+            return cached_distances[grp]
+            
         var_score = "dist_norm"
         list_dist_yue_diff = []
         for i, row in dfres.iterrows():
@@ -1870,6 +1896,15 @@ class Clusters(object):
         #     for var in label_vars:
         #         dfres = append_col_with_grp_index(dfres, [f"{var}_1", f"{var}_2"], f"{var}_12")
         #         dfres[f"{var}_same"] = dfres[f"{var}_1"] == dfres[f"{var}_2"]
+
+        if dfres.isnull().values.any():
+            # Example DataFrame
+            # Find and print columns with NaNs
+            print(dfres)
+            columns_with_nans = dfres.columns[dfres.isnull().any()]
+            print("Columns with NaN values:", columns_with_nans.tolist())
+
+            assert False, "replace Nones using replace_values_with_this"
 
         ### Return as a ClustClass object
         if return_as_clustclass:
