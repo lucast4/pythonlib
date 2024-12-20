@@ -679,6 +679,9 @@ def stratified_kfold_single_test(X, y, n_splits, shuffle=False, random_state=Non
     Train indices will be balanced across folds, wheras test indices will reflect the frequency in the
     data.
 
+    To modify fraction, you should use n_splits. High n_splits means each fold will contain more train inds, 
+    and less test inds (becuase each test ind appears only once across folds)
+
     NOTES:
     - Places more test inds in the first folds.
     
@@ -790,6 +793,7 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False, do_balancing_of_
     - n_splits
     --- int, this many folds.
     --- auto, takes n that maximizes n fold s(i.e. like LOO)
+    --- NOTE: n_splits may be reduced to match the level with min n in dataset.
     - do_balancing_of_train_inds, bool, if False, then doesnt balance the train idnices. This is useful if you
     want to maximize n samples for training (e.g., the trained model is not biased by n samples).
     
@@ -827,10 +831,10 @@ def balanced_stratified_kfold(X, y, n_splits=5, do_print=False, do_balancing_of_
         max_n_splits = 15
         n_splits = min([n_splits, max_n_splits]) 
 
-
         print(f"[Auto] Doing {n_splits} splits")
     else:
         # dont take more splits than possible.
+        assert n_splits>1, "you made mistake..."
         n_splits = min([n_splits, min(Counter(y).values())])
 
     if n_splits==1:
@@ -1044,3 +1048,122 @@ def cluster_kmeans_with_silhouette_score(X, n_clusters=None, n_clusters_min_max=
             return cluster_labels, fig, fig_final
         else:
             return cluster_labels
+
+def split_stratified_constrained_multiple(y, nsplits, fraction_constrained_set, n_constrained, list_labels_need_n=None,
+                     min_frac_datapts_unconstrained=None, min_n_datapts_unconstrained=None,
+                     random_state=None, PRINT=False, PLOT=False):
+    """
+    Same as split_stratified_constrained, but do multiple times, each time shuffling, and returning each fold 
+    so you get multiple folds (with replacement)
+    RETURNS:
+    - folds, list of 2-tuples, each being (unconstrained_inds, constrained_inds)
+    """
+
+    folds = []
+    for i in range(nsplits):
+        unconstrained_indices, constrained_indices, unconstrained_labels, constrained_labels = split_stratified_constrained(y, 
+                                    fraction_constrained_set, n_constrained, list_labels_need_n,
+                                    min_frac_datapts_unconstrained, min_n_datapts_unconstrained, 
+                                    PRINT=PRINT, PLOT=PLOT)
+        folds.append((unconstrained_indices, constrained_indices))
+    return folds
+
+    
+def split_stratified_constrained(y, fraction_constrained_set, n_constrained, list_labels_need_n=None,
+                     min_frac_datapts_unconstrained=None, min_n_datapts_unconstrained=None,
+                     random_state=None, PRINT=False, PLOT=False):
+    """
+    Split a dataset into two subsets in a manner stratifie by label, 
+    with constraints on minimum sample sizes for one of the sets (constrained_indices).
+    
+    Useful if you want to make sure enought datapts for one set (the constrained set), while not caring too much about the other set,
+    e.g to use one for training other for testing, etc
+
+    PARAMS:
+    - y, list of categoricals (str, int, tple)
+    - fraction_constrained_set, for each unique label in y, take this fraction of datapts and
+    put into the constrained_indices
+    - n_constrained, for each uniqye label, make sure that at least this many datapts are in n_constrained.
+    If there are fewer datapts in y than n_constrained, then takes all of them.
+    - list_labels_need_n, if not None, thne list of labels. If any of these do not have at least n_constrained
+    datapts in the constrained_indices, then raises error.
+    - min_frac_datapts_unconstrained, min_n_datapts_unconstrained, if not None, then checks that unconstrained
+    datapts (in aggregate) are at least this (frac or n). Useful to avoid throwing out a lot (or all) data (by 
+    having to place into constrained inds)
+    """
+    from pythonlib.tools.exceptions import NotEnoughDataException
+
+    assert isinstance(y[0], (str, int, tuple))
+    assert isinstance(y, list)
+    
+    np.random.seed(random_state)
+    labels = set(y)
+    # indices = np.arange(len(y))
+    unconstrained_indices = []
+    constrained_indices = []
+    for label in labels:
+        # Get indices of all samples with the current label
+        label_indices = [i for i, _y in enumerate(y) if _y==label]
+        # label_indices = indices[y == label]
+        count = len(label_indices)
+
+        # if PRINT:
+        # print(label, count)
+        
+        if count <= n_constrained:
+            # If the total count is less than or equal to n, put all in test
+            constrained_indices.extend(label_indices)
+        else:
+            # Calculate the number of samples to include in the test set
+            num_test = max(n_constrained, int(round(fraction_constrained_set * count)))
+            num_test = min(num_test, count)  # Ensure we don't exceed the total count
+            
+            # Randomly shuffle the indices and split
+            np.random.shuffle(label_indices)
+            test_label_indices = label_indices[:num_test]
+            train_label_indices = label_indices[num_test:]
+            
+            constrained_indices.extend(test_label_indices)
+            unconstrained_indices.extend(train_label_indices)
+    unconstrained_labels = [y[i] for i in unconstrained_indices]
+    constrained_labels = [y[i] for i in constrained_indices]
+
+    ################## SANITY CHECKS
+    # Which labels must have at least n trials, or throw error?
+    # list_labels_need_n = [('arcdeep-4-1-0', (0, 0), 'rig3_3x3_big')]
+    if list_labels_need_n is not None:
+        for lab_check in list_labels_need_n:
+            n = len([lab==lab_check for lab in constrained_labels])
+            if n< n_constrained:
+                print(lab_check)
+                print(n)
+                print("not enough data for this label")
+                raise NotEnoughDataException
+
+    ### Check that did not lose too much of "unconstrianed" data
+    if min_frac_datapts_unconstrained is not None:
+        _frac = len(unconstrained_indices)/(len(unconstrained_indices) + len(constrained_indices))
+        if _frac < min_frac_datapts_unconstrained:
+            print(len(unconstrained_indices), len(constrained_indices), _frac, min_frac_datapts_unconstrained)
+            raise NotEnoughDataException
+    
+    if min_n_datapts_unconstrained is not None:
+        if len(unconstrained_indices) < min_n_datapts_unconstrained:
+            print(len(unconstrained_indices), len(constrained_indices), min_n_datapts_unconstrained)
+            print("you dont have enough unconstrained inds")
+            raise NotEnoughDataException
+
+    if PRINT:
+        print("unconstrained_indices:", unconstrained_indices)
+        print("constrained_indices:", constrained_indices)
+        print("unconstrained_labels:", unconstrained_labels)
+        print("constrained_labels:", constrained_labels)
+
+    if PLOT:
+        fig, ax = plt.subplots(figsize=(10,4))
+        ax.plot(constrained_indices, 1+np.zeros(len(constrained_indices)), "or", alpha=0.3)
+        ax.plot(unconstrained_indices, np.zeros(len(unconstrained_indices)), "ok", alpha=0.3)
+        ax.set_title("red:constrained, bk:unconstrained")
+
+    return unconstrained_indices, constrained_indices, unconstrained_labels, constrained_labels
+
