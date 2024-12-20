@@ -708,8 +708,9 @@ def plotScatterOverlay(X, labels, dimsplot=(0,1), alpha=0.2, ver="overlay",
         
 
 def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity", 
-    means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None,
-                  fontsize=4, jitter_value=None, color=None, colors_each_pt=None):
+                means=False, labels=None, alpha=0.8, marker="x", x_errors=None, y_errors=None,
+                  fontsize=4, jitter_value=None, color=None, colors_each_pt=None,
+                  edgecolor='none'):
     """ scatter plot, but making sure is square, 
     xlim and ylim are identical, and plotting a unity line
     - plot_string_ind, THen plots 0, 1, 2..., on the pts
@@ -744,10 +745,12 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
         ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color)
     else:
         # Use scatter. need error for the errorbars
-        ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color, mfc="none", mec="none")
+        ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color, ecolor=colors_each_pt, mfc="none", mec="none")
         # colors_each_pt = makeColors(len(x))
         # ax.scatter(x, y, c=pcols)
-        ax.scatter(x, y, color=colors_each_pt, alpha=alpha, marker=marker)
+        ax.scatter(x, y, color=colors_each_pt, alpha=alpha, marker=marker, edgecolor=edgecolor)
+        # print(alpha)
+        # assert False
         # assert False
     # ax.set_axis("square")
     minimum = np.min([np.min(x), np.min(y)])
@@ -1277,3 +1280,77 @@ def plot_2d_binned_smoothed_heatmap(data, x_min, x_max, y_min, y_max,
         # ax.set_title("Smoothed 2D Frequency Heatmap of Coordinates")
 
     return heatmap, smoothed_heatmap, fig
+
+
+def map_coord_to_color_2dgradient(x, y, xmin, xmax, ymin, ymax, plot_legend=False):
+    """
+    Given x and y, map to a color, where color is defined on a 2d grid (a square).
+    ChatGPT prompt: points uniformly sampled in the square between (0,0) and (1,1), 
+    where each pt is colored based on its coordinates, where as x incresaes, 
+    one hue incresaes its saturation (e.g, red), and when the other coordinate incresaes, 
+    a second hue incresaes saturation. and therefore along diagonal it will be mixture of the two hues, 
+    incresaeing saturation along axis.
+
+    PARAMS:
+    - x, value between xmin and xmax,
+    - y, analogous
+    - xmin, xmax, defines range, what color will be mapped to.
+    """
+
+    x = (x-xmin)/(xmax-xmin)
+    y = (y-ymin)/(ymax-ymin)
+
+    assert x>=0 and x<=1
+    assert y>=0 and y<=1
+    
+    color = np.zeros((1, 3))
+
+    # This works, is flipped
+    # color[0, 2] = x  # Blue intensity increases with x
+    # color[0, 0] = y  # Red intensity increases with y
+    # # colors[:, 1] = (x+y)/2
+    # color[0, 1] = np.abs(x-y)
+
+    color[0, 2] = 1-x  # Blue intensity increases with x
+    color[0, 0] = 1-y  # Red intensity increases with y
+    # colors[:, 1] = 1-(x+y)/2
+    color[0, 1] = 1-(np.abs(x-y)) # This emphasizes deviation from diagonal.
+
+    if plot_legend:
+        if isinstance(xmax, int):
+            nx = xmax - xmin + 1
+            ny = ymax - ymin + 1
+            int_labels = True
+        else:
+            nx = 5
+            ny = 5
+            int_labels = False
+
+        # Generate colors
+        xs = np.linspace(xmin, xmax, nx)
+        ys = np.linspace(ymin, ymax, ny)
+
+        colors = np.zeros((nx, ny, 3))  # Assuming RGB format
+        for ix, x in enumerate(xs):
+            for iy, y in enumerate(ys):
+                col = map_coord_to_color_2dgradient(x, y, xmin, xmax, ymin, ymax)
+                colors[ix, iy] = col
+
+        colors = np.transpose(colors, (1,0,2))
+
+        # Plot the heatmap
+        fig, ax = plt.subplots(figsize=(5, 5))
+        # ax.imshow(colors, origin='lower', extent=[xmin, xmax, ymin, ymax])
+        ax.imshow(colors, origin='lower')
+
+        # Customize axes
+        if int_labels:
+            ax.set_xticks(ticks=range(len(xs)), labels=xs.astype(int))
+            ax.set_yticks(ticks=range(len(ys)), labels=ys.astype(int))
+        else:
+            ax.set_xticks(ticks=range(len(xs)), labels=xs)
+            ax.set_yticks(ticks=range(len(ys)), labels=ys)
+
+        return color, fig
+    else:
+        return color

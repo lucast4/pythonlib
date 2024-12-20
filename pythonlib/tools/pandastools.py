@@ -213,7 +213,21 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     """
 
     # check that there are no nones... any cells with None will be left out erroneously.
-    assert df.isnull().values.any() == False, "replace Nones using replace_values_with_this"
+    if df.isnull().values.any():
+        columns_with_nans = df.columns[df.isnull().any()]
+        if False:
+            # Example DataFrame
+            # Find and print columns with NaNs
+            print(df)
+            print("Columns with NaN values:", columns_with_nans.tolist())
+            assert False, "replace Nones using replace_values_with_this"
+        else:
+            # Make copy and do it
+            df = df.copy()
+            for col in columns_with_nans:
+                print("Making copy and replacing None with 'none', for: ", col)
+                print("* This adds compute time!!!!")
+                replace_values_with_this(df, col, None, "none")
 
     for v in values:
         assert v in df.columns, f"entered a value that doesnt exist, {v}"
@@ -244,20 +258,32 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
 
         # Only keep if values are categorical
         categorical_types = [str, tuple, int, bool]
-        nonnumercols_exist = [col for col in nonnumercols_exist if type(df[col].tolist()[0]) in categorical_types]
 
-        # assert "idx_morph_temp" in nonnumercols_exist
-        # assert False
+        # print("here")
+        # print([x in categorical_types for x in df[col].apply(type).unique()])
+        # nonnumercols_exist = [col for col in nonnumercols_exist if type(df[col].tolist()[0]) in categorical_types]
+        nonnumercols_exist = [col for col in nonnumercols_exist if all(check_column_data_type_allowed(df, col, categorical_types))] # Better, check all items
+
         # Check they all exist and has a single unique item per level of group
         # Throw out cols that fail this test.
         cols_exclude = []
         for col in nonnumercols_exist: 
-            groupdict = grouping_append_and_return_inner_items(df, group, 
-                groupinner=col)
-            for k, v in groupdict.items():
-                if len(v)!=1:
+            # print("---")
+            # print(group)
+            # print(col)
+            
+            list_col_levels_per_grp_level = df.groupby(group)[col].unique()
+            for list_lev in list_col_levels_per_grp_level: # list of col levels
+                if len(list_lev)!=1:
                     cols_exclude.append(col)
                     break
+
+            # groupdict = grouping_append_and_return_inner_items_good(df, group, 
+            #     groupinner=col)
+            # for k, v in groupdict.items():
+            #     if len(v)!=1:
+            #         cols_exclude.append(col)
+            #         break
         nonnumercols_exist = [col for col in nonnumercols_exist if col not in cols_exclude]
     else:
         nonnumercols_exist = None
@@ -1028,7 +1054,58 @@ def append_col_with_index_of_level_after_grouping(df, grpvars, column, newcolumn
 
     return dfout
 
-def append_col_with_index_of_level(df, column, newcolumn):
+def convert_var_to_categorical_mult_columns(df, columns, newcolumns, use_string=True, PRINT=False):
+    """
+    Convert variable to categrical levels, appending to df a new column
+    Ensures that all the columns have the same mapping from old values to new categorical ints
+
+    APpends a new column which converts levels of <column> into indices, 0, 1,..
+    assuming colum is categorical.
+    PARAMS:
+    - column, string col in df
+    - newcolumn, str, name of new column 
+    RETURNS:
+    (mutates df to have this new column)
+    - map_idx_to_level, dict
+    - map_level_to_idx, dict
+
+    """
+
+    assert len(columns)==len(newcolumns)
+
+    # Collect all unique levels across columns
+    levels =[]
+    for col in columns:
+        levels += df[col].unique().tolist()
+    levels = sort_mixed_type(set(levels))
+
+    # Make mappng from level to idx
+    if use_string:
+        map_level_to_idx = {lev:str(i) for i, lev in enumerate(levels)}
+        map_idx_to_level = {str(i):lev for i, lev in enumerate(levels)}
+    else:
+        map_level_to_idx = {lev:i for i, lev in enumerate(levels)}
+        map_idx_to_level = {i:lev for i, lev in enumerate(levels)}
+
+    if PRINT:
+        print("Categorical mapping (old --> new)...")
+        for idx, lev in map_idx_to_level.items():
+            print(lev, " ---> ", idx)
+
+    # Replace columns:
+    for col, newcol in zip(columns, newcolumns):
+        idxs = [map_level_to_idx[lev] for lev in df[col].tolist()]
+        df[newcol] = idxs
+
+    return map_idx_to_level, map_level_to_idx
+
+def convert_var_to_categorical(df, column, newcolumn, use_string=True):
+    """
+    """
+    return convert_var_to_categorical_mult_columns(df, [column], [newcolumn], use_string=use_string)
+    # return append_col_with_index_of_level(df, column, newcolumn, True)
+
+def append_col_with_index_of_level(df, column, newcolumn, use_string=False):
     """ 
     APpends a new column which converts levels of <column> into indices, 0, 1,..
     assuming colum is categorical.
@@ -1040,23 +1117,26 @@ def append_col_with_index_of_level(df, column, newcolumn):
     - map_idx_to_level, dict
     - map_level_to_idx, dict
     """
+    return convert_var_to_categorical_mult_columns(df, [column], [newcolumn], use_string=use_string)
 
-    levels = sort_mixed_type(df[column].unique().tolist())
+    # levels = sort_mixed_type(df[column].unique().tolist())
     
-    # map_idx_to_level, map_level_to_idx = map
-    map_level_to_idx = {lev:i for i, lev in enumerate(levels)}
-    map_idx_to_level = {}
-    for lev, idx in map_level_to_idx.items():
-        assert idx not in map_idx_to_level.keys()
-        map_idx_to_level[idx] = lev
+    # # map_idx_to_level, map_level_to_idx = map
+    # if use_string:
+    #     map_level_to_idx = {lev:str(i) for i, lev in enumerate(levels)}
+    # else:
+    #     map_level_to_idx = {lev:i for i, lev in enumerate(levels)}
+    # map_idx_to_level = {}
+    # for lev, idx in map_level_to_idx.items():
+    #     assert idx not in map_idx_to_level.keys()
+    #     map_idx_to_level[idx] = lev
 
+    # # get list, len(dtapts)
+    # idxs = [map_level_to_idx[lev] for lev in df[column].tolist()]
+    # # Append
+    # df[newcolumn] = idxs
 
-    # get list, len(dtapts)
-    idxs = [map_level_to_idx[lev] for lev in df[column].tolist()]
-    # Append
-    df[newcolumn] = idxs
-
-    return map_idx_to_level, map_level_to_idx
+    # return map_idx_to_level, map_level_to_idx
 
 def append_col_with_index_number_in_group(df, groupby, colname="trialnum_chron", randomize=False):
     """ appends a col, which holds index (0, 1, 2.) in order within its level within groupby.
@@ -2200,6 +2280,8 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
             return groupdict
         else:
             # Return the unique levels of <groupinner>, within each level of conj of list_groupouter_grouping_vars
+            for col in list_groupouter_grouping_vars + [groupinner]:
+                print(f"Column {col} types: {df[col].apply(type).unique()}")
             dftmp = df.groupby(list_groupouter_grouping_vars)[groupinner].unique().reset_index()
             assert sorted(dftmp.columns) == sorted(list_groupouter_grouping_vars + [groupinner]) # Sanityc check
 
@@ -2241,6 +2323,20 @@ def grouping_count_n_samples_quick(df, list_groupouter_grouping_vars):
     nmax = np.max(np.max(dftmp, axis=0))
     nmin = np.min(np.min(dftmp, axis=0))
     return nmin, nmax
+
+def grouping_plot_n_samples_conjunction_heatmap_helper(df, list_vars):
+    """ 
+    Plot heatmap shwoing grouping counts along multiple dimensions and their conjunctions, 
+
+    Very quick wrapper, which works no matter the length of list_vars"""
+    if len(list_vars)==1:
+        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], None)
+    elif len(list_vars)==2:
+        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1])
+    else:
+        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1], [list_vars[2]])
+
+    return fig
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
     norm_method=None, annotate_heatmap=True, row_levels=None,
@@ -2287,6 +2383,12 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     else:
         ncols = 3
     nrows = int(np.ceil(len(list_dummy)/ncols))
+    
+    # avoid bug
+    if nrows==0:
+        nrows=1
+    if ncols==0:
+        ncols = 1
 
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*FIGSIZE, nrows*FIGSIZE), squeeze=False)
     list_df_plotted = []
@@ -2891,7 +2993,7 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
     """
 
     _check_index_reseted(df)
-    assert isinstance(grp_vars, list)
+    assert isinstance(grp_vars, (tuple, list))
 
     groupdict = grouping_append_and_return_inner_items(df, grp_vars)
     inds_keep =[]
@@ -2910,7 +3012,7 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
                                                    plot_counts_heatmap_savepath=None,
                                                     lenient_allow_data_if_has_n_levels=2,
-                                                    levels_var=None):
+                                                    levels_var=None, remove_extra_columns=False):
     """
     Heloper, setting params I usualyl use for simple task of pruning df to get just tjhose levels
     opf vars_others which have at least 2 levels of var, with <n_min_per_level> trials at least, per
@@ -2926,7 +3028,7 @@ def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_p
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
                     balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
                     ignore_values_called_ignore=False, plot_counts_heatmap_savepath=plot_counts_heatmap_savepath,
-                                            balance_force_to_drop_which=None)
+                                            balance_force_to_drop_which=None, remove_extra_columns=remove_extra_columns)
     return dfout, dict_dfthis
 
 
@@ -2936,7 +3038,7 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
                     balance_prefer_to_drop_which=None, PRINT_AND_SAVE_TO=None,
                     ignore_values_called_ignore=False, plot_counts_heatmap_savepath=None,
                                             plot_counts_heatmap_savepath_pre=None,
-                                            balance_force_to_drop_which=None):
+                                            balance_force_to_drop_which=None, remove_extra_columns=False):
     """ Helper to extract dataframe (i) appending a new column
     with ocnjucntions of desired vars, and (ii) keeping only 
     levels of this vars (vars_others) that has at least n trials for 
@@ -3177,6 +3279,11 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
             if len(dfthis)>0:
                 dict_dfthis[lev] = dfthis.copy()
 
+    if remove_extra_columns and len(dfout)>0:
+        dfout.drop(["_index", "vars_others"], axis=1, inplace=True)
+        for _df in dict_dfthis.values():
+            if len(_df)>0:
+                _df.drop(["_index", "vars_others"], axis=1, inplace=True)
     return dfout, dict_dfthis
 
 # only keep if this has all the levels
@@ -3252,6 +3359,13 @@ def check_data_has_all_levels(dfthis, var, levels_to_check=None,
             return True, levels_passing
         else:
             return False, levels_passing
+
+def check_column_data_type_allowed(df, col, types_allowed):
+    """
+    REturns list of len the unique types in df[col], with bools indicating whether each
+    unqiue type is in the list types_allowed.
+    """
+    return [x in types_allowed for x in df[col].apply(type).unique()]
 
 def sort_by_two_columns_separate_keys(df, col1, col2, key2=None):
     """
@@ -3800,7 +3914,9 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                            color_by_var_datapt=False, force_all_on_same_axis=False,
                                            color=None,
                                            map_datapt_lev_to_colorlev=None,
-                                           colorlevs_that_exist=None):
+                                           colorlevs_that_exist=None,
+                                           map_dataptlev_to_color=None,
+                                           edgecolor='none'):
     """ Multiple supblots, each plotting
     45 deg scatter, comparing means for one lev
     vs. other lev
@@ -3824,6 +3940,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     - map_datapt_lev_to_colorlev, dict, mapping from level of var_datapt to a cateorical vriable that defines color.
     in this code, will make those colors.
     - colorlevs_that_exist, list of colorlevs, which are used to define the colors that exist.
+    - map_dataptlev_to_color, directly map from level of var_datapt to a 3-array color.
     EXAMPLE:
     - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
     separate subplot for each epoch_orig...
@@ -3911,7 +4028,11 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     #     _map_lev_to_color, _, _ = color_make_map_discrete_labels(list_lev)
 
     # Color each datapt by anotther category
-    if map_datapt_lev_to_colorlev is not None:
+    if map_dataptlev_to_color is not None:
+        # Then you passed it in
+        map_colorlev_to_color = None
+        assert map_datapt_lev_to_colorlev is None
+    elif map_datapt_lev_to_colorlev is not None:
         assert colorlevs_that_exist is not None
         map_colorlev_to_color, _, _ = color_make_map_discrete_labels(colorlevs_that_exist)
         map_dataptlev_to_color = {dataptlev:map_colorlev_to_color[colorlev] for dataptlev, colorlev in map_datapt_lev_to_colorlev.items()}
@@ -3962,7 +4083,8 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
         plotScatter45(xs, ys, ax, labels=labels, marker="o",
                         x_errors=x_errors, y_errors=y_errors, alpha=alpha, fontsize=fontsize, jitter_value=jitter_value,
-                        color=pcol, colors_each_pt=colors_each_pt)
+                        color=pcol, colors_each_pt=colors_each_pt,
+                        edgecolor=edgecolor)
         
 
         if verbose_done:
