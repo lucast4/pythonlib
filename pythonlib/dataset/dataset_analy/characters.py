@@ -13,9 +13,9 @@ from pythonlib.tools.listtools import sort_mixed_type
 
 def analy_preprocess_dataset(D, Dc, SAVEDIR):
     """
-    
+    Various preprocessing, including 
+    label characters, novel, perfblocky, etc.
     """
-    ##### Label characters, novel, perfblocky, etc.
 
     # (1) Novel chars
     savedir = f"{SAVEDIR}/preprocess"
@@ -27,7 +27,7 @@ def analy_preprocess_dataset(D, Dc, SAVEDIR):
 
         ### perfblocky chars.
         # For each los_set, check which are the task prims
-        params_perfblocky_chars(Dthis, savedir)
+        map_los_set_to_perfblocky = params_perfblocky_chars(Dthis, savedir)
 
     # Preprocess both same way
     for Dthis in [D, Dc]:
@@ -1344,13 +1344,22 @@ def analy_score_base_prim_reuse_plots(DS, savedir, shape_var="clust_sim_max_coln
     if PLOT_DRAWINGS:
         ### Plot example strokes, cols = shapes, rows = sorted by feature score.
         col_levels = list_shape_basis + ["IGN"]
+        if True: # Order columns to match the stacked bar
+            shapes_ordered_by_counts = DS.Dat["clust_sim_max_colname"].value_counts().reset_index()["clust_sim_max_colname"].tolist() # High to low
+            col_levels = shapes_ordered_by_counts
         recenter_strokes = True
         for task_kind, ds in DS_dict_task_kind.items():
-            fig = ds.plotshape_multshapes_trials_grid_sort_by_feature(shape_var, 
-                col_levels=col_levels, nrows=n_rows_plots, sort_rows_by_this_feature=dist_var, SIZE=2, 
-                recenter_strokes=recenter_strokes)
-            if fig is not None:
-                savefig(fig, f"{savedir}/drawings-sort_by_{dist_var}-taskkind={task_kind}-recenter={recenter_strokes}.pdf")
+            print("Plotting task_kind:", task_kind)
+            if task_kind=="character":
+                niter = 1 # moreis not random, as this is interpolating. 
+            else:
+                niter = 1
+            for i_iter in range(niter):
+                fig = ds.plotshape_multshapes_trials_grid_sort_by_feature(shape_var, 
+                    col_levels=col_levels, nrows=n_rows_plots, sort_rows_by_this_feature=dist_var, SIZE=2, 
+                    recenter_strokes=recenter_strokes)
+                if fig is not None:
+                    savefig(fig, f"{savedir}/drawings-sort_by_{dist_var}-taskkind={task_kind}-recenter={recenter_strokes}-iter={i_iter}.pdf")
         plt.close("all")
 
     # Frac strokes which are assigned as "match" to base prims
@@ -1560,6 +1569,9 @@ def analy_score_combined_animals_bases(DictDS, savedir):
     
     Also finds common characters across aniamls,a nd plots just those.
 
+    RETURNS:
+    - DScomb, DS holding all data crossing (animal, basis) [does NOT prune to common chars]
+    - dfchar_shared, df, just the chars that are common across animals.
     """
     from pythonlib.dataset.dataset_strokes import concat_dataset_strokes_minimal, concat_dataset_strokes
     from pythonlib.tools.pandastools import append_col_with_grp_index
@@ -1572,6 +1584,9 @@ def analy_score_combined_animals_bases(DictDS, savedir):
     def _plot(DFTHIS, savesuff):
         sdir = f"{savedir}/{savesuff}"
         os.makedirs(sdir, exist_ok=True)
+        
+        from pythonlib.tools.pandastools import stringify_values
+        DFTHIS = stringify_values(DFTHIS)
 
         fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
                     row="animal", jitter=True, alpha=0.2)
@@ -1585,9 +1600,27 @@ def analy_score_combined_animals_bases(DictDS, savedir):
                     row="animal", kind="violin")
         savefig(fig, f"{sdir}/catplot-FINAL_dist-all-3.pdf")
 
-        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="matches_base_prim", col="task_kind", hue="novel|blocky", 
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel_char", 
+                    row="animal", kind="violin")
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-4.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_match", col="task_kind", hue="novel|blocky", 
                     row="animal", kind="bar")
         savefig(fig, f"{sdir}/catplot-matches_base_prim-all-3.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_match", col="task_kind", hue="novel_char", 
+                    row="animal", kind="bar")
+        savefig(fig, f"{sdir}/catplot-matches_base_prim-all-4.pdf")
+
+        ###################
+        fig = sns.catplot(data=DFTHIS, x="animal", y="FEAT_num_strokes_beh", hue="novel|blocky", kind="violin", aspect=2)
+        savefig(fig, f"{sdir}/catplot-FEAT_num_strokes_beh-1.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FEAT_num_strokes_beh", y="FINAL_match", col="animal|basis", hue="novel|blocky", kind="point")
+        savefig(fig, f"{sdir}/catplot-FEAT_num_strokes_beh-2.pdf")
+        
+        fig = sns.catplot(data=DFTHIS, x="FEAT_num_strokes_beh", y="FINAL_match", col="animal|basis", hue="novel_char", kind="point")
+        savefig(fig, f"{sdir}/catplot-FEAT_num_strokes_beh-3.pdf")
 
         # Scatterplot, for each stroke, compare its score against the two base prims
         if False: # TOo slow.
@@ -1600,6 +1633,36 @@ def analy_score_combined_animals_bases(DictDS, savedir):
                 savefig(fig, f"{sdir}/scatter-vs-basis-animal_data={animal_data}.pdf")
 
         plt.close("all")
+
+        # (1) Agg, so los_info is single datapt
+        # dfcounts_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], aggmethod=["mean"], nonnumercols=["task_kind", "los_set"])
+        # dfchar_shared_str = stringify_values(dfchar_shared)
+        # assert pd.crosstab(dfchar_shared_str["los_info"], dfchar_shared_str["animal"]).min(axis=1).min()>0, "failure means a los_info was not done by all the animals."
+
+        if "los_info" in DFTHIS.columns:
+            var_data = "los_info"
+        else:
+            var_data = "los_set"
+
+        for var_value, plot_error_bars in [
+            ("FINAL_match", False),
+            # ("los_set", "FINAL_match", True),
+            ("FINAL_dist", False),
+            # ("los_set", "FINAL_dist", True),
+            ]:
+            # for alpha in [0.1, 0.3]:
+            for alpha in [0.2]:
+                _, fig = plot_45scatter_means_flexible_grouping(DFTHIS, "FINAL_basis", "Diego", "Pancho", "animal", 
+                                                                var_value, var_data, False, shareaxes=True, plot_error_bars=plot_error_bars, 
+                                                                alpha=alpha, SIZE=3.5)
+                savefig(fig, f"{savedir}/scatter-data={var_data}-value={var_value}-alpha={alpha}-errorbars={plot_error_bars}.pdf")
+
+        _, fig = plot_45scatter_means_flexible_grouping(DFTHIS, "novel_char", True, False, "animal|basis", "FINAL_match", "los_set", 
+                                            False, shareaxes=True, alpha=0.5)
+        savefig(fig, f"{savedir}/scatterNOVEL.pdf")
+
+        plt.close("all")
+
 
     ### Genreate single combined dataset
     list_ds = []
@@ -1625,41 +1688,72 @@ def analy_score_combined_animals_bases(DictDS, savedir):
             list_ds.append(ds)
     DScomb = concat_dataset_strokes_minimal(list_ds)
     DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["novel_char", "is_perfblocky"], "novel|blocky")
+    DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["animal","FINAL_basis"], "animal|basis")
+
+    # Just chars
+    task_kind = "character"
+    DScomb.Dat = DScomb.Dat[(DScomb.Dat["task_kind"] == task_kind)].reset_index(drop=True)
+
+    ### Filtering steps
+    if True:
+        # First, keep only those (animal, date, los_set[??]) which has both novel and trained.
+        dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(DScomb.Dat,
+                                                    "novel_char", ["animal", "date", "los_set"], 
+                                                    lenient_allow_data_if_has_n_levels=2)
+        print("after pruning to jus t(animal, date, los_set) with both novel and not-novel: ", len(DScomb.Dat), " --> ",  len(dfchar_shared))
+        assert len(dfchar_shared)>0, "no common chars between them"
+    else:
+        dfchar_shared = DScomb.Dat
 
     # Find characters that are tested for both animals
-    task_kind = "character"
-    dfchar = DScomb.Dat[(DScomb.Dat["task_kind"] == task_kind)].reset_index(drop=True)
     levels_var = ["Diego", "Pancho"]
-    dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(dfchar,
+    n1 = len(dfchar_shared)
+    dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(dfchar_shared,
                                                 "animal", ["character"], 
                                                 lenient_allow_data_if_has_n_levels=2, 
                                                 levels_var=levels_var)
-    print("after pruning to shared cahracters between subects: ", len(dfchar), " --> ",  len(dfchar_shared))
+    print("after pruning to shared cahracters between subects: ", n1, " --> ",  len(dfchar_shared))
+    assert len(dfchar_shared)>0, "no common chars between them"
 
+    # Finally, agg over trials, so that each los_info (char) has a single datapt.
+    
+    dfchar_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], 
+                ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], 
+                aggmethod=["mean"], 
+                nonnumercols=["task_kind", "los_set", "novel_char"])
+    
+    # Each los_set has one datapt (this is most conservative)
+    dfchar_shared_agg = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_set", "novel|blocky"], 
+                ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], 
+                aggmethod=["mean"], 
+                nonnumercols=["task_kind", "novel_char"])
+    
     #### PLOTS
-    for DFTHIS, savesuff in [(DScomb.Dat, "all_chars"), (dfchar_shared, "shared_chars")]:
-        _plot(DFTHIS, savesuff)
-
+    for dfthis, savesuff in [(DScomb.Dat, "all_chars"), (dfchar_shared, "shared_chars"), (dfchar_shared_agg, "shared_chars_datapt=los_set")]:
+        # NOTE:
+        # - DScomb.Dat is all data
+        # - dfchar_shared is stringent, shared chars, only (dates, los_set) with both novel and not-novel.
+        _plot(dfthis, savesuff)
 
     #### Pairwise plots, specifically just for shared chars
-    # (1) Agg, so los_info is single datapt
-    dfcounts_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], aggmethod=["mean"], nonnumercols=["task_kind", "los_set"])
-    from pythonlib.tools.pandastools import stringify_values
-    dfchar_shared_str = stringify_values(dfchar_shared)
-    assert pd.crosstab(dfchar_shared_str["los_info"], dfchar_shared_str["animal"]).min(axis=1).min()>0, "failure means a los_info was not done by all the animals."
+    # # (1) Agg, so los_info is single datapt
+    # dfcounts_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], aggmethod=["mean"], nonnumercols=["task_kind", "los_set"])
+    # from pythonlib.tools.pandastools import stringify_values
+    # dfchar_shared_str = stringify_values(dfchar_shared)
+    # assert pd.crosstab(dfchar_shared_str["los_info"], dfchar_shared_str["animal"]).min(axis=1).min()>0, "failure means a los_info was not done by all the animals."
 
-    for var_data, var_value, plot_error_bars in [
-        ("los_info", "FINAL_match", False),
-        ("los_set", "FINAL_match", True),
-        ("los_info", "FINAL_dist", False),
-        ("los_set", "FINAL_dist", True),
-        ]:
-        for alpha in [0.1, 0.3]:
-            _, fig = plot_45scatter_means_flexible_grouping(dfcounts_shared, "FINAL_basis", "Diego", "Pancho", "animal", 
-                                                            var_value, var_data, False, shareaxes=True, plot_error_bars=plot_error_bars, 
-                                                            alpha=alpha, SIZE=3.5)
-            savefig(fig, f"{savedir}/SHAREDCHAR-scatter-data={var_data}-value={var_value}-alpha={alpha}.pdf")
-    plt.close("all")
+    # for var_data, var_value, plot_error_bars in [
+    #     ("los_info", "FINAL_match", False),
+    #     ("los_set", "FINAL_match", True),
+    #     ("los_info", "FINAL_dist", False),
+    #     ("los_set", "FINAL_dist", True),
+    #     ]:
+    #     for alpha in [0.1, 0.3]:
+    #         _, fig = plot_45scatter_means_flexible_grouping(dfcounts_shared, "FINAL_basis", "Diego", "Pancho", "animal", 
+    #                                                         var_value, var_data, False, shareaxes=True, plot_error_bars=plot_error_bars, 
+    #                                                         alpha=alpha, SIZE=3.5)
+    #         savefig(fig, f"{savedir}/SHAREDCHAR-scatter-data={var_data}-value={var_value}-alpha={alpha}.pdf")
+    # plt.close("all")
 
     if False:
         # based on FINAL_Basis
@@ -1670,7 +1764,6 @@ def analy_score_combined_animals_bases(DictDS, savedir):
         dfthis = DScomb.Dat
         col = "k"
         nbins = 25
-
 
         grpvars = ["animal", "task_kind", "FINAL_basis"]
         grpdict = grouping_append_and_return_inner_items_good(DScomb.Dat, grpvars)
@@ -1695,9 +1788,164 @@ def analy_score_combined_animals_bases(DictDS, savedir):
             valmean = np.mean(dfthis["clust_sim_max"])
             ax.plot(valmean, YMAX, "v", color=pcol)
 
-    return DScomb, dfchar_shared
+    # FInal dumb sanity check that chars are indeed done by both aniamls.
+    ds1 = DictDS[("Diego", "Diego")]
+    ds2 = DictDS[("Pancho", "Pancho")]
 
+    for char in dfchar_shared["character"].unique().tolist():
+        assert char in ds1.Dat["character"].unique().tolist()
+        assert char in ds2.Dat["character"].unique().tolist()
+
+    for char in dfchar_shared["los_info"].unique().tolist():
+        assert char in ds1.Dat["los_info"].unique().tolist()
+        assert char in ds2.Dat["los_info"].unique().tolist()
+
+    return DScomb, dfchar_shared, dfchar_shared_agg
+
+def plot_drawing_task_colorby_matches_matched_trials(DictDS, LIST_ANIMAL_DATE, LIST_D, SAVEDIR,
+                                                     novel=None, perfblocky=None,
+                                                     plot_ax_beh_task=False):
+    """
+    PARAMS:
+    - novel, perfblocky, either None (ignores) or bool (filters to just keep those)
+    """
+    from pythonlib.tools.pandastools import filterPandas
+    from pythonlib.tools.plottools import color_make_map_discrete_labels
+
+    savedir = f"{SAVEDIR}/drawings_matched_chars-novel={novel}-perfblock={perfblocky}"
+    os.makedirs(savedir, exist_ok=True)
     
+    ### Overall filter
+    filtdict = {}
+    if novel is not None:
+        filtdict["novel_char"] = [novel]
+    if perfblocky is not None:
+        filtdict["is_perfblocky"] = [perfblocky]
+
+    ### Get common chars
+    ds1 = DictDS[("Diego", "Diego")]
+    ds2 = DictDS[("Pancho", "Pancho")]
+    chars1 = filterPandas(ds1.Dat, filtdict, False)["character"].unique().tolist()
+    chars2 = filterPandas(ds2.Dat, filtdict, False)["character"].unique().tolist()
+    # chars1 = ds1.Dat[(ds1.Dat["task_kind"] == "character") & (ds1.Dat["novel_char"] == novel) & (ds1.Dat["is_perfblocky"] == perfblocky)]["character"].unique().tolist()
+    # chars2 = ds2.Dat[(ds2.Dat["task_kind"] == "character") & (ds2.Dat["novel_char"] == novel) & (ds2.Dat["is_perfblocky"] == perfblocky)]["character"].unique().tolist()
+    chars_shared = [ch for ch in chars1 if ch in chars2]
+
+    print("This many shared chars: ", len(chars_shared))
+
+    ### Sort chars by quality
+    list_dist_1 = []
+    list_dist_2 = []
+    for char in chars_shared:
+        list_dist_1.append(np.mean(ds1.Dat[ds1.Dat["character"] == char]["FINAL_dist"]))
+        list_dist_2.append(np.mean(ds2.Dat[ds2.Dat["character"] == char]["FINAL_dist"]))
+    dfchars = pd.DataFrame({"character":chars_shared, "dist_1":list_dist_1, "dist_2":list_dist_2})
+    dfchars["dist_min"] = [np.min([row["dist_1"], row["dist_2"]]) for i, row in dfchars.iterrows()]
+    dfchars_sorted = dfchars.sort_values("dist_min", ascending=False).reset_index(drop=True)
+    if False: # pairwise distribtuion of distances
+        plt.figure()
+        plt.plot(dfchars["dist_1"], dfchars["dist_2"], "ok")
+        
+    # Sanity check
+    for char in dfchars_sorted["character"].unique().tolist():
+        assert char in ds1.Dat["character"].tolist()
+        assert char in ds2.Dat["character"].tolist()
+
+    map_animal_to_basis_data={}
+    for animal in ["Diego", "Pancho"]:
+        # (1) First, Plot all the base prims in a grid
+        _, list_strok_basis, list_shape_basis = ds1.stroke_shape_cluster_database_load_helper(which_basis_set=animal, plot_examples=False)
+        map_baseprim_to_color, _, _ = color_make_map_discrete_labels(list_shape_basis)
+
+        # center them
+        from pythonlib.tools.stroketools import strokes_centerize
+        list_strok_basis = strokes_centerize(list_strok_basis, "bounding_box")
+        ncols = 5
+        nrows = int(np.ceil(len(list_shape_basis)/ncols))
+        SIZE = 1.7
+        fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE), sharex=True, sharey=True)
+        for i, (ax, shape, strok) in enumerate(zip(axes.flatten(), list_shape_basis, list_strok_basis)):
+            color = map_baseprim_to_color[shape]
+            ds1.plot_single_strok(strok, "beh", ax=ax, color=color, alpha_beh=1)
+            from pythonlib.drawmodel.strokePlots import formatDatStrokesPlot
+            formatDatStrokesPlot(ax, naked_axes=True)
+            ax.set_title(f"#{i}")
+        fig.tight_layout()
+        savefig(fig, f"{savedir}/base_prims-{animal}.pdf")
+
+        map_animal_to_basis_data[animal] = (list_shape_basis, map_baseprim_to_color)
+
+    ### Plots
+    # from pythonlib.dataset.dataset_analy.characters import plot_drawing_task_colorby_matches_wrapper
+    # plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, SAVEDIR)
+    from pythonlib.tools.plottools import color_make_map_discrete_labels
+    from pythonlib.dataset.dataset_analy.characters import plot_drawing_task_colorby_matches_trial
+    from pythonlib.tools.pandastools import aggregGeneral
+
+    # Go thru blocks of 10 trials (from best to worst)
+    for ind_char_1 in range(0, len(dfchars_sorted), 10):
+        ind_char_2 = ind_char_1 + 10
+        print(ind_char_1, " to ", ind_char_2)
+        # ### User params
+        # ind_char_1 = 10
+        # ind_char_2 = 20
+
+        # Get characters, sorted so plot the best (across animals)
+        if False: # Doesnt work, for some reason. Returns chars tat dont exist across both
+            df = DScomb.Dat[DScomb.Dat["task_kind"] == "character"].reset_index(drop=True)
+            df = aggregGeneral(df, ["animal", "character", "novel|blocky", "task_kind"], ["clust_sim_max"])
+            dfmin = df.groupby(["character"])["clust_sim_max"].min().reset_index()
+            dfmin["tmp"] = -df["clust_sim_max"]
+            dfmin = dfmin.sort_values("tmp").reset_index(drop=True)
+            # Get the top <n_char> characters
+            # chars_get = dfmin["character"][:n_char_plot].tolist()
+        else:
+            chars_get = dfchars_sorted[ind_char_1:ind_char_2]["character"].tolist()
+
+        print("Plotting these chars: ", chars_get)
+
+        for only_color_if_good_match in [False, True]:
+            for i_iter in range(1):
+                n_char_plot = ind_char_2 - ind_char_1
+                n_animal = 2
+                nrows = n_animal*3
+                SIZE = 2
+                fig, axes = plt.subplots(nrows, n_char_plot, figsize=(n_char_plot*SIZE, nrows*SIZE), sharex=True, sharey=True)
+
+                # Plot
+                for i_an, animal in enumerate(["Diego", "Pancho"]):
+                    
+                    list_shape_basis, map_baseprim_to_color = map_animal_to_basis_data[animal]
+
+                    # Get data for this animal
+                    ds = DictDS[(animal, animal)]
+                    if False:
+                        trialcodes = ds.Dat["trialcode"][:5]
+                    else:
+                        # Get trialcodes givne input list of chars
+                        from pythonlib.tools.pandastools import extract_trials_spanning_variable
+                        list_inds, _ = extract_trials_spanning_variable(ds.Dat, "character", 
+                                                                                chars_get, F=filtdict,
+                                                                                method_if_not_enough_examples="fail")
+                        trialcodes = ds.Dat.iloc[list_inds]["trialcode"].tolist()
+
+                    for i_tc, tc in enumerate(trialcodes):
+                        print(tc)
+                        ax_task = axes[3*i_an][i_tc]
+                        ax_beh_prim = axes[3*i_an+1][i_tc]
+                        if plot_ax_beh_task:
+                            ax_beh_task = axes[3*i_an+2][i_tc]
+                        else:
+                            ax_beh_task = None
+
+                        ax_task.set_title(f"{animal}-{tc}")
+                        plot_drawing_task_colorby_matches_trial(ds, LIST_ANIMAL_DATE, LIST_D, tc, 
+                                                                        list_shape_basis, map_baseprim_to_color,
+                                                                        ax_task=ax_task, ax_beh_prim=ax_beh_prim, ax_beh_task=ax_beh_task,
+                                                                        only_color_if_good_match=only_color_if_good_match)
+                savefig(fig, f"{savedir}/inds={ind_char_1}-{ind_char_2}-onlycolormatch={only_color_if_good_match}-iter={i_iter}.pdf")
+                plt.close("all")
+                    
 def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, SAVEDIR):
     """
     To Make all plots of single trial characters, here iterates over each animal x basis prims,
@@ -1707,32 +1955,6 @@ def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, 
     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
     from pythonlib.dataset.dataset_analy.characters import plot_drawing_task_colorby_matches
     from pythonlib.tools.plottools import share_axes
-
-    def plot_icon_heatmap_base_prims_used(base_prim_shapes, ax):
-        from pythonlib.tools.snstools import heatmap_mat
-        list_index = [list_shape_basis.index(sh) for sh in base_prim_shapes]
-        ma = np.zeros((nrows, ncols))
-
-        for idx in list_index:
-            y = int(np.floor(idx/ncols)) # from top
-            x = idx%ncols
-            ma[y, x] = 1
-
-        # sns.heatmap(ma, ax=ax)
-        heatmap_mat(ma, ax=ax, annotate_heatmap=False, cbar=False)
-
-        # plot the index text
-        if False: # Too large
-            for idx in list_index:
-                y = int(np.floor(idx/ncols)) # from top
-                x = idx%ncols
-                print(x,y, nrows-y-1)
-                ax.text(x+0.25, y+0.625, f"#{idx}", color="k", fontsize=15)
-
-
-        ax.set_yticklabels([])
-        ax.set_xticklabels([])
-        ax.tick_params(axis='both', which='both',length=0)
         
 
     # This requires original dataset -- maybe best to run separately for each day.
@@ -1771,7 +1993,7 @@ def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, 
                 plot_icon_heatmap_base_prims_used(prim_matches_shape, ax)
 
             # (1) First, Plot all the base prims in a grid
-            dfbasis, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(which_basis_set=basis, plot_examples=False)
+            _, list_strok_basis, list_shape_basis = DS.stroke_shape_cluster_database_load_helper(which_basis_set=basis, plot_examples=False)
             map_baseprim_to_color, _, _ = color_make_map_discrete_labels(list_shape_basis)
 
             ncols = 5
@@ -1793,9 +2015,7 @@ def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, 
             grpdict = grouping_append_and_return_inner_items_good(dfcounts_clean, ["task_kind_Nbeh_first", "matches_base_prim_sum", "IMAGE_matches_sum"])
 
             # plot_beh_and_aligned_task_strokes
-            color_nonmatch = [0.3, 0.3, 0.3]
             SIZE = 3
-            color_task_by_matches = False
 
             for grp, inds_dfcounts in grpdict.items():
                 # print(inds_dfcounts)
@@ -1808,46 +2028,17 @@ def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, 
                 fig, axes = plt.subplots(4, n_examples, figsize=(SIZE*n_examples, SIZE*3))
 
                 for i_col, tc in enumerate(trialcodes):
-
-
-                    # inddat = 456
-                    # D.plotSingleTrial(inddat)
-                    # tc = D.Dat.iloc[inddat]["trialcode"]
-                    inds = DS.Dat[DS.Dat["trialcode"]==tc].index.tolist()
-                    if False:
-                        DS.plot_multiple_overlay_entire_trial(inds)
-                    
-                    # Append Dataset back to DS
-                    animal = DS.Dat.iloc[inds]["animal"].unique()[0]
-                    date = str(DS.Dat.iloc[inds]["date"].unique()[0])
-                    idx = LIST_ANIMAL_DATE.index((animal, date))
-                    Dthis = LIST_D[idx]
-                    DS.dataset_replace_dataset(Dthis)
-
-                    # Determine if strokes match base prims
-                    prim_matches = DS.Dat.iloc[inds]["matches_base_prim"].tolist()
-                    prim_matches_shape = DS.Dat.iloc[inds]["clust_sim_max_colname"].tolist()
-                    if False:
-                        prim_matches_index = [list_shape_basis.index(sh) for sh in prim_matches_shape]
-                    else:
-                        # Dont plot text on strokes.
-                        prim_matches_index= None
-                    colors_prim = [map_baseprim_to_color[sh] for sh in prim_matches_shape]
-
-                    # colors_match_prim = [map_baseprim_to_color[sh] if match else color_nonmatch for match, sh in zip(prim_matches, prim_matches_shape)]
-                    image_matches = DS.Dat.iloc[inds]["IMAGE_matches"].tolist()
-                    image_matches_shape = DS.Dat.iloc[inds]["shape"].tolist()
-
                     ax_task = axes[0][i_col]
                     ax_beh_prim = axes[1][i_col]
                     ax_beh_task = axes[2][i_col]
                     ax_base_prims_icon = axes[3][i_col]
 
-                    plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
-                                                            prim_matches, image_matches, colors_prim, prim_matches_index,
-                                                            color_nonmatch=color_nonmatch,
-                                                            color_task_by_matches=False)
-
+                    plot_drawing_task_colorby_matches_trial(DS, LIST_ANIMAL_DATE, LIST_D, tc, 
+                                                                list_shape_basis, map_baseprim_to_color,
+                                                                ax_task, ax_beh_prim, ax_beh_task, 
+                                                                ax_base_prims_icon, nrows, ncols)
+                    
+                    # Give title.
                     tmp = dfcounts[dfcounts["trialcode"] == tc]
                     assert len(tmp)==1
                     n_match_prim = tmp["matches_base_prim_sum"].values[0]
@@ -1858,17 +2049,166 @@ def plot_drawing_task_colorby_matches_wrapper(DictDS, LIST_ANIMAL_DATE, LIST_D, 
                     ax_beh_prim.set_title(f"n match prim: {n_match_prim}/{n_strokes_beh}")
                     ax_beh_task.set_title(f"n match task: {n_match_image}/{n_strokes_beh}")
 
-                    # Add icon of which base prims are gotten
-                    prim_matches_shape_good = [sh for sh, ismatch in zip(prim_matches_shape, prim_matches) if ismatch]
-                    plot_icon_heatmap_base_prims_used(prim_matches_shape_good, ax_base_prims_icon)
 
-                    # Share the drawing axes
-                    share_axes(np.array([ax_task, ax_beh_prim, ax_beh_task]), which="both")
+                #     # inddat = 456
+                #     # D.plotSingleTrial(inddat)
+                #     # tc = D.Dat.iloc[inddat]["trialcode"]
+                #     inds = DS.Dat[DS.Dat["trialcode"]==tc].index.tolist()
+                #     if False:
+                #         DS.plot_multiple_overlay_entire_trial(inds)
+                    
+                #     # Append Dataset back to DS
+                #     animal = DS.Dat.iloc[inds]["animal"].unique()[0]
+                #     date = str(DS.Dat.iloc[inds]["date"].unique()[0])
+                #     idx = LIST_ANIMAL_DATE.index((animal, date))
+                #     Dthis = LIST_D[idx]
+                #     DS.dataset_replace_dataset(Dthis)
+
+                #     # Determine if strokes match base prims
+                #     prim_matches = DS.Dat.iloc[inds]["matches_base_prim"].tolist()
+                #     prim_matches_shape = DS.Dat.iloc[inds]["clust_sim_max_colname"].tolist()
+                #     if False:
+                #         prim_matches_index = [list_shape_basis.index(sh) for sh in prim_matches_shape]
+                #     else:
+                #         # Dont plot text on strokes.
+                #         prim_matches_index= None
+                #     colors_prim = [map_baseprim_to_color[sh] for sh in prim_matches_shape]
+
+                #     # colors_match_prim = [map_baseprim_to_color[sh] if match else color_nonmatch for match, sh in zip(prim_matches, prim_matches_shape)]
+                #     image_matches = DS.Dat.iloc[inds]["IMAGE_matches"].tolist()
+                #     image_matches_shape = DS.Dat.iloc[inds]["shape"].tolist()
+
+                #     ax_task = axes[0][i_col]
+                #     ax_beh_prim = axes[1][i_col]
+                #     ax_beh_task = axes[2][i_col]
+                #     ax_base_prims_icon = axes[3][i_col]
+
+                #     plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
+                #                                             prim_matches, image_matches, colors_prim, prim_matches_index,
+                #                                             color_nonmatch=color_nonmatch,
+                #                                             color_task_by_matches=False)
+
+                #     tmp = dfcounts[dfcounts["trialcode"] == tc]
+                #     assert len(tmp)==1
+                #     n_match_prim = tmp["matches_base_prim_sum"].values[0]
+                #     n_match_image = tmp["IMAGE_matches_sum"].values[0]
+                #     n_strokes_beh = tmp["FEAT_num_strokes_beh_mean"].values[0]
+
+                #     ax_task.set_title(tc)
+                #     ax_beh_prim.set_title(f"n match prim: {n_match_prim}/{n_strokes_beh}")
+                #     ax_beh_task.set_title(f"n match task: {n_match_image}/{n_strokes_beh}")
+
+                #     # Add icon of which base prims are gotten
+                #     prim_matches_shape_good = [sh for sh, ismatch in zip(prim_matches_shape, prim_matches) if ismatch]
+                #     plot_icon_heatmap_base_prims_used(prim_matches_shape_good, ax_base_prims_icon)
+
+                #     # Share the drawing axes
+                #     share_axes(np.array([ax_task, ax_beh_prim, ax_beh_task]), which="both")
 
                 # fig.tight_layout()
                 savefig(fig, f"{savedir}/example_drawings-grp={grp}.pdf")
                 # assert False
                 plt.close("all")
+
+
+def plot_drawing_task_colorby_matches_trial(DS, LIST_ANIMAL_DATE, LIST_D, trialcode, 
+                                            list_shape_basis, map_baseprim_to_color,
+                                            ax_task, ax_beh_prim, ax_beh_task, 
+                                            ax_base_prims_icon=None, nrows_icon=None, ncols_icon=None,
+                                            only_color_if_good_match=True):
+    """
+    Does all things for plotting drwaing, including showing matches to base prims, for this trial.
+    Plots a single trial.    
+
+    """
+    from pythonlib.tools.plottools import share_axes
+
+    color_nonmatch = [0.3, 0.3, 0.3]
+    color_task_by_matches = False
+
+    def plot_icon_heatmap_base_prims_used(base_prim_shapes, ax):
+        from pythonlib.tools.snstools import heatmap_mat
+        list_index = [list_shape_basis.index(sh) for sh in base_prim_shapes]
+        ma = np.zeros((nrows_icon, ncols_icon))
+
+        for idx in list_index:
+            y = int(np.floor(idx/ncols_icon)) # from top
+            x = idx%ncols_icon
+            ma[y, x] = 1
+
+        # sns.heatmap(ma, ax=ax)
+        heatmap_mat(ma, ax=ax, annotate_heatmap=False, cbar=False)
+
+        # plot the index text
+        if False: # Too large
+            for idx in list_index:
+                y = int(np.floor(idx/ncols)) # from top
+                x = idx%ncols
+                print(x,y, nrows-y-1)
+                ax.text(x+0.25, y+0.625, f"#{idx}", color="k", fontsize=15)
+
+
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.tick_params(axis='both', which='both',length=0)
+
+    # inddat = 456
+    # D.plotSingleTrial(inddat)
+    # tc = D.Dat.iloc[inddat]["trialcode"]
+    inds = DS.Dat[DS.Dat["trialcode"]==trialcode].index.tolist()
+    if False:
+        DS.plot_multiple_overlay_entire_trial(inds)
+    
+    # Append Dataset back to DS
+    # animal = DS.animal()
+    # date = str(DS.date())
+    tmp = DS.Dat.iloc[inds]["animal"].unique()
+    assert len(tmp)==1
+    animal = tmp[0]
+    
+    tmp = DS.Dat.iloc[inds]["date"].unique()
+    assert len(tmp)==1
+    date = str(tmp[0])
+
+    idx = LIST_ANIMAL_DATE.index((animal, date))
+    Dthis = LIST_D[idx]
+    DS.dataset_replace_dataset(Dthis)
+
+    # Determine if strokes match base prims
+    prim_matches_shape = DS.Dat.iloc[inds]["clust_sim_max_colname"].tolist()
+    if only_color_if_good_match:
+        prim_matches = DS.Dat.iloc[inds]["matches_base_prim"].tolist()
+    else:
+        prim_matches = [True for _ in range(len(prim_matches_shape))]
+    if False:
+        prim_matches_index = [list_shape_basis.index(sh) for sh in prim_matches_shape]
+    else:
+        # Dont plot text on strokes.
+        prim_matches_index= None
+    colors_prim = [map_baseprim_to_color[sh] for sh in prim_matches_shape]
+
+    # colors_match_prim = [map_baseprim_to_color[sh] if match else color_nonmatch for match, sh in zip(prim_matches, prim_matches_shape)]
+    image_matches = DS.Dat.iloc[inds]["IMAGE_matches"].tolist()
+    image_matches_shape = DS.Dat.iloc[inds]["shape"].tolist()
+
+    plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
+                                            prim_matches, image_matches, colors_prim, prim_matches_index,
+                                            color_nonmatch=color_nonmatch,
+                                            color_task_by_matches=color_task_by_matches)
+    
+    # Add icon of which base prims are gotten
+    if ax_base_prims_icon is not None:
+        if ax_base_prims_icon is not None:
+            assert nrows_icon is not None, "needed to know how to plot grid icon"
+            assert ncols_icon is not None, "needed to know how to plot grid icon"
+        prim_matches_shape_good = [sh for sh, ismatch in zip(prim_matches_shape, prim_matches) if ismatch]
+        plot_icon_heatmap_base_prims_used(prim_matches_shape_good, ax_base_prims_icon)
+
+    # Share the drawing axes
+    _axes = [_ax for _ax in [ax_task, ax_beh_prim, ax_beh_task] if _ax is not None]
+
+    share_axes(np.array(_axes), which="both")
+
 
 def plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_task, 
                                         prim_matches, image_matches, colors_prim, prim_matches_index=None,
@@ -1892,8 +2232,8 @@ def plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_tas
     if prim_matches_index is None:
         prim_matches_index = [None for _ in range(len(prim_matches))]
 
+    ### Plot beh strokes, coloring only if match task image
     # number the beh strokes
-    # Plot beh strokes, coloring only if match task image
     for i, _ind in enumerate(inds):
         if prim_matches[i]:
             _color = colors_prim[i]
@@ -1918,12 +2258,14 @@ def plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_tas
         else:
             map_idxtaskorig_to_color[idx_task_orig] = color_nonmatch
 
-    for i, st in enumerate(strokes_task):
-        if color_task_by_matches and (i in map_idxtaskorig_to_color):
-            color = map_idxtaskorig_to_color[i]
-        else:
-            color = color_nonmatch
-        DS.plot_single_strok(st, "task_colored", ax=ax_task, color=color, alpha_beh=1)
+    ### Plot task image
+    if ax_task is not None:
+        for i, st in enumerate(strokes_task):
+            if color_task_by_matches and (i in map_idxtaskorig_to_color):
+                color = map_idxtaskorig_to_color[i]
+            else:
+                color = color_nonmatch
+            DS.plot_single_strok(st, "task_colored", ax=ax_task, color=color, alpha_beh=1)
 
 
     # strokes_task_ordered_by_beh = DS.extract_strokes(inds =inds, ver_behtask="task_aligned_single_strok")
@@ -1934,11 +2276,238 @@ def plot_drawing_task_colorby_matches(DS, inds, ax_task, ax_beh_prim, ax_beh_tas
     #         color="k" 
     #     DS.plot_single_strok(st, "task_colored", ax=ax_task, color=color, alpha_beh=1)
 
-    # Plot beh strokes, coloring only if match task image
-    for i, _ind in enumerate(inds):
-        if image_matches[i]:
-            _color = colors_prim[i]
-        else:
-            _color = color_nonmatch
-        DS.plot_single(_ind, ax_beh_task, color=_color)
+    ### Plot beh strokes, coloring only if match task image
+    if ax_beh_task is not None:
+        for i, _ind in enumerate(inds):
+            if image_matches[i]:
+                _color = colors_prim[i]
+            else:
+                _color = color_nonmatch
+            DS.plot_single(_ind, ax_beh_task, color=_color)
 
+
+
+
+def analy_collect_all_los_datetimes_using_presaved(animal):
+    """
+    Across historical data, get mappings from all char los to the list of datetimes that iwas done.
+    Useful for etermining whther trials were "novel".
+
+    Uses data pre-extracted and saved.
+    """
+    import re
+
+    # D.Dat.loc[:, ["character", "los_info", "task_kind", "trialcode", "datetime", "probe"]].to_csv(f"{SAVEDIR}/los_info-{animal}-{date}.csv")
+    
+    # List of dates that have had their los extracted previously.
+    list_animal_date = [
+        ("Pancho", "220531"),
+        ("Pancho", "220601"),
+        ("Pancho", "220602"),
+        ("Pancho", "220603"),
+        ("Pancho", "220613"),
+        ("Pancho", "220614"),
+        ("Pancho", "220615"),
+        ("Pancho", "220616"),
+        ("Pancho", "220617"),
+        ("Pancho", "220618"),
+        ("Pancho", "220621"),
+        ("Pancho", "220622"),
+        ("Pancho", "220624"),
+        ("Pancho", "230112"),
+        ("Pancho", "230117"),
+        ("Pancho", "230118"),
+        ("Pancho", "230119"),
+        ("Pancho", "230120"),
+        ("Pancho", "230122"),
+        ("Pancho", "230125"),
+        ("Pancho", "230126"),
+        ("Pancho", "230127"),
+        ("Diego", "231122"),
+        ("Diego", "231128"),
+        ("Diego", "231129"),
+        ("Diego", "231130"),
+        ("Diego", "231201"),
+        ("Diego", "231204"),
+        ("Diego", "231205"),
+        ("Diego", "231206"),
+        ("Diego", "231207"),
+        ("Diego", "231211"),
+        ("Diego", "231213"),
+        ("Diego", "231218"),
+        ("Diego", "231219"),
+        ("Diego", "231220"),
+    ]
+
+    animals = sorted(set([x[0] for x in list_animal_date]))
+    dates = sorted(set([x[1] for x in list_animal_date]))
+    savesuff = "_".join(animals) + "|" + f"{min(dates)}_{max(dates)}|N={len(list_animal_date)}"
+    savedir = f"/lemur2/lucas/analyses/main/strokes_clustering_similarity/analysis_match_base_prims/MULT/{savesuff}"
+    print(savedir)
+
+    # Go thru all dates and collect each los.
+    map_los_to_datetimes = {}
+    for a, date in list_animal_date:
+        if a == animal:
+            path = f"{savedir}/los_info-{animal}-{date}.csv"
+            print(path)
+            df = pd.read_csv(path)
+
+            if False:
+                display(df)
+                for col in df.columns:
+                    print(col, " -- ", type(df[col].values[0]))
+                assert False
+
+            # get all los and their list of datetimes
+            # (1) Collect ALL dates for each los across all expts (characters)
+            # los_novels = D.Dat[D.Dat["novel_char"]]["los_info"].unique().tolist()
+            los_all = df[df["task_kind"]=="character"]["los_info"].unique().tolist()
+            for los in los_all:
+                if los == "(None, None, None)":
+                    # Then this is a random task...
+                    continue
+                
+                # Convert from string to tuple (los)
+                _inds = [m.start() for m in re.finditer(",", los)]
+                
+                try:
+                    los_tuple = (los[2:_inds[0]-1], int(los[_inds[0]+2:_inds[1]]), int(los[_inds[1]+2:-1]))
+                except Exception as err:
+                    print(los)
+                    print(type(los))
+                    print(_inds)
+                    raise err
+                dts = df[(df["los_info"]==los) & (df["task_kind"]=="character")]["datetime"].unique().tolist()
+                
+                if los_tuple == (None, None, None):
+                    # Should have been caught above
+                    assert False
+
+                if los_tuple in map_los_to_datetimes:
+                    map_los_to_datetimes[los_tuple].extend(dts)
+                else:
+                    map_los_to_datetimes[los_tuple] = dts                
+
+    # sort datetimes
+    map_los_to_datetimes = {los:sorted(set(dts)) for los, dts in map_los_to_datetimes.items()}
+
+    return map_los_to_datetimes
+
+def analy_collect_all_los_datetimes(animal):
+    # (1) Collect ALL dates for each los across all expts (characters)
+    map_los_to_datetimes = {}
+    for D, (animal, date) in zip(LIST_D, LIST_ANIMAL_DATE):
+        if animal == animal_get:
+            # los_novels = D.Dat[D.Dat["novel_char"]]["los_info"].unique().tolist()
+            los_all = D.Dat[D.Dat["task_kind"]=="character"]["los_info"].unique().tolist()
+            for los in los_all:
+                dts = D.Dat[(D.Dat["los_info"]==los) & (D.Dat["task_kind"]=="character")]["datetime"].unique().tolist()
+                if los in map_los_to_datetimes:
+                    map_los_to_datetimes[los].extend(dts)
+                else:
+                    map_los_to_datetimes[los] = dts                
+    # sort datetimes
+    map_los_to_datetimes = {los:sorted(set(dts)) for los, dts in map_los_to_datetimes.items()}
+
+    return map_los_to_datetimes
+
+
+def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
+    """
+    For each trial, determine if it is a novel trial, the first trial of that
+    character, and I hand labeled it as novel. 
+    Then replace the column "novel_char" with this output.
+
+    NOTE: is OK to run this repeatedly, as it does not overwrite old labels.
+
+    """
+
+    savedir = f"{SAVEDIR}/novel_chars_finalize"
+    os.makedirs(savedir, exist_ok=True)
+
+    # To be called novel, must be (i) "novel" on that day. (ii) 
+    # NOTE: is fine to run this repeatedyl
+
+    # Get mapping, los --> list of datetimes across all data
+    # For a given los, this gets only the trials that are novel_char==True
+
+    for animal_get in ["Diego", "Pancho"]:
+
+        if True:
+            # Better -- uses all char dates
+            map_los_to_datetimes = analy_collect_all_los_datetimes_using_presaved(animal_get)
+        else:
+            # Use just what is in the dataset
+            map_los_to_datetimes = analy_collect_all_los_datetimes(animal_get)
+
+        # # (1) Collect ALL dates for each los across all expts (characters)
+        # map_los_to_datetimes = {}
+        # for D, (animal, date) in zip(LIST_D, LIST_ANIMAL_DATE):
+        #     if animal == animal_get:
+        #         # los_novels = D.Dat[D.Dat["novel_char"]]["los_info"].unique().tolist()
+        #         los_all = D.Dat[D.Dat["task_kind"]=="character"]["los_info"].unique().tolist()
+        #         for los in los_all:
+        #             dts = D.Dat[(D.Dat["los_info"]==los) & (D.Dat["task_kind"]=="character")]["datetime"].unique().tolist()
+        #             if los in map_los_to_datetimes:
+        #                 map_los_to_datetimes[los].extend(dts)
+        #             else:
+        #                 map_los_to_datetimes[los] = dts                
+        # # sort datetimes
+        # map_los_to_datetimes = {los:sorted(set(dts)) for los, dts in map_los_to_datetimes.items()}
+
+        # (2) For each candidate los (already hand-labeled as novel_char), determine if it is the first trial ever
+        # (for any los, it is only called novel if its time matches the first attempt)
+        def _is_novel(row):
+            """ Return True if this is the first trial
+            this los ever found, in this dataset
+            """
+            los = row["los_info"]
+            dt = row["datetime"]
+            # if (los in map_los_to_datetimes)
+
+            if (row["task_kind"]=="character") and (row["random_task"]==False):
+                assert los in map_los_to_datetimes, "PRoblem with extraction/saving of old los"
+                return (row["novel_char_hand"]==True) and (map_los_to_datetimes[los][0] == dt)
+            else:
+                # This is not novel (becuase it is either not char or is random char)
+                # print(row["los_info"])
+                # print(row["datetime"])
+                # assert False, "weird, all chars should be in dict"
+                return False
+
+        # To be called novel, must be (i) probe/novel. and (ii) first time done
+        # Go thru all datasetes again, this time replacing novel label with correct one.
+        list_df = []
+        for D, (animal, _) in zip(LIST_D, LIST_ANIMAL_DATE):
+            if animal == animal_get:
+
+                # novels = []
+                # for _, row in D.Dat.iterrows():
+                #     novels.append(_is_novel(row))
+                novels = ([_is_novel(row) for i, row in D.Dat.iterrows()])
+                
+                # Update "novel char"
+                D.Dat["novel_char"] = novels
+
+                # Finally, print and save all the finalized novel chars.
+                a = D.animals(True)[0]
+                d = D.dates(True)[0]
+
+                D.grouping_print_n_samples(["novel_char", "probe", "los_info", "block"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-1.txt")
+                D.grouping_print_n_samples(["block", "probe", "novel_char", "los_info"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-2.txt")
+                D.grouping_print_n_samples(["block", "probe", "novel_char", "los_set"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-3.txt")
+                D.grouping_print_n_samples(["block", "probe", "novel_char", "task_kind"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-4.txt")
+
+                list_df.append(D.Dat)
+
+        df = pd.concat(list_df).reset_index(drop=True)
+        from pythonlib.tools.pandastools import grouping_print_n_samples
+        grp_vars = ["animal", "date", "probe", "novel_char", "block"]
+        grouping_print_n_samples(df, grp_vars, savepath=f"{savedir}/{animal_get}-ALL-novel_char_assignments-3.txt")
+
+        grp_vars = ["animal", "date", "probe", "novel_char", "los_set"]
+        grouping_print_n_samples(df, grp_vars, savepath=f"{savedir}/{animal_get}-ALL-novel_char_assignments-2.txt")
+
+        grp_vars = ["animal", "date", "probe", "novel_char", "los_info"]
+        grouping_print_n_samples(df, grp_vars, savepath=f"{savedir}/{animal_get}-ALL-novel_char_assignments-1.txt")
