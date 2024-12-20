@@ -2569,14 +2569,15 @@ class DatStrokes(object):
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good, indices_sort_by_feature
         from pythonlib.tools.listtools import random_inds_uniformly_distributed
         from pythonlib.tools.plottools import plotGridWrapper
-        from pythonlib.drawmodel.strokePlots import plotDatStrokes
+        from pythonlib.drawmodel.strokePlots import plotDatStrokes, plot_single_strok
 
 
         grpdict = grouping_append_and_return_inner_items_good(self.Dat, [col_grp])
         if col_levels is not None:
             assert isinstance(col_levels, list)
-            grpdict = {k:v for k,v in grpdict.items() if k[0] in col_levels}
-        
+            # grpdict = {k:v for k,v in grpdict.items() if k[0] in col_levels}
+            grpdict = {(lev,):grpdict[(lev,)] for lev in col_levels if (lev,) in grpdict} # Also sort.
+            
         def _get_sorted_inds(inds):
             inds, values = indices_sort_by_feature(self.Dat, inds, sort_rows_by_this_feature)
             _idxs = random_inds_uniformly_distributed(inds, dosort=False, ntoget=nrows)
@@ -2605,7 +2606,8 @@ class DatStrokes(object):
         else:
             strokes = self.Dat.iloc[list_inds]["strok"].values
             def plotfunc(strok, ax):
-                plotDatStrokes([strok], ax)
+                # plotDatStrokes([strok], ax)
+                plot_single_strok(strok, ax=ax)
 
             if recenter_strokes:
                 from pythonlib.tools.stroketools import strokes_centerize
@@ -3588,9 +3590,9 @@ class DatStrokes(object):
         import glob
 
         if ANIMAL is None:
-            ANIMAL = DS.animal()
+            ANIMAL = self.animal()
         if DATE is None:
-            DATE = DS.date()
+            DATE = self.date()
 
         if WHICH_BASIS is None:
             WHICH_BASIS = ANIMAL
