@@ -82,10 +82,10 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'V-2-2-0': 'V-DD-DD',
     'V-2-3-0': 'V-RR-RR',
     'V-2-4-0': 'V-UU-UU',
-    'arcdeep-4-1-0': 'arcdeep-LL-LL',
-    'arcdeep-4-2-0': 'arcdeep-DD-DD',
-    'arcdeep-4-3-0': 'arcdeep-RR-RR',
-    'arcdeep-4-4-0': 'arcdeep-UU-UU',
+    # 'arcdeep-4-1-0': 'arcdeep-LL-LL',
+    # 'arcdeep-4-2-0': 'arcdeep-DD-DD',
+    # 'arcdeep-4-3-0': 'arcdeep-RR-RR',
+    # 'arcdeep-4-4-0': 'arcdeep-UU-UU',
     # 'line-8-1-0': 'line-LL-LL',
     # 'line-8-2-0': 'line-UU-UU',
     # 'line-8-3-0': 'line-UR-UR',
@@ -123,11 +123,17 @@ MAP_SHAPE_TO_SHAPESEMANTIC = {
     'Lcentered-5-8-0': 'arcdeep-UU-UU',
     }
 
-for scale in [8, 6, 11, 13, 14, 15]:
+for scale in list(range(16)):
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-1-0'] = 'line-LL-LL'
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-2-0'] = 'line-UU-UU'
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-3-0'] = 'line-UR-UR'
     MAP_SHAPE_TO_SHAPESEMANTIC[f'line-{scale}-4-0'] = 'line-UL-UL'
+
+for scale in list(range(16)):
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'arcdeep-{scale}-1-0'] = 'arcdeep-LL-LL'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'arcdeep-{scale}-2-0'] = 'arcdeep-DD-DD'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'arcdeep-{scale}-3-0'] = 'arcdeep-RR-RR'
+    MAP_SHAPE_TO_SHAPESEMANTIC[f'arcdeep-{scale}-4-0'] = 'arcdeep-UU-UU'
 
 ###### To merge shapesem into shamesemgroups, which are groups of similar shapes. Useful for characters, where you want to increase
 # sample size for each shape.
