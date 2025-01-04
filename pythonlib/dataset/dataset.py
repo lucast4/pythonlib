@@ -7995,6 +7995,12 @@ class Dataset(object):
 
         self.behclass_preprocess_wrapper()
 
+        if "BehClass" not in self.Dat.columns:
+            print("This is not neceairly a bug -- you have likely replaced original tokens")
+            print("With reloaded (e.g. charclust), so this is stopping you from mistakenly thinking these are the task tokens")
+            print("You simply cannot ask about whether there was 1-to-1 match between beh adn task, since that doenst make sense for characters..")
+            assert False
+            
         Beh = self.Dat.iloc[indtrial]["BehClass"]
 
         # task datsegs (get in both (i) length of task and (ii) length of beh.

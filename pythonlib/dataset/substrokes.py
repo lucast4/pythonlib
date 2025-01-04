@@ -227,6 +227,10 @@ def pipeline_wrapper(D, dosave=True):
     from pythonlib.tools.pandastools import grouping_print_n_samples
     from pythonlib.tools.pandastools import append_col_with_grp_index
 
+    if "character" in D.Dat["task_kind"].unique():
+        print("cannot do this, as it uses shape-label to determing segmentation into substrokes, and that only works well if strokes are clean")
+        assert False
+        
     PLOT = True
     Npts = 70
     refrac_npts = int(0.1*Npts) # within this refrac, takes ony a single trough maximum.
