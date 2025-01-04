@@ -107,7 +107,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
     else:
         # Not symmetric..
         for i, v1 in enumerate(vals1):
-            if i%50==0:
+            if i%50==0 and i>0:
                 print("distmat_construct_wrapper: ", i)
             for j, v2 in enumerate(vals2):
                 if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):

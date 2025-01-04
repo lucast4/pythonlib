@@ -217,7 +217,8 @@ def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir,
     Cl = DSthis.distgood_compute_beh_beh_strok_distances(strokes1, strokes2, labels_rows_dat=shapes1, 
                                                          labels_cols_feats=shapes2, label_var=label_var, 
                                                          clustclass_rsa_mode=True,
-                                                         PLOT=True, savedir=savedir, savesuff=savesuff)
+                                                         PLOT=True, savedir=savedir, savesuff=savesuff,
+                                                         invert_score=True)
     # if len(strokes1)<200 and len(strokes2)<200:
     #     fig, _ = Cl.rsa_plot_heatmap()
     #     if fig is not None:
@@ -624,7 +625,7 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     list_distance_ver  = ["dtw_vels_2d"]
     # Cl = DS._cluster_compute_sim_matrix_aggver(strokes, strokes, labels, labels, grpvars, list_distance_ver,
     #                                             clustclass_rsa_mode=True)
-    Cl = DS.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, grpvars, clustclass_rsa_mode=True)
+    Cl = DS.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, grpvars, clustclass_rsa_mode=True, invert_score=True)
     
     # Save, since this takes a long time.
     import pickle
@@ -632,18 +633,18 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
         pickle.dump(Cl, f)
 
     ################### PLOTS
-
     # Plot heatmap
+    # - First agg (over trials), or else plots too large
+    _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(get_only_one_direction=False, return_as_clustclass=True,
+                                                              return_as_clustclass_which_var_score="dist_mean")
     for sort_order in [(0,1,2), (1,2, 0), (2,0,1)]:
-        fig, ax = Cl.rsa_plot_heatmap(sort_order=sort_order)
+        fig, ax = Clagg.rsa_plot_heatmap(sort_order=sort_order)
         if fig is not None:
             savefig(fig, f"{savedir}/distmat-sort={sort_order}.pdf")
-    for var in Cl.rsa_labels_extract_label_vars():  
-        _, fig = Cl.rsa_distmat_construct_theoretical(var, True)
+    for var in Clagg.rsa_labels_extract_label_vars():  
+        _, fig = Clagg.rsa_distmat_construct_theoretical(var, True)
         if fig is not None:
             savefig(fig, f"{savedir}/theor_distmat-var={var}.pdf")
-    # fig, ax = Cl.rsa_plot_heatmap()
-    # savefig(fig, f"{savedir}/heatmap-trials.pdf")
 
     dfdist = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
     dfdist = dfdist.drop("dist_yue_diff", axis=1)
@@ -667,22 +668,22 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     import seaborn as sns
     for y in ["dist_mean", "dist_mean_norm_v2"]:
         fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y)
-        savefig(fig, f"{savedir}/catplot-trials-1.pdf")
+        savefig(fig, f"{savedir}/catplot-trials-{y}-1.pdf")
 
         fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y, kind="violin")
-        savefig(fig, f"{savedir}/catplot-trials-2.pdf")
+        savefig(fig, f"{savedir}/catplot-trials-{y}-2.pdf")
 
         fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y, kind="bar", errorbar=("ci", 68))
-        savefig(fig, f"{savedir}/catplot-trials-3.pdf")
+        savefig(fig, f"{savedir}/catplot-trials-{y}-3.pdf")
 
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y)
-        savefig(fig, f"{savedir}/catplot-grps-1.pdf")
+        savefig(fig, f"{savedir}/catplot-grps-{y}-1.pdf")
 
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="violin")
-        savefig(fig, f"{savedir}/catplot-grps-2.pdf")
+        savefig(fig, f"{savedir}/catplot-grps-{y}-2.pdf")
 
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="bar", errorbar=("ci", 68))
-        savefig(fig, f"{savedir}/catplot-grps-3.pdf")
+        savefig(fig, f"{savedir}/catplot-grps-{y}-3.pdf")
         plt.close("all")
 
 def fig3_charsyntax_wrapper(animal, DATE, SAVEDIR):
@@ -1437,7 +1438,7 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                     labels = labels[::2]
                 Cl = DSmorphsets.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, label_var, 
                                                                         clustclass_rsa_mode=True, PLOT=True, 
-                                                                        savedir=savedir, savesuff=version)
+                                                                        savedir=savedir, savesuff=version, invert_score=True)
                 # Cl = score_motor_distances(DSmorphsets, strokes, strokes, labels, labels, "/tmp", "TEST", label_var=label_var)
             elif version == "task":
                 strokes = dfdat["strok_task"].tolist()

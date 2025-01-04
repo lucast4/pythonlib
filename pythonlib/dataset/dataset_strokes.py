@@ -974,7 +974,8 @@ class DatStrokes(object):
                                                  labels_cols_feats= None,
                                                  label_var=None,
                                                  clustclass_rsa_mode=False,
-                                                 PLOT=False, savedir=None, savesuff=None):
+                                                 PLOT=False, savedir=None, savesuff=None,
+                                                 invert_score=False):
         """
         GOOD - compute pairwise distance between all pairs across 1 and 2.
         This is motor distnace, the method used for clustreing strokes from 
@@ -996,7 +997,11 @@ class DatStrokes(object):
                                                         label_var=label_var,
                                                         list_ver= list_distance_ver, 
                                                         clustclass_rsa_mode=clustclass_rsa_mode)
-        
+
+        if invert_score:
+            # Invert, so that 0 is close and 1 is far (i.e, is a distnace). 
+            Cl._Xinput = 1-Cl._Xinput
+
         if PLOT:
             self._distgood_plot_heatmap_helper(Cl, savedir, "motor", savesuff)
 
