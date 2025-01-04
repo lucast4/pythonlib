@@ -464,7 +464,8 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         lab_add = 0.5
     else:
         # center = None
-        cmap = sns.color_palette("rocket", as_cmap=True)
+        # cmap = sns.color_palette("rocket", as_cmap=True)
+        cmap = sns.color_palette("rocket", as_cmap=True).reversed() # lower numbers are lighter hue (and thus pops out), this is useful ebcuase I often plot distance scores, and lower is important.
         # cmap = sns.color_palette
         lab_add = 0.5
 
