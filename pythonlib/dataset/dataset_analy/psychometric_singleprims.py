@@ -1919,6 +1919,9 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
     SHould actualyl just be same stuff.
     """
 
+    if NEURAL_VERSION:
+        assert cetegory_expt_version is not None, "to avoid errors, you need to specify this, so not skip on error"
+
     from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_preprocess_wrapper, psychogood_plot_drawings_morphsets, params_remap_angle_to_idx_within_morphset
 
     assert NEURAL_VERSION is not None, "have to give false or true."
@@ -1998,7 +2001,7 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
         ]:
         if NEURAL_VERSION:
             # Angle morphs
-            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess, plot_overview, preprocess_angle_to_morphsets, psychogood_prepare_for_neural_analy
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import preprocess, plot_overview, preprocess_angle_to_morphsets
             _, DSlenient, _ = preprocess(D, clean_ver="singleprim_psycho_noabort")
 
             if False:
@@ -2024,6 +2027,11 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
     if NEURAL_VERSION:
         savedir_this = f"{NEURAL_SAVEDIR}/{animal}-{date}"
         os.makedirs(savedir_this, exist_ok=True)
+
+        # # REmove bad trialcodes
+        # # Hacky, remove trialcodes that are by eye messy
+        # trialcodes_ignore = params_good_morphsets_switching_ignore_trialcodes(animal, date)
+        # DSmorphsets.Dat = DSmorphsets.Dat[~DSmorphsets.Dat["trialcode"].isin(trialcodes_ignore)].reset_index(drop=True)
 
         if NEURAL_PLOT_DRAWINGS:
             psychogood_plot_drawings_morphsets(DSmorphsets, savedir=savedir_this)
@@ -3746,7 +3754,9 @@ def psychogood_prepare_for_neural_analy(D, DSmorphsets):
     return DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status
 
 
-def psychogood_plot_drawings_morphsets(DSmorphsets, savedir, n_iter=2):
+def psychogood_plot_drawings_morphsets(DSmorphsets, savedir, n_iter=2, n_examples_per_sublot=8,
+                                       rowvar="morph_idxcode_within_set", colvar="morph_set_idx", suff=None,
+                                       plot_task=True):
     """ 
     General -- plot grid of beh and task images, organized as (idx_within, morphset), useful for all
     psycho tasks
@@ -3754,11 +3764,129 @@ def psychogood_plot_drawings_morphsets(DSmorphsets, savedir, n_iter=2):
     One large figure for all dataset
     """
 
+    if suff is None:
+        suff = ""
+    else:
+        suff = f"suff-{suff}"
+
     for _iter in range(n_iter):
 
-        figbeh, figtask = DSmorphsets.plotshape_row_col_vs_othervar("morph_idxcode_within_set", "morph_set_idx", 
-            n_examples_per_sublot=8, plot_task=True, ver_behtask="task_entire")
-        savefig(figbeh, f"{savedir}/morph_idxcode_within_set-vs-morph_set_idx-beh-iter{_iter}.pdf")
-        savefig(figtask, f"{savedir}/morph_idxcode_within_set-vs-morph_set_idx-task-iter{_iter}.pdf")
+        _plot_task = plot_task and _iter==0
+            
+        figbeh, figtask = DSmorphsets.plotshape_row_col_vs_othervar(rowvar=rowvar, colvar=colvar, 
+            n_examples_per_sublot=n_examples_per_sublot, plot_task=_plot_task, ver_behtask="task_entire")
+        savefig(figbeh, f"{savedir}/{rowvar}-vs-{colvar}-beh{suff}-iter{_iter}.pdf")
+        if _plot_task:
+            savefig(figtask, f"{savedir}/{rowvar}-vs-{colvar}-task{suff}-iter{_iter}.pdf")
         plt.close("all")
 
+
+
+def psychogood_plot_drawings_morphsets_manuscript(D, DSmorphsets, SAVEDIR):
+    """
+    To make plot of drawings and tasks in grid, arranged in a good way for the final manuscript.
+    The goal is to show examples of the drawing and task.
+    """
+
+    # Here, just holds the plotting functions.
+
+    # savedir = "/tmp/PSYCHODRAW/WRAPPER"
+    # os.makedirs(savedir, exist_ok=True)
+
+    # psychogood_plot_morphset_drawings(D, DSmorphsets, savedir, PLOT_EACH_TRIAL = True, list_psycho_group=None)
+    # savedir = "/tmp/PSYCHODRAW"
+    # os.makedirs(savedir, exist_ok=True)
+    # psychogood_plot_drawings_morphsets(DSmorphsets, savedir, 1)
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets, psychogood_plot_morphset_drawings
+
+    # For plotting
+    list_strokes_task = DSmorphsets.extract_strokes("list_list_arrays", ver_behtask="task")
+    DSmorphsets.Dat["strokes_task"] = list_strokes_task
+
+    from pythonlib.tools.stroketools import strokes_centerize, strokes_centerize_combined
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+
+    DSmorphsetsCopy = DSmorphsets.copy()
+
+    strokes = DSmorphsetsCopy.Dat["strok"].tolist()
+    DSmorphsetsCopy.Dat["strok"] = strokes_centerize(strokes)
+
+    strokes_list = DSmorphsetsCopy.Dat["strokes_task"].tolist()
+    strokes_list = [strokes_centerize(strokes) for strokes in strokes_list]
+    DSmorphsetsCopy.Dat["strokes_task"] = strokes_list
+
+    DSmorphsetsCopy.Dat["animal"] = DSmorphsetsCopy.animal()
+    DSmorphsetsCopy.Dat["date"] = DSmorphsetsCopy.date()
+
+    # Relabel to include (animal, date, morphset) info as well.
+    DSmorphsetsCopy.Dat = append_col_with_grp_index(DSmorphsetsCopy.Dat, ["animal", "date", "morph_set_idx"], "ani_dat_msi")
+    DSmorphsetsCopy.Dat = append_col_with_grp_index(DSmorphsetsCopy.Dat, ["animal", "date", "morph_set_idx", "assigned_base_simple"], "ani_dat_msi_base")
+    # DSmorphsetsCopy.Dat = append_col_with_grp_index(DSmorphsetsCopy.Dat, ["morph_idxcode_within_set", "morph_assigned_to_which_base"], "ani_dat_msi")
+    savedir = SAVEDIR
+    os.makedirs(savedir, exist_ok=True)
+
+    # rowvar = "ani_dat_msi"
+    # colvar = "idxmorph_assigned"
+    rowvar = "ani_dat_msi_base"
+    colvar = "morph_idxcode_within_set"
+
+    ### Plot single trials
+    psychogood_plot_drawings_morphsets(DSmorphsetsCopy, savedir, 4, n_examples_per_sublot=1, colvar=colvar, rowvar=rowvar, suff="SINGLE")
+    plt.close("all")
+
+    ### Plot a single, overlaying multiple trials
+    psychogood_plot_drawings_morphsets(DSmorphsetsCopy, savedir, 2, n_examples_per_sublot=8, colvar=colvar, rowvar=rowvar, suff="MULT")
+    plt.close("all")
+
+    ### Plot mean stroke
+    df = DSmorphsetsCopy.extract_mean_stroke_shape_grp_vars([rowvar, colvar])
+    figbeh, figtask = DSmorphsetsCopy._plotshape_row_col_vs_othervar(df, rowvar, colvar, 1)
+    savefig(figbeh, f"{savedir}/{rowvar}-vs-{colvar}-MEAN.pdf")
+    plt.close("all")    
+
+    ### Plot entire trial for the task, for cases that have multiple strokes.
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_grid_tasks
+    fig = psychogood_plot_grid_tasks(D, DSmorphsets, centerize_strokes=True)
+    savefig(fig, f"{savedir}/TASKS-entiretrial.pdf")
+    plt.close("all")    
+    
+def psychogood_plot_grid_tasks(D, DSmorphsets, centerize_strokes = True):
+    """
+    Good plotting of tasks, in grid of (morphset, index). This plots the entire task, not just the aligned stroke.
+    This is useful becuase some cases the tasks are not single strokes, and so the standrad plotting methods
+    fail.
+
+    Still has problem in that it tries to plot lines, leading to crossing of gaps, sometimes.
+    """
+
+    list_psycho_group = sorted(DSmorphsets.Dat["morph_set_idx"].unique().tolist())
+    subplot_var = "morph_idxcode_within_set"
+
+    list_subplot_var = sorted(DSmorphsets.Dat[subplot_var].unique().tolist())
+    
+    n_trials_overlap = 1
+    ver = "task"
+    SIZE = 4
+
+    ncols = len(list_subplot_var)
+    nrows = len(list_psycho_group)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*SIZE, nrows*SIZE), sharex=True, sharey=True)
+
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpdict = grouping_append_and_return_inner_items_good(DSmorphsets.Dat, ["morph_set_idx", subplot_var])
+
+    for i, psycho_group in enumerate(list_psycho_group):
+        for j, subplot_lev in enumerate(list_subplot_var):
+
+            if (psycho_group, subplot_lev) in grpdict:
+                _inds = grpdict[(psycho_group, subplot_lev)]
+                ax = axes[i][j]        
+                    
+                inds = D.Dat[D.Dat["trialcode"].isin(DSmorphsets.Dat.iloc[_inds]["trialcode"].tolist())].index.tolist()
+                
+                inds = inds[:n_trials_overlap]
+                D.plot_mult_trials_overlaid_on_axis(inds, ax, ver=ver, single_color="k", centerize=centerize_strokes)
+
+                ax.set_title(f"morphset={psycho_group}-idx={subplot_lev}")
+                
+    return fig
