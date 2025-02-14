@@ -1566,6 +1566,130 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
         df["morph_assigned_label"] = [map_idxassign_to_label[x] for x in df["labels_1_datapt"]] # (base1, ambig1, ..., base2)
         # df["idx_morph_temp"] = [map_idxassign_to_idx_morph[x] for x in df["idxmorph_assigned"]]
 
+
+def recording_units_counts_plot(DFall, savedir):
+    """
+    All plots of num units, across all recording dates.
+
+    """
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+    from pythonlib.tools.pandastools import grouping_count_n_samples_return_df
+    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.plottools import savefig
+    from pythonlib.tools.pandastools import aggregGeneral
+    from pythonlib.tools.expttools import writeStringsToFile
+
+    ### Get data of counts
+    dfcount = grouping_count_n_samples_return_df(DFall, ["ani_date", "animal", "date", "spikes_version", "label_final", "region"])
+    dfcount_comb = grouping_count_n_samples_return_df(DFall, ["ani_date", "animal", "date", "spikes_version", "region"])
+
+    ### PLOTS
+    if False: # Skip, because x orders are not shared across plots
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+        from pythonlib.tools.plottools import rotate_x_labels
+
+        grpdict = grouping_append_and_return_inner_items_good(DFall, ["animal", "date"])
+
+        ncols = 4
+        nrows = int(np.ceil(len(grpdict)/ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*4, nrows*3), sharex=True, sharey=True)
+        for i, ((animal, date), inds) in enumerate(grpdict.items()):
+
+            ax = axes.flatten()[i]
+            
+            df = DFall.iloc[inds].reset_index(drop=True)
+            plot_bar_stacked_histogram_counts(df, "region", "label_final", ax=ax)
+            ax.set_title(f"{animal}-{date}-{df['spikes_version'].values[0]}")
+
+            rotate_x_labels(ax, 90)
+
+    fig = grouping_plot_n_samples_conjunction_heatmap(DFall, "region", "label_final", ["animal", "date"])
+    savefig(fig, f"{savedir}/counts_heatmap.pdf")
+
+    fig = sns.catplot(data=dfcount, x="region", y="count", hue="label_final", col="ani_date", col_wrap=4, kind="bar")
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_counts_all.pdf")
+
+    plt.close("all")
+
+    # Plot summary
+    fig = sns.catplot(data=dfcount, x="region", y="count", hue="label_final", col="spikes_version", col_wrap=4, kind="bar", aspect=1.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts-1.pdf")
+
+    fig = sns.catplot(data=dfcount, x="region", y="count", hue="label_final", col="spikes_version", col_wrap=4, jitter=True, alpha=0.5, aspect=1.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts-2.pdf")
+
+    fig = sns.catplot(data=dfcount, x="region", y="count", hue="label_final", row="animal", col="spikes_version", kind="bar", aspect=1.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts-1a.pdf")
+
+    fig = sns.catplot(data=dfcount, x="region", y="count", hue="label_final", row="animal", col="spikes_version", jitter=True, alpha=0.5, aspect=1.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts-2a.pdf")
+
+    fig = sns.catplot(data=dfcount_comb, x="region", y="count", col="spikes_version", col_wrap=4, jitter=True, alpha=0.5)
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts_comb-1.pdf")
+
+    fig = sns.catplot(data=dfcount_comb, x="region", y="count", col="spikes_version", col_wrap=4, kind="bar")
+    rotateLabel(fig)
+    savefig(fig, f"{savedir}/catplot_catplot_counts_comb-2.pdf")
+
+    plt.close("all")
+    
+    ### Print results
+    dfcount.to_csv(f"{savedir}/count_summary_all.csv")
+    df = aggregGeneral(dfcount, ["animal", "spikes_version", "label_final", "region"], ["count"], aggmethod=["mean", "std"])
+    df.to_csv(f"{savedir}/count_summary_split.csv")
+
+    # Print text for manuscript
+    animals = df["animal"].unique().tolist()
+    bregions = df["region"].unique().tolist()
+
+    strings = []
+    for a in animals:
+        for b in bregions:
+            for label in ["mua", "su"]:
+                tmp = df[(df["animal"] == a) & (df["region"]==b) & (df["spikes_version"]=="kilosort") & (df["label_final"]==label)]
+                if len(tmp)==1:
+                    if label=="mua":
+                        _label = "MU"
+                    elif label == "su":
+                        _label = "SU"
+                    else:
+                        assert False
+                    s = f"{a} - {b} ({_label}: {tmp['count_mean'].values[0]:.1f} +/- {tmp['count_std'].values[0]:.1f})"
+                    print(s)
+                    strings.append(s)
+                else:
+                    assert len(tmp)==0
+    writeStringsToFile(f"{savedir}/count_summary_split_strings-1.txt", strings)
+
+
+    df = aggregGeneral(dfcount_comb, ["animal", "spikes_version", "region"], ["count"], aggmethod=["mean", "std"])
+    df.to_csv(f"{savedir}/count_summary_comb.csv")
+
+    # Print text for manuscript
+    animals = df["animal"].unique().tolist()
+    bregions = df["region"].unique().tolist()
+
+    strings = []
+    for a in animals:
+        for b in bregions:
+            tmp = df[(df["animal"] == a) & (df["region"]==b) & (df["spikes_version"]=="kilosort")]
+            if len(tmp)==1:
+                s = f"{a} - {b} - {tmp['count_mean'].values[0]:.1f} +/- {tmp['count_std'].values[0]:.1f}"
+                s = f"{a} - {b} ({tmp['count_mean'].values[0]:.1f} +/- {tmp['count_std'].values[0]:.1f})"
+                print(s)
+                strings.append(s)
+            else:
+                assert len(tmp)==0
+
+    writeStringsToFile(f"{savedir}/count_summary_split_strings-2.txt", strings)
+
+
 if __name__=="__main__":
     import sys
 
