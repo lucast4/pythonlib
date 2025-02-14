@@ -1418,7 +1418,7 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
         else:
             assert False
 
-        for version in ["beh", "beh_imagedist", "task"]:
+        for version in ["beh_imagedist_reversed", "beh_imagedist", "beh", "task"]:
             savedir = f"{SAVEDIR}/extraction/morphset={morphset}-ver={version}"
             os.makedirs(savedir, exist_ok=True)
 
@@ -1456,6 +1456,20 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                     strokes = strokes[::2]
                     labels = labels[::2]
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
+                                                                do_centerize=True, clustclass_rsa_mode=True,
+                                                                PLOT=True, savedir=savedir, savesuff=version)
+            elif version == "beh_imagedist_reversed":
+                # Reverse the direction of one of the beh strokes. Do this as sanity check that the motor has no effect. ie. this 
+                # really is image-level
+                strokes = dfdat["strok"].tolist()
+                strokes = strokes_centerize(strokes, method="bounding_box")
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                # Do the reverse
+                strokes1 = [strok.copy() for strok in strokes]
+                strokes2 = [strok.copy()[::-1] for strok in strokes]
+                Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes1, strokes2, labels, labels, label_var,
                                                                 do_centerize=True, clustclass_rsa_mode=True,
                                                                 PLOT=True, savedir=savedir, savesuff=version)
             else:
@@ -1693,8 +1707,8 @@ def recording_units_counts_plot(DFall, savedir):
 if __name__=="__main__":
     import sys
 
-    # PLOTS_DO = [4.1]
-    PLOTS_DO = [5.1]
+    PLOTS_DO = [4.1]
+    # PLOTS_DO = [5.1]
     
     ###
     for plot_do in PLOTS_DO:
@@ -1755,7 +1769,7 @@ if __name__=="__main__":
             ### Load a daily dataset
             animal = sys.argv[1]
             DATE = sys.argv[2]
-            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{animal}-{DATE}"
+            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{cetegory_expt_version}/{animal}-{DATE}"
 
             D = load_dataset_daily_helper(animal, DATE)
 
@@ -1764,11 +1778,10 @@ if __name__=="__main__":
             savedir = f"{SAVEDIR}/preprocess"
             os.makedirs(savedir, exist_ok=True)
             NEURAL_PLOT_DRAWINGS = False
-            DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, 
-                                                                                                                                                                                                                            NEURAL_VERSION=True, 
-                                                                                                                                                                                                                            NEURAL_SAVEDIR=savedir,
-                                                                                                                                                                                                                            NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS,
-                                                                                                                                                                                                                            cetegory_expt_version=cetegory_expt_version)
+            DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, \
+                map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, \
+                map_tc_to_morph_status = psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=True, NEURAL_SAVEDIR=savedir,
+                                                NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS, cetegory_expt_version=cetegory_expt_version)
             
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
             DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
@@ -1813,7 +1826,7 @@ if __name__=="__main__":
 
 
             from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets_manuscript
-            psychogood_plot_drawings_morphsets_manuscript(DSmorphsets, SAVEDIR)
+            psychogood_plot_drawings_morphsets_manuscript(D, DSmorphsets, SAVEDIR)
 
         elif plot_do==4.2:
             # Categories (smooth), plotting motor distances of each index vs. endpoint (base prims), and doing
@@ -1824,7 +1837,7 @@ if __name__=="__main__":
             ### Load a daily dataset
             animal = sys.argv[1]
             DATE = sys.argv[2]
-            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/smooth/{animal}-{DATE}"
+            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{cetegory_expt_version}/{animal}-{DATE}"
 
             D = load_dataset_daily_helper(animal, DATE)
 
@@ -1841,6 +1854,7 @@ if __name__=="__main__":
             
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
             DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
+
 
         else:
             assert False
