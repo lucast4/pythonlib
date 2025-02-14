@@ -1569,7 +1569,8 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
 if __name__=="__main__":
     import sys
 
-    PLOTS_DO = [4.1]
+    # PLOTS_DO = [4.1]
+    PLOTS_DO = [5.1]
     
     ###
     for plot_do in PLOTS_DO:
@@ -1647,6 +1648,48 @@ if __name__=="__main__":
             
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
             DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
+
+        elif plot_do==5.1:
+            ### Categories, switching, plot drawings in grid, for final manuscript.
+            # goal is to show examples of drawing and task.
+            
+            animal = sys.argv[1]
+            DATE = sys.argv[2]
+            D = load_dataset_daily_helper(animal, DATE)
+            
+            ### Choose one of these
+
+            # # Original plots of stats, keeping all data
+            # NEURAL_VERSION = False # For stats (older plots)
+            # remove_flankers=False
+            # cetegory_expt_version=None
+
+            # For making draings, grids, restrict to good trials
+            NEURAL_VERSION = True # For making good draing figures (grid of drawings)
+            remove_flankers=True
+            cetegory_expt_version="switching"
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_preprocess_wrapper_GOOD
+
+            savedir = "/tmp/PSYCHO"
+            os.makedirs(savedir, exist_ok=True)
+            NEURAL_PLOT_DRAWINGS = False 
+
+            DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, \
+                map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, \
+                    map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status = \
+                        psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=NEURAL_VERSION, 
+                                                        NEURAL_SAVEDIR=savedir, 
+                                                        NEURAL_PLOT_DRAWINGS=NEURAL_PLOT_DRAWINGS,
+                                                        remove_flankers=remove_flankers,
+                                                        cetegory_expt_version=cetegory_expt_version)
+
+            #  Plotting drawings, combining all image sets.
+            SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/DRAWING_GRID/{animal}-{DATE}"
+            os.makedirs(SAVEDIR, exist_ok=True)
+
+
+            from pythonlib.dataset.dataset_analy.psychometric_singleprims import psychogood_plot_drawings_morphsets_manuscript
+            psychogood_plot_drawings_morphsets_manuscript(DSmorphsets, SAVEDIR)
 
         elif plot_do==4.2:
             # Categories (smooth), plotting motor distances of each index vs. endpoint (base prims), and doing

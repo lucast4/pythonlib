@@ -236,7 +236,7 @@ class Clusters(object):
         - mask, boolean mask (nrow, ncol)
         """
 
-        if len(list_masks)==0:
+        if isinstance(list_masks, list) and len(list_masks)==0:
             list_masks = None
 
         if dat is None:

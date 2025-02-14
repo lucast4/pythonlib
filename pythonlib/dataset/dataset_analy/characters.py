@@ -31,7 +31,8 @@ def analy_preprocess_dataset(D, Dc, SAVEDIR):
 
     # Preprocess both same way
     for Dthis in [D, Dc]:
-        Dthis.preprocessGood(params=["no_supervision", "remove_online_abort"])
+        if Dthis is not None:
+            Dthis.preprocessGood(params=["no_supervision", "remove_online_abort"])
 
     # Final image accuracy (append, i.e, each char, convert to pts)
     D.score_visual_distance()
@@ -1716,7 +1717,6 @@ def analy_score_combined_animals_bases(DictDS, savedir):
     assert len(dfchar_shared)>0, "no common chars between them"
 
     # Finally, agg over trials, so that each los_info (char) has a single datapt.
-    
     dfchar_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], 
                 ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], 
                 aggmethod=["mean"], 
@@ -2413,7 +2413,7 @@ def analy_collect_all_los_datetimes(animal):
     return map_los_to_datetimes
 
 
-def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
+def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR, animals=("Diego", "Pancho")):
     """
     For each trial, determine if it is a novel trial, the first trial of that
     character, and I hand labeled it as novel. 
@@ -2432,7 +2432,7 @@ def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
     # Get mapping, los --> list of datetimes across all data
     # For a given los, this gets only the trials that are novel_char==True
 
-    for animal_get in ["Diego", "Pancho"]:
+    for animal_get in animals:
 
         if True:
             # Better -- uses all char dates
@@ -2468,7 +2468,7 @@ def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
 
             if (row["task_kind"]=="character") and (row["random_task"]==False):
                 assert los in map_los_to_datetimes, "PRoblem with extraction/saving of old los"
-                return (row["novel_char_hand"]==True) and (map_los_to_datetimes[los][0] == dt)
+                return (row["novel_char_hand_old"]==True) and (map_los_to_datetimes[los][0] == dt)
             else:
                 # This is not novel (becuase it is either not char or is random char)
                 # print(row["los_info"])
@@ -2499,6 +2499,17 @@ def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
                 D.grouping_print_n_samples(["block", "probe", "novel_char", "los_set"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-3.txt")
                 D.grouping_print_n_samples(["block", "probe", "novel_char", "task_kind"], savepath=f"{savedir}/{a}-{d}-novel_char_assignments-4.txt")
 
+                # Sanity check -- confirm that each novel_char is unique los
+                if any(D.Dat["novel_char"]==True):
+                    try:
+                        assert D.Dat[D.Dat["novel_char"]==True]["los_info"].value_counts().max()<2
+                        assert D.Dat[D.Dat["novel_char"]==True]["character"].value_counts().max()<2
+                    except Exception as err:
+                        print(D.Dat[D.Dat["novel_char"]==True]["los_info"].value_counts().max())
+                        print(D.Dat[D.Dat["novel_char"]==True]["character"].value_counts().max())
+                        raise err
+
+
                 list_df.append(D.Dat)
 
         df = pd.concat(list_df).reset_index(drop=True)
@@ -2511,3 +2522,455 @@ def analy_update_novel_label(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
 
         grp_vars = ["animal", "date", "probe", "novel_char", "los_info"]
         grouping_print_n_samples(df, grp_vars, savepath=f"{savedir}/{animal_get}-ALL-novel_char_assignments-1.txt")
+
+def analy_update_novel_label_ALL_wrapper(LIST_D, LIST_ANIMAL_DATE, savesuff):
+    """
+    For all trialcodes currently designated as "novel_char"==True, determine whether this is atually
+    novel by comparing it to every previous trial, using image distances, and calling noivel only if is not similar
+    to EVERY previous trial. 
+
+    Only run this AFTER already pre-saved all data across days.
+
+    Very stringent.
+    """
+    
+    
+    for animal in list(set([x[0] for x in LIST_ANIMAL_DATE])):
+
+        ### Load dataset of all trials.
+        DFALL, SAVEDIR_ALL = analy_update_novel_label_ALL_load(animal)
+
+        savedir = f"{SAVEDIR_ALL}/final_list_novel/version={savesuff}/{animal}"
+        os.makedirs(savedir, exist_ok=True)
+        analy_update_novel_label_ALL_run(DFALL, LIST_D, LIST_ANIMAL_DATE, animal, savedir)
+
+
+def analy_update_novel_label_ALL_load(animal_get):
+    """
+    Load database of data across ALL dates.
+    """
+    import pickle
+
+    ##### Load data across all day (just the "raw" df)
+    LIST_ANIMAL_DATE_ALL = [
+        ("Pancho", "220531"),
+        ("Pancho", "220601"),
+        ("Pancho", "220602"),
+        ("Pancho", "220603"),
+        ("Pancho", "220613"),
+        ("Pancho", "220614"),
+        ("Pancho", "220615"),
+        ("Pancho", "220616"),
+        ("Pancho", "220617"),
+        ("Pancho", "220618"),
+        ("Pancho", "220621"),
+        ("Pancho", "220622"),
+        ("Pancho", "220624"),
+        ("Pancho", "220625"), # added 2/8/25
+        ("Pancho", "220626"), # added 2/8/25
+        ("Pancho", "220627"), # added 2/8/25
+        ("Pancho", "220628"), # added 2/8/25
+        ("Pancho", "220629"), # added 2/8/25
+        ("Pancho", "220630"), # added 2/8/25
+        ("Pancho", "230112"),
+        ("Pancho", "230117"),
+        ("Pancho", "230118"),
+        ("Pancho", "230119"),
+        ("Pancho", "230120"),
+        ("Pancho", "230122"),
+        ("Pancho", "230124"),
+        ("Pancho", "230125"),
+        ("Pancho", "230126"),
+        ("Pancho", "230127"),
+        ("Diego", "230421"), # added 2/8/25
+        ("Diego", "230422"), # added 2/8/25
+        ("Diego", "230423"), # added 2/8/25
+        ("Diego", "230424"), # added 2/8/25
+        ("Diego", "231120"), # added 2/8/25
+        ("Diego", "231121"), # added 2/8/25
+        ("Diego", "231122"),
+        ("Diego", "231128"),
+        ("Diego", "231129"),
+        ("Diego", "231130"),
+        ("Diego", "231201"),
+        ("Diego", "231204"),
+        ("Diego", "231205"),
+        ("Diego", "231206"),
+        ("Diego", "231207"),
+        ("Diego", "231209"), # added 2/8/25
+        ("Diego", "231211"),
+        ("Diego", "231213"),
+        ("Diego", "231214"), # added 2/8/25
+        ("Diego", "231215"), # added 2/8/25
+        ("Diego", "231218"),
+        ("Diego", "231219"),
+        ("Diego", "231220"),
+    ]
+
+    animals = sorted(set([x[0] for x in LIST_ANIMAL_DATE_ALL]))
+    dates = sorted(set([x[1] for x in LIST_ANIMAL_DATE_ALL]))
+    savesuff = "_".join(animals) + "|" + f"{min(dates)}_{max(dates)}|N={len(LIST_ANIMAL_DATE_ALL)}"
+    SAVEDIR_ALL = f"/lemur2/lucas/analyses/main/strokes_clustering_similarity/analysis_match_base_prims/MULT/{savesuff}"
+    print(SAVEDIR_ALL)
+
+    list_df = []
+    # LIST_D = []
+    for animal, date in LIST_ANIMAL_DATE_ALL:
+        if animal==animal_get:
+
+            print(animal, date)
+            import pickle
+            path = f"{SAVEDIR_ALL}/dat_unique_los-{animal}-{date}.pkl.pkl"
+
+            with open(path, "rb") as f:
+                Dthis = pickle.load(f)
+
+                # Condition, for relate to global things.
+                if False: # I stopped using tvalfake...
+                    # - get all time relative same date
+                    date_start = min([x[1] for x in LIST_ANIMAL_DATE_ALL])
+                    Dthis._get_standard_time(date_start)
+
+                # Collect data
+                Dthis.Dat = Dthis.Dat[Dthis.Dat["task_kind"]=="character"].reset_index(drop=True)
+                list_df.append(Dthis.Dat)
+
+    # Concatenate into a single
+    DFALL = pd.concat(list_df).reset_index(drop=True)
+
+    return DFALL, SAVEDIR_ALL
+
+
+def analy_update_novel_label_ALL_run(DFALL, LIST_D, LIST_ANIMAL_DATE, animal, savedir):
+    """
+    GOOD - uses ALL trials across dates in rig.
+
+    Saves data, one row for each index that is novel_char, in each D in LIST_D.
+
+
+    """
+    from pythonlib.tools.stringtools import trialcode_to_scalar
+
+    ### Filter to just this animal
+    DFall = DFALL[DFALL["animal"]==animal].reset_index(drop=True)
+    list_D = [D for D, anidate in zip(LIST_D, LIST_ANIMAL_DATE) if anidate[0]==animal]
+    # Make copy, as below will prune.
+
+    ### Preprocessing, to make below faster
+    # # - sort by tval_fake
+    # DFall = DFall.sort_values("tvalfake").reset_index(drop=True)
+
+    # (1) all data
+    DFall["trialcode_num"]= [trialcode_to_scalar(tc) for tc in DFall["trialcode"]]
+
+    # (2) specific data
+    for D in list_D:
+        D.Dat["trialcode_num"]= [trialcode_to_scalar(tc) for tc in D.Dat["trialcode"]]
+
+    # keep only first trial for each los_info
+    from pythonlib.tools.pandastools import extract_first_trial_each_level
+    DFall = extract_first_trial_each_level(DFall, "los_info", "trialcode_num")
+
+    # # Plot to check that tvals are monotonic, correct.
+    # sns.catplot(data=DFall, x="tvalfake", y="date", col="animal", sharex=False)
+    # # For both datasets (current, and loaded_all_days), match them in the following ways:
+    DEBUG = False
+    for D in list_D:
+        # # (1) tval_fake to same date.
+        # date_start = min([x[1] for x in LIST_ANIMAL_DATE_ALL])
+        # D._get_standard_time(date_start)
+
+        # (2) Keep just first trial
+        if False: # No need, becuase below only pulls out novel chars, which are by definition just one trial.
+            df = D.analy_subsample_first_trial_each_level("los_info")
+            if DEBUG:
+                print(len(D.Dat), len(df))
+                # Confirm that tvalfake and trialcode_num are similar.
+                sns.scatterplot(data=D.Dat, x="tvalfake", y="trialcode_num")        
+            assert sum(D.Dat["novel_char"]) == sum(df["novel_char"]), "keeping only first trial should NEVER throw out novel chars..."
+            D.Dat = df
+
+    ### Use trialcode global.
+
+    # Sanity check that all are monotonic increasing
+    if False:
+        DFall = DFall.sort_values("trialcode_num")
+        assert np.all(np.diff(DFall["trialcode_num"])>0)
+        assert np.all(np.diff(DFall["tvalfake"])>0)
+        sns.scatterplot(data=DFall, x="trialcode_num", y="tvalfake")
+
+    ### Go thru each novel char, and compare it to all pevious trials.
+    from pythonlib.dataset.dataset_strokes import DatStrokes
+    ds = DatStrokes()
+
+    res = []
+    for D in list_D:
+        
+        # THIS IS MAIN CODE.
+        # for each novel char, compare it to all the previous chars
+        inds_novel = D.Dat[D.Dat["novel_char"]==True].index.tolist()
+
+        for ind in inds_novel:
+
+            ### Information for this novel 
+            tc_this = D.Dat.iloc[ind]["trialcode"]
+            tcnum_this = D.Dat.iloc[ind]["trialcode_num"]
+            los_this = D.Dat.iloc[ind]["los_info"]
+            novel_this = D.Dat.iloc[ind]["novel_char"]
+            animal_this = D.Dat.iloc[ind]["animal"]
+            date_this = D.Dat.iloc[ind]["date"]
+            pts_this = np.concatenate(D.Dat.iloc[ind]["strokes_task"])
+
+            print(tc_this)
+
+            ### Information for trials before this date
+            df_others = DFall[DFall["trialcode_num"] < tcnum_this]      
+
+            if len(df_others)==0:
+                # Then this is earliser... there are no preceding trials. Fake it as not having match.
+                res.append({
+                    "this_trialcode":tc_this,
+                    "this_trialcode_num":tcnum_this,
+                    "this_los":los_this,
+                    "this_novel":novel_this,
+                    "this_animal":animal_this,
+                    "this_date":date_this,
+                    "other_trialcode":"IGNORE",
+                    "other_los":"IGNORE",
+                    "dist":10
+                })
+            else: 
+                # list_pts_others = [np.concatenate(strokes) for strokes in df_others["strokes_task"]]
+                # # list_novel_others = df_others["novel_char"].tolist()
+                # list_los_others = df_others["los_info"].tolist()
+                # # list_trialcode_others = df_others["trialcode"].tolist()
+
+                # For each of the others, compare to this.
+                # Get all their distances to this one
+                for _, row in df_others.iterrows():
+                    pts_other = np.concatenate(row["strokes_task"])
+                    dist = ds._dist_strok_pair(pts_this, pts_other, do_centerize=True, centerize_method="bounding_box")
+                    res.append({
+                        "this_trialcode":tc_this,
+                        "this_trialcode_num":tcnum_this,
+                        "this_los":los_this,
+                        "this_novel":novel_this,
+                        "this_animal":animal_this,
+                        "this_date":date_this,
+                        "other_trialcode":row["trialcode"],
+                        "other_los":row["los_info"],
+                        # "other_novel":row["novel_char"],
+                        "dist":dist
+                    })
+    dfres = pd.DataFrame(res)
+    
+    ### Final saves and plots
+    # Can evaluate, for each novel char, whether it has any mathces (failures)
+    dfres["failure_same_los"] = (dfres["this_los"] == dfres["other_los"])
+
+    thresh = 1.0
+    dfres["failure_images_same"] = dfres["dist"]<thresh
+
+    dfres["failure_any"] = (dfres["failure_same_los"]) | (dfres["failure_images_same"])
+
+    dfres.groupby(["failure_same_los", "failure_images_same"]).size().to_csv(f"{savedir}/failure_kinds.csv")
+
+    # save list of all the bad cases
+    # Save this somewhere global, then can reference this later no matter what dataset use.
+    dfres_bad = dfres[dfres["failure_any"]].reset_index(drop=True)
+    dfres_bad.to_csv(f"{savedir}/failures_list.csv")
+
+    # Save, finally, all the novel trials.
+    # list_trialcode = dfres["this_trialcode"].unique().tolist()
+    # list_trialcode
+    # trialcodes_good = []
+    # trialcodes_bad = []
+    # for tc in list_trialcode:
+    #     if any(dfres[(dfres["this_trialcode"]==tc)]["failure_any"]):
+    #         trialcodes_bad.append(tc)
+    #     else:
+    #         trialcodes_good.append(tc)
+    # print(len(trialcodes_bad), len(trialcodes_good))
+
+    from pythonlib.tools.pandastools import aggregGeneral
+    # Cnofirmed -- this gets failure_any true if any cases are faile.d
+    dfres_agg = aggregGeneral(dfres, ["this_trialcode", "this_los"], ["failure_any"], aggmethod=["any"], nonnumercols="all")
+
+    # save this
+    dfres_agg.to_csv(f"{savedir}/final_results_each_los.csv")
+    dfres_agg.to_pickle(f"{savedir}/final_results_each_los.pkl")
+    
+    dfres.to_pickle(f"{savedir}/final_results_each_pair.pkl")
+
+def analy_update_novel_label_ALL_apply(LIST_D, LIST_ANIMAL_DATE, savesuff):
+    """
+    
+    PARAMS:
+    - savesuff, 
+    --- "original_novel_labels", DATA = subset of dates (all trials), but using ALL data to determine if data are data in DATA are novel.
+    --- "shared_all_not_just_novel", DATA = chars shared across subjects, first trial only, across all days.
+    """
+    # Finally, update labels using previuosly saved data    
+    SAVEDIR_LABELS = "/lemur2/lucas/analyses/main/strokes_clustering_similarity/analysis_match_base_prims/MULT/Diego_Pancho|220531_231220|N=52"
+    # TODO HERE: Load it, and keep just those trialcodes.
+
+    # dict_failures = {}
+    dict_res = {}
+    for animal in ["Pancho", "Diego"]:
+
+        # path = f"{SAVEDIR_LABELS}/final_list_novel/{animal}/final_results_each_los.pkl"
+        # pd.read_pickle(path)
+
+        # path = f"{SAVEDIR_LABELS}/final_list_novel/{animal}/failures_list.csv"
+        # df_failures = pd.read_csv(path)
+
+        path = f"{SAVEDIR_LABELS}/final_list_novel/version={savesuff}/{animal}/final_results_each_los.pkl"
+        df_res = pd.read_pickle(path)
+        dict_res[animal] = df_res
+        
+        # Keep only dist less than 1.0
+        if False:
+            thresh_better = 1.0
+            df_failures = df_failures[df_failures["dist"]<thresh_better].reset_index(drop=True)
+
+            dict_failures[animal] = df_failures
+
+    ### Apply all updates to novel chars
+    for D, ani_date in zip(LIST_D, LIST_ANIMAL_DATE):
+        animal = ani_date[0]
+        date = ani_date[1]
+        # df_failures = dict_failures[animal]
+        df_res = dict_res[animal]
+
+        def _is_novel(tc):
+            # Return if this new label is novel (F/T). Error if tc doesnt exist in database.
+            tmp = df_res[df_res["this_trialcode"]==tc]
+            assert len(tmp)==1
+            return not tmp["failure_any"].item()
+
+        novels = []
+        for _, row in D.Dat.iterrows():
+            if row["novel_char"] and not (row["trialcode"] in df_res["this_trialcode"].tolist()):
+                # Previuosly novel, but not included in database... PRoblem, this cannot happen... 
+                print(animal, date, row["trialcode"])
+                assert False, "bug,  not sure why"
+            elif not row["novel_char"]:
+                # Not novel. check that it is not in database
+                if False: # this sometimes fails, for good reason
+                    assert not (row["trialcode"] in df_res["this_trialcode"].tolist())
+                novels.append(False)
+            elif row["novel_char"] and _is_novel(row["trialcode"]):
+                # previously novel, and is still novel
+                novels.append(True)
+            elif row["novel_char"] and not _is_novel(row["trialcode"]):
+                print("Changed from novel to not novel:  ", row["trialcode"])
+                # Peviously novel, but changed now
+                novels.append(False)
+            else:
+                assert False, "cannot happen"
+            
+        # Update novels
+        D.Dat["novel_char"] = novels
+
+def analy_update_novel_label_ALL_plot_counts(LIST_D, LIST_ANIMAL_DATE, SAVEDIR):
+    """
+    Print how many unqiue los that were practiced vs novel.
+    """
+    
+    from pythonlib.tools.pandastools import extract_first_trial_each_level
+    from pythonlib.tools.pandastools import aggregGeneral
+
+    ### Plot and 
+    savedir = f"{SAVEDIR}/novel_counts_final"
+    os.makedirs(savedir, exist_ok=True)
+    print("Saving to: ", savedir)
+
+    # Count how many novels
+    res_counts = []
+    for D, ani_date in zip(LIST_D, LIST_ANIMAL_DATE):
+        animal = ani_date[0]
+        date = ani_date[1]
+
+        # Make sure only first trial for each char
+        df = D.analy_subsample_first_trial_each_level("character")
+        
+        # keep only character
+        df = df[df["task_kind"] == "character"].reset_index(drop=True)
+        
+        # Save stats on novel chars -- n novel per day.
+        dfagg = aggregGeneral(df, ["character"], ["novel_char"], aggmethod=["any"])
+        n_practiced = sum(dfagg["novel_char"] == False)
+        n_novel = sum(dfagg["novel_char"] == True)
+
+        res_counts.append({
+            "animal":animal,
+            "date":date,
+            "n_practiced_los":n_practiced,
+            "n_novel_los":n_novel,
+        })
+    # Finalisze and save, where is clean -- one los (unique task) 
+    # MINOR PROBLEM: some tasks may be repeats. But confirmed that this is NEVER the case for novel chars (i..e each novel
+    # char is first time it is encountred.)
+    dfres_counts = pd.DataFrame(res_counts)
+    dfres_counts.to_csv(f"{savedir}/all_counts.csv")
+    dfres_counts.loc[:, ["n_practiced_los", "n_novel_los"]].mean().to_csv(f"{savedir}/mean_counts.csv")
+    dfres_counts.loc[:, ["n_practiced_los", "n_novel_los"]].std().to_csv(f"{savedir}/stdl_counts.csv")
+    for animal in ["Diego", "Pancho"]:
+        dfthis = dfres_counts[dfres_counts["animal"] == animal]
+        dfthis.loc[:, ["n_practiced_los", "n_novel_los"]].mean().to_csv(f"{savedir}/mean_counts-{animal}.csv")
+        dfthis.loc[:, ["n_practiced_los", "n_novel_los"]].std().to_csv(f"{savedir}/stdl_counts-{animal}.csv")
+
+    # ##### Older code, using distnace matrix, which is not good for large data -- blows up.
+    # D.Dat["taskconfig_shploc"]
+
+    # fig, axes, idxs = D.plotMultTrials(30, return_idxs=True)
+    # D.plotMultTrials(idxs, "strokes_task", return_idxs=True)
+
+    # for i in idxs:
+    #     tk = D.Dat.iloc[i]["taskconfig_shploc_SHSEM"]
+    #     print(i, " --- ", tk)
+
+    # for i in idxs:
+    #     print(i, " --- ", D.Dat.iloc[i]["los_info"])
+
+
+    # # Get pairwise distances
+    # from pythonlib.tools.distfunctools import distmat_construct_wrapper
+
+    # list_pts = [np.concatenate(D.Dat.iloc[i]["strokes_task"]) for i in idxs]
+    # labels = [tuple(x) for x in D.Dat.loc[idxs, ["animal", "date", "trialcode", "novel_char", "los_info"]].values.tolist()]
+
+    # # With this dist_func, <1 means this is same image (actually, <5 even is very rare)
+    # def dist_func(pts1, pts2):
+    #     return ds._dist_strok_pair(pts1, pts2, do_centerize=True, centerize_method="bounding_box")
+    # Cl = distmat_construct_wrapper(list_pts, list_pts, dist_func, PLOT=True, return_as_clustclass=True, 
+    #                                clustclass_labels_1=labels, clustclass_labels_2=labels, clustclass_label_vars="index")
+
+    # # def dist_func(pts1, pts2):
+    # #     return ds._dist_strok_pair(pts1, pts2, do_centerize=True, centerize_method="bounding_box", distancever="hausdorff_max")
+    # # Cl = distmat_construct_wrapper(list_pts, list_pts, dist_func, PLOT=True, return_as_clustclass=True, 
+    # #                                clustclass_labels_1=labels, clustclass_labels_2=labels, clustclass_label_vars="index")
+
+
+    # # Plot distribution of pairwise distances
+    # fig, ax = plt.subplots()
+    # dat = Cl.dataextract_masked_upper_triangular_flattened()
+    # ax.hist(dat, bins=50)
+
+    # # Find cases that are similar. Make sure do sanity checks.
+    # # - cannot be (novel, practiced) --> remove the "novel" label.
+    # # - cannot be (novel, novel) --> keep only the first novel.
+
+    # dflabs = Cl.rsa_labels_return_as_df()
+
+    # ma_ut = Cl._rsa_matindex_generate_upper_triangular()
+    # ma = Cl.Xinput<1 & ma_ut
+    # ind_pairs = Cl._rsa_matindex_convert_from_mask_to_rowcol(ma)
+
+    # for inds in ind_pairs:
+    #     _i = 3
+    #     novel1 = dflabs.iloc[inds[0]]["index"][_i]
+    #     novel2 = dflabs.iloc[inds[1]]["index"][_i]
+    #     if novel1==True or novel2==True:
+    #         print(inds)
+    #         assert False

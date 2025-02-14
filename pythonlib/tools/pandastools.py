@@ -1059,6 +1059,10 @@ def convert_var_to_categorical_mult_columns(df, columns, newcolumns, use_string=
     Convert variable to categrical levels, appending to df a new column
     Ensures that all the columns have the same mapping from old values to new categorical ints
 
+    The reason this is mult is that it collects levels across all columns, ensuring that they have
+    the same categorical encoding. e.g., if multiple columns hold shape variable, then you want
+    them to have consistent categories.
+    
     APpends a new column which converts levels of <column> into indices, 0, 1,..
     assuming colum is categorical.
     PARAMS:
@@ -2017,6 +2021,32 @@ def extract_resample_balance_by_var(df, var, n_samples="min", method_if_not_enou
 
     return balanced_df
 
+def extract_first_trial_each_level(df, var, sort_var):
+    """
+    For each level of var, get the first time for that level in this dataset, using the 
+    sort_var (e.g., trialcode as number)
+    
+    e.g., if want first trial (sort_var=tval) for each shape (var=shape)
+
+    RETURNS: copy
+    """
+
+    # First, sort by var
+    df = df.sort_values(sort_var).reset_index(drop=True)
+
+    # Get first trial for each los
+    keys_gotten = []
+    inds_keep = []
+    inds_exclude = []
+    for i in range(len(df)):
+        key = df.iloc[i][var]
+        if key in keys_gotten:
+            inds_exclude.append(i)
+        else:
+            inds_keep.append(i)
+            keys_gotten.append(key)
+    df = df.iloc[inds_keep].reset_index(drop=True)        
+    return df
                                          
 def extract_trials_spanning_variable(df, varname, varlevels=None, n_examples=1,
                                     F = None, return_as_dict=False, 
@@ -2311,6 +2341,15 @@ def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars,
             groupdict = {k:groupdict[k] for k in keys}
         
         return groupdict, df
+
+def grouping_count_n_samples_return_df(df, groupvars):
+    """
+    REturn df where each row is a level of conjunctive groupvars, and there is column "count" with the
+    N cases.
+    """
+    dfcount = df.groupby(groupvars).size().reset_index()
+    dfcount = dfcount.rename({0:"count"}, axis=1)
+    return dfcount
 
 def grouping_count_n_samples(df, groupvars):
     """ REturn list of ints, the n across all conjucntiosn of groupvars"""
@@ -3703,6 +3742,8 @@ def plot_bar_stacked_histogram_counts(df, x_var, hue_var, ax):
     # df = DS.Dat
     # x_var = "clust_sim_max_colname"
     # hue_var = "matches_base_prim"
+
+    _check_index_reseted(df)
 
     # 1. frequency counts
     dfc = pd.crosstab(df[x_var], df[hue_var])

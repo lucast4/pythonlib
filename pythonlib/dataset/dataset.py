@@ -11321,7 +11321,7 @@ class Dataset(object):
 
         return suff
 
-    def save(self, savedir, columns_to_keep = None):
+    def save(self, savedir, filename="dataset_beh", columns_to_keep = None):
         """ saves dataset (the entire object) in
         savedir/dataset_beh.pkl
         """
@@ -11333,7 +11333,7 @@ class Dataset(object):
             D = self
 
         import pickle
-        path = f"{savedir}/dataset_beh.pkl"
+        path = f"{savedir}/{filename}.pkl"
         with open(path, "wb") as f:
             pickle.dump(D, f)
 
@@ -11444,7 +11444,7 @@ class Dataset(object):
             ver="beh", strok_indices=None, add_stroke_number_beh=True,  alpha=0.55):
         """ Simple low-level helper for plotting strokes
         """
-        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes, plot_single_strok
         
         if ax is None:
             fig, ax = plt.subplots(1,1)
@@ -11459,13 +11459,15 @@ class Dataset(object):
             plotDatStrokes(strokes, ax, each_stroke_separate=True, 
                 plotver="onecolor", add_stroke_number=False, 
                 mark_stroke_onset=False, pcol=single_color, number_from_zero=False, alpha=alpha)
+            # for strok in strokes:
+            #     plot_single_strok(strok, ver, ax, single_color, alpha, label_onset=False)
         else:
             assert False
 
     def plot_mult_trials_overlaid_on_axis(self, inds, ax, 
                                           single_color=None, 
             ver="beh", strok_indices=None, add_stroke_number_beh=True, alpha=0.55,
-            nrand=None):
+            nrand=None, centerize=False):
         """
         As title says...
         """
@@ -11475,10 +11477,11 @@ class Dataset(object):
 
         for idx in inds:
             self.plot_single_trial(idx, ax, single_color, ver,
-            strok_indices, add_stroke_number_beh, alpha=alpha)
+                strok_indices, add_stroke_number_beh, alpha=alpha, centerize=centerize)
 
     def plot_single_trial(self, idx, ax=None, single_color=None, 
-            ver="beh", strok_indices=None, add_stroke_number_beh=True,  alpha=0.55):
+            ver="beh", strok_indices=None, add_stroke_number_beh=True,  alpha=0.55,
+            centerize=False):
         """ Low-level code to plot a single trial, beh or task strokes, on an axis.
         PARAMS:
         - single_color, either None (colors by ordinal), or str color code
@@ -11490,6 +11493,11 @@ class Dataset(object):
             strokes = self.Dat.iloc[idx]["strokes_task"]
         else:
             assert False
+        if centerize:
+            from pythonlib.tools.stroketools import strokes_centerize_combined
+            # Cneters relative to global 0
+            strokes = strokes_centerize_combined(strokes, method="bounding_box")
+
         return self.plot_strokes(strokes, ax, single_color, ver, strok_indices, 
             add_stroke_number_beh,  alpha=alpha)
 
@@ -12444,6 +12452,24 @@ class Dataset(object):
 
         self.Dat = applyFunctionToAllRows(self.Dat, F, "inds_same_task")
 
+    def analy_subsample_first_trial_each_level(self, var):
+        """
+        For each level of var, get the first time for that level in this dataset, using the 
+        trialcode as number
+
+        RETURNS:
+        - df, a copy
+        """
+        from pythonlib.tools.pandastools import extract_first_trial_each_level
+        from pythonlib.tools.stringtools import trialcode_to_scalar
+
+        # First, get sorted by trialcode.
+        self.Dat["trialcode_num"] = [trialcode_to_scalar(tc) for tc in self.Dat["trialcode"]]
+        # Then get first trial.
+        df = extract_first_trial_each_level(self.Dat, var, "trialcode_num")
+
+        return df
+        
     def analy_subsample_trials_for_example(self, scores, inds, method="uniform",
         score_range=None, n=20):
         """ Extract subset of trials based on some filter for some score.
