@@ -42,24 +42,31 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
     - datapt_vars, list of str, each datap will be unique conjunction of these vars 
     (i.e., each row)
     - contrast_var, str, the var whose 2 levesl you want to contrast.
-    - contrast_levels, list of 2 levels of contrast var, which you want to comapre.
+    - contrast_levels, list of 2 levels of contrast var, which you want to comapre. if has only one
+    level, then compares that to 0.
     - value_var, str, the var holding the numerical values.
     - assert_no_na_rows, if True, then fails if any rows (datapt_vars) are thrown out, which 
     can occur if any column (contrast_levels) are missing.
     """
     from pythonlib.tools.pandastools import pivot_table 
     from pythonlib.tools.statstools import signrank_wilcoxon, plotmod_pvalues
-    assert len(contrast_levels)==2
+
+    assert len(contrast_levels) in [1,2]
 
     for lev in contrast_levels:
         assert lev in df[contrast_var].tolist(), f"Misentered contrast_levels. Maybe typo? {contrast_var} -- {contrast_levels}"
 
     var1 = f"{value_var}-{contrast_levels[0]}"
-    var2 = f"{value_var}-{contrast_levels[1]}"
+    vars_list = [var1]
+    if len(contrast_levels)>1:
+        var2 = f"{value_var}-{contrast_levels[1]}"
+        vars_list.append(var2)
+    else:
+        var2 = "NA"
 
     dfpivot = pivot_table(df, datapt_vars, [contrast_var], [value_var], flatten_col_names=True)
 
-    dfpivot = dfpivot.loc[:, list(datapt_vars)+[var1, var2]] # keep just the vars you care about, before removing na rows, or you might remove supriosuly. 
+    dfpivot = dfpivot.loc[:, list(datapt_vars)+vars_list] # keep just the vars you care about, before removing na rows, or you might remove supriosuly. 
     n1 = len(dfpivot)
     dfpivot = dfpivot.dropna()
     n2 = len(dfpivot)
@@ -74,21 +81,42 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
         return None
     
     # display(dfpivot)
-    res = signrank_wilcoxon(dfpivot[var1], dfpivot[var2])
+    if len(contrast_levels)==2:
+        res = signrank_wilcoxon(dfpivot[var1], dfpivot[var2])
+    elif len(contrast_levels)==1:
+        res = signrank_wilcoxon(dfpivot[var1])
+    else:
+        print(contrast_levels)
+        assert False
 
     if PLOT:
-        fig, ax = plt.subplots()
-        for i, row in dfpivot.iterrows():
-            ax.plot([0, 1], [row[var1], row[var2]], "-ok", alpha=0.5)
+        if len(contrast_levels)>1:
+            fig, ax = plt.subplots()
+            for i, row in dfpivot.iterrows():
+                ax.plot([0, 1], [row[var1], row[var2]], "-ok", alpha=0.5)
 
-        # Overlay means
-        ax.plot([-0.05, 1.05], [dfpivot[var1].mean(), dfpivot[var2].mean()], "sr", alpha=0.5)
+            # Overlay means
+            ax.plot([-0.05, 1.05], [dfpivot[var1].mean(), dfpivot[var2].mean()], "sr", alpha=0.5)
 
-        ax.set_ylim(0)
-        ax.set_xlim([-0.5, 1.5])
-        plotmod_pvalues(ax, [0.5], [res.pvalue])
-        ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. {var2}", fontsize=6)
-        ax.set_ylabel(value_var)
+            # ax.set_ylim(0)
+            ax.set_xlim([-0.5, 1.5])
+            plotmod_pvalues(ax, [0.5], [res.pvalue])
+            ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. {var2}", fontsize=6)
+            ax.set_ylabel(value_var)
+        else:
+            fig, ax = plt.subplots()
+            for i, row in dfpivot.iterrows():
+                ax.plot([0], [row[var1]], "-ok", alpha=0.5)
+
+            # Overlay means
+            ax.plot([-0.05], [dfpivot[var1].mean()], "sr", alpha=0.5)
+
+            # ax.set_ylim(0)
+            ax.set_xlim([-0.5, 1.5])
+            plotmod_pvalues(ax, [0.5], [res.pvalue])
+            ax.set_xlabel(f"<value_var>-{contrast_var} = {var1} vs. 0", fontsize=6)
+            ax.set_ylabel(value_var)
+
     else:
         fig = None
     
