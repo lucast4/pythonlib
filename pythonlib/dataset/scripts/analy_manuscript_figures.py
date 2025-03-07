@@ -469,7 +469,8 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
         plt.close("all")
 
 
-def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
+def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False,
+                          PLOT_DRAWINGS=True, ):
     """
     Entire pipeline, to analyze invariance of motor parameters due to loation and size.
     Expt is assumed to have both loc and size vairation.
@@ -503,21 +504,22 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     DS.Dat = append_col_with_grp_index(DS.Dat, grpvars, "shape_loc_size")
 
     # Drawings
-    n_iter_drawing = 3
-    for i in range(n_iter_drawing):
-        fig_beh, fig_task = DS.plotshape_row_col_size_loc()
-        savefig(fig_beh, f"{savedir}/drawing-1-beh-iter{i}.pdf")
-        savefig(fig_task, f"{savedir}/drawing-1-task-iter{i}.pdf")
+    if PLOT_DRAWINGS:
+        n_iter_drawing = 3
+        for i in range(n_iter_drawing):
+            fig_beh, fig_task = DS.plotshape_row_col_size_loc()
+            savefig(fig_beh, f"{savedir}/drawing-1-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-1-task-iter{i}.pdf")
 
-        fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("shape", "locsize", plot_task=True, ver_behtask="task")
-        savefig(fig_beh, f"{savedir}/drawing-2-beh-iter{i}.pdf")
-        savefig(fig_task, f"{savedir}/drawing-2-task-iter{i}.pdf")
+            fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("shape", "locsize", plot_task=True, ver_behtask="task")
+            savefig(fig_beh, f"{savedir}/drawing-2-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-2-task-iter{i}.pdf")
 
-        fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("locsize", plot_task=True, ver_behtask="task")
-        savefig(fig_beh, f"{savedir}/drawing-3-beh-iter{i}.pdf")
-        savefig(fig_task, f"{savedir}/drawing-3-task-iter{i}.pdf")
+            fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("locsize", plot_task=True, ver_behtask="task")
+            savefig(fig_beh, f"{savedir}/drawing-3-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-3-task-iter{i}.pdf")
 
-    plt.close("all")
+        plt.close("all")
 
     # get pairwise distances between all strokes
     # OLD VERSION - obsolete -- uses mean strokes to compute distance
@@ -632,19 +634,34 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     with open(f"{savedir}/Cl.pkl", "wb") as f:
         pickle.dump(Cl, f)
 
+    ### Plots
+    dfdist, dfdist_agg = fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True)
+
+    return dfdist, dfdist_agg
+
+def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
+    """
+    After getting Cl, make the invariance plots.
+    This is split from code to construct Cl, as it is slow.
+    Can load pre-saved Cl and then run this from notebook
+    """
     ################### PLOTS
     # Plot heatmap
     # - First agg (over trials), or else plots too large
     _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(get_only_one_direction=False, return_as_clustclass=True,
                                                               return_as_clustclass_which_var_score="dist_mean")
-    for sort_order in [(0,1,2), (1,2, 0), (2,0,1)]:
-        fig, ax = Clagg.rsa_plot_heatmap(sort_order=sort_order)
-        if fig is not None:
-            savefig(fig, f"{savedir}/distmat-sort={sort_order}.pdf")
-    for var in Clagg.rsa_labels_extract_label_vars():  
-        _, fig = Clagg.rsa_distmat_construct_theoretical(var, True)
-        if fig is not None:
-            savefig(fig, f"{savedir}/theor_distmat-var={var}.pdf")
+    
+
+    ### Heatmaps
+    if plot_heatmaps:
+        for sort_order in [(0,1,2), (1,2, 0), (2,0,1)]:
+            fig, ax = Clagg.rsa_plot_heatmap(sort_order=sort_order)
+            if fig is not None:
+                savefig(fig, f"{savedir}/distmat-sort={sort_order}.pdf")
+        for var in Clagg.rsa_labels_extract_label_vars():  
+            _, fig = Clagg.rsa_distmat_construct_theoretical(var, True)
+            if fig is not None:
+                savefig(fig, f"{savedir}/theor_distmat-var={var}.pdf")
 
     dfdist = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
     dfdist = dfdist.drop("dist_yue_diff", axis=1)
@@ -664,6 +681,21 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
     
     fig = grouping_plot_n_samples_conjunction_heatmap(dfdist_agg, "labels_1_datapt", "same-shape_loc_size")
     savefig(fig, f"{savedir}/counts-dfdist_agg.pdf")
+
+    fig = grouping_plot_n_samples_conjunction_heatmap(dfdist, "labels_1_datapt", "same-shape_loc_size")
+    savefig(fig, f"{savedir}/counts-dfdist.pdf")
+
+    path = f"{savedir}/counts-dfdist.txt"
+    grouping_print_n_samples(dfdist, ["labels_1_datapt", "same-shape_loc_size"], savepath=path)        
+
+    # Print sample size
+    from pythonlib.tools.pandastools import grouping_print_n_samples
+    
+    path = f"{savedir}/counts_trial.txt"
+    grouping_print_n_samples(dfdist, ["same-shape_loc_size"], savepath=path)        
+    
+    path = f"{savedir}/counts_grp.txt"
+    grouping_print_n_samples(dfdist_agg, ["same-shape_loc_size"], savepath=path)        
 
     import seaborn as sns
     for y in ["dist_mean", "dist_mean_norm_v2"]:
@@ -685,6 +717,36 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False):
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="bar", errorbar=("ci", 68))
         savefig(fig, f"{savedir}/catplot-grps-{y}-3.pdf")
         plt.close("all")
+
+    ### Stats
+    from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+    datapt_vars = ["labels_1_datapt"] # data
+    contrast_var = "same-shape_loc_size"
+    lev_base = "1|1|1"
+    value_var = "dist_mean"
+
+    res = []
+    for lev1 in dfdist_agg["same-shape_loc_size"].unique():
+        for lev2 in dfdist_agg["same-shape_loc_size"].unique():
+            if not lev1==lev2:
+                contrast_levels = [lev1, lev2]
+                path = f"{savedir}/stats-agg-{lev1}-vs-{lev2}.txt"
+                out, fig = signrank_wilcoxon_from_df(dfdist_agg, datapt_vars, contrast_var, contrast_levels, value_var, PLOT=True,
+                                                save_text_path=path)
+
+
+                savefig(fig, f"{savedir}/stats-agg-{lev1}-vs-{lev2}.pdf")
+                plt.close("all")
+
+                res.append({
+                    "p":out["p"],
+                    "lev1":lev1,
+                    "lev2":lev1
+                })
+    pd.DataFrame(res).to_csv(f"{savedir}/stats_summary.csv")
+
+    return dfdist, dfdist_agg
+
 
 def fig3_charsyntax_wrapper(animal, DATE, SAVEDIR):
     """
@@ -1418,7 +1480,7 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
         else:
             assert False
 
-        for version in ["beh_imagedist_reversed", "beh_imagedist", "beh", "task"]:
+        for version in ["beh_imagedist_reversed", "beh_imagedist", "beh_imagedist_bb", "beh", "task"]:
             savedir = f"{SAVEDIR}/extraction/morphset={morphset}-ver={version}"
             os.makedirs(savedir, exist_ok=True)
 
@@ -1458,14 +1520,22 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
                                                                 do_centerize=True, clustclass_rsa_mode=True,
                                                                 PLOT=True, savedir=savedir, savesuff=version)
+            elif version == "beh_imagedist_bb":
+                # Same, but using bounding box.
+                strokes = dfdat["strok"].tolist()
+                strokes = strokes_centerize(strokes, method="bounding_box")
+
+                # interpolate spatially.
+                strokes = strokesInterpolate2(strokes, N=["npts", 70], base="space")
+
+                Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
+                                                                do_centerize=False, clustclass_rsa_mode=True,
+                                                                PLOT=True, savedir=savedir, savesuff=version)
             elif version == "beh_imagedist_reversed":
                 # Reverse the direction of one of the beh strokes. Do this as sanity check that the motor has no effect. ie. this 
                 # really is image-level
                 strokes = dfdat["strok"].tolist()
                 strokes = strokes_centerize(strokes, method="bounding_box")
-                if DEBUG:
-                    strokes = strokes[::2]
-                    labels = labels[::2]
                 # Do the reverse
                 strokes1 = [strok.copy() for strok in strokes]
                 strokes2 = [strok.copy()[::-1] for strok in strokes]
@@ -1579,6 +1649,407 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
         df["morph_assigned_to_which_base"] = [map_idxassign_to_assignedbase[x] for x in df["labels_1_datapt"]] # (base, ambig, notambig)
         df["morph_assigned_label"] = [map_idxassign_to_label[x] for x in df["labels_1_datapt"]] # (base1, ambig1, ..., base2)
         # df["idx_morph_temp"] = [map_idxassign_to_idx_morph[x] for x in df["idxmorph_assigned"]]
+
+def fig2_categ_switching_mult_load(cetegory_expt_version):
+    """
+    Load pre-extracted data, for categ switching.
+    """
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import params_good_morphsets_switching, params_good_morphsets_no_switching, params_has_intermediate_shape
+    from pythonlib.dataset.dataset_analy.psychometric_singleprims import params_image_distance_progression_not_linear
+
+    # Load pre-computed DFDISTS
+    if cetegory_expt_version=="switching":
+        list_animal_date = [("Diego", 240517), ("Diego", 240521), ("Diego", 240523), ("Diego", 240730), ("Pancho", 240516), ("Pancho", 240521), ("Pancho", 240524)]
+    elif cetegory_expt_version=="smooth":
+        list_animal_date = [("Diego", 240515), ("Diego", 240517), ("Diego", 240523), ("Diego", 240731), ("Diego", 240801), 
+                    ("Diego", 240802), ("Pancho", 240516), ("Pancho", 240521), ("Pancho", 240524), ("Pancho", 240801), ("Pancho", 240802)]
+        # list_animal_date = [("Diego", 240515), ("Diego", 240517), ("Diego", 240523), 
+        #                     ("Pancho", 240516), ("Pancho", 240521), ("Pancho", 240524)]
+    else:
+        assert False
+
+    SAVEDIR_LOAD = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{cetegory_expt_version}"
+
+    SAVEDIR_MULT = f"{SAVEDIR_LOAD}/MULT/{cetegory_expt_version}"
+    os.makedirs(SAVEDIR_MULT, exist_ok=True)
+
+    list_dfindex = []
+    for animal, date in list_animal_date:
+        savedir = f"{SAVEDIR_LOAD}/{animal}-{date}"
+        dfindex = pd.read_pickle(f"{savedir}/DFINDEX.pkl")
+        dfindex["animal"] = animal
+        dfindex["date"] = date
+
+        if False:
+            dfdists = pd.read_pickle(f"{savedir}/DFDISTS.pkl")
+            dfdists["animal"] = animal
+            dfdists["date"] = date
+            morphsets_list_smooth = params_good_morphsets_no_switching(animal, date)
+
+        # Keep just the good switching dates
+        if cetegory_expt_version=="switching":
+            # Pick out just the good morphsets
+            morphsets_map_set_to_indices_switching = params_good_morphsets_switching(animal, date)
+            dfindex = dfindex[dfindex["morphset"].isin(list(morphsets_map_set_to_indices_switching.keys()))]
+        elif cetegory_expt_version=="smooth":
+            # Pick out just the good morphsets
+            morphsets_list_smooth = params_good_morphsets_no_switching(animal, date)
+            dfindex = dfindex[dfindex["morphset"].isin(list(morphsets_list_smooth))]
+            # No intermediate shape
+            morphsets_bad = params_has_intermediate_shape(animal, date)
+            dfindex = dfindex[~dfindex["morphset"].isin(list(morphsets_bad))]
+            # Image should be linear.
+            bad_expts = params_image_distance_progression_not_linear()
+            dfindex = dfindex[[(animal, date, ms) not in bad_expts for ms in dfindex["morphset"]]].reset_index(drop=True)        
+        else:
+            assert False
+
+        list_dfindex.append(dfindex)   
+
+    DFINDEX = pd.concat(list_dfindex).reset_index(drop=True)
+
+
+    ### Plot, separately for each (animal, date, morphset)
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
+
+    DFINDEX = append_col_with_grp_index(DFINDEX, ["animal", "date", "morphset"], "ani_date_ms")
+
+    if cetegory_expt_version=="switching":
+        DFINDEX = DFINDEX[~DFINDEX["morph_assigned_label"].isin(["not_enough_trials"])].reset_index(drop=True)
+        DFINDEX["assigned_base_simple"] = [x[1] for x in DFINDEX["labels_1_datapt"]]
+
+        # any cases that are ambiguous -- they must have trials for both 
+        # ie. every (ani, date, ms, idxcode) must have at least 1 trial each in base1, base2
+        list_df =[]
+        for morph_assigned_label in ["not_ambig", "ambig", "base"]:
+            dfthis = DFINDEX[DFINDEX["morph_assigned_label"] == morph_assigned_label].reset_index(drop=True)
+            if morph_assigned_label=="ambig":
+                _dfthis, dict_dfthis = extract_with_levels_of_conjunction_vars_helper(dfthis, "assigned_base_simple", 
+                                                            ["ani_date_ms", "morph_idxcode_within_set"],
+                                                            plot_counts_heatmap_savepath=None,
+                                                            lenient_allow_data_if_has_n_levels=2)
+                print(len(dfthis), len(_dfthis), len(_dfthis)/len(dfthis))
+                assert len(_dfthis)>0.75*len(dfthis), "pruned so many. unexpcted"
+                dfthis = _dfthis
+            list_df.append(dfthis)
+        DFINDEX = pd.concat(list_df).reset_index(drop=True)
+        DFINDEX = DFINDEX.drop(["_index", "vars_others"], axis=1)
+
+        def _new_x_label(morph_assigned_to_which_base):
+            if morph_assigned_to_which_base in ["base1", "base2", "not_ambig_base1", "not_ambig_base2"]:
+                return morph_assigned_to_which_base
+            elif morph_assigned_to_which_base in ["ambig_base1", "ambig_base2"]:
+                return "ambig"
+            else:
+                print(morph_assigned_to_which_base)
+                assert False
+        DFINDEX["label_good"] = [_new_x_label(x) for x in DFINDEX["morph_assigned_to_which_base"]]
+    elif cetegory_expt_version=="smooth":
+        DFINDEX["label_good"] = DFINDEX["morph_idxcode_within_set"]
+    else:
+        assert False
+
+    # normalize, so that ranges from (0,1) for index (0, 99)
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpvars = ["animal", "date", "morphset", "version"]
+    grpdict = grouping_append_and_return_inner_items_good(DFINDEX, grpvars)
+    list_df = []
+    for grp, inds in grpdict.items():
+        dfindex = DFINDEX.iloc[inds].reset_index(drop=True)
+
+        # Normalize to range of min,max (of means)
+        valmin = dfindex.groupby(["labels_1_datapt"])["dist_index"].mean().min()
+        valmax = dfindex.groupby(["labels_1_datapt"])["dist_index"].mean().max()
+        dfindex["dist_index_norm"] = (dfindex["dist_index"]-valmin)/(valmax-valmin)
+
+        # Flip direction if this is beh
+        if False: # Not any more...
+            if dfindex["version"].values[0] == "beh":
+                dfindex["dist_index_norm"] = 1 - dfindex["dist_index_norm"]
+
+        list_df.append(dfindex)
+    DFINDEX = pd.concat(list_df).reset_index(drop=True)
+
+    from pythonlib.tools.pandastools import aggregGeneral
+    DFINDEX_AGG_1 = aggregGeneral(DFINDEX, ["label_good", "animal", "date", "morphset", "labels_1_datapt", "version"], ["dist_index", "dist_index_norm"], nonnumercols="all")
+
+    from pythonlib.tools.pandastools import stringify_values
+    DFINDEX = stringify_values(DFINDEX)
+    DFINDEX_AGG_1 = stringify_values(DFINDEX_AGG_1)
+
+    if cetegory_expt_version=="switching":
+        DFINDEX_AGG_2 = aggregGeneral(DFINDEX_AGG_1, ["label_good", "animal", "date", "morphset", "morph_assigned_to_which_base", "version"], ["dist_index", "dist_index_norm"], nonnumercols="all")
+        DFINDEX_AGG_2 = stringify_values(DFINDEX_AGG_2)
+
+    return DFINDEX, DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT
+
+def fig2_categ_switching_mult_plot_stats(DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_expt_version):
+    """
+    Plot stats, results for switching beh
+    """
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap, grouping_append_and_return_inner_items_good
+    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap, grouping_append_and_return_inner_items_good
+    from pythonlib.tools.pandastools import aggregGeneral
+
+    if cetegory_expt_version=="switching":
+        
+        ### Stats
+        fig = grouping_plot_n_samples_conjunction_heatmap(DFINDEX_AGG_2, "ani_date_ms", "morph_assigned_to_which_base", ["version"])
+        savefig(fig, f"{SAVEDIR_MULT}/stats-counts.pdf")
+
+        ### (1) Show the the change from base --> not_ambig is small for beh compared to for image. (i.e., the flat part of sigmoid)
+        grpdict = grouping_append_and_return_inner_items_good(DFINDEX_AGG_2, ["ani_date_ms", "version"])
+        res = []
+        for grp, inds in grpdict.items():
+            dfthis = DFINDEX_AGG_2.iloc[inds]
+
+            # (1) Not-ambig minus base
+            a = dfthis[dfthis["morph_assigned_to_which_base"]=="base1"]["dist_index_norm"].mean()
+            b = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base1"]["dist_index_norm"].mean()
+            c = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base2"]["dist_index_norm"].mean()
+            d = dfthis[dfthis["morph_assigned_to_which_base"]=="base2"]["dist_index_norm"].mean()
+
+            res.append({
+                "ani_date_ms":grp[0],
+                "version":grp[1],
+                "score_name":"notambig-base",
+                "score":np.nanmean([(b-a), (d-c)])
+            })
+
+        dfstats = pd.DataFrame(res)
+        assert not any(dfstats["score"].isna())
+        
+        from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+        out, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "version", ["beh", "task"], 
+                                "score", True, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.txt", assert_no_na_rows=True)
+        savefig(fig, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.pdf")
+
+        dfstats.to_csv(f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.csv")
+
+        ### (2) trial by trial switching (ambig, base 2 minus base 1)
+        dfthis = DFINDEX_AGG_2[DFINDEX_AGG_2["version"]=="beh"].reset_index(drop=True)
+        out, fig = signrank_wilcoxon_from_df(DFINDEX_AGG_2, ["ani_date_ms"], "morph_assigned_to_which_base", ["ambig_base1", "ambig_base2"], 
+                                "dist_index_norm", True, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.txt", assert_no_na_rows=True)
+        savefig(fig, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.pdf")
+        
+        plt.close("all")
+
+        ### (3) At each condition (base1, base2,...) compare image to beh, to show that beh is more sigmoidal than image. 
+
+
+        grpdict = grouping_append_and_return_inner_items_good(DFINDEX_AGG_2, ["ani_date_ms", "morph_assigned_to_which_base"])
+        y = "dist_index_norm"
+        res = []
+        for grp, inds in grpdict.items():
+            dfthis = DFINDEX_AGG_2.iloc[inds]
+
+            val_beh = dfthis[dfthis["version"]=="beh"][y].mean()
+            val_task = dfthis[dfthis["version"]=="task"][y].mean()    
+
+            morph_assigned_to_which_base = grp[1]
+
+            assert len(dfthis["morph_assigned_label"].unique())==1
+            morph_assigned_label = dfthis["morph_assigned_label"].values[0]
+
+            # The diff is always in the direction where if it is positive, then it is consistent
+            # with a sigmoidal curve for beh (i.e, beh more sigmoidal than task)
+            if morph_assigned_to_which_base in ["base1", "not_ambig_base1", "ambig_base1"]:
+                val_diff = val_task - val_beh
+            elif morph_assigned_to_which_base in ["base2", "not_ambig_base2", "ambig_base2"]:
+                val_diff = val_beh - val_task
+            else:
+                assert False
+
+            res.append({
+                "ani_date_ms":grp[0],
+                "morph_assigned_to_which_base":morph_assigned_to_which_base,
+                "score_name":"diff_image_vs_beh",
+                "score":val_diff,
+                "morph_assigned_label":morph_assigned_label
+            })
+
+        dfstats = pd.DataFrame(res)
+
+        # Further, average across two bases, to get 3 values per (ani, date, ms): base, notambig, ambig.
+        dfstats = aggregGeneral(dfstats, ["ani_date_ms", "morph_assigned_label"], ["score"], ["score_name"])
+        
+        for morph_assigned_label in ["base", "not_ambig", "ambig"]:
+            out, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "morph_assigned_label", [morph_assigned_label], 
+                                    "score", True, f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image-{morph_assigned_label}.txt", assert_no_na_rows=True)
+            savefig(fig, f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image-{morph_assigned_label}.pdf")
+
+        dfstats.to_csv(f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image.csv")
+
+        plt.close("all")
+    else:
+        assert False
+
+def fig2_categ_switching_mult_plot_eachexpt(DFINDEX, DFINDEX_AGG_1, SAVEDIR_MULT, cetegory_expt_version):
+    """
+    Plot stats, results for each expt
+    """
+
+    if cetegory_expt_version=="switching":
+        map_xlabel_to_orders = {
+            "label_good":["base1", "not_ambig_base1", "ambig",  "not_ambig_base2", "base2"],
+            "morph_assigned_label":["base", "not_ambig", "ambig"],
+            "morph_assigned_to_which_base":["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"],
+        }
+    else:
+        assert False
+
+    ### Plot, separately for each (animal, date, morphset)
+    if cetegory_expt_version=="switching":
+        x_var = "morph_idxcode_within_set"
+        x_order = sorted(DFINDEX[x_var].unique())
+        for y in ["dist_index", "dist_index_norm"]:
+            fig = sns.catplot(data=DFINDEX, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="ani_date_ms", row="version", order=x_order, kind="point")
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}-1.pdf")
+
+            fig = sns.catplot(data=DFINDEX, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="ani_date_ms", row="version", order=x_order, alpha=0.5, jitter=True)
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}-2.pdf")
+
+            plt.close("all")
+
+        x_var = "label_good"
+        x_order = map_xlabel_to_orders[x_var]
+        for y in ["dist_index", "dist_index_norm"]:
+            fig = sns.catplot(data=DFINDEX_AGG_1, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="ani_date_ms", row="version", order=x_order, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}.pdf")
+            
+            plt.close("all")
+            
+        x_var = "morph_assigned_label"
+        x_order = map_xlabel_to_orders[x_var]
+        for y in ["dist_index", "dist_index_norm"]:
+            fig = sns.catplot(data=DFINDEX_AGG_1, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="ani_date_ms", row="version", order=x_order, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}.pdf")
+            plt.close("all")
+            
+    elif cetegory_expt_version=="smooth":
+        x_var = "morph_idxcode_within_set"
+        x_order = sorted(DFINDEX[x_var].unique())
+        for y in ["dist_index", "dist_index_norm"]:
+            fig = sns.catplot(data=DFINDEX, x=x_var, y=y, col="ani_date_ms", col_wrap=6,
+                            hue="version", order=x_order, alpha=0.5, jitter=True)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}-1.pdf")
+
+            fig = sns.catplot(data=DFINDEX, x=x_var, y=y, col="ani_date_ms", col_wrap=6,
+                            hue="version", order=x_order, kind="point")
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}-2.pdf")
+            plt.close("all")
+
+    else:
+        assert False
+    plt.close("all")
+
+def fig2_categ_switching_mult_plot_allexpt(DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_expt_version):
+    """
+    Plot stats, results for each expt
+    """
+    
+    ### Summarize across all expts.
+    # One plot per "version"
+    if cetegory_expt_version=="switching":
+        map_xlabel_to_orders = {
+            "label_good":["base1", "not_ambig_base1", "ambig",  "not_ambig_base2", "base2"],
+            "morph_assigned_label":["base", "not_ambig", "ambig"],
+            "morph_assigned_to_which_base":["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"],
+        }
+    else:
+        assert False
+
+    if cetegory_expt_version=="switching":
+        x_var = "label_good"
+        x_order = map_xlabel_to_orders[x_var]
+        for y in ["dist_index", "dist_index_norm"]:
+            for row in [None, "animal"]:
+                fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                                col="version", order=x_order, jitter=True, row=row)
+                rotateLabel(fig)
+                savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-1.pdf")
+
+                fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                                col="version", order=x_order, kind="violin", row=row)
+                rotateLabel(fig)
+                savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-2.pdf")
+
+                fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                                col="version", order=x_order, kind="point", row=row)
+                rotateLabel(fig)
+                savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-3.pdf")
+
+                order =["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"]
+                fig = sns.catplot(data=DFINDEX_AGG_2, x="morph_assigned_to_which_base", y=y, hue="version", 
+                                kind="point", order=order, row=row)
+                rotateLabel(fig)
+                savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-4.pdf")
+
+                plt.close("all")
+
+    elif cetegory_expt_version=="smooth":
+        ### One datapt per each morph_idxcode (good esp for smooth expts)
+        assert False, "replace dist_index_norm with both dist_index_norm and dist_index (see above)"
+        for row in [None, "animal"]:
+            fig = sns.catplot(data=DFINDEX_AGG_1, x="morph_idxcode_within_set", y="dist_index_norm", 
+                            col="version", jitter=True, row=row)
+            savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-catplot-row={row}-1.pdf")
+
+            fig = sns.catplot(data=DFINDEX_AGG_1, x="morph_idxcode_within_set", y="dist_index_norm", 
+                            col="version", kind="point", errorbar=("ci", 68), row=row)
+            savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-catplot-row={row}-2.pdf")
+
+        # For smoothing expts
+        from pythonlib.tools.pandastools import pivot_table
+        DFINDEX_AGG_1_WIDE = pivot_table(DFINDEX_AGG_1, ["ani_date_ms", "animal", "date", "morphset", "labels_1_datapt"], 
+                                        ["version"], ["dist_index_norm"], flatten_col_names=True)
+
+        nbins = 8
+        bin_edges = np.linspace(0, 1.0, nbins+1)
+        from pythonlib.tools.nptools import bin_values
+        DFINDEX_AGG_1_WIDE["task_image_binned"] = [int(x) for x in bin_values(DFINDEX_AGG_1_WIDE["dist_index_norm-task"], nbins)]
+
+        for x_var in ["dist_index_norm-task", "task_image_binned"]:
+            for yvar in ["dist_index_norm-beh", "dist_index_norm-beh_imagedist"]:
+                fig = sns.relplot(data=DFINDEX_AGG_1_WIDE, x=x_var, 
+                            y=yvar, col="ani_date_ms", col_wrap=6, kind="line")
+                # for ax in fig.axes.flatten():
+                #     ax.plot([0,0], [1,1], "--k", alpha=0.5)
+                savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-replot-x_var={x_var}-yvar={yvar}-1.pdf")
+
+                fig = sns.relplot(data=DFINDEX_AGG_1_WIDE, x=x_var, 
+                            y=yvar, hue="ani_date_ms", kind="line", legend=False)
+                # for ax in fig.axes.flatten():
+                #     ax.plot([0,0], [1,1], "--k", alpha=0.5)
+                savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-replot-x_var={x_var}-yvar={yvar}-2.pdf")
+
+                fig = sns.relplot(data=DFINDEX_AGG_1_WIDE, x=x_var, 
+                            y=yvar, hue="ani_date_ms", legend=False)
+                # for ax in fig.axes.flatten():
+                #     ax.plot([0,0], [1,1], "--k", alpha=0.5)
+                savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-replot-x_var={x_var}-yvar={yvar}-3.pdf")
+
+                if x_var == "task_image_binned":
+                    fig = sns.catplot(data=DFINDEX_AGG_1_WIDE, x=x_var, 
+                                y=yvar, alpha=0.5, jitter=True, legend=False)
+                    savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-catplot-x_var={x_var}-yvar={yvar}-1.pdf")
+
+                    fig = sns.catplot(data=DFINDEX_AGG_1_WIDE, x=x_var, 
+                                y=yvar, kind="point", legend=False)
+                    savefig(fig, f"{SAVEDIR_MULT}/eachmorphidxcode-catplot-x_var={x_var}-yvar={yvar}-2.pdf")
+
+            plt.close("all")
+    else:
+        assert False
 
 
 def recording_units_counts_plot(DFall, savedir):

@@ -2124,6 +2124,8 @@ def psychogood_preprocess_wrapper_GOOD(D, NEURAL_VERSION=None, NEURAL_SAVEDIR=No
 
                 # Check that all labels exist which are required for this to be switching morphset
                 assert all([x in dfthis["morph_assigned_to_which_base"].unique().tolist() for x in ['base1', 'ambig_base1', 'ambig_base2', 'base2']]), "this is not a complete switching morphset.. exclude?"
+        else:
+            assert cetegory_expt_version is None, f"typo? {cetegory_expt_version}"
 
         return DSmorphsets, map_tc_to_morph_info, map_morphset_to_basemorphinfo, map_tcmorphset_to_idxmorph, map_tcmorphset_to_info, map_morphsetidx_to_assignedbase_or_ambig, map_tc_to_morph_status
     else:

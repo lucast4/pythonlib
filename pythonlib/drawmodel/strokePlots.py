@@ -533,6 +533,9 @@ def plotDatStrokesVelSpeed(strokes, ax, fs, plotver="speed", lowpass_freq=None,
     """
     from ..tools.stroketools import strokesVelocity
 
+    if plotver == "velocity":
+        plotver = "vel"
+        
     if plotver == "raw":
         # x y pos
         plotDatStrokesTimecourse(strokes, ax=ax, plotver=plotver, 

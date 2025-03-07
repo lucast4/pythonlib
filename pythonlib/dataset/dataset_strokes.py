@@ -2355,7 +2355,7 @@ class DatStrokes(object):
         - othervar, string, column in self.Dat (caregorical)
         """
 
-        if plot_task:
+        if plot_task and "strokes_task" not in self.Dat.columns:
             # NEed to extract strokes beh and task
             list_strokes_task = self.extract_strokes("list_list_arrays", ver_behtask=ver_behtask)
             self.Dat["strokes_task"] = list_strokes_task
@@ -3014,6 +3014,40 @@ class DatStrokes(object):
         return shape
 
     ################################ SIMILARITY/CLUSTERING
+    def extract_mean_stroke_shape_grp_vars(self, grouping_vars, centerize=True, skip_if_fail_alignment_check=True):
+        """
+        Get one mean stroke for each level of conjunctinve grouping vars 
+        PARAMS:
+        - grouping_vars, list of str, to define conjuntive levels.
+        RETURNS:
+        - df, each row a level, and columns "strok", and the variables in grouping_vars
+        """
+        # Get average stroke for each conjunction of veriable.
+        from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+        grpdict = grouping_append_and_return_inner_items_good(self.Dat, grouping_vars)
+
+        skipped_expts = []
+        res = []
+        for grp, inds in grpdict.items():
+            try:
+                # Can fail if finds multiple strokse that are not aligned in diretion
+                strokmean, strokstacked = self.cluster_compute_mean_stroke(inds, False, Npts=50, centerize=centerize)
+            except AssertionError as err:
+                print(grp)
+                if skip_if_fail_alignment_check:
+                    skipped_expts.append(grp)
+                else:
+                    raise err
+            
+            res.append({
+                "strok":strokmean,
+            })
+
+            for var, val in zip(grouping_vars, grp):
+                res[-1][var] = val
+            
+        return pd.DataFrame(res)
+
     def _cluster_compute_mean_stroke(self, strokes, center_at_onset=True,
         check_same_direction=True, Npts = 70, ver="mean", rescale_strokes_ver = None,
         centerize=False):
@@ -3154,10 +3188,9 @@ class DatStrokes(object):
         ### Cmpute sim matrix
         if distancever == "dtw_vels_1d":
             assert False, "use dtw_vels_2d insetad, its been tested..."
-        elif distancever == "dtw_vels_2d":
+        elif distancever in ["dtw_vels_2d", "euclid_vels_2d"]:
             # DTW, using velocity in 2d, invariant to scale and
             # temporal structure.   
-
 
             # fs = self.dataset_get_sample_rate()
             fs = None # not needed, since now is using "fake time"
@@ -3900,6 +3933,8 @@ class DatStrokes(object):
         # - Given velocity and time window, get mean vel
         """
         from pythonlib.tools.nptools import bin_values
+        from pythonlib.tools.stroketools import feature_velocity_vector_angle_norm
+        from pythonlib.tools.vectools import cart_to_polar
 
         # 2) mean velocity in time window.
         inds = list(range(len(self.Dat)))
@@ -3913,32 +3948,51 @@ class DatStrokes(object):
             s = strok[inds, :2]
             velmean = np.mean(s,axis=0) # (x,y)
 
+            angle, norm = cart_to_polar(velmean[0], velmean[1])
+
+        # I replaced the above wtih this, but not sure why. I reverted back to above...
+        # OK I realized why -- to get th and norm in one wraper. Tjhat just prettifies code. no need.
+        # for strok in list_strokes_vel:
+        #     assert False, "slice it to twind, I did previosuly, but replaced gthat code with feature_velocity_vector_angle_norm"
+        #     velmean, angle, norm = feature_velocity_vector_angle_norm(strok)
+        #     # tvals = strok[:,2]
+        #     # tvals = tvals-tvals[0] 
+        #     # inds = (tvals>=twind[0]) & (tvals<=twind[1]) # bool mask
+
+        #     # s = strok[inds, :2]
+        #     # velmean = np.mean(s,axis=0) # (x,y)
+
             out.append({
                 "strok_vel":strok,
                 "velmean_x":velmean[0],
                 "velmean_y":velmean[1],
+                "velmean_th":angle,
+                "velmean_norm":norm,
             })
 
         dfvels = pd.DataFrame(out)
 
         # save it in self.Dat
-        cols_keep = ["velmean_x", "velmean_y"]
+        cols_keep = ["velmean_x", "velmean_y", "velmean_th", "velmean_norm"]
         for col in cols_keep:
             self.Dat[col] = dfvels[col]
 
         # convert to polar
         from pythonlib.tools.vectools import get_angle, bin_angle_by_direction, cart_to_polar
-        list_angles = []
-        list_magn = []
-        for i in range(len(self.Dat)):
-            # vec = [self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"]]
-            a, norm = cart_to_polar(self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"])
-            list_angles.append(a)
-            list_magn.append(norm)    
-        list_angles_binned = bin_angle_by_direction(list_angles, num_angle_bins=8)
-        self.Dat["velmean_th"] = list_angles
-        self.Dat["velmean_thbin"] = list_angles_binned
-        self.Dat["velmean_norm"] = list_magn
+        # list_angles = []
+        # list_magn = []
+        # for i in range(len(self.Dat)):
+        #     # vec = [self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"]]
+        #     a, norm = cart_to_polar(self.Dat.iloc[i]["velmean_x"], self.Dat.iloc[i]["velmean_y"])
+        #     list_angles.append(a)
+        #     list_magn.append(norm)    
+        list_angles = self.Dat["velmean_th"].tolist()
+        list_magn = self.Dat["velmean_norm"].tolist()
+
+        # self.Dat["velmean_th"] = list_angles
+        # self.Dat["velmean_norm"] = list_magn
+        # list_angles_binned = bin_angle_by_direction(list_angles, num_angle_bins=8)
+        self.Dat["velmean_thbin"] = bin_angle_by_direction(list_angles, num_angle_bins=8)
         self.Dat["velmean_normbin"] = bin_values(list_magn, nbins=4)
 
         if plot_vel_timecourses:
@@ -4381,7 +4435,8 @@ class DatStrokes(object):
                 print(d1, d2)
                 assert False, "why identical?"
 
-    def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False, do_centerize=False):
+    def _dist_strok_pair(self, strok1, strok2, recenter_to_onset=False, do_centerize=False, 
+                         centerize_method="center_of_mass", distancever="hausdorff_means"):
         """ compute *visual* doistance between strok1 and 2
         uses by defaiult hausdorff mean.
         
@@ -4391,12 +4446,12 @@ class DatStrokes(object):
         if do_centerize:
             assert recenter_to_onset==False
             from pythonlib.tools.stroketools import strokes_centerize
-            strok1, strok2 = strokes_centerize([strok1, strok2])
+            strok1, strok2 = strokes_centerize([strok1, strok2], method=centerize_method)
         if recenter_to_onset:
             assert do_centerize==False
             strok1 = strok1 - strok1[0,:]
             strok2 = strok2 - strok2[0,:]
-        return distStrokWrapperMult([strok1], [strok2], convert_to_similarity=False).squeeze().item()
+        return distStrokWrapperMult([strok1], [strok2], convert_to_similarity=False, distancever=distancever).squeeze().item()
 
 
     def _dist_alignedtask_to_beh(self, list_inds):
@@ -4493,6 +4548,55 @@ class DatStrokes(object):
         self.Dat = applyFunctionToAllRows(self.Dat, F, newcolname=newcolname)
 
     #################################### LOCATIONS
+    def location_gridloc_map_to_loc_easy(self, strokes=None, PLOT_CENTERS=False, eps = 1):
+        """
+        Get dict mappinug from gridloc (discrete variables) to acrtual pixel location.
+
+        Does this by using boudning box on each stroke's image (if strokes is None)
+
+        Related to D.taskclass_tokens_sanitycheck_gridloc_identical
+        
+        PARAMS:
+        - strokes, either list of strokes (will use that and nothing in self) or None (will use
+        task strokes
+        )
+        - eps, tolerance for allowing variability in location for same gridloc. defualt is 
+        1 as these are expeting pixels
+        """
+        from pythonlib.tools.stroketools import get_centers_strokes_list
+
+        if strokes is None:
+            strokes = self.extract_strokes(ver_behtask="task")
+
+        centers = get_centers_strokes_list(strokes)
+
+        if PLOT_CENTERS:
+            fig, ax = plt.subplots()
+            for cen in centers:
+                ax.plot(cen[0], cen[1], "x")
+        else:
+            fig = None
+
+        # Iterate over all strokes in self.
+        map_gridloc_loc_x, map_gridloc_loc_y = {}, {}
+        for gridloc, cen in zip(self.Dat["gridloc"], centers):
+
+            gx = gridloc[0]
+            gy = gridloc[1]
+
+            if gx in map_gridloc_loc_x:
+                assert np.abs(cen[0] - map_gridloc_loc_x[gx]) < eps
+            else:
+                map_gridloc_loc_x[gx] = cen[0]
+            
+            if gy in map_gridloc_loc_y:
+                assert np.abs(cen[1] - map_gridloc_loc_y[gy]) < eps
+            else:
+                map_gridloc_loc_y[gy] = cen[1]
+
+        return map_gridloc_loc_x, map_gridloc_loc_y, fig
+
+
     def location_redefine_gridloc_locally(self, nbins=2, df=None, PLOT=False):
         """ Redefine gridloc based on locally where the stroke onset is, within the categorical
         gridloc.
@@ -4654,14 +4758,14 @@ class DatStrokes(object):
             list_strok = dfdat["strok"].tolist()
             list_shape = dfdat["shape"].tolist()
             # centerize task strokes, otherwise they are in space
-            list_strok_task = dfbasis["strok_task"].tolist()
+            list_strok_task = dfdat["strok_task"].tolist()
             list_strok_task = [x-np.mean(x, axis=0, keepdims=True) for x in list_strok_task]
 
             for i, titles in enumerate([None, list_shape]):
-                fig, axes = DS.plot_multiple_strok(list_strok, overlay=False, ncols=9, titles=titles);
+                fig, axes = self.plot_multiple_strok(list_strok, overlay=False, ncols=9, titles=titles);
                 savefig(fig, f"{sdir}/mean_stroke_each_shape-{i}-BEH.pdf")
 
-                fig, axes = DS.plot_multiple_strok(list_strok_task, ver="task", overlay=False, ncols=9, titles=titles);
+                fig, axes = self.plot_multiple_strok(list_strok_task, ver="task", overlay=False, ncols=9, titles=titles);
                 savefig(fig, f"{sdir}/mean_stroke_each_shape-{i}-TASK.pdf")
 
     def stroke_shape_align_flip_vs_task(self, ind):

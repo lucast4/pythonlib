@@ -1632,7 +1632,7 @@ class Clusters(object):
         for idx1 in range(len(self.Labels)):
             inds1 = [idx1]
             grp1 = self.Labels[idx1] # tuple
-            for j, (grp2, inds2) in enumerate(grpdict.items()):
+            for _, (grp2, inds2) in enumerate(grpdict.items()):
                 
                 if ignore_self_distance and grp1==grp2:
                     continue
@@ -3044,6 +3044,22 @@ class Clusters(object):
                         labels_cols=labels_cols, ver="dist", params=self.Params)
         return Cl
 
+    def transpose(self):
+        """
+        Returns a copy, with rows and columns switched.
+        """
+        Cl = self.copy_with_slicing()
+
+        Cl._Xinput = Cl._Xinput.T
+
+        tmp = [lab for lab in self.LabelsCols]
+        Cl.LabelsCols = [lab for lab in self.Labels]
+        Cl.Labels = tmp
+
+        assert self.Trialcodes is None, "decide what to do for transposing.."
+
+        return Cl
+    
     ############# CLASSIFY
     def scalar_score_convert_to_classification_accuracy(self, dfdist, var_datapt = "idx_row_datapt", 
                                                         var_score="dist_mean",

@@ -1583,10 +1583,12 @@ def analy_score_combined_animals_bases(DictDS, savedir):
 
 
     def _plot(DFTHIS, savesuff):
+        from pythonlib.tools.pandastools import grouping_print_n_samples, grouping_plot_n_samples_conjunction_heatmap
+        from pythonlib.tools.pandastools import stringify_values
+
         sdir = f"{savedir}/{savesuff}"
         os.makedirs(sdir, exist_ok=True)
         
-        from pythonlib.tools.pandastools import stringify_values
         DFTHIS = stringify_values(DFTHIS)
 
         fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
@@ -1612,6 +1614,38 @@ def analy_score_combined_animals_bases(DictDS, savedir):
         fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_match", col="task_kind", hue="novel_char", 
                     row="animal", kind="bar")
         savefig(fig, f"{sdir}/catplot-matches_base_prim-all-4.pdf")
+
+        ### Print useful things       
+        path = f"{sdir}/counts-1.txt"
+        grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "FINAL_basis"], savepath=path)  
+
+        # path = f"{sdir}/counts-2.txt"
+        # grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "date", "novel_char", "FINAL_basis"], savepath=path)   
+
+        ### Print useful things       
+        if "los_info" in DFTHIS.columns:
+            path = f"{sdir}/counts-3.txt"
+            grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "los_info", "FINAL_basis"], savepath=path)   
+
+            path = f"{sdir}/counts-4_testing_why_los_has_mult_trials.txt"
+            grouping_print_n_samples(DFTHIS, ["task_kind", "FINAL_basis", "los_info", "animal", "novel_char"], savepath=path)   
+
+        ### Stats
+        from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+        for is_novel in [False, True]:
+            for animal in ["Diego", "Pancho"]:
+                dfthis = DFTHIS[(DFTHIS["novel_char"] == is_novel) & (DFTHIS["animal"] == animal)].reset_index(drop=True)
+
+                datapt_vars = ["los_info"] # data
+                value_var = "FINAL_match"
+                contrast_var = "FINAL_basis"
+                contrast_levels = ["Diego", "Pancho"]
+
+                path = f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.txt"
+                out, fig = signrank_wilcoxon_from_df(dfthis, datapt_vars, contrast_var, contrast_levels, value_var, PLOT=True,
+                                                save_text_path=path)
+                savefig(fig, f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.pdf")
+                plt.close("all")
 
         ###################
         fig = sns.catplot(data=DFTHIS, x="animal", y="FEAT_num_strokes_beh", hue="novel|blocky", kind="violin", aspect=2)

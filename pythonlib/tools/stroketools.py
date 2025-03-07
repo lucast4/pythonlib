@@ -44,7 +44,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         """ 
         NEW - use this instaed of strokesInterpolate.
         N is multipurpose to determine how to interpolate. e.g,.
-        N = ["npts", 100], same time range, but 100 pts
+        N = ["npts", 100], same time range, but 100 pts uniformly spaced
         N = ["updnsamp", 1.5] then up or down samples (here up by 1.5)
         N = ["fsnew", 1000, 125] then targets new fs 1000, assuming
         N = ["interval", interval], for spatial,
@@ -387,8 +387,7 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
             ax.plot(strok[:,0], strok[:,1], '-xk', alpha=0.8, label="input")
             ax.plot(strokf[:,0], strokf[:,1], '-or', alpha=0.2, label="filtered")
             # Compare to just smoothing
-            stroksm = smoothStrokes([strok], fs, window_time=1/Wn, window_type="hanning",
-                         adapt_win_len="adapt")[0]
+            stroksm = smoothStrokes([strok], fs, window_time=1/Wn)[0]
             ax.plot(stroksm[:,0], stroksm[:,1], '-og', alpha=0.2, label="smoothed")
             plt.legend()
             ax.set_title(f"Stroke {_i} (Wn={Wn})")
@@ -540,7 +539,20 @@ def strokes_bin_velocity_wrapper(strokes, fs, binsize=0.01, return_as_dataframe=
         return pd.DataFrame(out)
     else:
         return out
+    
 
+def sample_rate_from_strokes(strokes):
+    """
+    Get fs from using the time differences between samples.
+    Does sanity check for low variance.
+    """
+    strok = np.concatenate(strokes[:2], axis=0)
+    gaps =np.diff(strok[:, 2])
+    gap_mean = np.mean(gaps)
+    gap_std = np.std(gaps)
+    assert gap_std<0.01 * gap_mean, "too much variation in gap durations across samples!"
+    fs = 1/gap_mean
+    return fs
 
 # def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
 #     fs_new = 30, do_pre_filter=False, clean=False):
@@ -620,6 +632,10 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
     #     print("here", fs_new)
     #     assert False
     import matplotlib.pyplot as plt
+
+    if fs is None:
+        # get it autoamtically.
+        fs = sample_rate_from_strokes(strokes)
 
     # Prep variables.
     strokes = [x.copy() for x in strokes]
@@ -846,6 +862,32 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
 
     return strokes_vels, strokes_speeds
 
+
+def feature_velocity_vector_angle_norm(strok):
+    """
+    A single vector, which is the average vector over all timesteps
+    RETURNS:
+    - velmean, (2,) which is mean x and y vel during stroke.
+    - angle, radians
+    - norm, length of vector.
+    """
+    from pythonlib.tools.vectools import cart_to_polar
+
+    # First, convert to velocity
+    strok_vel = strokesVelocity([strok], fs=None)[0][0]
+
+    # tvals = strok[:,2]
+    # tvals = tvals-tvals[0] # get relative to onset
+    # inds = (tvals>=twind[0]) & (tvals<=twind[1]) # bool mask
+
+    # s = strok[inds, :2]
+    velmean = np.mean(strok_vel[:, :2],axis=0) # (x,y)
+
+    # Also get polar
+    angle, norm = cart_to_polar(velmean[0], velmean[1])
+
+    return velmean, angle, norm
+
 def diff5pt(x, h=1):
     """ given timeseries x get devirative,
     using 5-point differentiation. see:
@@ -856,8 +898,9 @@ def diff5pt(x, h=1):
     edges by repeating the 1-interval distance.
     - expects input to be around 100hz (doesnt relaly matter).
     - x can be list or nparray
-    - h is time interval. leave as 1 to be unitless. (e..g, if
-    100hz, then h=10)
+    - h is time interval. this tells the code what the scale of the 
+    output is (i.e, the units). leave as 1 if the input is unitless. 
+    (e..g, if 100hz, then the intervals are 10ms, can input h=10)
     """
     
     if isinstance(x, list):
@@ -867,6 +910,7 @@ def diff5pt(x, h=1):
         # doesnt work well - large discontnuities at edges.
         x = np.concatenate([x[0, None], x[0, None], x, x[-1, None], x[-1, None]])
     else:
+        # Pad edges.
         for _ in range(2):
             x = np.concatenate([
                 x[0, None]+(x[0]-x[1]), 
@@ -1162,7 +1206,13 @@ def rescaleStrokes(strokes, ver="stretch_to_1"):
     values by that. i..e make this as big as possible in a square
     [-1 1 -1 1]. This makes most sense if you have recentered already, so that (0,0) is 
     at center.
+    
+    RETURNS:
+    - copy of strokes, modified.
     """
+
+    strokes = [s.copy() for s in strokes]
+
     if ver=="stretch_to_1":
         # First, make all pts positive
         strokes = strokes_make_all_pts_positive(strokes)
@@ -1940,8 +1990,23 @@ def angle_of_stroke_segment(strokes, twind=[0, 0.2]):
 
     return angles
 
+
+def slice_strok_by_frac_bounds(strok, frac_low, frac_high):
+    """
+    Returns strok slices by fraction of the num pts. 
+    PARAMS:
+    - frac_low, frac_high, will return segement of stroke within bounds (inclusive).
+    """
+
+    npts = strok.shape[0]
+    ind1 = int(frac_low*npts)
+    ind2 = int(frac_high*npts)
+    assert ind1<ind2
+
+    return strok[ind1:ind2+1, :]
+
 def sliceStrokes(strokes, twind, retain_n_strokes=False,
-                 time_is_relative_each_onset=False):
+                 time_is_relative_each_onset=False, assert_no_lost_strokes=False):
     """ Get a time slice of strokes, returned in strokes format.
     PARAMS:
     - [IGNORE] list_twind, list of twinds, where keeps pts that are within any of the 
@@ -1956,8 +2021,10 @@ def sliceStrokes(strokes, twind, retain_n_strokes=False,
     - strokes_out
     """
 
+    strokes = [s.copy() for s in strokes]
+    n_in = len(strokes)
+    
     if time_is_relative_each_onset:
-        strokes = [strok.copy() for strok in strokes]
         for s in strokes:
             s[:,2] = s[:,2] - s[0,2]
 
@@ -1976,6 +2043,9 @@ def sliceStrokes(strokes, twind, retain_n_strokes=False,
     strokes_out = [_slice(s) for s in strokes]
     if retain_n_strokes==False:
         strokes_out = [s for s in strokes_out if len(s)>0]
+
+    if assert_no_lost_strokes:
+        assert len(strokes_out)==n_in
     return strokes_out
 
 
@@ -2049,9 +2119,29 @@ def strokes_average(strokes, Ninterp=70, center_at_onset=False, centerize=False,
         assert False
     return strok_mean, strokes_stacked
 
+def strokes_centerize_combined(strokes, method="bounding_box"):
+    """ Return list ofs trokes (copy) which are all trasnalted such that the
+    center of the entire strokes is (0,0). i.e. related position of stroks to each
+    other unchanged"""
+
+    if method=="center_of_mass":
+        assert False, "code it"
+        strok_total = concatStrokes(strokes)
+        # strokes = [_centerize(strok) for strok in strokes]
+    elif method=="bounding_box":
+        strok_total = concatStrokes(strokes)[0]
+        cen = get_centers_strokes_list([strok_total], method="bounding_box")[0]
+        strokes = [s.copy() for s in strokes]
+        for strok in strokes:
+            strok[:,0] -= cen[0]
+            strok[:,1] -= cen[1]
+    else:
+        assert False
+        
+    return strokes
 
 def strokes_centerize(strokes, method="center_of_mass"):
-    """ Return list ofs trokes (copy) which are 
+    """ Return list ofs trokes (copy) which are EACH
     cetnred in xy coord, using the mean (i.e, center of mass)"""
 
     if method=="center_of_mass":
