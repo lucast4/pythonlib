@@ -389,7 +389,7 @@ class PrimitiveClass(object):
                 a1 = bin_angle_by_direction([a1], starting_angle=-pi/8, num_angle_bins=8)[0]
                 a2 = bin_angle_by_direction([a2], starting_angle=-pi/8, num_angle_bins=8)[0]
 
-                if a1==4 and a2==2:
+                if a1 in (4, 5) and a2 in (2,3):
                     label = (shcat, scale, "UU" , "UU") # opens to top
                 elif a1==6 and a2==8:
                     label = (shcat, scale, "DD" , "DD") #
@@ -439,6 +439,8 @@ class PrimitiveClass(object):
 
                 if a1==3 and a2==1:
                     label = (shcat, scale, "UR" , "UR") # opens to top-right
+                elif a1==1 and a2==3:
+                    label = (shcat, scale, "UR" , "UR") # opens to top-right
                 elif a1==4 and a2==2:
                     label = (shcat, scale, "UU" , "UU") # opens to top
                 elif a1==5 and a2==3:
@@ -487,11 +489,11 @@ class PrimitiveClass(object):
 
                 if (a1 in [3, 4] and a2==8) or (a2 in [3, 4] and a1==8):
                     label = (shcat, scale, "LL" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
-                elif a1 in [6, 7] and a2==2 and hw<1:
+                elif a1 in [5, 6, 7] and a2==2 and hw<1:
                     label = (shcat, scale, "LL" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
                 elif a1 in [5, 6] and a2==2 and hw>1:
                     label = (shcat, scale, "UU" , 0) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
-                elif a1 in [1, 8] and a2==4:
+                elif a1 in [1, 7, 8] and a2 in [4, 7]:
                     label = (shcat, scale, "UU" , 1) # [2] location of the "top" if you were writing "S". [3] reflected [first reflect, then reflect]
                 else:
                     _raise_error(a1, a2)
