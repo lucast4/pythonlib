@@ -3789,6 +3789,9 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     if ncols is None:
         # Then ncols is the num suibplots
         ncols = max([len(list_subplot), 2]) # for axes sake
+    
+    if ncols> max([len(list_subplot), 2]):
+        ncols =  max([len(list_subplot), 2])
 
     # ncols = 3
     # W = 5

@@ -237,7 +237,7 @@ def _groupingParams(D, expt):
             3:"TTL3",
             4:"TTL4"
         }
-
+        label_as_novel_if_shape_semantic_fails = True
     elif ("primsingridpanchostim" in expt) or ("primsingriddiegostim" in expt):
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["microstim_code"]
@@ -429,6 +429,9 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = True            
         label_as_novel_if_shape_semantic_fails = True
 
+    elif expt == "dirshapepancho1":
+        label_as_novel_if_shape_semantic_fails = True
+
     elif "dirshape" in expt:
         # 10/17/22 - e..g, dircolro3b    
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
@@ -444,6 +447,10 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True            
+
+    elif expt in ["shapecolor1b", "shapecolor1c"]:
+        # Hacky, since this was failing
+        label_as_novel_if_shape_semantic_fails = True
 
     elif "shapecolor" in expt:
         # 10/17/22 - e..g, dircolro3b    
@@ -478,6 +485,7 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
+        label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
 
     elif "rowcol" in expt:
         grouping_reassign = True
@@ -558,7 +566,7 @@ def _groupingParams(D, expt):
         # Novel prims, wnat to rename shapes using hash.
         # reclassify_shape_using_stroke_version = "hash"
         reclassify_shape_using_stroke_version = "cluster_by_sim"
-    
+
     elif (expt=="primdiego1g") or (expt in ["priminvar3j", "priminvar3k", "priminvar3l", "priminvar3m"]):
         # [Novel prims, concatted segments]
         # reclassify_shape_using_stroke_version = "hash"
@@ -590,12 +598,20 @@ def _groupingParams(D, expt):
         # Also included some ZZ on this day -- this is not base prim.
         label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
 
+    elif expt == "priminvar3e":
+        # shuldn't but the code for labeling semantic is stupidly using beh strokes, and so is failing.
+        label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
+
     elif "priminvar" in expt:
         # e.g., priminvar5
         # Is just single prims
         # Just use defaults.
         pass
-    elif "primsingridrand" in expt or "primsingridfixed" in expt or "primsingrid" in expt:
+
+    elif expt == "primsingridfixed4":
+        label_as_novel_if_shape_semantic_fails = True # or else fails, for novel.
+
+    elif "primsingridrand" in expt or "primsingrid" in expt:
         # Just regulare prims in grid
         # Just use defaults.
         pass
@@ -640,10 +656,15 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
+
+    elif "charparts" in expt:
+        color_is_considered_instruction = True
+        replace_shapes_with_clust_labels_if_exist=True
+        label_as_novel_if_shape_semantic_fails = True
+
     elif "char" in expt:
         color_is_considered_instruction = True
         replace_shapes_with_clust_labels_if_exist=True
-        pass
 
     elif "shapeseqsupstim" in expt:
         # Grammar vs. seqsup
@@ -686,12 +707,14 @@ def _groupingParams(D, expt):
     ############### OPTIONAL:
     # Filter dataframe
     if len(F)>0:
+        assert False, "do this after preprpocessing"
         print("*** Filtering dataframe using this filter:")
         print(F)
         D = D.filterPandas(F, return_ver="dataset")
 
     # classify based on plan times
     if len(plantime_cats)>0:
+        assert False, "do this after preprpocessing"
         print("*** Reassigning plan_time category names, using this filter:")
         print(plantime_cats)
         F = lambda x: plantime_cats[x["plan_time"]]
@@ -801,6 +824,7 @@ def _groupingParams(D, expt):
     # Merge epochs;
     if len(epoch_merge_dict)>0:
         print("MERGING EPOCHS...")
+        assert False, "do outside of preprocessing"
         for epoch_new, list_epoch_old in epoch_merge_dict.items():
             print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
             D.supervision_epochs_merge_these(list_epoch_old, epoch_new)
@@ -1297,6 +1321,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # Only keep characters that have at lesat one trial across all grouping levels.
     if only_keep_trials_across_groupings:
+        assert False, "Do this outside preprocessing"
         D.removeTrialsExistAcrossGroupingLevels(GROUPING, GROUPING_LEVELS)
 
     # -- std of stroke and gaps
@@ -1337,11 +1362,13 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     ### EXTRACT FEATURES
     # - hausdorff, offline score
     if extract_features:
+        assert False, "dont do this here"
         D.extract_beh_features(feature_list = FEATURE_NAMES)
         D.score_visual_distance()
 
     # -- pull out variables into separate columns
     if extract_motor_stats:
+        assert False, "dont do this here"
         for col in ["motortiming", "motorevents"]:
             keys = D.Dat[col][0].keys()
             for k in keys:
@@ -1368,6 +1395,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # (4) Sequences more similar within group than between?
     if score_all_pairwise_within_task:
+        assert False, "dont do this here"
         from pythonlib.dataset.analy import score_all_pairwise_within_task
         from pythonlib.dataset.analy import score_alignment
         DIST_VER = "dtw_split_segments"
@@ -1383,6 +1411,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # - score beh sequence rank relative to parses
     if get_sequence_rank:
+        assert False, "dont do this here"
         sequence_get_rank_vs_task_permutations_quick(D)
         FEATURE_NAMES = sorted(set(FEATURE_NAMES + ["effic_rank", "effic_summary", "effic_confid"]))
     # print("pruning by confidence of rank")
@@ -1392,6 +1421,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     print("- starting/ending len (getting sequence):")
     print(len(D.Dat))
     if get_sequence_rank and sequence_rank_confidence_min is not None:
+        assert False, "dont do this here"
         D.Dat = D.Dat[D.Dat["effic_confid"]>=sequence_rank_confidence_min]
         D.Dat = D.Dat.reset_index(drop=True)
     if len(D.Dat)==0:
@@ -1400,6 +1430,7 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
     # =========
     if sequence_match_kind in ["same", "diff"]:
+        assert False, "dont do this here"
         print("-- Doing only_if_sequence_different_across_grouping")
         print(len(D.Dat))
         D.analy_match_sequence_discrete_per_task(groupby=GROUPING, 
@@ -1414,8 +1445,10 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     D.removeNans(columns=features_to_remove_nan) 
     # - Replace outliers with nans
     for F in features_to_remove_outliers:
+        assert False, "dont do this here"
         D.removeOutlierRowsTukey(F, niqr=2.5, replace_with_nan=True)
     if remove_outliers:
+        assert False, "dont do this here"
         D.removeOutlierRows(FEATURE_NAMES, [0.1, 99.9])
 
     # FIgure out task probes (0 and 1)

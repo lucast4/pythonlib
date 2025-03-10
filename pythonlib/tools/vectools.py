@@ -26,6 +26,38 @@ from math import pi
 #     x,y = _convert_to_rel_units(x,y)
     # return x,y
 
+def _convert_list_vector_to_array(vec_as_list):
+    """
+    Convert list of 2 numbers to np array, shape (2,), a standard
+    format for vectors.
+    PARAMS:
+    - vec_as_list, either list of 2 nums, or vector or 2 nums, shape (1,2), (2,1), or (2,)
+    RETURNS:
+    - vector, (2,) array of c
+    """
+    # Convert to np arrays
+    if isinstance(vec_as_list, (list, tuple)):
+        vector = np.array(vec_as_list)
+    else:
+        vector = vec_as_list
+
+    # Make its shape (2,)
+    if vector.shape in [(1,2), (2,1)]:
+        vector = vector.squeeze()
+
+    assert vector.shape == (2,)
+
+    return vector
+
+def average_angle(angles):
+    """ Given angles in radians, return the mean angle by firrst converting
+    all to vectors,. getting mean vector, then convering back to angle.
+    NOTE: the mean can be very low norm....
+    """
+    mean_vec = np.mean(np.stack([get_vector_from_angle(a) for a in angles]), axis=0)
+    angle_mean, norm_mean = cart_to_polar(mean_vec[0], mean_vec[1])
+    return angle_mean, norm_mean
+    
 def get_vector_from_angle(angle):
     """ Returns unit vector given angle in rads, where
     0rad is (1,0) and goes CCw from there. modulo 2pi
@@ -63,8 +95,12 @@ def get_dot_between_unit_vectors(u, v):
 #     return proj
 
 def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
-    return vector / np.linalg.norm(vector)
+    """ Returns the unit vector of the vector.  
+    returns shape (2,)
+    """
+    vector = _convert_list_vector_to_array(vector)
+    x = vector / np.linalg.norm(vector)
+    return x
 
 def cart_to_polar(x, y):
     """ convert from cartesiaon to polar coords
@@ -74,6 +110,8 @@ def cart_to_polar(x, y):
 
     theta = get_angle((x,y))
     norm = np.linalg.norm((x,y))
+    norm = _convert_list_vector_to_array(norm)
+
     return theta, norm
 
 def angle_between(v1, v2):
@@ -91,12 +129,10 @@ def angle_between(v1, v2):
     return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
 def get_angle(v):
-    from math import pi
     """given a vector, gets angle from (1,0), 
     in domain [0, 2pi)"""
-    if isinstance(v, (list, tuple)):
-        v = np.array(v)
-
+    from math import pi
+    v = _convert_list_vector_to_array(v)
     a = angle_between([1,0], v)
     if np.sum(v**2)==0:
         print(v)
@@ -263,6 +299,47 @@ def bin_angle_by_direction(angles_all, starting_angle=0, num_angle_bins=4,
 
     return angles_named
 
+def linearize_angles_around_mean(angles, PLOT=False):
+    """
+    Given vector of angles, find its mean, and then linear data by subtracting this from 
+    all angles, and then taking sine, so that all data is now approx centered at 0, and deviating
+    neg and postiive.
+
+    Throws AssertionError if you pass in angles where the max-min is greater than pi, beucase then it 
+    doesnt make sense to linearize.
+
+    RETURNS:
+    - angles_diff, angles_diff_sin, anglemean, anglemean_norm
+    """
+    # Note: for angle, linearize angle by converting to difference from mean angle
+    from math import pi
+    
+    angles = np.array(angles)
+
+    # Get mean angle
+    anglemean, anglemean_norm = average_angle(angles)
+
+    # Convert all angles to difference from this angle.
+    # angles_diff = angle_diff_vectorized(angles, anglemean * np.ones(angles.shape)) # This gives absolute...
+    angles_diff = angles - anglemean
+
+    # Take sine of this difference to deal with wraparound effects.
+    # (sine beucase wnat this to be linear)
+    angles_diff_sin = np.sin(angles_diff)
+
+    # Sanity check, because linearizing doesnt make sense if the (max-min) of angles if >pi.
+    if (max(angles_diff)-min(angles_diff))>pi:
+        fig, ax = plt.subplots()
+        ax.plot(angles, angles_diff, "xr")
+        ax.plot(angles, angles_diff_sin, "xk")
+        assert False
+
+    if PLOT:
+        fig, ax = plt.subplots()
+        ax.plot(angles, angles_diff, "xr")
+        ax.plot(angles, angles_diff_sin, "xk")
+
+    return angles_diff, angles_diff_sin, anglemean, anglemean_norm
 
 def projection_onto_axis_subspace(xmean_base1, xmean_base2, X, doplot=False,
     plot_color_labels=None):

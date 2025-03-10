@@ -171,7 +171,8 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
         return strokes_interp
 
 def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
-                 adapt_win_len="adapt", sanity_check_endpoint_not_different=True):
+                 adapt_win_len="adapt", sanity_check_endpoint_not_different=True,
+                 DEBUG=False):
     """ returns copy of strokes, smoothed with window_time (seconds)
     - sample_rate in samp/sec (e.g., fd["params"]["sample_rate"])
     - adapt_win_len, what to do fro strokes that are shoerter than window.
@@ -189,7 +190,18 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
         did_adapt = False
         if len(s)<window_len:
             if adapt_win_len=="adapt":
-                window_len = len(s)
+                
+                if False:
+                    # Old method, before 3/2025. it is too large, leads to output strokes that are too much changed.
+                    window_len = len(s)
+                else:
+                    pad_dur = 0.01 # time to subtract from entire stroke dur.
+                    pad_n_samp = int(pad_dur*sample_rate)
+                    window_len = len(s)-pad_n_samp # Added, to have less negaitve effect on short strokes.
+
+                if window_len<1:
+                    window_len = 1
+
                 if window_len%2==0:
                     window_len-=1
                 window_len = int(window_len)
@@ -206,6 +218,11 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                 # print("removing stroke since shorter than window")
                 pass
         # Do smoothing
+        if DEBUG:
+            print(window_len, window_time, sample_rate)
+            print(window_type)
+            print(len(s))
+
         strokes_sm.append(np.array([
             smoothDat(s[:,0], window_len=window_len, window=window_type), 
             smoothDat(s[:,1], window_len=window_len, window=window_type), 
@@ -250,50 +267,55 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
         if diag > 20: # Otherwise dont fail for things like dots, ebcuase of small diagonal.
             for s, sf in zip(strokes, strokes_sm):
                 for idx_pt in [0, -1]:
-                    d = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
+                    dist_old_to_new = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
                     duration = s[-1,2] - s[0,2]
 
                     # Shorter duration strokes are more likely to have larger diff from filtering, so
                     # give them a bit more leweway
                     if duration<0.075:
-                        max_frac = 0.37
-                    elif duration<0.2:
+                        # max_frac = 0.37
                         max_frac = 0.25
+                    elif duration<0.2:
+                        # max_frac = 0.25
+                        max_frac = 0.17
                     elif duration<0.34:
-                        max_frac = 0.2
+                        # max_frac = 0.2
+                        max_frac = 0.13
                     else:
-                        max_frac = 0.18
+                        # max_frac = 0.18
+                        max_frac = 0.11
 
                     # print("-----")
                     # print(d)
                     # print(diag)
                     # print("-----")
-                    if d/diag > max_frac:
+                    if dist_old_to_new/diag > max_frac:
                         from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper
                         print(s)
                         print(sf)
-                        print(d)
-                        print(d/diag)
+                        print(dist_old_to_new)
+                        print(dist_old_to_new/diag)
                         print(max_frac)
 
-                        fig, axes = plt.subplots(2,2)
-                        ax = axes.flatten()[0]
-
+                        fig, axes = plt.subplots(1,2, sharex=True, sharey=True)
+                        
                         from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
                         ax = axes.flatten()[0]
                         plotDatStrokesTimecourse(strokes, ax=ax)
                         ax = axes.flatten()[1]
                         plotDatStrokesTimecourse(strokes_sm, ax=ax)
                         ax.set_title("strokesFilter() --> Filtered")
+                        fig.savefig("/tmp/tmp1.png")
 
-                        ax = axes.flatten()[2]
+                        fig, axes = plt.subplots(1,2, sharex=True, sharey=True)
+                        ax = axes.flatten()[0]
                         plotDatStrokesWrapper(strokes, ax)
 
-                        ax = axes.flatten()[3]
+                        ax = axes.flatten()[1]
                         plotDatStrokesWrapper(strokes_sm, ax)
 
                         # Find velocity
-                        fig.savefig("/tmp/tmp.png")
+                        fig.savefig("/tmp/tmp2.png")
 
                         assert False, "why smoothing made such big change to poisitons?"
 

@@ -2261,6 +2261,9 @@ class Dataset(object):
 
             # (1) Strokes beh, what sahpes to call each beh stroke
             tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
+            # if len(tokens_beh_old)==0:
+            #     tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
+            #     assert False, "this will fail"
             shape_seq = [tok["shape"] for tok in tokens_beh_old]
             list_ind_taskstroke_orig = [tok["ind_taskstroke_orig"] for tok in tokens_beh_old]
             strokes = self.Dat.iloc[ind]["strokes_beh"]
@@ -2466,8 +2469,10 @@ class Dataset(object):
                 assert self.TokensStrokesBeh is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensStrokesBeh[tc]
                 assert Tk is not None
+                assert len(Tk.Tokens)==len(self.Dat.iloc[ind]["strokes_beh"])
             elif which_order == "beh_using_task_data":
-                # beh lenght, task strokes (DEFAULT)
+                # beh lenght, task strokes (DEFAULT). 
+                # Actually, I think it could be shrter than beh length, if any beh misses task strokes entirely.
                 try:
                     Tk = self.TokensStrokesBehUsingTaskStrokes[tc]
                 except Exception as err:
@@ -2479,6 +2484,7 @@ class Dataset(object):
             elif which_order == "task":
                 assert self.TokensTask is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensTask[tc]
+                assert len(Tk.Tokens)==len(self.Dat.iloc[ind]["strokes_task"])
             else:
                 print(which_order)
                 assert False, "only beh and task make sense for 'regenerated_from_raw'..."
@@ -2508,7 +2514,7 @@ class Dataset(object):
             # if not self.behclass_check_if_tokens_extracted():
             self.behclass_preprocess_wrapper()
 
-            # mapper from taskstrokeinds to beh
+            # mapper from taskstrokeinds to beh. 
             mapper_taskstroke_to_beh = {}
             this = self.behclass_extract_beh_and_task(ind)[3]
 
@@ -2530,6 +2536,7 @@ class Dataset(object):
                 assert Tk.Tokens is not None
                 assert Tk.Tokens[0] is not None
                 # REturn here, since it doesnt have valid taskstroke_orig indices.
+                assert len(Tk.Tokens)==len(self.Dat.iloc[ind]["strokes_beh"])
                 if return_as_tokensclass:
                     return Tk
                 else:
@@ -2537,7 +2544,10 @@ class Dataset(object):
             elif which_order=="task":
                 Task = self.Dat.iloc[ind]["Task"]
                 tokens = Task.tokens_generate(assert_computed=True)
+                assert len(tokens)==len(self.Dat.iloc[ind]["strokes_task"])
             elif which_order=="beh_using_task_data":
+                # Get, for each beh stroke, its best aligned task stroke. NOTE: it is possible for a
+                # beh stroke to have no matched task stroke!
                 tokens = Beh.alignsim_extract_datsegs_both_beh_task()[1]
                 # tokens = self.behclass_extract_beh_and_task(ind)[1]
             elif which_order=="beh_firsttouch":
@@ -3640,7 +3650,7 @@ class Dataset(object):
         # print(remove_online_abort)
         # print(sum(self.Dat["trialcode"] == "220608-1-132"))
         if remove_online_abort:
-            print("HERE")
+            # print("HERE")
             # Remove any trials that were online abort.
             self.Dat = self.Dat[self.Dat["aborted"]==False]
             print("Removed online aborts")
@@ -7353,9 +7363,45 @@ class Dataset(object):
         adapt_win_len= "adapt"
         list_strokes_filt = []
         for strokes in list_strokes:
-            strokes_filt = smoothStrokes(strokes, fs,
-                window_time=window_time, window_type=window_type,
-                     adapt_win_len=adapt_win_len)
+            for _window_time in [window_time, 0.9*window_time, 0.8*window_time, 0.7*window_time, 0.6*window_time, 0.5*window_time]:
+                try:
+                    # Try reducing the window time, this might help for cases where large winodw time
+                    # leads to big change in output stroke.
+                    strokes_filt = smoothStrokes(strokes, fs,
+                        window_time=_window_time, window_type=window_type,
+                            adapt_win_len=adapt_win_len)
+                    success = True
+                    break
+                except Exception as err:
+                    success = False
+                    continue
+                    
+            if not success:
+                print("TO SOLVE THIS PROBLEM: (1) add another item to _window_time iteration above; (2) potnetialyl increase max_frac in stroketools")
+                raise err
+                
+            # try:
+            #     strokes_filt = smoothStrokes(strokes, fs,
+            #         window_time=window_time, window_type=window_type,
+            #             adapt_win_len=adapt_win_len)
+            # except Exception as err:
+            #     try:
+            #         # Try reducing the window time, this might help for cases where large winodw time
+            #         # leads to big change in output stroke.
+            #         _window_time = 0.85*window_time
+            #         strokes_filt = smoothStrokes(strokes, fs,
+            #             window_time=_window_time, window_type=window_type,
+            #                 adapt_win_len=adapt_win_len)
+            #     except Exception as err:
+            #         # Try reducing the window time, this might help for cases where large winodw time
+            #         # leads to big change in output stroke.
+            #         _window_time = 0.7*window_time
+            #         print(_window_time)
+            #         assert False
+            #         strokes_filt = smoothStrokes(strokes, fs,
+            #             window_time=_window_time, window_type=window_type,
+            #                 adapt_win_len=adapt_win_len)
+
             list_strokes_filt.append(strokes_filt)
 
             if PLOT_EXAMPLE:
@@ -7742,10 +7788,12 @@ class Dataset(object):
                 self._behclass_generate_alltrials(reset_tokens=reset_tokens,
                                                   reclassify_shape_using_stroke_version=reclassify_shape_using_stroke_version,
                                                   tokens_gridloc_snap_to_grid=tokens_gridloc_snap_to_grid)
-
-                # Prune cases where beh did not match any task strokes.
-                # NOTE: added here 2/21/24, used to be in dataset_strokes.py (_prepare_dataset)
-                self.behclass_clean()
+                
+                if True: # NEed to do this. Otherwise sometimes gets trials where no beh stroke matches any task strokes.
+                    # These will fail in initial preprpcessing of tokens
+                    # Prune cases where beh did not match any task strokes.
+                    # NOTE: added here 2/21/24, used to be in dataset_strokes.py (_prepare_dataset)
+                    self.behclass_clean()
 
     def behclass_generate(self, indtrial, expt=None, reset_tokens=False):
         """ Generate the BehaviorClass object for this trial
@@ -7784,7 +7832,7 @@ class Dataset(object):
                                      reclassify_shape_using_stroke_version="default",
                                      tokens_gridloc_snap_to_grid=False):
         """ Generate list of behClass objects, one for each trial,
-        and stores as part of self.
+        and stores as part of self. NOTE: This is the first place behcalss is generated, during Dataset extractio
         RETURNS:
         - self.Dat["BehClass"], list of beh class iunstance.
 
@@ -7984,9 +8032,9 @@ class Dataset(object):
         [in order and num of BEH]
         - datsegs_behlength, tokens, same length as primlist, for the best match for
         each beh stroke [in order and num of BEH]
-        - datsegs_tasklength_firsttouch, tokens, same length as task seg that weret touched, 
+        - datsegs_tasklength_firsttouch, tokens, list (length num taskstrokes that were touched), 
         in order of first time each task stroke gotten by beh. [in order of BEH, but num of TASK TOUCHED]
-        - out_combined. Combined representaion, list (length num taskstrokes) of tuples, and in
+        - out_combined. Combined representaion, list (length num taskstrokes that were touched) of tuples, and in
         order that they are gotten (identical to datsegs_tasklength_firsttouch). Each tuple: 
         (inds_beh, strokesbeh, dseg_task), where inds_beh are indices into Beh.Strokes indiicating
         for which beh strkes this task stroke was the first task stroke the bhe stroke touched,
@@ -8013,6 +8061,9 @@ class Dataset(object):
 
         # assert [s() for s in Beh.Strokes] == self.Dat.iloc[indtrial]["strokes_beh"]
 
+        assert len(datsegs_tasklength_firsttouch) == len(out_combined)
+        assert len(Beh.Strokes)==len(datsegs_behlength)
+
         return Beh.Strokes, datsegs_behlength, datsegs_tasklength_firsttouch, out_combined
 
     def behclass_clean(self):
@@ -8033,8 +8084,13 @@ class Dataset(object):
                 trials_good.append(ind)
 
         # Only keep good trials.
-        print("Removing these trials: ")
+        print("Removing these trials beucause beh strokes all fail to match to a task stroke: ")
         print(trials_bad)
+
+        # Sanity check not remove too many trials.
+        if len(trials_bad)/len(trials_good)>0.02:
+            print(trials_bad, trials_good)
+            assert False, "why lost so many trials?"
         self.subsetDataframe(trials_good)
 
     def behclass_check_if_tokens_extracted(self):
@@ -8485,6 +8541,11 @@ class Dataset(object):
                 # This then is like solid, but not using rule, instead signalling
                 # that this is trial using sequence_mask.
                 supervstr+="|colsqmsk"
+            elif prms["COLOR_METHOD"] == "":
+                # Older data...
+                date = int(self.dates(force_single=True)[0])
+                assert (self.animals(force_single=True)[0]=="Pancho" and date<220606 and date>220525), "allow using dummy for these days, as not really analyzing them.."
+                supervstr+="|coldummy"
             else:
                 print(prms)
                 print(self.Dat.iloc[ind]["epoch"])
@@ -10680,11 +10741,14 @@ class Dataset(object):
                 clust_sim_maxes_keep.append(clust_sim_maxes)
 
             # if n_success/(n_failures + n_success)<0.9:
-            if n_success/(n_failures + n_success)<0.98: # I expect that all strokes are included (i.e., not just quality ones) in the saved data
-                print(n_success, n_failures)
-                print(len(DS.Dat["trialcode"].unique()))
-                print(len(self.Dat["trialcode"].unique()))
-                assert False, "why skipped so many? Id expect the only reason to skipt o be very rare losses of strokes (e.g, noise reduction)"
+            if n_failures + n_success>0:
+                if n_success/(n_failures + n_success)<0.98: # I expect that all strokes are included (i.e., not just quality ones) in the saved data
+                    print(n_success, n_failures)
+                    print(len(DS.Dat["trialcode"].unique()))
+                    print(len(self.Dat["trialcode"].unique()))
+                    assert False, "why skipped so many? Id expect the only reason to skipt o be very rare losses of strokes (e.g, noise reduction)"
+            else:
+                assert sum(self.Dat["task_kind"]=="character")==0, "the only explanation for not having any trials..."
 
             # Assign them back to
             # self.Dat = self.Dat.iloc[inds_keep].reset_index(drop=True)
