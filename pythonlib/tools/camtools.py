@@ -317,6 +317,61 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
                     print(f'Fail {trial}-{i}', outcome)
                 plt.close('all')
     return corr_lags,euc_lags
+def finalize_alignment_data(lags, good_inds):
+    """ Function to generate plots on alignment/lag data
+
+    Args:
+        lags (dict): trial keyed dict with list of lags (one for each stroke) for corr method {trial:[lags],trial:[lags]}
+        good_inds (list): trials and strokes with good corr plots. Should be a list fo strings formatted like:
+            ['trial-stroke', ... ,'trial-stroke'] e.g. ['10-0','12-1','20-0']
+            * Uses the same labelling scheme as the get_lags function in stroketools thay is called below
+    """
+    plt.style.use('dark_background')
+    all_corr_lags = []
+    corr_lag_nums = []
+    for lag_trial in lags['corr_lags'].values():
+        for lag in lag_trial:
+            if lag is None:
+                continue
+            else:
+                all_corr_lags.append(lag[0]-lag[1])
+    for index in good_inds:
+        trial = int(index.split('-')[0])
+        stroke = int(index.split('-')[1])
+        this_lag = lags['corr_lags'][trial][stroke]
+        if this_lag is None:
+            continue
+        lag_num = this_lag[0]-this_lag[1]
+        corr_lag_nums.append(lag_num)
+        print(index,lag_num)
+    euc_lag_nums = []
+    # for index in good_inds:
+    #     trial = int(index.split('-')[0])
+    #     stroke = int(index.split('-')[1])
+    #     this_lag = euc_lags[trial][stroke]
+    #     if this_lag is None:
+    #         continue
+    #     lag_num = this_lag[0]-this_lag[1]
+    #     euc_lag_nums.append(lag_num)
+    #     # print(index,lag_num)
+    bins = 30
+    fig,ax = plt.subplots(4,1,figsize=(15,30))
+    ax[0].hist(all_corr_lags, bins=bins, color='indianred', alpha=0.5, label='corr lag')
+    ax[0].set_xlabel('Lag times (pos means touch_t0 > cam_t0)')
+    ax[0].set_title('All lags')
+    # plt.hist(all_euc_lags, bins=bins, color='lightgreen', alpha=0.5, label='euc lag')
+    ax[1].hist(corr_lag_nums, bins=bins, color='indianred', alpha=0.5, label='corr lag')
+    ax[1].set_title('Good inds lags')
+    # plt.hist(euc_lag_nums, bins=bins, color='lightgreen', alpha=0.5, label='euc lag')
+
+    corr_mean = round(np.mean(corr_lag_nums),4)
+    # euc_mean = round(np.mean(euc_lag_nums),4)
+    # plt.boxplot([corr_lag_nums,euc_lag_nums], label=[f'corr lag {corr_mean}', f'euc lag {euc_mean}'])
+    ax[2].boxplot(corr_lag_nums)
+    ax[2].set_title(f'Good inds lags boxplot, mean: {corr_mean}')
+    ax[3].plot(all_corr_lags,'.-')
+    ax[3].set_title('Lags over trials')
+    return fig,corr_mean
 
 ## Gap tools
 ## General tools for gaps, may overlap with stroke tools but with different intentionbs
