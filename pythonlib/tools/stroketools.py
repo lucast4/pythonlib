@@ -2511,10 +2511,10 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
     corr_lags = {}
     import os
     import shutil
-    euc_dir = f'{sdir}/euc_figs'
+    # euc_dir = f'{sdir}/euc_figs'
     corr_dir = f'{sdir}/corr_figs'
-    if os.path.exists(euc_dir):
-        shutil.rmtree(euc_dir)
+    # if os.path.exists(euc_dir):
+    #     shutil.rmtree(euc_dir)
     if os.path.exists(corr_dir):
         shutil.rmtree(corr_dir)
     os.makedirs(euc_dir, exist_ok=True)
@@ -2528,13 +2528,13 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
         if len(dat) == 0:
             continue
         cam_pts = dat['pts_time_cam_all']
-        trans_cam_pts = dat['trans_pts_time_cam_all']
-        strokes_touch = dat['strokes_touch']
+        # trans_cam_pts = dat['trans_pts_time_cam_all']
+        strokes_touch = dat['strokes_raw_times']
         pnut_strokes_touch = dat['pnut_strokes']
 
         touch_fs = 1/np.mean(np.diff(strokes_touch[0][:,2]))
         cam_fs = 1/np.mean(np.diff(cam_pts[:,3]))
-        trans_cam_fs = 1/np.mean(np.diff(trans_cam_pts[:,3]))
+        # trans_cam_fs = 1/np.mean(np.diff(trans_cam_pts[:,3]))
 
         
         t_stroke_start = pnut_strokes_touch[0][0,2]
@@ -2544,7 +2544,7 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
 
         # restrict data to be within desired times
         all_cam = cam_pts[(cam_pts[:,3] >= t_stroke_start-cush) & (cam_pts[:,3] <= t_stroke_end+cush)]
-        trans_all_cam = trans_cam_pts[(trans_cam_pts[:,3] >= t_stroke_start-cush) & (trans_cam_pts[:,3] <= t_stroke_end+cush)]
+        # trans_all_cam = trans_cam_pts[(trans_cam_pts[:,3] >= t_stroke_start-cush) & (trans_cam_pts[:,3] <= t_stroke_end+cush)]
         touch_strokes_rest = []
         for strok in strokes_touch:
             if strok[0,2] >= t_stroke_start and strok[-1,2] <= t_stroke_end:
@@ -2568,8 +2568,8 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
         cam_interp_smth = smoothStrokes(cam_interp, 1000, window_type='median')[0]
         cam_interp_smth = cam_interp_smth[:,[0,1,3]]
 
-        trans_cam_interp = strokesInterpolate2([trans_all_cam],kind='linear',N=["fsnew",1000,trans_cam_fs])
-        trans_cam_interp_smth = smoothStrokes(trans_cam_interp, 1000, window_type='median')[0]
+        # trans_cam_interp = strokesInterpolate2([trans_all_cam],kind='linear',N=["fsnew",1000,trans_cam_fs])
+        # trans_cam_interp_smth = smoothStrokes(trans_cam_interp, 1000, window_type='median')[0]
         # trans_cam_interp_smth = trans_cam_interp_smth[:,[0,1,3]]
         touch_interp = strokesInterpolate2(strokes_touch,kind='linear',N=["fsnew",1000,touch_fs])
         touch_interp_noz = []
@@ -2581,13 +2581,13 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
             touch_stroke_filt = touch_stroke
             if len(touch_stroke_filt) == 0:
                 continue
-            euc_lag, euc_fig = euclidAlign(trans_cam_interp_smth,touch_stroke_filt, ploton=True)
+            # euc_lag, euc_fig = euclidAlign(trans_cam_interp_smth,touch_stroke_filt, ploton=True)
             corr_lag, corr_fig, outcome = corrAlign(cam_interp_smth,touch_stroke_filt, UB=0.25, method='corr', ploton=True)
             corr_lags[trial].append(corr_lag)
-            euc_lags[trial].append(euc_lag)
+            # euc_lags[trial].append(euc_lag)
             if ploton:
-                if euc_fig is not None:
-                    euc_fig.savefig(f'{euc_dir}/trial{trial}-{i}_euc.png')
+                # if euc_fig is not None:
+                #     euc_fig.savefig(f'{euc_dir}/trial{trial}-{i}_euc.png')
                 if corr_fig is not None:
                     corr_fig.savefig(f'{corr_dir}/trial{trial}-{i}_corr.png')
                 else:
