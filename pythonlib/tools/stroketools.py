@@ -182,9 +182,9 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
     """
     from .timeseriestools import  smoothDat
 
-    # if window_type=='median':
-    #     #Idk median filter is probably a safe bet, also don't want to change code to make work
-    #     sanity_check_endpoint_not_different = False
+    if strokes[0].shape[1] == 4 :
+        #turn off for 3d points bc errors
+        sanity_check_endpoint_not_different = False
 
     window_len = int(np.floor(window_time/(1/sample_rate)))
     if window_len%2==0:
