@@ -106,18 +106,24 @@ def smoothDat(x, window_len=11, window='hanning', flip_at_edges=False):
         # signal prepared by repeating the endpoint value 
         s = np.r_[np.ones(int((window_len-1)/2))*x[0], x, np.ones(int((window_len-1)/2))*x[-1]]
         
-    if window == 'flat' or window == 'median': #moving average
-        w=np.ones(window_len,'d')
+    if window == 'median':
+        from scipy.signal import medfilt
+        y = medfilt(s,window_len)
+        #med filt returns smoothed array of same length as padded s so do this to avoid extra points
+        y = y[(window_len-1)//2:-(window_len-1)//2]
     else:
-        w=eval('np.'+window+'(window_len)')
+        if window == 'flat': #moving average
+            w=np.ones(window_len,'d')
+        else:
+            w=eval('np.'+window+'(window_len)')
 
-    # print("--")
-    # print(len(x))
-    # print(len(s))
-    # print(window_len)
-    # print("==")
-    y=np.convolve(w/w.sum(),s,mode='valid')
-    # print(len(y))
+        # print("--")
+        # print(len(x))
+        # print(len(s))
+        # print(window_len)
+        # print("==")
+        y=np.convolve(w/w.sum(),s,mode='valid')
+        # print(len(y))
     return y
 
 

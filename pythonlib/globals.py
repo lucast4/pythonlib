@@ -53,7 +53,7 @@ elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan" 
 # 	PATH_MATLAB = "/data1/programs/MATLAB/R2021a/bin/matlab"
 elif MACHINE == 'ltbonobo':
 	HOME = "/home/danhan"
-	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
+	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = f"{HOME}/freiwaldDrive/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER = f"{HOME}/freiwaldDrive/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER2 = f"{HOME}/freiwaldDrive/ltian/backup/gorilla/gorilla1/animals"
