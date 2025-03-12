@@ -296,6 +296,7 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
                     print(f'Fail {trial}-{i}', outcome)
                 plt.close('all')
     return corr_lags
+
 def finalize_alignment_data(lags, good_inds):
     """ Function to generate plots on alignment/lag data
 
