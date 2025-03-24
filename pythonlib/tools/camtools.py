@@ -6,6 +6,7 @@ Written by D. Hanuska, originalyl in stroketools.py, and LT moved over here.
 """
 import numpy as np
 from pythonlib.drawmodel.features import *
+from pythonlib.tools.stroketools import strokesInterpolate2, smoothStrokes
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
@@ -366,6 +367,7 @@ def fps2(x, fs):
 
 def plotTrialsTrajectories(dat, trial_ml2, data_use='trans'):
     """Plot some relevant trajectories"""
+
     plt.style.use('dark_background')
 
     assert len(dat) > 0, "No data here"
@@ -405,7 +407,7 @@ def plotTrialsTrajectories(dat, trial_ml2, data_use='trans'):
     int_vt = np.column_stack((fps(pts_cam_int[:,2],1000),pts_cam_int[2:-2,3]))
     #Smooth interp data
     if_zt = smoothStrokes([int_zt], 1000, window_type='median')[0]
-    if_vt = smoothStrokes([int_vt], 1000, window_type='median')[0]
+    if_vt = smoothStrokes([int_vt], 1000, window_type='flat')[0]
 
     fig = plt.figure(figsize=(20,10))
     #Plot data
@@ -443,28 +445,45 @@ def normalizeGaps(gaps):
         norm_ts = (ts - t_min)/(t_max-t_min)
         gaps_norm.append(np.column_stack((gap[:,:-1],norm_ts)))
     return gaps_norm
+def sort_gaps_by_disp_ratio(gaps,stroke_dists)
+    """
+    Will sort gaps based on ration between distance travelled and direct distance between strokes
+    """
+    
 
-def plotGapHeat(gaps,color_ind=2):
-    """Plot heat maps of gaps, one gap per row could be normal
+def plotGapHeat(gaps,color_ind=2,preprocess_method='norm', sort_method='disp_ratio'):
+    """Plot heat maps of gaps, one gap per row could be normal. Will bad zeros on bottom if needed
 
     Args:
         gaps (array): Array of gaps (x,y,z,t) 
         coord_ind (int): Index of relevant coord (default is 2/z)
+        preprocess_method (str):
+            'pad': Pads end with zero rows
+            'norm': Will normalize t to [0,1]
     """
-    # Convert to NumPy array for easier manipulation
-    gaps = np.array(gaps, dtype=float)  # Shape: (num_gaps, num_points, 4)
+    if sort_method == 'dur':
+        gaps = sorted(gaps,key=len)
+    if sort_method == 'disp_ratio':
+
+    if preprocess_method == 'pad':
+        max_gap_len = np.max([len(gap) for gap in gaps])
+        pad_gaps = []
+        for gap in gaps:
+            pad_size = max_gap_len - len(gap)
+            pad_gap = np.pad(gap,((0,pad_size),(0,0)))
+            assert len(pad_gap) == max_gap_len, f'{len(pad_gap)},{max_gap_len}'
+            pad_gaps.append(pad_gap)
+
+        gaps = np.array(pad_gaps)
+    elif preprocess_method == 'norm':
+        gaps = normalizeGaps(gaps)
+    color_values = gaps[:,:,color_ind]
     
-    # Determine which index to use for coloring
-    
-    # Extract values for heatmap
-    color_values = gaps[:, :, color_ind]  # Extract chosen variable
-    
-    # Plot the heatmap
-    plt.figure(figsize=(10, len(gaps)))  # Adjust height based on number of gaps
+    plt.figure(figsize=(10, 500))
     plt.imshow(color_values, aspect='auto', cmap='viridis', interpolation='nearest')
 
     # Label axes
-    plt.xlabel("Normalized Time (t)")
+    plt.xlabel("Time (t)")
     plt.ylabel("Gap Index")
     plt.colorbar()
     
