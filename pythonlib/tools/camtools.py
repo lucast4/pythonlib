@@ -6,7 +6,6 @@ Written by D. Hanuska, originalyl in stroketools.py, and LT moved over here.
 """
 import numpy as np
 from pythonlib.drawmodel.features import *
-from pythonlib.tools.stroketools import strokesInterpolate2, smoothStrokes
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
@@ -367,6 +366,7 @@ def fps2(x, fs):
 
 def plotTrialsTrajectories(dat, trial_ml2, data_use='trans'):
     """Plot some relevant trajectories"""
+    from pythonlib.tools.stroketools import strokesInterpolate2, smoothStrokes
 
     plt.style.use('dark_background')
 
@@ -445,7 +445,7 @@ def normalizeGaps(gaps):
         norm_ts = (ts - t_min)/(t_max-t_min)
         gaps_norm.append(np.column_stack((gap[:,:-1],norm_ts)))
     return gaps_norm
-def sort_gaps_by_disp_ratio(gaps,stroke_dists)
+# def sort_gaps_by_disp_ratio(gaps,stroke_dists)
     """
     Will sort gaps based on ration between distance travelled and direct distance between strokes
     """
@@ -464,7 +464,7 @@ def plotGapHeat(gaps,color_ind=2,preprocess_method='norm', sort_method='disp_rat
     if sort_method == 'dur':
         gaps = sorted(gaps,key=len)
     if sort_method == 'disp_ratio':
-
+        print('Not done yet')
     if preprocess_method == 'pad':
         max_gap_len = np.max([len(gap) for gap in gaps])
         pad_gaps = []
