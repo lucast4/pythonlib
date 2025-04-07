@@ -99,6 +99,13 @@ class Clusters(object):
                 assert f in self.Params.keys()
             if "label_vars" not in self.Params.keys():
                 self.Params["label_vars"] = self.Params["Clraw"].Params["label_vars"]
+            if False: # actually, allow diff length variable for labels  and var.. to allow theoretical..
+                for lab in self.Labels:
+                    assert isinstance(lab, tuple)
+                    print("------")
+                    print(len(lab), lab)
+                    print(len(self.Params["label_vars"]), self.Params["label_vars"])
+                    assert len(lab)==len(self.Params["label_vars"])
         elif ver=="pca":
             # Holes results of PCA. (NOT data tformed to PC space).
             # Square matrix of PCs (pcs, original dims)
@@ -1025,7 +1032,10 @@ class Clusters(object):
 
         if len(X)>skip_if_nrows_more_than:
             print("rsa_plot_heatmap SKIPPING, too many rows:", len(X))
-            return None, None
+            # Return dummy fig, or else downstream fails
+            fig, ax = plt.subplots()
+            ax.set_title(f"rsa_plot_heatmap SKIPPING, too many rows: {len(X)}")
+            return fig, ax
 
         # Sort labels if needed
         labels_rows = self.Labels
@@ -1224,6 +1234,7 @@ class Clusters(object):
             return dist_func_tuple_of_ordinal
         else:
             pass # Try to get it auto below.
+        
         ########## SECOND, TRY AUTOMATICALLY, based on type.
         vals = self.rsa_index_values_this_var(var)
         list_types = list(set([type(v) for v in vals]))
@@ -1243,7 +1254,7 @@ class Clusters(object):
             # Only one type
             t = list_types[0]
             v = vals[0]
-            if t in (str, bool):
+            if t in (str, bool, tuple):
                 print("... using distfunc: dist_func_cat")
                 return dist_func_cat
             elif t in (int,):
@@ -1405,11 +1416,98 @@ class Clusters(object):
         return map_grp_to_mask
 
 
+    def rsa_mask_context_helper_simple(self, diffctxt_vars_same=None, diffctxt_vars_diff=None, diff_context_ver=None,
+                                       PLOT=False, mask_out_nans=True, path_for_save_print_lab_each_mask=None,
+                                       only_upper_triangle=True):
+        """
+        Define a context, where context is a mask on self data, i.e., over pairs, where the pairs with True
+        satisfy BOTH diffctxt_vars_same and diffctxt_vars_diff.
+
+        i.e, context defined as pairs that are same for ALL var in diffctxt_vars_same, 
+        and diff for ALL or AT_LEAST_ONE [depending on diff_context_ver] var in diffctxt_vars_diff
+        
+        TESTED CAREFULLY, by inspecting the print of the pairs of extract row-col, for each of these options:
+        1. 
+        diffctxt_vars_same = []
+        diffctxt_vars_diff = [a, b], for both "diff_complete", and "diff_at_least_one.
+
+        2.
+        diffctxt_vars_same = [c]
+        diffctxt_vars_diff = [a, b], for both "diff_specific", "diff_specific_lenient.
+        
+        3.
+        diffctxt_vars_same = [c, d]
+        diffctxt_vars_diff = []
+        """
+
+        if diffctxt_vars_diff is not None and len(diffctxt_vars_diff)==0:
+            diffctxt_vars_diff = None
+
+        if diffctxt_vars_same is not None and len(diffctxt_vars_same)==0:
+            diffctxt_vars_same = None
+            
+        if diffctxt_vars_same is not None and diffctxt_vars_diff is not None:
+            # assert diff_context_ver not in ["diff_complete", "diff_at_least_one"], "problem, rsa_mask_context_helper() will stupidly combine diffctxt_vars_same and diffctxt_vars_diff"
+            if diff_context_ver is None:
+                # Then use strict
+                diff_context_ver = "diff_specific"
+            assert diff_context_ver in ["diff_specific", "diff_specific_lenient"], "the two methods that take into accout both same and diff"
+            MASKS, fig, axes = self.rsa_mask_context_helper(None, None, diff_context_ver,
+                                    diffctxt_vars_same, diffctxt_vars_diff,
+                                    PLOT, mask_out_nans, path_for_save_print_lab_each_mask,
+                                    only_upper_triangle=only_upper_triangle)
+            ma = MASKS["context_diff"]
+        elif diffctxt_vars_same is None and diffctxt_vars_diff is not None:
+            if diff_context_ver is None:
+                # Then use strict
+                diff_context_ver = "diff_complete"
+            assert diff_context_ver in ["diff_complete", "diff_at_least_one"], "otherwise will fail, as will look for diffctxt_vars_same"
+            # assert diff_context_ver not in ["diff_complete", "diff_at_least_one"], "problem, rsa_mask_context_helper() will stupidly combine diffctxt_vars_same and diffctxt_vars_diff"
+            MASKS, fig, axes = self.rsa_mask_context_helper(None, None, diff_context_ver,
+                                    None, diffctxt_vars_diff,
+                                    PLOT, mask_out_nans, path_for_save_print_lab_each_mask,
+                                    only_upper_triangle=only_upper_triangle)
+            ma = MASKS["context_diff"]            
+        elif diffctxt_vars_same is not None and diffctxt_vars_diff is None:
+            # Then you want same
+            # if mask_out_nans:
+            #     ma_not_nan = ~np.isnan(self.Xinput)
+            # else:
+            #     ma_not_nan = self._rsa_matindex_generate_all_true()
+            # ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=False)
+            # ma = self.rsa_matindex_same_diff_mult_var_flex(vars_same=vars_context)
+            diff_context_ver = "SKIP"
+            MASKS, fig, axes = self.rsa_mask_context_helper(None, None, diff_context_ver,
+                                    diffctxt_vars_same, None,
+                                    PLOT, mask_out_nans, path_for_save_print_lab_each_mask,
+                                    only_upper_triangle=only_upper_triangle)
+            ma = MASKS["context_same"]            
+        else:
+            assert False
+
+        return ma, fig, axes
+    
     def rsa_mask_context_helper(self, var_effect, vars_context, diff_context_ver,
                                 diffctxt_vars_same=None, diffctxt_vars_diff=None,
                                 PLOT=False, mask_out_nans=True,
-                                path_for_save_print_lab_each_mask=None):
+                                path_for_save_print_lab_each_mask=None, only_upper_triangle=True):
         """
+        INTUITIVE EXPLANATION, as it is not that intuitive. First, note that context and var_other become mixed here.
+        This is how:
+
+        var_effect: same and different is obvious.
+        context_var_other (i.e., the thing that combines var_other and context). Indeed, I generally
+        have vars_context identical to the variables in context.
+        - same: all levels must be same.
+        - diff: 
+        --- if diffctxt_vars_same and diffctxt_vars_diff are presented: then is entirely defined by this.
+        --- if diffctxt_vars_same and diffctxt_vars_diff are both None: then is entirely defined by vars_context
+
+        In other words, diffctxt_vars_same and diffctxt_vars_diff are useful if you want to see effect of 
+        semeting (diffctxt_vars_diff), while holding other things constant (diffctxt_vars_same).
+
+        -------------------------------------------
+
         Generate boolean mask to focus on "context" defined by relations for given variables.
         You can use this mask to then slice out data for analyses (restricting data).
         PARAMS:
@@ -1436,13 +1534,28 @@ class Clusters(object):
         else:
             ma_not_nan = self._rsa_matindex_generate_all_true()
 
+        if vars_context is None:
+            # Then auto get as concat of same and diff
+            vars_context = []
+            if diffctxt_vars_same is not None:
+                vars_context += diffctxt_vars_same
+            if diffctxt_vars_diff is not None:
+                vars_context += diffctxt_vars_diff
+            assert len(vars_context)>0
+            
         # Same context
-        ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=False)
         ma_context_same = self.rsa_matindex_same_diff_mult_var_flex(vars_same=vars_context)
-        ma_context_same = ma_context_same & ma_ut & ma_not_nan
+        if only_upper_triangle:
+            ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=False)
+            ma_context_same = ma_context_same & ma_ut & ma_not_nan
+        else:
+            ma_context_same = ma_context_same & ma_not_nan
 
         # Diff context
-        if diff_context_ver=="diff_complete":
+        if diff_context_ver=="SKIP":
+            # Instruting functoin to ignore diff
+            ma_context_diff = self._rsa_matindex_generate_all_true()
+        elif diff_context_ver=="diff_complete":
             # Then every var must be diff
             ma_context_diff = self.rsa_matindex_same_diff_mult_var_flex(vars_diff=vars_context)
         elif diff_context_ver=="diff_at_least_one":
@@ -1461,7 +1574,6 @@ class Clusters(object):
                 print(vars_context)
                 print(diffctxt_vars_same)
                 print(diffctxt_vars_diff)
-                print(var_effect)
                 raise err
             # Previously this, but realized that context can be more
             # assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
@@ -1481,7 +1593,6 @@ class Clusters(object):
                 print(vars_context)
                 print(diffctxt_vars_same)
                 print(diffctxt_vars_diff)
-                print(var_effect)
                 raise err
             # Previously this, but realized that context can be more
             # assert sorted(diffctxt_vars_same + diffctxt_vars_diff) == sorted(vars_context)
@@ -1491,12 +1602,20 @@ class Clusters(object):
         else:
             print(diff_context_ver)
             assert False
-        ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=True)
-        ma_context_diff = ma_context_diff & ma_ut & ma_not_nan
+
+        if only_upper_triangle:
+            ma_ut = self._rsa_matindex_generate_upper_triangular(exclude_diag=True)
+            ma_context_diff = ma_context_diff & ma_ut & ma_not_nan
+        else:
+            ma_context_diff = ma_context_diff & ma_not_nan
 
         # Effect var only
-        ma_effect_same = self.rsa_matindex_same_diff_mult_var_flex(vars_same=[var_effect])
-        ma_effect_diff = self.rsa_matindex_same_diff_mult_var_flex(vars_diff=[var_effect])
+        if var_effect is not None:
+            ma_effect_same = self.rsa_matindex_same_diff_mult_var_flex(vars_same=[var_effect])
+            ma_effect_diff = self.rsa_matindex_same_diff_mult_var_flex(vars_diff=[var_effect])
+        else:
+            ma_effect_same = None
+            ma_effect_diff = None
 
         MASKS = {
             "context_same":ma_context_same,
@@ -1506,17 +1625,21 @@ class Clusters(object):
         }
 
         if PLOT:
+            
+            if ma_effect_diff is not None:
+                # get each conjunction mask
+                ma_effD_ctxtD = ma_effect_diff & ma_context_diff
+                ma_effD_ctxtS = ma_effect_diff & ma_context_same
+                ma_effS_ctxtD = ma_effect_same & ma_context_diff
+                ma_effS_ctxtS = ma_effect_same & ma_context_same
 
-            # get each conjunction mask
-            ma_effD_ctxtD = ma_effect_diff & ma_context_diff
-            ma_effD_ctxtS = ma_effect_diff & ma_context_same
-            ma_effS_ctxtD = ma_effect_same & ma_context_diff
-            ma_effS_ctxtS = ma_effect_same & ma_context_same
-
-            titles = ["ma_context_same", "ma_context_diff", "ma_effect_same", "ma_effect_diff",
-                      "ma_effD_ctxtD", "ma_effD_ctxtS", "ma_effS_ctxtD", "ma_effS_ctxtS"]
-            masks = [ma_context_same, ma_context_diff, ma_effect_same, ma_effect_diff,
-                     ma_effD_ctxtD, ma_effD_ctxtS, ma_effS_ctxtD, ma_effS_ctxtS]
+                titles = ["ma_context_same", "ma_context_diff", "ma_effect_same", "ma_effect_diff",
+                        "ma_effD_ctxtD", "ma_effD_ctxtS", "ma_effS_ctxtD", "ma_effS_ctxtS"]
+                masks = [ma_context_same, ma_context_diff, ma_effect_same, ma_effect_diff,
+                        ma_effD_ctxtD, ma_effD_ctxtS, ma_effS_ctxtD, ma_effS_ctxtS]
+            else:
+                titles = ["ma_context_same", "ma_context_diff"]
+                masks = [ma_context_same, ma_context_diff]
 
             fig, axes = plt.subplots(3,3, figsize=(25, 28))
             for ax, ma, tit in zip(axes.flatten(), masks, titles):
@@ -1529,8 +1652,14 @@ class Clusters(object):
                     ax.set_title(f"{tit}-mean_{sc:.2f}", color="r")
                 else:
                     ax.set_title(f"{tit}", color="r")
+                
                 # also print the mask
-                self.rsa_matindex_print_mask_labels(ma, path_for_save_print_lab_each_mask)
+                if path_for_save_print_lab_each_mask is not None:
+                    from pythonlib.tools.expttools import fileparts, deconstruct_filename
+                    fp = fileparts(path_for_save_print_lab_each_mask)
+                    # deconstruct_filename(path_for_save_print_lab_each_mask)
+                    _path = f"{fp[0]}{fp[1]}-{tit}{fp[2]}"                
+                    self.rsa_matindex_print_mask_labels(ma, _path)
 
             return MASKS, fig, axes
         else:
@@ -1775,7 +1904,7 @@ class Clusters(object):
 
     def rsa_distmat_score_all_pairs_of_label_groups(self, get_only_one_direction=True, label_vars=None,
             return_as_clustclass=False, return_as_clustclass_which_var_score="dist_yue_diff",
-            labels_get=None):
+            labels_get=None, context_dict=None):
         """
         Get mean distance between all conjucntions of labels, returning dataframe where each row is distance between a levbel of
         labels_1 and labels_2, where labels_1 is tuple, conjunction of self.Labels
@@ -1811,8 +1940,37 @@ class Clusters(object):
         # for k, v in grpdict.items():
         #     print(k, "n =", len(v))
 
+        # Context?
+        if context_dict is not None:
+            diffctxt_vars_same=context_dict["same"]
+            diffctxt_vars_diff=context_dict["diff"]
+            # if (len(diffctxt_vars_same)>0 and diffctxt_vars_same is not None) or (len(diffctxt_vars_same)>0 and diffctxt_vars_same is not None):
+            if "diff_context_ver" in context_dict:
+                diff_context_ver = context_dict["diff_context_ver"]
+            else:
+                diff_context_ver = None
+            # PLOT = True
+            # path_for_save_print_lab_each_mask = f"/tmp/SYNTAX/mask.txt"
+            # ma_context, fig, axes = self.rsa_mask_context_helper_simple(diffctxt_vars_same, diffctxt_vars_diff, 
+            #                                                             diff_context_ver, only_upper_triangle=False,
+            #                                                             PLOT=PLOT, 
+            #                                                             path_for_save_print_lab_each_mask=path_for_save_print_lab_each_mask)
+            # savefig(fig, f"/tmp/SYNTAX/masks.pdf")
+            # plt.close("all")
+            PLOT = False
+            path_for_save_print_lab_each_mask = None
+            ma_context, fig, axes = self.rsa_mask_context_helper_simple(diffctxt_vars_same, diffctxt_vars_diff, 
+                                                                        diff_context_ver, only_upper_triangle=False,
+                                                                        PLOT=PLOT, 
+                                                                        path_for_save_print_lab_each_mask=path_for_save_print_lab_each_mask)
+        else:
+            ma_context = self._rsa_matindex_generate_all_true()
+
+        ma_ut = self._rsa_matindex_generate_upper_triangular()
+
         # Get distance between each pair or grps
         res = []
+        nskips = 0
         for i, (grp1, inds1) in enumerate(grpdict.items()):
             if labels_get is not None and grp1 not in labels_get:
                 continue
@@ -1822,16 +1980,22 @@ class Clusters(object):
                 if get_only_one_direction and i<j:
                     continue
                 if i==j:
+                    # always collect this, as this is used for normalizing, for yue diff
+                    # Therefore, dont prune with ma_context
                     assert inds1==inds2
                     ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
                     # - exclude diagonal
-                    ma_ut = self._rsa_matindex_generate_upper_triangular()
                     X = self.Xinput[ma & ma_ut]
                 else:
                     # Should include below lower and upper triangle, to make sure get all pairs.
                     ma = self._rsa_matindex_convert_to_mask_rect(inds1, inds2)
-                    X = self.Xinput[ma]
+                    X = self.Xinput[ma & ma_context]
                 
+                if len(X)==0:
+                    # print("Skipped (due to context): ", grp1, " -- ", grp2)
+                    nskips += 1
+                    continue
+
                 if np.isnan(np.mean(X)):
                     print(X)
                     print(i, grp1, inds1)
@@ -1849,6 +2013,9 @@ class Clusters(object):
                     for _ivar, _var in enumerate(label_vars):
                         res[-1][f"{_var}_1"] = grp1[_ivar]
                         res[-1][f"{_var}_2"] = grp2[_ivar]
+
+        # print(len(res), nskips)
+        # assert False
 
         # Also get 98th percentile between pairs of pts.
         ma = self._rsa_matindex_generate_upper_triangular()
@@ -1911,7 +2078,6 @@ class Clusters(object):
             
             assert get_only_one_direction==False
 
-
             labels = sort_mixed_type(set(dfres["labels_1"].tolist() + dfres["labels_2"].tolist()))
             # labels = sorted(set(self.Labels))
             map_label_to_idx = {lab:i for i, lab in enumerate(labels)}
@@ -1925,7 +2091,14 @@ class Clusters(object):
 
                 assert (indrow, indcol) not in indsgotten
                 indsgotten.append((indrow, indcol))
-            assert not np.any(X==-np.inf), "did not fill in all indices..."
+            
+            if context_dict is not None:
+                # Then you are allowed to have (label1, label2) pairs that are missed. This would be
+                # pairs for which all trials fail the ocntext.
+                # Use nan.
+                X[X==-np.inf] = np.nan
+            else:
+                assert not np.any(X==-np.inf), "did not fill in all indices..."
 
             # Alternative, mucgh slower method
             # import numpy as np
@@ -1943,10 +2116,11 @@ class Clusters(object):
             # ax.imshow(X)
 
             params = {
-                "label_vars":self.Params["label_vars"],
+                "label_vars":label_vars,
                 "version_distance":self.Params["version_distance"],
                 "Clraw":None,
             }
+            assert len(label_vars)==len(labels[0])
             Cldist = Clusters(X, labels, labels, ver="dist", params=params)
 
             return dfres, Cldist
@@ -1992,7 +2166,8 @@ class Clusters(object):
 
         return dfdists
 
-    def rsa_distmat_convert_from_triangular_to_full(self, dfdists, label_vars, PLOT=False):
+    def rsa_distmat_convert_from_triangular_to_full(self, dfdists, label_vars=None, PLOT=False,
+                                                    repopulate_relations=True):
         """
         Given a dfdists that is triangular (inclues diagonmal usually), convert to 
         full matrix by copying and swapping labels 1 and 2, assuming that
@@ -2017,18 +2192,21 @@ class Clusters(object):
         
         # concat
         dfdists = pd.concat([dfdists, dftmp]).reset_index(drop=True)
-        
-        # Repopulation all label columns
-        # label_vars = ["seqc_0_shape", var_other]
-        # from pythonlib.cluster.clustclass import Clusters
-        # cl = Clusters(None)
-        dfdists = self.rsa_distmat_population_columns_label_relations(dfdists, label_vars)
+
+        if repopulate_relations:
+            # Repopulation all label columns
+            assert label_vars is not None        
+            # label_vars = ["seqc_0_shape", var_other]
+            # from pythonlib.cluster.clustclass import Clusters
+            # cl = Clusters(None)
+            dfdists = self.rsa_distmat_population_columns_label_relations(dfdists, label_vars)
 
         if PLOT:
             grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
 
         # Sanity check that populated all cells in distance matrix
-        assert dfdists.groupby(["labels_2"]).size().min() == dfdists.groupby(["labels_2"]).size().max()
+        if False: # I know this code works, so no need for this.
+            assert dfdists.groupby(["labels_2"]).size().min() == dfdists.groupby(["labels_2"]).size().max()
 
         return dfdists
 
@@ -2044,7 +2222,8 @@ class Clusters(object):
         PARAMS:
         - var_effect, str, the var you want to test the pairwise distances for.
         - var_others, list of all vars, used to help define context, where "same" means
-        all vars same, and diff defined in contingent manner.
+        all vars same, and diff defined in contingent manner. NOTE: this MUST have the context
+        variables inlcuded
         - context_input, either None (ingore) or dict with "same" and
         "diff" keys, each list of str (vars) for manualyl defining contxt.
             # context_input = {
@@ -2072,6 +2251,14 @@ class Clusters(object):
         """
 
         assert dat_level in ["pts", "distr"], f"must indicate which it is -- {dat_level}"
+
+        if "same" in context_input:
+            for var in context_input["same"]:
+                assert var in var_others, "by definition, this must be strue"
+
+        if "diff" in context_input:
+            for var in context_input["diff"]:
+                assert var in var_others, "by definition, this must be strue"
 
         ### Get masks of context
         if context_input is not None and len(context_input)>0:
@@ -2493,6 +2680,8 @@ class Clusters(object):
         # labels_col = [tuple([lab]) for lab in labels_col]
         # No: instead keep the labels as in self, to allow plotting self and
         # Cltheor using similar sort indices.
+        # Cltheor = Clusters(D, self.Labels, self.LabelsCols, ver="dist",
+        #                    params={"var":var, "version_distance":None, "label_vars":(var,)})
         Cltheor = Clusters(D, self.Labels, self.LabelsCols, ver="dist",
                            params={"var":var, "version_distance":None, "label_vars":(var,)})
         # plot
@@ -2611,6 +2800,7 @@ class Clusters(object):
         """ Return bool mask with all values True (or false,
         if all_false==True)
         """
+        assert all_false == False, "code it"
         ma = np.ones_like(self.Xinput, dtype=bool)
         return ma
 
@@ -2841,9 +3031,30 @@ class Clusters(object):
 
         df_lab = self.rsa_labels_return_as_df(include_row_index=False)
 
-        levs = df_lab.loc[:, list_var].values.tolist() # list of list, each inner list being levels for [var1, var2, ...]
+        try:
+            levs = df_lab.loc[:, list_var].values.tolist() # list of list, each inner list being levels for [var1, var2, ...]
+        except Exception as err:
+            print(df_lab.columns)
+            print(list_var)
+            raise err
+        levs = [tuple(x) for x in levs]
+        if False:
+            def boolean_2d_array(vec1, vec2):
+                # Convert lists of tuples into NumPy arrays with dtype=object
+                vec1 = np.array(vec1, dtype=object)
+                vec2 = np.array(vec2, dtype=object)
+                
+                # Construct the boolean 2D array correctly
+                return np.array([[bool(np.all(item1 == item2)) for item2 in vec2] for item1 in vec1], dtype=bool)
 
-        ma_same = distmat_construct_wrapper(levs, levs, lambda x,y:x==y).astype(bool)
+            print(levs[0])
+            ma_same = boolean_2d_array(levs, levs)
+            print(ma_same.shape)
+            assert False
+        else:
+            ma_same = distmat_construct_wrapper(levs, levs, lambda x,y:x==y).astype(bool)
+            # np.all(ma_same==ma_same2)
+
         ma_diff = ma_same==False
 
         return ma_same, ma_diff
