@@ -1,4 +1,4 @@
-
+import numpy as np
 
 def decompose_string(s, sep="-"):
     """ 
@@ -22,7 +22,7 @@ def decompose_string(s, sep="-"):
         substrings.append(s[i1+1:i2])
     return substrings
 
-def trialcode_to_scalar(tc):
+def trialcode_to_scalar(tc, allow_failure=True, input_tuple_directly=False):
     """
     Convert trialcode to a scalar that is sortable (globally, within a subject, guaranteed to be currect)
 
@@ -34,9 +34,16 @@ def trialcode_to_scalar(tc):
     
     """
     from pythonlib.tools.stringtools import decompose_string
-    
-    tc_tuple = trialcode_to_tuple(tc)
+
+    if input_tuple_directly:
+        tc_tuple = tc
+    else:
+        tc_tuple = trialcode_to_tuple(tc)
+
     if tc_tuple is None:
+        if not allow_failure:
+            print(tc)
+            assert False
         return None
     else:
         assert tc_tuple[1] < 10, "then divide by more, so that is mapped to max 0.,000 is mapped to 0.01"
@@ -54,7 +61,7 @@ def trialcode_to_scalar(tc):
             print(tc)
             print(a, b, c)
             raise err
-    
+
 def trialcode_to_tuple(tc):
     """
     PARAMS:
@@ -79,3 +86,28 @@ def trialcode_to_tuple(tc):
         except ValueError:
             # usualyl becuase a b or c are not numbers
             return None
+        
+def trialcode_extract_rows_within_range(list_trialcode, tc_start, tc_end, input_tuple_directly=False):
+    """
+    Return indices (into list_trialcode) which have truialcode within range of [tc_start, tc_end], inclusive.
+    Checks based on real time, not based on location within dataframe
+    PARAMS:
+    - list_trialcode, list of string trialcodes
+    - input_tuple_directly, if True, then input tc's as tuples of ints, e.g, (240522, 1, 20)
+    RETURNS:
+    - inds, trialcodes, both lists, those that fall within the range.
+    """
+    from pythonlib.tools.stringtools import trialcode_to_scalar
+    
+    list_trialcode_scalar = np.array([trialcode_to_scalar(tc) for tc in list_trialcode])
+
+    tc_start_scalar = trialcode_to_scalar(tc_start, allow_failure=False, input_tuple_directly=input_tuple_directly)
+    tc_end_scalar = trialcode_to_scalar(tc_end, allow_failure=False, input_tuple_directly=input_tuple_directly)
+
+    inds = np.where((list_trialcode_scalar >= tc_start_scalar) & (list_trialcode_scalar <= tc_end_scalar))[0]
+    trialcodes = [list_trialcode[i] for i in inds]
+    
+    # convert to list
+    inds = list(inds)
+
+    return inds, trialcodes

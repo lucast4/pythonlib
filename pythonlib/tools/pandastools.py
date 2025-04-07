@@ -229,8 +229,6 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
                 print("* This adds compute time!!!!")
                 replace_values_with_this(df, col, None, "none")
 
-    for v in values:
-        assert v in df.columns, f"entered a value that doesnt exist, {v}"
         
     if len(df)==0:
         return df
@@ -243,6 +241,9 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
         DELETE_DUMMY = True
     else:
         DELETE_DUMMY = False
+        
+    for v in values:
+        assert v in df.columns, f"entered a value that doesnt exist, {v}"
 
     if aggmethod is not None:
         assert isinstance(aggmethod, list)

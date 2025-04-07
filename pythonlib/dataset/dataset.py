@@ -609,6 +609,22 @@ class Dataset(object):
             return (d, s, t)
         self.Dat = applyFunctionToAllRows(self.Dat, F, "trialcode_tuple")
 
+    def trialcode_extract_rows_within_range(self, tc_start, tc_end, input_tuple_directly=False):
+        """
+        Return indices (rows into self) which have truialcode within range of [tc_start, tc_end], inclusive.
+        Checks based on real time, not based on location within dataframe
+        PARAMS:
+        - input_tuple_directly, if True, then input tc's as tuples of ints, e.g, (240522, 1, 20)
+        RETURNS:
+        - inds, trialcodes, both lists, those that fall within the range.
+        """
+        from pythonlib.tools.stringtools import trialcode_to_scalar, trialcode_extract_rows_within_range
+
+        list_trialcode = self.Dat["trialcode"]
+        inds, trialcodes = trialcode_extract_rows_within_range(list_trialcode, tc_start, tc_end, input_tuple_directly)
+
+        return inds, trialcodes
+
     ############### UTILS
     def _strokes_kinds(self):
         """ returns list with names (strings) for the kinds of strokes that
@@ -885,13 +901,17 @@ class Dataset(object):
             e = M["expt"]
 
             # Find path, load Tasks
-            if len(r)>0:
-                sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-{r}-all"
+            if False: # Always use server...
+                if len(r)>0:
+                    sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-{r}-all"
+                else:
+                    sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-all"
+            
+                # Load the tasks
+                pathlist = findPath(sdir, [], "Tasks", "pkl")
             else:
-                sdir = f"{base_dir}/database/TASKS_GENERAL/{a}-{e}-all"
+                pathlist = []
 
-            # Load the tasks
-            pathlist = findPath(sdir, [], "Tasks", "pkl")
             if len(pathlist)==0:
                 # Try server
                 if len(r)>0:
@@ -1025,7 +1045,6 @@ class Dataset(object):
         """ Save the task in a format that can be loaded in dragmonkey (matlab)
         to generate tasks for experiments
         """
-        from pythonlib.tools.matlabtools import convert_to_npobject
         from scipy.io import savemat
 
         # 1) Extract the task and save
@@ -1616,12 +1635,13 @@ class Dataset(object):
         """ For each trial, extract its los info and append as 
         new col in D.Dat, called "los_info"
         """
-        tmp = []
-        for ind in range(len(self.Dat)):
-            tmp.append(self.taskclass_extract_los_info(ind))
-        self.Dat["los_info"] = tmp
-        self.Dat["los_set"] = [(los[0], los[1]) for los in self.Dat["los_info"]]
-        print("Appended column: los_info and los_set ")
+        if ("los_info" not in self.Dat) or ("los_set" not in self.Dat): 
+            tmp = []
+            for ind in range(len(self.Dat)):
+                tmp.append(self.taskclass_extract_los_info(ind))
+            self.Dat["los_info"] = tmp
+            self.Dat["los_set"] = [(los[0], los[1]) for los in self.Dat["los_info"]]
+            print("Appended column: los_info and los_set ")
 
     def taskclass_gridsize_assign_column(self):
         """ Extract gridsize (string) and assign to new column in self.Dat
@@ -4102,9 +4122,10 @@ class Dataset(object):
         from pythonlib.tools.expttools import findPath
 
         # Collects across these dirs
-        SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH",
-            f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database", f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/BEH"
-            ]
+        # SDIR_LIST = [f"{base_dir}/database", f"{base_dir}/database/BEH",
+        #     f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database", f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/BEH"
+        #     ]
+        SDIR_LIST = [f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database", f"{PATH_ANALYSIS_OUTCOMES_SERVER}/database/BEH"]
 
         def _find(SDIR):
             pathlist = findPath(SDIR, [[f"{animal}-", f"{expt}-", f"{rule}-"]], "dat", ".pkl", True)
@@ -7363,7 +7384,7 @@ class Dataset(object):
         adapt_win_len= "adapt"
         list_strokes_filt = []
         for strokes in list_strokes:
-            for _window_time in [window_time, 0.9*window_time, 0.8*window_time, 0.7*window_time, 0.6*window_time, 0.5*window_time]:
+            for _window_time in [window_time, 0.9*window_time, 0.8*window_time, 0.7*window_time, 0.6*window_time, 0.5*window_time, 0.4*window_time, 0.3*window_time]:
                 try:
                     # Try reducing the window time, this might help for cases where large winodw time
                     # leads to big change in output stroke.
@@ -7376,7 +7397,7 @@ class Dataset(object):
                     success = False
                     continue
                     
-            if not success:
+            if success==False:
                 print("TO SOLVE THIS PROBLEM: (1) add another item to _window_time iteration above; (2) potnetialyl increase max_frac in stroketools")
                 raise err
                 
@@ -10223,6 +10244,53 @@ class Dataset(object):
     #     """ Goal is to replace "seuqence" module with grammar
     #     """
     #     return self.grammarmatlab_extract_beh_and_task(ind, ploton)
+
+    def grammarparses_save_map_los_to_sequence_for_dragmonkey_matlab(self):
+        """
+        For each trial, store its sequence, thus returning a map from los --> sequence of indices
+        
+        For loading in matlab dragmonkey (search for "map_from_los_to_order")
+        """
+        from pythonlib.tools.matlabtools import convert_to_npobject
+        from scipy.io import savemat
+        from pythonlib.globals import PATH_ANALYSIS_OUTCOMES
+
+        just_take_first = True
+        animal = self.animals(force_single=True)[0]
+        date = self.dates(force_single=True)[0]
+
+        # Collect sequences for correct trials.
+        map_los_to_sequence = {}
+        for ind in range(len(self.Dat)):
+            beh_sequence_taskstroke_inds = self.grammarparses_extract_beh_taskstroke_inds(ind)
+            los = self.Dat.iloc[ind]["los_info"]
+            correct = self.Dat.iloc[ind]["success_binary_quick"]
+
+            print(ind, los, correct, beh_sequence_taskstroke_inds)
+
+            los_str = "__".join([str(x) for x in los])
+
+            assert just_take_first==True, "how deal with los that have different sequence on different trials?"
+
+            if (los_str not in map_los_to_sequence.keys()) and correct:
+                # i.e,, just take the first one.
+                map_los_to_sequence[los_str] = beh_sequence_taskstroke_inds
+
+        ### save it for matlab loading. 
+        # 3) convert to format that can be saved into mat file
+        for k, v in map_los_to_sequence.items():
+            map_los_to_sequence[k] = convert_to_npobject(v)
+
+        # 4) Save
+        SDIR = f"{PATH_ANALYSIS_OUTCOMES}/main/map_los_to_sequence_matlab"
+        os.makedirs(SDIR, exist_ok=True)
+        fname = f"{SDIR}/{animal}-{date}.mat"
+
+        savemat(fname, map_los_to_sequence)
+        print("Saved to: ", fname)
+
+        return map_los_to_sequence
+    
 
     def grammarmatlab_tasksequencer_rules_matlab(self, ind):
         """ REturn the tasksequencer rules used in matlab to generate

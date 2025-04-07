@@ -297,13 +297,13 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                     # give them a bit more leweway
                     if duration<0.075:
                         # max_frac = 0.37
-                        max_frac = 0.25
+                        max_frac = 0.26
                     elif duration<0.2:
                         # max_frac = 0.25
-                        max_frac = 0.17
+                        max_frac = 0.18
                     elif duration<0.34:
                         # max_frac = 0.2
-                        max_frac = 0.13
+                        max_frac = 0.14
                     else:
                         # max_frac = 0.18
                         max_frac = 0.11
