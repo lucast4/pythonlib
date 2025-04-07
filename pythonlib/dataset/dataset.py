@@ -4551,6 +4551,9 @@ class Dataset(object):
         """
         ind_md = self.Dat.iloc[ind]["which_metadat_idx"]
         fs = self.Metadats[ind_md]["filedata_params"]["sample_rate"]
+        if (isinstance(fs, (list,np.ndarray))):
+            fs = fs[0]
+
         return fs
             
     def get_motor_stats(self, ind):
@@ -12183,9 +12186,11 @@ class Dataset(object):
             list_fs = [self.get_sample_rate(i) for i in idxs]
             assert len(np.unique(list_fs))==1, "why have diff sample rate? easy fix, make plotfunc take in fs in data tuple"
             fs = list_fs[0]
+            print(fs)
         else:
             # just pick the first trial
             fs = self.get_sample_rate(0)
+            print(fs)
 
         if align_to=="first_touch":
             # make the first touch 0
