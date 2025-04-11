@@ -490,4 +490,12 @@ def plotGapHeat(gaps,color_ind=2,preprocess_method='norm', sort_method='disp_rat
     
     plt.show()
 
+def fps(x, fs):
+    '''Five point stentil function for discrete derivative, scales to m/s auto'''
+    v = [(-x[i+2] + 8*x[i+1] - 8*x[i-1] + x[i-2])/12 for i in range(len(x)) if 2<=i<len(x)-2]
+    return np.array(v) * fs
+def fps2(x, fs):
+    '''Same as above but for second derivative scales to m/s**2 auto'''
+    a = [(-x[i+2] + 16*x[i+1] - 30*x[i] + 16*x[i-1] - x[i-2])/12 for i in range(len(x)) if 2<=i<len(x)-2]
+
     
