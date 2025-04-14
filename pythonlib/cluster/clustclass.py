@@ -16,6 +16,43 @@ from pythonlib.tools.listtools import sort_mixed_type
 import seaborn as sns
 import pandas as pd
 
+def generate_clustclass_from_flat_df(dfres, var_row, var_col, var_value, var_labels, PRINT=False):
+    """
+    Given dataframe whhere each row is a pair of conditions (i.e., a single cell in Cl), then
+    generate a new Cl. Must be square, with each condition appearing once in rows and coluns
+    PARAMS:
+    - var_labels, list/tuple of strings, mathching length of each item in var_row and var_col.
+    """
+    ### Plot heatmap of all r2 scores
+
+    # Convert to clustclass
+    list_labels = sorted(dfres[var_row].unique())
+    assert list_labels == sorted(dfres[var_col].unique()), "need each condition appearing once in rows and coluns"    
+    assert isinstance(list_labels[0], tuple)
+    # assert isinstance(list_labels[0][0], str)
+
+    distmat = np.zeros((len(list_labels), len(list_labels))) - np.inf
+    for row, labrow in enumerate(list_labels):
+        for col, labcol in enumerate(list_labels):
+            tmp = dfres[(dfres[var_row] == labrow) & (dfres[var_col] == labcol)]
+            assert len(tmp)==1
+
+            distmat[row, col] = tmp[var_value].values[0]
+            
+            if PRINT:
+                print("row:", labrow, "  col:", labcol, " val:", distmat[row, col] )
+
+    assert np.all(distmat > -np.inf)
+
+    if PRINT:
+        print(distmat.shape)
+        print(len(list_labels), len(list_labels))
+    
+    params = {"label_vars":var_labels, "version_distance":"IGNORE"}
+    Cl = Clusters(distmat, list_labels, list_labels, "rsa", params)
+    
+    return Cl
+
 class Clusters(object):
     """docstring for Clusters"""
     def __init__(self, X, labels_rows=None, labels_cols=None, ver=None, params=None, trialcodes=None):
