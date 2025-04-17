@@ -498,6 +498,19 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue",
     # plt.show()
     return ax
 
+def plot_y_at_each_x_mean_sem(x, y, ax):
+    """
+    For each level of x (categorical), plot the mean and sem of y.
+    """
+    import pandas as pd
+    dftmp = pd.DataFrame({"x":x, "y":y})
+
+    dftmp1 = dftmp.groupby("x").mean().reset_index()
+    dftmp2 = dftmp.groupby("x").sem().reset_index()
+    assert np.all(dftmp1["x"] == dftmp2["x"])
+
+    # ax.plot(dftmp.groupby("x").mean(), "ok")
+    ax.errorbar(dftmp1["x"], dftmp1["y"], dftmp2["y"], fmt="ok-")
 
 def _plotScatterXreduced(X, dims_to_take=None, n_overlay_text = 20, ax=None,
                          color="k", textcolor="r", alpha=0.05,
@@ -753,24 +766,6 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
         # assert False
         # assert False
     # ax.set_axis("square")
-    minimum = np.min([np.min(x), np.min(y)])
-    maximum = np.max([np.max(x), np.max(y)])
-
-    # minimum = np.min((ax.get_xlim(),ax.get_ylim()))
-    # maximum = np.max((ax.get_xlim(),ax.get_ylim()))
-    ran = maximum - minimum
-    MIN = minimum - 0.1*ran
-    MAX = maximum + 0.1*ran
-    # MIN = minimum
-    # MAX = maximum
-    if dotted_lines=="unity":
-        ax.plot([MIN, MAX], [MIN, MAX], '--k', alpha=0.5)
-    elif dotted_lines=="plus":
-        ax.plot([0, 0], [MIN, MAX], '--k', alpha=0.5)
-        ax.plot([MIN, MAX], [0, 0], '--k', alpha=0.5)
-    else:
-        assert dotted_lines=="none", "what you want?"
-
     if means:
         xmean = np.mean(x)
         ymean = np.mean(y)
@@ -787,11 +782,55 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
             for i, (xx, yy) in enumerate(zip(x,y)):
                 ax.text(xx, yy, i, fontsize=fontsize)
 
-    if MAX>MIN:
-        ax.set_xlim(MIN, MAX)
-        ax.set_ylim(MIN, MAX)
+    if False:
+        minimum = np.min([np.min(x), np.min(y)])
+        maximum = np.max([np.max(x), np.max(y)])
+
+        # minimum = np.min((ax.get_xlim(),ax.get_ylim()))
+        # maximum = np.max((ax.get_xlim(),ax.get_ylim()))
+        ran = maximum - minimum
+        MIN = minimum - 0.1*ran
+        MAX = maximum + 0.1*ran
+        # MIN = minimum
+        # MAX = maximum
+        if dotted_lines=="unity":
+            ax.plot([MIN, MAX], [MIN, MAX], '--k', alpha=0.5)
+        elif dotted_lines=="plus":
+            ax.plot([0, 0], [MIN, MAX], '--k', alpha=0.5)
+            ax.plot([MIN, MAX], [0, 0], '--k', alpha=0.5)
+        else:
+            assert dotted_lines=="none", "what you want?"
+
+        if MAX>MIN:
+            ax.set_xlim(MIN, MAX)
+            ax.set_ylim(MIN, MAX)
+        ax.axis("square")
+    else:
+        # Helper function
+        set_axis_lims_square_bounding_data_45line(ax, x, y, 0.1, dotted_lines)
+        # ax.set_aspect('equal', adjustable='datalim')
+
+def set_axis_lims_square_bounding_data_45line(ax, xs, ys, delta_frac=0.1, dotted_lines="unity"):
+    """
+    """
+    vals = np.concatenate([xs, ys])
+
+    delta = delta_frac * (np.max(vals)-np.min(vals))
+    
+    lims = [np.min(vals)-delta, np.max(vals)+delta]
+
     ax.axis("square")
-    # ax.set_aspect('equal', adjustable='datalim')
+    if lims[1]>lims[0]:
+        ax.set_xlim(lims)
+        ax.set_ylim(lims)
+
+    if dotted_lines=="unity":
+        ax.plot(lims, lims, '--k', alpha=0.5)
+    elif dotted_lines=="plus":
+        ax.plot([0, 0], lims, '--k', alpha=0.5)
+        ax.plot(lims, [0, 0], '--k', alpha=0.5)
+    else:
+        assert dotted_lines=="none", "what you want?"
 
 def hist_with_means(ax, vals, **kwargs):
     """ same, but overlays line for mean

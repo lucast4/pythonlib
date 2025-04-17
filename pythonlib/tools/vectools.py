@@ -49,14 +49,68 @@ def _convert_list_vector_to_array(vec_as_list):
 
     return vector
 
-def average_angle(angles):
+def average_angle(angles, weights=None):
     """ Given angles in radians, return the mean angle by firrst converting
     all to vectors,. getting mean vector, then convering back to angle.
     NOTE: the mean can be very low norm....
+    PARAMS:
+    - angles, in radians (where (1,0) is defined to be 0)
+    - weights, optional, to weight each angle
     """
-    mean_vec = np.mean(np.stack([get_vector_from_angle(a) for a in angles]), axis=0)
+    if weights is None:
+        vectors = np.stack([get_vector_from_angle(a) for a in angles])
+    else:
+        vectors = np.stack([w * get_vector_from_angle(a) for a, w in zip(angles, weights)])
+    
+    assert vectors.shape[1]==2
+    assert vectors.shape[0]==len(angles)
+
+    mean_vec = np.mean(vectors, axis=0)
+
     angle_mean, norm_mean = cart_to_polar(mean_vec[0], mean_vec[1])
     return angle_mean, norm_mean
+
+def average_vectors_wrapper(vectors, length_method):
+    """
+    Methods for computing average vector:
+    - "sum": vector summation (actually returns the mean)
+    - "dot": square root of the average dot product between all pairs of vectors.   
+    vectors, array (n_data, 2)
+    """
+
+    assert vectors.shape[1]==2  
+
+    # First, generic method using vector addition
+    mean_vec = np.mean(vectors, axis=0)
+    angle_mean, norm_mean = cart_to_polar(mean_vec[0], mean_vec[1])
+
+    if length_method == "sum":
+        # Vector summation
+        length = norm_mean
+
+    elif length_method == "dot":
+        # Square root of the average dot product between all pairs of vectors.
+        # - This is high if the vectors are similar angle. 
+        # - This is like testing the hypotehsis -- all vectors are random samples from the
+        # same distribution of vectors.
+
+        if vectors.shape[0]==1:
+            # Need at least 2 rows to do this
+            length = np.nan
+        
+        squared_length_estimates =[]
+        for i, vec1 in enumerate(vectors):
+            for j, vec2 in enumerate(vectors):
+                if j>i:
+                    squared_length_estimates.append(np.dot(vec1, vec2))
+
+        # Convert to eucl distance
+        squared_length = np.mean(squared_length_estimates)
+        length = np.sign(squared_length) * (np.abs(squared_length)**0.5)
+    else:
+        assert False
+
+    return angle_mean, length
     
 def get_vector_from_angle(angle):
     """ Returns unit vector given angle in rads, where
@@ -108,9 +162,13 @@ def cart_to_polar(x, y):
     - theta, norm, the anglea nd legngth of vector
     """
 
+    if x==0. and y==0.:
+        return 0, 0
+    
     theta = get_angle((x,y))
     norm = np.linalg.norm((x,y))
-    norm = _convert_list_vector_to_array(norm)
+    # print(norm)
+    # norm = _convert_list_vector_to_array(norm)
 
     return theta, norm
 
@@ -409,3 +467,37 @@ def projection_onto_axis_subspace(xmean_base1, xmean_base2, X, doplot=False,
         return X_proj_scal_norm, fig
     else:
         return X_proj_scal_norm
+    
+def cosine_similarity(vector_a, vector_b):
+    """
+    Compute the cosine_similarity between two vectors.
+
+    1 means parallel.
+    0 means orthogonal
+    -1 means antiparlle
+
+    :param vector_a: 1D array-like
+    :param vector_b: 1D array-like
+    :return: A float representing the cosine_similarity.
+
+    """
+    # Convert inputs to NumPy arrays (in case they're Python lists)
+    a = np.array(vector_a, dtype=float)
+    b = np.array(vector_b, dtype=float)
+    
+    # Compute dot product
+    dot_product = np.dot(a, b)
+    
+    # Compute norms
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    
+    # Calculate cosine similarity
+    cosine_similarity = dot_product / (norm_a * norm_b)
+    
+    # print(cosine_similarity)
+    assert cosine_similarity<=1.0001
+    assert cosine_similarity>=-1.0001
+
+    # Return cosine distance
+    return cosine_similarity

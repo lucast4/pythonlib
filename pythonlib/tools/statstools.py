@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy import stats
 import pandas as pd
-
+from pythonlib.tools.plottools import savefig
 import numpy as np
 
 def compute_d_prime(dist1, dist2):
@@ -376,6 +376,7 @@ def coeff_determination_R2(yvals, yvals_pred, doplot=False):
 def statsmodel_ols(x, y, PRINT=False, 
                    overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12):
     """
+    Ordinary least squares regression.
     PARAMS:
     - x, (ndat, nfeat), or (ndat,)
     - y, (ndat,)
@@ -397,11 +398,14 @@ def statsmodel_ols(x, y, PRINT=False,
     if PRINT:
         print(results.summary())
 
-    if len(results.params)!=2:
-        print(results.summary())
-        print(y.shape)
-        print(x.shape)
-        assert False, "why"
+    if len(x.shape)==2:    
+        if len(results.params)!=x.shape[1]:
+            print(results.summary())
+            print(y.shape)
+            print(x.shape)
+            print(len(results.params))
+            print(results.params)
+            assert False, "why"
 
     if overlay_on_this_ax is not None:
         overlay_on_this_ax.text(overlay_x, overlay_y, f"r2={results.rsquared:.2f}|p={results.pvalues[1]:.3f}|int={results.params[0]:.3f}|slope={results.params[1]:.3f}", color=overlay_color, fontsize=overlay_font_size)
@@ -1194,4 +1198,169 @@ def split_stratified_constrained(y, fraction_constrained_set, n_constrained, lis
         ax.set_title("red:constrained, bk:unconstrained")
 
     return unconstrained_indices, constrained_indices, unconstrained_labels, constrained_labels
+
+
+
+def decode_resample_balance_dataset(X_train, labels_train, method="upsample",
+                                    plot_resampled_data_path_nosuff=None):
+    """
+    Resample data to balance n datapts across classes of labels, with methods for both up- and down-sample
+    PARAMS:
+    - X_train, scalar acgivity to decode, a single time bin, (ntrials, nchans)
+    - labels_train, list of cat valuyes. len ntrials
+    """
+    from pythonlib.tools.listtools import tabulate_list
+    from neuralmonkey.analyses.state_space_good import trajgood_plot_colorby_splotbydims_scalar
+
+    # Skip, if only 1 class exists...
+    if len(set(labels_train))==1:
+        print("SKipping, ony one class lewvel found... [decode_train_model]")
+        return None, None
+    
+    if False:
+        print("---------")
+        print("ntot:", len(labels))
+        print("n train", len(train_index))
+        print("n test", len(test_index))
+        print("n splits", n_splits)
+        print("n classes", len(set(labels)))
+
+    # Do upsampling here, since it is hleped by having more data
+    # Balance the train data
+    n_min_across_labs = min(tabulate_list(labels_train).values())
+    n_max_across_labs = max(tabulate_list(labels_train).values())
+    if n_min_across_labs/n_max_across_labs<0.85:
+
+        # Plot (BEFORE)
+        if plot_resampled_data_path_nosuff is not None:
+            # Only do for i==0 since each time is very similar (trains are overlapoing).
+            # For plot
+            list_dims_plot = [(0,1), (2,3), (4,5), (6,7)]
+            list_dims_plot = [dims for dims in list_dims_plot if X_train.shape[1]>max(dims)]
+
+            fig, axes = trajgood_plot_colorby_splotbydims_scalar(X_train, labels_train, list_dims_plot)
+            savefig(fig, f"{plot_resampled_data_path_nosuff}-raw.png")
+
+        # Do this or else will raise erorr.
+        labels_train_orig = labels_train
+        if isinstance(labels_train, (list, tuple)):
+            # Convert indiv labels, if they are list/tyuple, to str, or else will fail.
+            # from pythonlib.tools.listtools import stringify_list_of_tuple
+            # labels_train = stringify_list_of_tuple(labels_train)
+
+            map_idx_to_lab = {}
+            map_lab_to_idx = {}
+            for i, lab in enumerate(set(labels_train)): 
+                map_idx_to_lab[i] = lab
+                map_lab_to_idx[lab] = i
+            labels_train = [map_lab_to_idx[lab] for lab in labels_train]
+            do_convert=True
+        else:
+            do_convert=False
+
+        print(f"[Doing {method}] Across levels, nmin_dat / nmax_dat:", n_min_across_labs, n_max_across_labs)
+        if method=="upsample":
+            from imblearn.over_sampling import SMOTE
+            smote = SMOTE(sampling_strategy="not majority", k_neighbors=n_min_across_labs-1)
+            try:
+                # if False:
+                #     assert False, "bad -- need to use X, as it does interpolation..."
+                #     # Allows to keep labels_train as list of tuples
+                #     indexes = np.arange(X_train.shape[0])[:, None]
+                #     indexes_resamp, _ = smote.fit_resample(indexes, labels_train)
+                #     print(labels_train)
+                #     print(indexes)
+                #     print(indexes_resamp)
+                #     assert False
+                #     indexes_resamp = [int(i) for i in indexes_resamp]
+                #     _x_resamp = X_train[indexes_resamp,:]
+                #     _lab_resamp = [labels_train_orig[i] for i in indexes_resamp]
+                # else:
+                _x_resamp, _lab_resamp = smote.fit_resample(X_train, labels_train)
+            except Exception as err:
+                print(X_train.shape)
+                print(X_train[:5, :])
+                print(len(labels_train))
+                print(labels_train[:5])
+                print(type(X_train), type(labels_train))
+                raise err
+        elif method=="downsample":
+            # Random
+            from imblearn.under_sampling import RandomUnderSampler
+            rus = RandomUnderSampler()
+            _x_resamp, _lab_resamp = rus.fit_resample(X_train, labels_train)
+        else:
+            print(method)
+            assert False, "code it"
+
+        # Finally, update values.
+        X_train = _x_resamp
+        if do_convert:
+            labels_train = [map_idx_to_lab[idx] for idx in _lab_resamp]
+        else:
+            labels_train = _lab_resamp
+        
+        # Plot (AFTER)
+        if plot_resampled_data_path_nosuff is not None:
+            fig, axes = trajgood_plot_colorby_splotbydims_scalar(X_train, labels_train, list_dims_plot)
+            savefig(fig, f"{plot_resampled_data_path_nosuff}-upsampled.png")
+        
+    return X_train, labels_train
+
+def decode_upsample_dataset(X_train, labels_train, plot_resampled_data_path_nosuff=False):
+    """
+    Upsample data to balance n datapts across classes of labels.
+    PARAMS:
+    - X_train, scalar acgivity to decode, a single time bin, (ntrials, nchans)
+    - labels_train, list of cat valuyes. len ntrials
+    """
+
+    X_train, labels_train = decode_resample_balance_dataset(X_train, labels_train, "upsample", plot_resampled_data_path_nosuff)
+    return X_train, labels_train
+
+    # from pythonlib.tools.listtools import tabulate_list
+    # from neuralmonkey.analyses.state_space_good import trajgood_plot_colorby_splotbydims_scalar
+
+    # list_dims_plot = [(0,1), (2,3), (4,5), (6,7)]
+    # list_dims_plot = [dims for dims in list_dims_plot if X_train.shape[1]>max(dims)]
+
+    # n_min_across_labs = min(tabulate_list(labels_train).values())
+    # n_max_across_labs = max(tabulate_list(labels_train).values())
+
+    # # Skip, if only 1 class exists...
+    # if len(set(labels_train))==1:
+    #     print("SKipping, ony one class lewvel found... [decode_train_model]")
+    #     return None
+
+    # if False:
+    #     print("---------")
+    #     print("ntot:", len(labels))
+    #     print("n train", len(train_index))
+    #     print("n test", len(test_index))
+    #     print("n splits", n_splits)
+    #     print("n classes", len(set(labels)))
+
+    # # Do upsampling here, since it is hleped by having more data
+    # # Balance the train data
+    # if n_min_across_labs/n_max_across_labs<0.85:
+    #     print("[Upsampling] Across levels, nmin_dat / nmax_dat:", n_min_across_labs, n_max_across_labs)
+    #     from imblearn.over_sampling import SMOTE
+    #     n_min_across_labs = min(tabulate_list(labels_train).values())
+    #     smote = SMOTE(sampling_strategy="not majority", k_neighbors=n_min_across_labs-1)
+    #     _x_resamp, _lab_resamp = smote.fit_resample(X_train, labels_train)
+
+    #     # Plot
+    #     if plot_resampled_data_path_nosuff is not None:
+    #         # Only do for i==0 since each time is very similar (trains are overlapoing).
+
+    #         fig, axes = trajgood_plot_colorby_splotbydims_scalar(X_train, labels_train, list_dims_plot)
+    #         savefig(fig, f"{plot_resampled_data_path_nosuff}-raw.png")
+
+    #         fig, axes = trajgood_plot_colorby_splotbydims_scalar(_x_resamp, _lab_resamp, list_dims_plot)
+    #         savefig(fig, f"{plot_resampled_data_path_nosuff}-upsampled.png")
+    #     X_train = _x_resamp
+    #     labels_train = _lab_resamp
+
+    # return X_train, labels_train
+
 

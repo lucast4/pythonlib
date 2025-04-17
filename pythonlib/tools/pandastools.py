@@ -2378,6 +2378,16 @@ def grouping_plot_n_samples_conjunction_heatmap_helper(df, list_vars):
 
     return fig
 
+def grouping_plot_n_samples_heatmap_var_vs_grpvar(df, var, vars_grp):
+    """
+    Helper to plot heatmap of counts, where rows are var (string) and columns
+    are levels of vars_grp (list of str). Does help by first appending conjunctive variabe
+    vars_grp...
+    """
+    df = append_col_with_grp_index(df, vars_grp, "_vars_grp")
+    fig = grouping_plot_n_samples_conjunction_heatmap(df, var, "_vars_grp")
+    return fig
+
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
     norm_method=None, annotate_heatmap=True, row_levels=None,
     sort_rows_by_mean_col_value=False, also_return_df=False):
@@ -3052,7 +3062,8 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
                                                    plot_counts_heatmap_savepath=None,
                                                     lenient_allow_data_if_has_n_levels=2,
-                                                    levels_var=None, remove_extra_columns=False):
+                                                    levels_var=None, remove_extra_columns=False,
+                                                    plot_counts_also_before_prune_path=None):
     """
     Heloper, setting params I usualyl use for simple task of pruning df to get just tjhose levels
     opf vars_others which have at least 2 levels of var, with <n_min_per_level> trials at least, per
@@ -3062,6 +3073,11 @@ def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_p
     :param vars_others:
     :return:
     """
+    if plot_counts_also_before_prune_path is not None:
+        fig = grouping_plot_n_samples_heatmap_var_vs_grpvar(df, var, vars_others)
+        savefig(fig, plot_counts_also_before_prune_path)
+        plt.close("all")
+        
     # lenient_allow_data_if_has_n_levels = 2
     dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var, n_min_across_all_levs_var=n_min_per_lev,
                     PRINT=False, lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels, DEBUG=False,
