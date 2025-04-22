@@ -1,6 +1,7 @@
 
 """
-Stuff for cam (x,y,z,t) points, especialyl for alignmenet with touchscreen data.
+Stuff for cam (x,y,z,t) points, especialyl for alignmenet with touchscreen data and gaps analysis.
+Also merge tool for merging Ht and dataset object
 Written by D. Hanuska, originalyl in stroketools.py, and LT moved over here.
 
 """
@@ -9,6 +10,23 @@ from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
+
+def mergeHTWithDataset (ht,ds):
+    """Funciton to merge HT data into dataset object for cohesive data unit. Will maintain DS structure so that 
+    DS functions will still work o the structure 
+
+    Args:
+        ht (dict): Trial indexed dict of HT data, use either merged version or pull out data for one coef set
+        ds (DS object): Dataset object from lucas code
+
+    Returns:
+        merge_ds (DS object): Merged dataset with HT data
+    """
+    if 'trialcode_tuple' not in D.Dat.columns:
+        D.trialcode_tuple_extract_assign()
+
+
+
 
 # Some additional functiosn for checking alignment of strokes. There may be similiar functions baove, but these ones I wrote for this specific puropose
 def euclidAlign(cam_pts, touch_pts, ploton=False, UB = 0.15):
@@ -75,7 +93,7 @@ def corrAlign(cam_pts, touch_pts, ploton=True, UB = 0.15, method='corr'):
         lag : [t0_touch, t0_stroke]. Can then align data using these nums
         fig : 4 panel fgirue for looking at lag visually for inspection. x axis is time, y axis is x or y coordinate repsp.
     """
-    plt.style.use('dark_background')
+    
     plot_bound_size = 0
 
     fig, ax = plt.subplots(2,2,figsize=(40,20), sharex=True)
@@ -229,7 +247,7 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
     Returns:
         2 dicts, with corr and euc lags indexed by trial (trial nums from input df)
     """
-    plt.style.use('dark_background')
+    
     euc_lags = {}
     corr_lags = {}
     import os
@@ -306,7 +324,7 @@ def finalize_alignment_data(lags, good_inds):
             ['trial-stroke', ... ,'trial-stroke'] e.g. ['10-0','12-1','20-0']
             * Uses the same labelling scheme as the get_lags function in stroketools thay is called below
     """
-    plt.style.use('dark_background')
+    
     all_corr_lags = []
     corr_lag_nums = []
     for lag_trial in lags['corr_lags'].values():
@@ -372,7 +390,7 @@ def plotTrialsTrajectories(fd,dat, trial_ml2, data_use='trans'):
     from drawmonkey.tools.utils import getTrialsTimesOfMotorEvents
 
 
-    plt.style.use('dark_background')
+    
 
     assert len(dat) > 0, "No data here"
     if data_use == 'trans':
