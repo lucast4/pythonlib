@@ -75,7 +75,7 @@ def corrAlign(cam_pts, touch_pts, ploton=True, UB = 0.15, method='corr'):
         lag : [t0_touch, t0_stroke]. Can then align data using these nums
         fig : 4 panel fgirue for looking at lag visually for inspection. x axis is time, y axis is x or y coordinate repsp.
     """
-    plt.style.use('dark_background')
+    # plt.style.use('dark_background')
     plot_bound_size = 0
 
     fig, ax = plt.subplots(2,2,figsize=(40,20), sharex=True)
@@ -229,7 +229,7 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
     Returns:
         2 dicts, with corr and euc lags indexed by trial (trial nums from input df)
     """
-    plt.style.use('dark_background')
+    # plt.style.use('dark_background')
     euc_lags = {}
     corr_lags = {}
     import os
@@ -369,7 +369,7 @@ def plotTrialsTrajectories(dat, trial_ml2, data_use='trans'):
     """Plot some relevant trajectories"""
     from pythonlib.tools.stroketools import strokesInterpolate2, smoothStrokes
 
-    plt.style.use('dark_background')
+    # plt.style.use('dark_background')
 
     assert len(dat) > 0, "No data here"
     if data_use == 'trans':
