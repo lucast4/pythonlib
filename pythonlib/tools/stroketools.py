@@ -7,7 +7,7 @@ from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
-from pythonlib.tools.camtools import euclidAlign, corrAlign, get_lags, fps, fps2, plotTrialsTrajectories, normalizeGaps, plotGapHeat
+from pythonlib.tools.camtools import euclidAlign, corrAlign, get_lags, fps, fps2, plotTrialsTrajectories, normalizeGaps
 
 # =============== TIME SERIES TOOLS
 def create_generate_strokes_fake_debug(nstrokes):
