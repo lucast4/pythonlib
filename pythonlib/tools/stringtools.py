@@ -8,9 +8,10 @@ def decompose_string(s, sep="-"):
     s = "11-2-3"
     returns:
     ['11', '2', '3'], or [] if sep doesnt exist.
-    """
+    """ 
 
-    assert sep in ["-", "_"], "| did not work in one case not sure wy."
+    if False:
+        assert sep in ["-", "_"], "| did not work in one case not sure wy."
     import re
     inds = [m.start() for m in re.finditer(sep, s)]
     if len(inds)==0:

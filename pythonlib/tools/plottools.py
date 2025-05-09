@@ -813,6 +813,10 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
 def set_axis_lims_square_bounding_data_45line(ax, xs, ys, delta_frac=0.1, dotted_lines="unity"):
     """
     """
+    if len(xs)==0:
+        return 
+    
+    assert len(xs)==len(ys)
     vals = np.concatenate([xs, ys])
 
     delta = delta_frac * (np.max(vals)-np.min(vals))
