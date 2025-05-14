@@ -173,7 +173,7 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
 
 def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                  adapt_win_len="adapt", sanity_check_endpoint_not_different=True,
-                 DEBUG=False):
+                 DEBUG=False, clean_endpoints=True):
     """ returns copy of strokes, smoothed with window_time (seconds)
     - sample_rate in samp/sec (e.g., fd["params"]["sample_rate"])
     - adapt_win_len, what to do fro strokes that are shoerter than window.
@@ -197,7 +197,6 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
         did_adapt = False
         if len(s)<window_len:
             if adapt_win_len=="adapt":
-                
                 if False:
                     # Old method, before 3/2025. it is too large, leads to output strokes that are too much changed.
                     window_len = len(s)
@@ -224,7 +223,8 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
             elif adapt_win_len=="remove":
                 # print("removing stroke since shorter than window")
                 pass
-        # Do smoothing
+
+        ### Do smoothing
         if DEBUG:
             print(window_len, window_time, sample_rate)
             print(window_type)
@@ -256,6 +256,94 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                 print(strokes_sm[-1].shape)
                 print('orig')
                 print(s.shape)
+
+    if clean_endpoints:
+        # FIx edge artifacts the edges, by taking weighted average between orig and 
+        # new smoothed strokes.
+        # This solves problem where sometimes short strokes are smoothed to the point where
+        # the endpojnts are changed too much, and then it fails below.
+        strokes_final = []
+        for s_raw, s_sm in zip(strokes, strokes_sm):
+
+            # tmp = np.stack([s1, s2], axis=2) # (times, dims, 2)
+            # np.mean(tmp, axis=2)
+            # np.average(tmp, axis=2, weights=)
+
+            assert s_raw.shape == s_sm.shape
+            npts = s_raw.shape[0]
+            w = np.zeros(npts)[:, None]
+            if npts>=10:
+                # For edges, take some of the onset pts.
+                # This done by hand, seems reasonable. The logic is that one should trust the on and off
+                # position for each stroke, bsaed on touchscreen.
+                w[0] = 1.
+                w[1] = 0.66
+                w[2] = 0.33
+                w[3] = 0.16
+                w[4] = 0.08
+
+                w[-5] = 0.08
+                w[-4] = 0.16
+                w[-3] = 0.33
+                w[-2] = 0.66
+                w[-1] = 1.
+
+                if False:
+                    plt.figure()
+                    plt.plot(w)
+            else:
+                # Then modify fewer pts at the edges.
+                assert len(w)>=6, "assuming so below... Why keep such a short stroke anyway?"
+                w[0] = 0.66
+                w[1] = 0.33
+                w[2] = 0.16
+                w[-3] = 0.16
+                w[-2] = 0.33
+                w[-1] = 0.66
+
+            s_new = s_sm*(1-w) + s_raw*w
+            
+            # Assign the actual values of the times. if take mean, then may run into numerical errors when try to check if is equal...
+            if False: # Not needed...
+                from pythonlib.tools.nptools import isnear
+                assert isnear(s_sm[:, -1], s_raw[:, -1]), "why are times not the same?"
+                s_new[:, -1] = s_sm[:, -1]
+
+            strokes_final.append(s_new)
+
+        if False:
+            fig, axes = plt.subplots(1,3, sharex=True, sharey=True)
+            
+            from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+            ax = axes.flatten()[0]
+            plotDatStrokesTimecourse(strokes, ax=ax)
+
+            ax = axes.flatten()[1]
+            plotDatStrokesTimecourse(strokes_sm, ax=ax)
+            ax.set_title("strokesFilter() --> Filtered")
+
+            ax = axes.flatten()[2]
+            plotDatStrokesTimecourse(strokes_final, ax=ax)
+            ax.set_title("combined")
+
+            fig.savefig("/tmp/tmp1.png")
+
+            fig, axes = plt.subplots(1,3, sharex=True, sharey=True)
+            ax = axes.flatten()[0]
+            plotDatStrokesWrapper(strokes, ax)
+
+            ax = axes.flatten()[1]
+            plotDatStrokesWrapper(strokes_sm, ax)
+
+            ax = axes.flatten()[2]
+            plotDatStrokesWrapper(strokes_final, ax)
+
+            fig.savefig("/tmp/tmp2.png")
+
+            import random
+            if random.random() < 0.02:
+                assert False
+        strokes_sm = strokes_final
 
     # if plotprepost_xy:
     #     # Overlay strokes on (x,y) plot
@@ -297,16 +385,20 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                     # give them a bit more leweway
                     if duration<0.075:
                         # max_frac = 0.37
-                        max_frac = 0.26
+                        # max_frac = 0.26
+                        max_frac = 0.2
                     elif duration<0.2:
                         # max_frac = 0.25
-                        max_frac = 0.18
+                        # max_frac = 0.18
+                        max_frac = 0.15
                     elif duration<0.34:
                         # max_frac = 0.2
-                        max_frac = 0.14
+                        # max_frac = 0.14
+                        max_frac = 0.1
                     else:
                         # max_frac = 0.18
-                        max_frac = 0.11
+                        # max_frac = 0.11
+                        max_frac = 0.08
 
                     # print("-----")
                     # print(d)
