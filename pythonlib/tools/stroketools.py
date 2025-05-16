@@ -379,7 +379,9 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                 for idx_pt in [0, -1]:
                     
                     dist_old_to_new = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
-                    duration = s[-1,2] - s[0,2]
+                    # print(s)
+                    # print('meow')
+                    duration = s[-1,-1] - s[0,-1]
 
                     # Shorter duration strokes are more likely to have larger diff from filtering, so
                     # give them a bit more leweway

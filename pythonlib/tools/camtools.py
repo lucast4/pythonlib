@@ -10,8 +10,10 @@ from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
+import pandas as pd
 
-def mergeHTWithDataset (ht,ds):
+
+def mergeHTWithDataset (ht,D):
     """Funciton to merge HT data into dataset object for cohesive data unit. Will maintain DS structure so that 
     DS functions will still work o the structure 
 
@@ -24,6 +26,52 @@ def mergeHTWithDataset (ht,ds):
     """
     if 'trialcode_tuple' not in D.Dat.columns:
         D.trialcode_tuple_extract_assign()
+    #Only get strokes and gaps data
+    strokes_gaps = {}
+    for trial,dat in ht.items():
+        if dat['skipped'] is None:
+            strokes_gaps[trial] = {}
+            strokes = dat['strokes_cam_calc_onoff']
+            gaps = dat['gaps_cam_calc_onoff']
+            strokes_gaps[trial]['strokes'] = strokes
+            strokes_gaps[trial]['gaps'] = gaps
+            stroke_times = []
+            for stroke in strokes:
+                stroke_times.extend(stroke[:,3])
+            tmin = np.min(stroke_times)
+            tmax = np.max(stroke_times)
+            all_pts = dat['trans_pts_time_cam_all']
+            all_pts = all_pts[(all_pts[:,3] >= tmin) & (all_pts[:,3] <= tmax)]
+            strokes_gaps[trial]['all_pts'] = all_pts
+
+    D.Dat['trial_key'] = D.Dat['trialcode_tuple'].apply(lambda x: x[2])
+    if 'strokes' in D.Dat.columns:
+        D.Dat.drop(columns='strokes', inplace=True)
+    if 'gaps' in D.Dat.columns:
+        D.Dat.drop(columns='gaps', inplace=True)
+    if 'all_pts' in D.Dat.columns:
+        D.Dat.drop(columns='all_pts', inplace=True)
+
+    sg_df = pd.DataFrame.from_dict(strokes_gaps, orient='index')
+    sg_df.index.name = 'trial_key'
+
+    # Merge on the 'key' column
+    merged_df = D.Dat.merge(sg_df, on='trial_key', how='left')
+
+    # Drop the helper column if desired
+    merged_df.drop(columns='trial_key', inplace=True)
+
+    #Fill empty values (trials no data) with empty lists/arrays
+    merged_df['strokes'] = merged_df['strokes'].apply(lambda d: d if isinstance(d, list) else [np.array([])])
+    merged_df['gaps'] = merged_df['gaps'].apply(lambda d: d if isinstance(d, list) else [np.array([])])
+    merged_df['all_pts'] = merged_df['all_pts'].apply(lambda d: d if isinstance(d, np.ndarray) else np.empty((0,4)))
+
+
+
+
+    return merged_df
+
+        
 
 
 
@@ -221,12 +269,12 @@ def corrAlign(cam_pts, touch_pts, ploton=True, UB = 0.15, method='corr'):
         ax[1,0].plot(cam_pts[:,2], cam_pts[:,1], label = 'y coord')
 
         for p in false_alarms:
-            ax[1,0].axvline(p, color='w', zorder=0, alpha = 0.1)
+            ax[1,0].axvline(p, color='k', zorder=0, alpha = 0.1)
         ax[1,0].legend()
 
         print(sim_course.shape)
         ax[1,1].plot(*zip(*sim_course))
-        plt.axvline(cam_pts[best_index,2], color ='w', linestyle='--')
+        plt.axvline(cam_pts[best_index,2], color ='k', linestyle='--')
 
     return lag,fig,'success'
 
@@ -392,8 +440,10 @@ def plotTrialsTrajectories(fd,dat, trial_ml2, data_use='trans'):
     
 
     assert len(dat) > 0, "No data here"
+    dat = dat[trial_ml2+1]
     if data_use == 'trans':
-        cam_pts = dat['trans_pts_time_cam_all']
+        cam_pts = dat['trans_pts_time_cam_all_int']
+        cam_pts_raw = dat['trans_pts_time_cam_all']
         strokes_touch = dat["strokes_touch"]
     elif data_use == 'raw':
         cam_pts = dat['pts_time_cam_all']
@@ -420,28 +470,24 @@ def plotTrialsTrajectories(fd,dat, trial_ml2, data_use='trans'):
         on_offs['off_fix'] = [t_offfix_on,None]
 
     # filter data to be within desired times
-    pts_cam = cam_pts[(cam_pts[:,3] >= t_onfix_off-cushion) & (cam_pts[:,3] <= t_offfix_on+cushion)]
-    cam_fs = 1/np.mean(np.diff(pts_cam[:,3]))
-    assert 49.5 <= cam_fs <= 50.5, f'cam fs of {cam_fs}hz is weird'
-
-    #Interpolate to 100 points
-    kind='linear'
-    pts_cam_int = strokesInterpolate2([pts_cam],kind=kind,N=["fsnew",1000,cam_fs])[0]
+    cam_pts_raw = cam_pts_raw[(cam_pts_raw[:,3] >= t_onfix_off-cushion) & (cam_pts_raw[:,3] <= t_offfix_on+cushion)]
+    pts_cam_int = cam_pts[(cam_pts[:,3] >= t_onfix_off-cushion) & (cam_pts[:,3] <= t_offfix_on+cushion)]
 
     #Get z data and v data (raw and interp)
-    raw_z = pts_cam[:,2]
+    raw_z = cam_pts_raw[:,2]
+    raw_cam_fs = 1/np.mean(np.diff(cam_pts_raw[:,3]))
     int_zt = np.column_stack((pts_cam_int[:,2],pts_cam_int[:,3]))
-    raw_vt = np.column_stack((fps(raw_z,cam_fs),pts_cam[2:-2,3]))
+    raw_vt = np.column_stack((fps(raw_z,raw_cam_fs),cam_pts_raw[2:-2,3]))
     int_vt = np.column_stack((fps(pts_cam_int[:,2],1000),pts_cam_int[2:-2,3]))
     #Smooth interp data
-    if_zt = smoothStrokes([int_zt], 1000, window_type='median')[0]
+    if_zt = smoothStrokes([int_zt], 1000, window_type='flat')[0]
     if_vt = smoothStrokes([int_vt], 1000, window_type='flat')[0]
 
     fig = plt.figure(figsize=(20,10))
     #Plot data
     plt.plot(if_vt[:,1], if_vt[:,0], label='v_filt')
-    plt.plot(if_zt[:,1], if_zt[:,0]*10, label='z_filt')
-    plt.plot(pts_cam[:,3],pts_cam[:,2], '.-',color='orange',label='raw z')
+    plt.plot(if_zt[:,1], if_zt[:,0], label='z_filt')
+    plt.plot(cam_pts_raw[:,3],cam_pts_raw[:,2], '.',color='orange',label='raw z')
     #plot calculated strokes (intersection method, see handtrack.py calcOnsetOffset)
     if 'strokes_cam_calc_onoff' in dat.keys():
         for stroke in dat['strokes_cam_calc_onoff']:
@@ -484,43 +530,64 @@ def normalizeGaps(gaps):
     Will sort gaps based on ration between distance travelled and direct distance between strokes
     """
     
-
-def plotGapHeat(gaps,color_ind=2,preprocess_method='norm', sort_method='disp_ratio'):
-    """Plot heat maps of gaps, one gap per row could be normal. Will bad zeros on bottom if needed
+def plotHeat(dat_in, plot_trials = None, color_ind=2, preprocess_method='pad', sort_method=None):
+    """Plot heat maps of dat, one gap per row could be normal. Will pad zeros on end if needed
 
     Args:
-        gaps (array): Array of gaps (x,y,z,t) 
+        dat (array): flat array of data (x,y,z,t)
         coord_ind (int): Index of relevant coord (default is 2/z)
+        plot_trials (range): Range obj for trials to plot
         preprocess_method (str):
             'pad': Pads end with zero rows
             'norm': Will normalize t to [0,1]
     """
+    import seaborn as sns
+
+    if plot_trials is not None:
+        ml2_plot_trials_all = np.array(list(plot_trials))-1
+        ds_trials = [t[2] for t in dat_in['trialcode_tuple'] if t[2] in ml2_plot_trials_all]
+        ml2_plot_trials = [t for t in ml2_plot_trials_all if t in ds_trials]
+        dat = dat_in[dat_in['trialcode_tuple'].apply(lambda x: x[2] in ds_trials)]['all_pts']
+    else:
+        ml2_plot_trials = [t[3] for t in dat_in['trialcode_tuple']]
+        dat = dat_in['all_pts']
+
+
     if sort_method == 'dur':
-        gaps = sorted(gaps,key=len)
+        dat = sorted(dat,key=len)
     if sort_method == 'disp_ratio':
         print('Not done yet')
     if preprocess_method == 'pad':
-        max_gap_len = np.max([len(gap) for gap in gaps])
-        pad_gaps = []
-        for gap in gaps:
-            pad_size = max_gap_len - len(gap)
-            pad_gap = np.pad(gap,((0,pad_size),(0,0)))
-            assert len(pad_gap) == max_gap_len, f'{len(pad_gap)},{max_gap_len}'
-            pad_gaps.append(pad_gap)
-
-        gaps = np.array(pad_gaps)
+        max_len = dat.apply(len).max()
+        filler_for_empty = np.zeros((max_len, 4))
+        padded_series = pd.Series([
+            filler_for_empty if len(arr) == 0 else np.vstack([
+                arr, 
+                np.column_stack([
+                    np.zeros((max_len - len(arr), 3)),
+                    np.arange(arr[-1, 3] + 1, arr[-1, 3] + 1 + (max_len - len(arr)))
+                ])
+            ])
+            for arr in dat
+        ])
+        dat = padded_series.values
     elif preprocess_method == 'norm':
-        gaps = normalizeGaps(gaps)
-    color_values = gaps[:,:,color_ind]
-    
-    plt.figure(figsize=(10, 500))
-    plt.imshow(color_values, aspect='auto', cmap='viridis', interpolation='nearest')
+        dat = normalizedat(dat)
+    heatmap_data = []
 
-    # Label axes
-    plt.xlabel("Time (t)")
-    plt.ylabel("Gap Index")
-    plt.colorbar()
-    
+    for arr in dat:
+        spatial_index = arr[:, color_ind]
+        
+        heatmap_data.append(spatial_index)
+
+    heatmap_data = np.array(heatmap_data)
+
+    plt.figure(figsize=(12, 6))
+    sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'z_coord', 'orientation': 'horizontal'},\
+                 xticklabels=10, yticklabels=ml2_plot_trials)
+    plt.xlabel('Time (ms)')
+    plt.ylabel('Trial')
+    plt.title('Heatmap of z by trial')
     plt.show()
 
 def fps(x, fs):
