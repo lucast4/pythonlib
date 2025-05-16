@@ -1260,7 +1260,8 @@ def plot_beh_codes(codes, times, ax=None, codenames=False,
         ax.plot(t, yval, "o", mfc=color, mec=color)
         ax.text(t, yval, c, color="m", fontsize=8)
         
-def plot_patch_rectangle_filled(ax, x1, x2, color="r", alpha=0.5, YLIM=None):
+def plot_patch_rectangle_filled(ax, x1, x2, color="r", alpha=0.5, YLIM=None,
+                                linewidth=1):
     """
     Fill a patch between x1 and x2 (values along x axis), heiight will span YLIMS, 
     unless input YLIM = [ymin, ymax]
@@ -1271,7 +1272,7 @@ def plot_patch_rectangle_filled(ax, x1, x2, color="r", alpha=0.5, YLIM=None):
         YLIM = ax.get_ylim()
 
     rect = Rectangle((x1, YLIM[0]), x2-x1, YLIM[1]-YLIM[0], 
-        linewidth=1, edgecolor=color,facecolor=color, alpha=alpha)
+        linewidth=linewidth, edgecolor=color, facecolor=color, alpha=alpha)
     ax.add_patch(rect)
     
 

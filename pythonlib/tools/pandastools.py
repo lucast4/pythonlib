@@ -2390,7 +2390,8 @@ def grouping_plot_n_samples_heatmap_var_vs_grpvar(df, var, vars_grp):
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
     norm_method=None, annotate_heatmap=True, row_levels=None,
-    sort_rows_by_mean_col_value=False, also_return_df=False):
+    sort_rows_by_mean_col_value=False, also_return_df=False,
+    n_columns=3):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2431,7 +2432,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     if len(list_dummy)<3:
         ncols = len(list_dummy)
     else:
-        ncols = 3
+        ncols = n_columns
     nrows = int(np.ceil(len(list_dummy)/ncols))
     
     # avoid bug
@@ -2539,10 +2540,14 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
 
     if sorted_by_keys:
         list_keys = list(outdict.keys())
-        # print(list_keys)
+        # print(list_keys[:5])
         list_keys = sort_mixed_type(list_keys)
-        # print(list_keys)
+        # print(list_keys[:30])
+        # print(sorted(list_keys[:30]))
+        # print(sort_mixed_type(list_keys[:30]))
+        # assert False
         # adsfsf
+        
         outdict = {k:outdict[k] for k in list_keys}
         # print(k)
         # asdsad
@@ -3542,7 +3547,7 @@ def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
                           maintain_block_temporal_structure=False, shift_level="datapt",
                           return_in_input_order=True):
     """ Hierarhical, this means shuffle only the variables in list_var_shuff, within
-    each level of list_var_noshuff. Moreover, all var in lisT_var_shuff will
+    each level of list_var_noshuff. Moreover, all var in list_var_shuff will
     remain correlated. e.g., if want to shuffle all cases of (char, seq) within
     each epoch, have list_var_noshuff = ["epoch"], and list_var_shuff = ["char", "seq"],
     which does dfs for each level of "epoch" one by one, and within each one, shuffle
@@ -3562,7 +3567,7 @@ def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
 
     # For each group of var, shuffle the othervar
     list_grp = []
-    for i, grp in df.groupby(list_var_noshuff):
+    for _, grp in df.groupby(list_var_noshuff):
         if len(list_var_shuff)==1:
             grp = shuffle_dataset_singlevar(grp, list_var_shuff[0], maintain_block_temporal_structure=maintain_block_temporal_structure,
                                    shift_level=shift_level)

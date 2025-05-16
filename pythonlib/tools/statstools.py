@@ -446,7 +446,7 @@ def empiricalPval(stat_actual, stats_shuff, side="two"):
         # n = sum(np.abs(stats_shuff)<=np.abs(stat_actual)) + 1 # THIS WAS BUG
         n = sum(np.abs(stats_shuff)>np.abs(stat_actual)) + 1
     elif side=="left":
-        # n = sum(stats_shuff<=stat_actual) + 1
+        # predict that data is to left
         n = sum(stats_shuff<=stat_actual) + 1
     elif side=="right":
         n = sum(stats_shuff>=stat_actual) + 1
