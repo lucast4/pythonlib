@@ -257,11 +257,13 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
             else:
                 # This squashes large numbers down to <10. this is important since "10" is before "9" when sorting as string,
                 # which is not what we want.
-                tmp = np.log(10 + val)
+                tmp = np.log10(10 + val)
 
             # Then convert to 9.999[]
             if tmp>10:
                 tmp = 9.99 + np.log(10)/1000
+            # print(val, tmp)
+            # assert False
 
             # Append strings so that negative numbners come before pos.
             # Make the string long so that numbers will cluster togethre (as opopsed to being seprated by actual trings).
@@ -318,8 +320,12 @@ def sort_mixed_type(mylist, DEBUG=False, key_user=None):
             else:
                 out = (2, [_convert_to_sortable(val) for val in x])
         elif isinstance(x, str):
+            # print(x)
+            # assert False
             out = (0, _convert_to_sortable(x))
         elif isinstance(x, (float, int, ndarray, np.generic)):
+            # print(x)
+            # assert False
             out = (1, _convert_to_sortable(x))
         elif isinstance(x, dict):
             if False:
