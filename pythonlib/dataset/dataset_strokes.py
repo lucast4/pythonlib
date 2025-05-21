@@ -303,6 +303,24 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
         n2 = len(DS.Dat)
         assert n2/n1>0.7, "why removed so much data?"
 
+    elif version == "chars_clusters_without_reloading":
+        # Keep all strokes, but 'chars' here means that also extract char clust scores and labels.
+        # Requires clust_sim_max already having been loaded into D.
+
+        D.preprocessGood(params=["no_supervision", "remove_online_abort"])
+
+        assert "charclust_shape_seq_scores" in D.Dat.columns, "you must have already loaded this into Dataset"
+        columns_to_append = {} # one value for each (substroke)
+        for column in ["charclust_shape_seq", "charclust_shape_seq_scores"]:
+            columns_to_append[column] = D.Dat[column].tolist()
+        DS = DatStrokes(D, columns_to_append=columns_to_append)
+
+        # 11/5/24 - Hacky, but this makes sure the names I usualyl use (csm, csmc) are
+        # present, e.g., for neural data. i.e., this is used for populating Snippets,
+        # and I include these two columns as features to extract. 
+        DS.Dat["clust_sim_max"] = DS.Dat["charclust_shape_seq_scores"]
+        DS.Dat["clust_sim_max_colname"] = DS.Dat["charclust_shape_seq"]
+
     elif version=="chars_load_clusters":
         # Without pruning DS basd on whether or not a given row has pre-saved char cluster label,
         # load pre-saved clustres (shape labels) --> column in DS called "shape_label"
@@ -379,7 +397,7 @@ def preprocess_dataset_to_datstrokes(D, version="clean_one_to_one"):
     animal = D.animals(True)[0]
     if animal=="Diego" and date=="230618":
         # Is very messy...
-        DS.Dat = DS.Dat[~(DS.Dat["shape_oriented"]=="zigzagSq-1-2-0")].reset_index(drop=True)
+        DS.Dat = DS.Dat[(DS.Dat["shape_oriented"]!="zigzagSq-1-2-0")].reset_index(drop=True)
     return DS
 
 
@@ -1868,6 +1886,9 @@ class DatStrokes(object):
         (if overlay==False).
         """
 
+        if len(list_strok)>100:
+            return None, None
+        
         if ax is not None:
             fig = None
 
@@ -1892,7 +1913,7 @@ class DatStrokes(object):
         if titles is not None and overlay==False:
             assert len(titles)==len(list_strok)
             for ax, tit in zip(axes, titles):
-                ax.set_title(tit)
+                ax.set_title(tit, fontsize=10)
 
         return fig, axes
 
@@ -3329,9 +3350,9 @@ class DatStrokes(object):
         
         # Can work with rectangle (usualyl nrows > ncols)
         Cl = Clusters(X = simmat, labels_rows=labels_rows_dat, labels_cols=labels_cols_feats)
-
-        # Cl.rsa_plot_heatmap()
         # print(Cl.Params)
+        # print(clustclass_rsa_mode)
+        # print(label_var, list_ver)
         # assert False
         if clustclass_rsa_mode:
             # params = {
@@ -3613,116 +3634,137 @@ class DatStrokes(object):
                 
                 plt.close("all")
 
-    def clustergood_load_saved_cluster_shape_classes_input_basis_set(self, WHICH_BASIS=None, WHICH_LEVEL="trial",
-                                                                     ANIMAL=None, DATE=None, merge_with_self=True):
+    def clustergood_load_saved_cluster_shape_classes_input_basis_set(self, WHICH_BASIS, WHICH_SHAPES, 
+                                                                     merge_with_self=True):
         """ [NOTE: is like clustergood_load_saved_cluster_shape_classes, but loads saved DS, which was saved
         separately based on which_basis. Is identical, just dumb forgeting when saving] 
         Laod cluster labels, make copy of self, and append labels
         to rows if those rows are found in the loaded data. I.,e, usualyl I
         only save thius for subset of data (e.g., chars), and so anything not
         loaded will have a "IGNORE" in that column.
+
+        The useful columns will be:
+        - clust_sim_max...
+
         PARAMS:
-        - WHICH_BASIS, str, usualyl which animal's basis set was used.
-        RETURNS DS,a copy that includes ONLY those rows that found shape label.
+        - WHICH_BASIS, str, usualyl which animal's basis set was used. None to use this data's animal
+        - WHICH_SHAPES, str, use None to use default.
+
+        RETURNS:
+        - DS,a copy that includes ONLY those rows that found shape label.
         """
         import glob
 
-        if ANIMAL is None:
-            ANIMAL = self.animal()
-        if DATE is None:
-            DATE = self.date()
-
         if WHICH_BASIS is None:
-            WHICH_BASIS = ANIMAL
+            WHICH_BASIS = self.animal()
 
-        # First, try loading the DS, which has information about which basis set.
-        DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
-        path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
-        
-        list_dir = glob.glob(path)
-        if len(list_dir)==1:
-            path = list_dir[0]
-            _ds = pd.read_pickle(path)
+        if True:
+            # New version, which makes sure there is only one place where you are loading DS from.
+            _ds, _ = self.clustergood_load_saved_cluster_shape_classes(which_basis=WHICH_BASIS, which_shapes=WHICH_SHAPES)
             df = _ds.Dat
 
+            # Remove things that are misleading (they are relate to image componets)
+            # only keep the useufl columns
+            cols_keep = [col for col in df.columns if "clust_sim_" in col]
+            cols_keep.extend(["dataset_trialcode", "character", "trialcode", "stroke_index", "stroke_index_semantic", "stroke_index_fromlast", "strok"]) # useful for IDing rows
+            cols_keep.extend(["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_angle", "distcum", "time_duration", "velocity"]) # useful motor stuff, ths is def correct
+            df = df.loc[:, cols_keep]
+
             if merge_with_self:
-                self.Dat = self.datamod_append_unique_indexdatapt_copy()
                 DS = self.copy()
+                DS.Dat = DS.datamod_append_unique_indexdatapt_copy()
                 df = DS.datamod_append_unique_indexdatapt_copy(df=df)
                 DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
                 return DS, params_dict
             else:
                 return df, None
-        elif len(list_dir)>1:
-            print(list_dir)
-            assert False
+
         else:
-            return None, None
+            if ANIMAL is None:
+                ANIMAL = self.animal()
+            if DATE is None:
+                DATE = self.date()
+            if WHICH_BASIS is None:
+                WHICH_BASIS = ANIMAL
+
+            # First, try loading the DS, which has information about which basis set.
+            DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
+            path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
+            
+            list_dir = glob.glob(path)
+            if len(list_dir)==1:
+                path = list_dir[0]
+                _ds = pd.read_pickle(path)
+                df = _ds.Dat
+
+                # Remove things that are misleading (they are relate to image componets)
+                if False:
+                    for col in df:
+                        if "shape" in col:
+                            del df[col]
+                else:
+                    # only keep the useufl columns
+                    cols_keep = [col for col in df.columns if "clust_sim_" in col]
+                    cols_keep.extend(["dataset_trialcode", "character", "trialcode", "stroke_index", "stroke_index_semantic", "stroke_index_fromlast", "strok"]) # useful for IDing rows
+                    cols_keep.extend(["gap_from_prev_dur", "gap_from_prev_dist", "gap_from_prev_angle", "distcum", "time_duration", "velocity"]) # useful motor stuff, ths is def correct
+                    df = df.loc[:, cols_keep]
+
+                if merge_with_self:
+                    self.Dat = self.datamod_append_unique_indexdatapt_copy()
+                    DS = self.copy()
+                    df = DS.datamod_append_unique_indexdatapt_copy(df=df)
+                    DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
+                    return DS, params_dict
+                else:
+                    return df, None
+            elif len(list_dir)>1:
+                print(list_dir)
+                assert False
+            else:
+                return None, None
 
 
-    def clustergood_load_saved_cluster_shape_classes(self, skip_if_labels_not_found=False):
+    def clustergood_load_saved_cluster_shape_classes(self, skip_if_labels_not_found=False,
+                                                     which_basis=None, which_shapes=None):
         """ Laod cluster labels, make copy of self, and append labels
         to rows if those rows are found in the loaded data. I.,e, usualyl I
         only save thius for subset of data (e.g., chars), and so anything not
         loaded will have a "IGNORE" in that column.
         RETURNS DS, a copy, that includes ONLY those rows that found shape label.
         """
+
+        assert skip_if_labels_not_found == False, "not coded otherwise"
+
         self.Dat = self.datamod_append_unique_indexdatapt_copy()
         DS = self.copy()
 
-        # # First, try loading the DS, which has information about which basis set.
-        # DIR = "/gorilla1/analyses/main/strokes_clustering_similarity"
-        # path = f"{DIR}/{WHICH_LEVEL}-basis_{WHICH_BASIS}/{ANIMAL}_{DATE}_*/DS.pkl"
-
-        basis_animal = DS.animal()
-        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={basis_animal}/{DS.date()}"
+        if which_basis is None:
+            # First, try loading the DS, which has information about which basis set.
+            which_basis = DS.animal()
+        
+        # if which_shapes is not None:
+        #     PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={which_basis}-shapes={which_shapes}/{DS.date()}"
+        # else:
+        #     # This is default, 
+        #     PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={which_basis}/{DS.date()}"
+        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={which_basis}-shapes={which_shapes}/{DS.date()}"
         path = f"{PATHDIR}/DS_data.pkl"
+
         if os.path.exists(path):
             df = pd.read_pickle(path)
             df = DS.datamod_append_unique_indexdatapt_copy(df=df)
 
             DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
-            # # Only keep indices that exist in both self and loaded DS_data
-            # indices = [idx for idx in DS.Dat["index_datapt"] if idx in df["index_datapt"].tolist()]
-            # print("Len DS: ", len(DS.Dat))
-            # print("Len loaded DS: ", len(df))
-            # print("Len DS: ", len(indices))
-            # assert len(indices)>0
-
-            # # slice both so they match
-            # DS.Dat = DS.dataset_slice_by("index_datapt", indices)
-            # df = DS.dataset_slice_by("index_datapt", indices, df=df)
-
-            # assert len(df)>0
-            # assert DS.Dat["index_datapt"].tolist() == df["index_datapt"].tolist()
-
-            # # Replace all shape labels...
-            # # Replace shape_label, beucase I had grouped shapes but decided best not to do that here.
-            # df["shape_label"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
-            # df["shape_oriented"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
-            # df["shape"] = df["clust_sim_max_colname"] # Just forgot at one point (code)..
-
-            # # Combine them
-            # cols_take = ["clust_sim_max_colname", "clust_sim_max", "shape_label", "velmean_th", "velmean_thbin"]
-            # for col in cols_take:
-            #     assert col not in DS.Dat.columns
-            #     DS.Dat[col] = df[col]
-            #     print("Merged this column: ", col)
-
-            # # Also load params
-            # try:
-            #     from pythonlib.tools.expttools import load_yaml_config
-            #     params_dict = load_yaml_config(f"{PATHDIR}/params.txt")
-            # except Exception as err:
-            #     # mistake, saved np arary as text... cant parse
-            #     params_dict = None
             return DS, params_dict
         else:
+            print(path)
+            assert False
             return None, None
 
     def _clustergood_load_saved_cluster_shape_classes_inner(self, df):
         """
-        Take loaded df and merge into self.
+        Take loaded df (holding cluster class labels for each stroke), 
+        and merge into self.
         """
 
         DS = self.copy()
@@ -4088,7 +4130,7 @@ class DatStrokes(object):
 
     # def features_generate_clusters_from_dataset(self, dfdat, 
     def features_wrapper_generate_all_features(self, version_trial_or_shapemean="trial",
-        which_basis_set=None):
+        which_basis_set=None, which_shapes=None):
         """
         [Wrapper] Generate represnetation of data, across different possible representational
         spaces, such as motor-distance (from basis set), and so on, and return each of them
@@ -4111,7 +4153,7 @@ class DatStrokes(object):
         assert len(dfdat)>0
 
         ClustDict, ParamsDict = self._features_wrapper_generate_all_features(dfdat,
-            which_basis_set=which_basis_set)
+            which_basis_set=which_basis_set, which_shapes=which_shapes)
 
         ParamsGeneral = {
             "version_trial_or_shapemean":version_trial_or_shapemean
@@ -4128,7 +4170,8 @@ class DatStrokes(object):
 
     def _features_wrapper_generate_all_features(self, dfdat,
         perform_clustering=True, compute_distance_matrix=True,
-        which_basis_set=None):
+        which_basis_set=None, which_shapes=None,
+        just_do_motor=False):
         """ 
         Wrapper to generate all (or many) feature datasets.
         Generate feature vectors, each row in a matrix (ndat x ndim). 
@@ -4144,7 +4187,7 @@ class DatStrokes(object):
         print("TODO: use held out stroke for basis set")
         Cl, params = self.clustergood_featurespace_project(dfdat, "strok_sim_motor",
             list_strok_basis=None, which_basis_set = which_basis_set,
-            which_shapes = None,
+            which_shapes = which_shapes,
             list_distance_ver=None)
         # list_strok = dfdat["strok"].values.tolist()
         # list_strok_basis = dfdat["strok"].values.tolist()
@@ -4155,52 +4198,53 @@ class DatStrokes(object):
         ClustDict["beh_motor_sim"] = Cl
         ParamsDict["beh_motor_sim"] = params
 
-        # 2) Visual similarity to basis set
-        Cl, params = self.clustergood_featurespace_project(dfdat, "strok_sim_task",
-            list_strok_basis=None, which_basis_set = which_basis_set,
-            which_shapes = None,
-            list_distance_ver=None)
+        if not just_do_motor:
+            # 2) Visual similarity to basis set
+            Cl, params = self.clustergood_featurespace_project(dfdat, "strok_sim_task",
+                list_strok_basis=None, which_basis_set = which_basis_set,
+                which_shapes = which_shapes,
+                list_distance_ver=None)
 
-        # # - for each shape, return a single example task image
-        # list_strok = dfdat["strok_task"].values.tolist()
-        # list_strok_basis = dfdat["strok_task"].values.tolist()
-        # list_shape = dfdat["shape"].values.tolist()
+            # # - for each shape, return a single example task image
+            # list_strok = dfdat["strok_task"].values.tolist()
+            # list_strok_basis = dfdat["strok_task"].values.tolist()
+            # list_shape = dfdat["shape"].values.tolist()
 
-        # # Cluster
-        # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-        #                                     rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
-        #                                    labels_for_Clusters=list_shape)
-        # # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
-        # #                                     rescale_strokes_ver=None, distancever="hausdorff_centered", return_as_Clusters=True,
-        # #                                    labels_for_Clusters=list_shape)
-        ClustDict["task_image_sim"] = Cl
-        ParamsDict["task_image_sim"] = params
+            # # Cluster
+            # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
+            #                                     rescale_strokes_ver=None, distancever="hausdorff_max", return_as_Clusters=True,
+            #                                    labels_for_Clusters=list_shape)
+            # # Cl = self._cluster_compute_sim_matrix(list_strok, list_strok_basis,
+            # #                                     rescale_strokes_ver=None, distancever="hausdorff_centered", return_as_Clusters=True,
+            # #                                    labels_for_Clusters=list_shape)
+            ClustDict["task_image_sim"] = Cl
+            ParamsDict["task_image_sim"] = params
 
-        # 3) shape category (abstract)
-        Cl, params = self.clustergood_featurespace_project(dfdat, "shape_cat_abstract",
-            list_strok_basis=None, which_basis_set = which_basis_set,
-            which_shapes = None,
-            list_distance_ver=None)
+            # 3) shape category (abstract)
+            Cl, params = self.clustergood_featurespace_project(dfdat, "shape_cat_abstract",
+                list_strok_basis=None, which_basis_set = which_basis_set,
+                which_shapes = which_shapes,
+                list_distance_ver=None)
 
-        # # convert to one-hot
+            # # convert to one-hot
 
-        # encoder = OneHotEncoder(handle_unknown='ignore')
-        # X = encoder.fit_transform(dfdat[["shape_cat_abstract"]]).toarray()
+            # encoder = OneHotEncoder(handle_unknown='ignore')
+            # X = encoder.fit_transform(dfdat[["shape_cat_abstract"]]).toarray()
 
-        # labels_rows = list_shape
-        # labels_cols = encoder.categories_[0].tolist()
-        # ClustDict["task_shape_cat_abstract"] = Clusters(X, labels_rows=labels_rows, labels_cols=labels_cols)
-        ClustDict["task_shape_cat_abstract"] = Cl
-        ParamsDict["task_shape_cat_abstract"] = params
+            # labels_rows = list_shape
+            # labels_cols = encoder.categories_[0].tolist()
+            # ClustDict["task_shape_cat_abstract"] = Clusters(X, labels_rows=labels_rows, labels_cols=labels_cols)
+            ClustDict["task_shape_cat_abstract"] = Cl
+            ParamsDict["task_shape_cat_abstract"] = params
 
-        # 4) curved vs. linear
+            # 4) curved vs. linear
 
-        # TODO
+            # TODO
 
 
-        # (See notes for other)
+            # (See notes for other)
 
-        # TODO
+            # TODO
 
         # Confirm that all inputed rows are identical across Data
         prev = None
@@ -4705,7 +4749,11 @@ class DatStrokes(object):
         if date is None:
             date = "_".join(self.Dataset.Dat["date"].unique().tolist())
 
-        sdir = f"{SDIR}/{animal}-{expt}-{date}{suffix}"
+        if date != "IGNORE":
+            sdir = f"{SDIR}/{animal}-{expt}-{date}{suffix}"
+        else:
+            sdir = f"{SDIR}/{animal}-{expt}{suffix}"
+        
         path = f"{sdir}/strokes_each_shape_dataframe.pkl"
 
         return sdir, path
@@ -4794,7 +4842,8 @@ class DatStrokes(object):
 
         return flip
 
-    def stroke_shape_cluster_database_load(self, animal, expt, date, suffix):
+    def stroke_shape_cluster_database_load(self, animal, expt, date, suffix,
+                                           shuffle_iter=None):
         """ Load set of strokes, one for each sahpe, previously saved 
         RETURNS:
         - pd dataframe, each row a stroke instance (usually mean over trials).
@@ -4802,6 +4851,10 @@ class DatStrokes(object):
 
         sdir, path = self._stroke_shape_cluster_database_path(suffix=suffix,
             animal=animal, expt=expt, date=date)
+        if shuffle_iter is not None:
+            # This these are from shuffling by combining first and second halves.
+            sdir = f"{sdir}/iter={shuffle_iter}"
+            path = f"{sdir}/dfbasis_merged_take.pkl"
         dfdat = pd.read_pickle(path)
         return dfdat, sdir
 
@@ -4839,11 +4892,42 @@ class DatStrokes(object):
             WHICH_BASIS_SET = "standard_17"
         elif which_basis_set=="Diego":
             WHICH_BASIS_SET="diego_all_minus_open_to_left"
+        # elif "Diego_shuffled" in which_basis_set:
+        #     from pythonlib.tools.stringtools import decompose_string
+        #     WHICH_BASIS_SET="Diego_shuffled"   
+        #     parts = decompose_string(which_basis_set, "_")
+        #     if parts ==['Diego', 'shuffled']:
+        #         idx_shuffed = 0
+        #     else:
+        #         idx_shuffed = int(parts[2])
+        #         assert idx_shuffed > 0 and idx_shuffed < 5
+        # elif "Pancho_shuffled" in which_basis_set:
+        #     from pythonlib.tools.stringtools import decompose_string
+        #     WHICH_BASIS_SET="Pancho_shuffled"   
+        #     parts = decompose_string(which_basis_set, "_")
+        #     if parts ==['Pancho', 'shuffled']:
+        #         idx_shuffed = 0
+        #     else:
+        #         idx_shuffed = int(parts[2])
+        #         assert idx_shuffed > 0 and idx_shuffed < 5
+        elif ("Diego_shuffled" in which_basis_set) or ("Pancho_shuffled" in which_basis_set):
+            # e.g, Diego_shuffled means the 0-th index. Diego_shuffled_1 means the first
+            # e.g., Pancho_shuffled_2.
+            from pythonlib.tools.stringtools import decompose_string
+            parts = decompose_string(which_basis_set, "_")
+            if len(parts)==2:
+                # ==['Diego', 'shuffled']:
+                idx_shuffed = 0
+            else:
+                idx_shuffed = int(parts[2])
+                assert idx_shuffed > 0 and idx_shuffed < 5
+            WHICH_BASIS_SET=f"{parts[0]}_shuffled"
         else:
             # Use the input
             WHICH_BASIS_SET = which_basis_set
 
         # Load the set
+        remove_shape_names=False
         if WHICH_BASIS_SET=="standard_17":
             dfbasis, sdir = self.stroke_shape_cluster_database_load("Pancho", "priminvar4", 220918, None)
             SHAPES_EXCLUDE = []
@@ -4858,11 +4942,44 @@ class DatStrokes(object):
             # code exludes therm
             dfbasis, sdir = self.stroke_shape_cluster_database_load("Diego", "primsingridrand6b", 230223, None)
             SHAPES_EXCLUDE = ["V-2-1-0", "arcdeep-4-1-0", "usquare-1-1-0", "dot-2-1-0"]
+        elif WHICH_BASIS_SET=="Diego_shuffled":
+            # Shuffled, this means it is first and second half of two prims, concatenated.
+            animal = "Diego"
+            expt = "shuffled_first_second_half"
+            date = "IGNORE"
+            suffix = "250518_222821"
+            list_shuff_iter = [6, 5, 2] # from best, decreasing
+            shuffle_iter = list_shuff_iter[idx_shuffed]
+            dfbasis, sdir = self.stroke_shape_cluster_database_load(animal, expt, date, suffix, shuffle_iter=shuffle_iter)
+            # Force that you keep all the shapes
+            assert which_shapes =="all_basis" or which_shapes is None
+            SHAPES_EXCLUDE = []
+            remove_shape_names=True
+            
+            # Fake this, so that doesntream codes doesnt break
+            # - make them all the same, so that I don't get confused -- any result will def look weird.
+            if True: # actually no, to avoid silent errors
+                dfbasis["strok_task"] = [dfbasis["strok"].values[0] for _ in range(len(dfbasis))]
+        elif WHICH_BASIS_SET=="Pancho_shuffled":
+            animal = "Pancho"
+            expt = "shuffled_first_second_half"
+            date = "IGNORE"
+            suffix = "250518_233847"
+            list_shuff_iter = [7, 4, 8]
+            shuffle_iter = list_shuff_iter[idx_shuffed]
+            dfbasis, sdir = self.stroke_shape_cluster_database_load(animal, expt, date, suffix, shuffle_iter=shuffle_iter)
+            # Force that you keep all the shapes
+            assert which_shapes =="all_basis" or which_shapes is None
+            SHAPES_EXCLUDE = []
+            remove_shape_names=True
+
+            # Fake this, so that doesntream codes doesnt break
+            # - make them all the same, so that I don't get confused -- any result will def look weird.
+            if True: # actually no, to avoid silent errors
+                dfbasis["strok_task"] = [dfbasis["strok"].values[0] for _ in range(len(dfbasis))]
         else:
             print(WHICH_BASIS_SET)
             assert False
-
-
 
         # Which shapes to extract from this set
         if which_shapes=="current_dataset":
@@ -4879,6 +4996,36 @@ class DatStrokes(object):
         elif which_shapes=="Pancho":
             # Those in panchos... load it and get the shapes
             _, _, list_shape_basis = self.stroke_shape_cluster_database_load_helper("Pancho")
+        elif which_shapes=="main_21":
+            # The main pool of 21 used in the paper, which simply excludes the U and ZZ (which are redundant
+            # with arc and sqiuggle), for Diego
+            # (Prune dfbasis to just main 21 shapes)
+
+            # from pythonlib.drawmodel.tokens import MAP_SHAPE_TO_SHAPESEMANTIC, MAP_SHAPESEM_TO_SHAPESEMGROUP, map_shsem_to_new_shsem
+            # # print("Ignoreing these shapes:  ", shapes_ignore)
+            # dfbasis["shape_semantic"] = [MAP_SHAPE_TO_SHAPESEMANTIC[sh] for sh in dfbasis["shape"]]
+            # shapes_ignore = list(map_shsem_to_new_shsem.keys())
+            # shapes_keep = [sh for sh in dfbasis["shape_semantic"] if sh not in shapes_ignore]
+            # # dfbasis = dfbasis[dfbasis["shape_semantic"].isin(shapes_keep)].reset_index(drop=True)
+
+            # list_shape_basis = dfbasis[dfbasis["shape_semantic"].isin(shapes_keep)]["shape"].tolist()
+            
+            from pythonlib.drawmodel.tokens import LIST_SHAPES_SEM_MAIN_21, MAP_SHAPE_TO_SHAPESEMANTIC
+            # print("Ignoreing these shapes:  ", shapes_ignore)
+            dfbasis["shape_semantic"] = [MAP_SHAPE_TO_SHAPESEMANTIC[sh] for sh in dfbasis["shape"]]
+            list_shape_basis = dfbasis[dfbasis["shape_semantic"].isin(LIST_SHAPES_SEM_MAIN_21)]["shape"].tolist()
+            list_shape_basis = [shape for shape in list_shape_basis if shape not in SHAPES_EXCLUDE]
+
+            # - sanity check
+            if WHICH_BASIS_SET=="standard_17":
+                assert len(list_shape_basis)==17
+            elif WHICH_BASIS_SET=="diego_all_minus_open_to_left":
+                assert len(list_shape_basis)==19
+            else:
+                assert False, "code the sanity check"
+
+            print("Basis set of strokes:", list_shape_basis)
+
         elif isinstance(which_shapes, list):
             # List of string, each a shape name
             for sh in which_shapes:
@@ -4886,16 +5033,20 @@ class DatStrokes(object):
             list_shape_basis = which_shapes
         else:
             assert False
-        print("Basis set of strokes:", list_shape_basis)
 
         for sh in list_shape_basis:
             if sh not in dfbasis["shape"].tolist():
                 print("shape doesnt exist in basis set:", sh)
                 assert False
         dfbasis = slice_by_row_label(dfbasis, "shape", list_shape_basis, assert_exactly_one_each=True)
-        list_strok_basis = dfbasis["strok"].values.tolist()
+
+        if remove_shape_names:
+            dfbasis["shape"] = [f"ignore-{i}-{i}-0" for i in range(len(dfbasis))]
+            dfbasis["shape_semantic"] = [f"ignore-{i}-{i}-0" for i in range(len(dfbasis))]
 
         # Plto some examples for sanity check
+        list_strok_basis = dfbasis["strok"].values.tolist()
+        list_shape_basis = dfbasis["shape"].values.tolist()
         if plot_examples:
             # self.plot_multiple_strok(list_strok[:4])
             self.plot_multiple_strok(list_strok_basis, overlay=False, titles=list_shape_basis)

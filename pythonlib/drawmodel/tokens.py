@@ -74,6 +74,7 @@ import matplotlib.pyplot as plt
 # NOTE: THis below is hand modified
 MAP_SHAPE_TO_SHAPESEMANTIC = {
     'circle-6-1-0': 'circle-XX-XX',
+    'dot-2-1-0':'dot-XX-XX',
     'Lcentered-4-1-0': 'Lcentered-UL-UL',
     'Lcentered-4-2-0': 'Lcentered-DL-DL',
     'Lcentered-4-3-0': 'Lcentered-DR-DR',
@@ -154,6 +155,45 @@ for shsemgrp, list_shsem in MAP_SHAPESEMGROUP_TO_SHAPESEM.items():
     for shsem in list_shsem:
         assert shsem not in MAP_SHAPESEM_TO_SHAPESEMGROUP
         MAP_SHAPESEM_TO_SHAPESEMGROUP[shsem] = shsemgrp
+
+
+# Diego, to consolidate shapes that are similar (e.g., arc vs. U) into a single shape (to be in the main pool of 21 shapes)
+# - This is map that says rename usquare-DD-DD so that it is now called arcdeep-DD-DD.
+map_shsem_to_new_shsem = {
+    "usquare-LL-LL":"arcdeep-LL-LL",
+    "usquare-DD-DD":"arcdeep-DD-DD",
+    "usquare-RR-RR":"arcdeep-RR-RR",
+    "usquare-UU-UU":"arcdeep-UU-UU",
+    "zigzagSq-LL-1.0":"squiggle3-LL-1.0",
+    "zigzagSq-LL-0.0":"squiggle3-LL-0.0",
+    "zigzagSq-UU-1.0":"squiggle3-UU-1.0",
+    "zigzagSq-UU-0.0":"squiggle3-UU-0.0"
+}
+
+# Main 21 used in paper
+LIST_SHAPES_SEM_MAIN_21 =     [
+    'Lcentered-UL-UL',
+    'Lcentered-DL-DL',
+    'Lcentered-DR-DR',
+    'Lcentered-UR-UR',
+    'V-LL-LL',
+    'V-DD-DD',
+    'V-RR-RR',
+    'V-UU-UU',
+    'arcdeep-LL-LL',
+    'arcdeep-DD-DD',
+    'arcdeep-RR-RR',
+    'arcdeep-UU-UU',
+    'circle-XX-XX',
+    'line-LL-LL',
+    'line-UU-UU',
+    'line-UR-UR',
+    'line-UL-UL',
+    'squiggle3-UU-1.0',
+    'squiggle3-UU-0.0',
+    'squiggle3-LL-1.0',
+    'squiggle3-LL-0.0']
+assert len(LIST_SHAPES_SEM_MAIN_21)==21
 
 def generate_tokens_from_raw(strokes, shapes, gridlocs=None, gridlocs_local=None,
                              reclassify_shape_using_stroke=False, list_ind_taskstroke_orig=None):
