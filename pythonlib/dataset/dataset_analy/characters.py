@@ -3613,3 +3613,134 @@ def analy_extract_strokes_wrapper(LIST_D, LIST_Dc, LIST_ANIMAL_DATE, SAVEDIR,
 
     return DictDS
 
+def basisprims_simulate_strokes_residuals_compute(DS, dfbasis, shape_var_DS="shape_orig",
+                                                  PLOT=False, skip_shape_if_no_data_in_DS=True):
+    """
+    Generating trials that simulate how monkey
+    would draw the shuffled prims (ie in dfbasis). Do this by getting residuals for ground truth prims, applying them
+    to shuffled prims, ingoring the shape names.
+
+    I used this for determine thresholds for shuffled prims. 
+
+    PARAMS:
+    - DS, holds the strokes that will be used for computing residuals, in column "shape" and "strok"
+    - dfbasis, holds the basis set of strokes.
+    RETURNS:
+    - dfresiduals, all trails for shapes that exist in dfbasis["shape"]
+    """
+    from pythonlib.tools.stroketools import strokesInterpolate2
+    from pythonlib.tools.stroketools import strokes_bounding_box_dimensions
+
+    ## HARD CODED PARAMS
+    # task_kinds_control = ["prims_single"]
+    task_kinds_control = ["prims_single", "prims_on_grid"]
+    list_shape = list(dfbasis["shape"].unique())
+
+    ### Collect residuals.
+    res = []
+    for shape in list_shape:
+        # shape = "circle-6-1-0"
+        df = DS.Dat[(DS.Dat[shape_var_DS]==shape) & (DS.Dat["task_kind"].isin(task_kinds_control))]
+
+        if len(df) == 0:
+            if skip_shape_if_no_data_in_DS:
+                print("Skipping shape (no data in DS): ", shape)
+                continue
+            else:
+                print("Did not find this shape: ", shape)
+                assert False, "DS must have data for each shape in dfbasis"
+
+        ### Get basis stroke.
+        tmp = dfbasis[dfbasis["shape"] == shape]
+        if len(tmp)!=1:
+            print("here:", tmp)
+            assert False
+        strok_basis = tmp["strok"].values[0]
+        # Interpolate spatially
+        strok_basis = strokesInterpolate2([strok_basis], N=["npts", len(strok_basis)], base="space")[0]
+
+        ### Collect the data
+        strokes = df["strok"].tolist()
+        # Center at onset
+        strokes = [strok - strok[0, :] for strok in strokes]
+        # Iirst interpolate all to same n pts as basis
+        strokes = strokesInterpolate2(strokes, N=["npts", len(strok_basis)], base="space")
+        # strokes = strokesInterpolate2(strokes, N=["npts", len(strok_basis)], base="time")
+        # Rescale to same diagonal as basis stroke.
+        d_basis = strokes_bounding_box_dimensions([strok_basis])[2]
+        diameters = [strokes_bounding_box_dimensions([s])[2] for s in strokes]
+        strokes = [s.copy() for s in strokes]
+        weights = [d_basis/d for d in diameters]
+        for s, w in zip(strokes, weights):
+            s[:,:2] *= w
+
+        ### Get residuals
+        strokes_residuals = [(s - strok_basis)[:, :2] for s in strokes]
+
+        if PLOT:
+            DS.plot_multiple_strok([strok_basis] + strokes[:10] + strokes_residuals[:10], overlay=False)
+            # ds.plot_multiple_strok(strokes_residuals[:10], overlay=False)
+            assert False
+        
+        # Store
+        assert len(df)==len(strokes_residuals)
+        for index_datapt, s_resid, s in zip(df["index_datapt"], strokes_residuals, strokes):
+            res.append({
+                "index_datapt":index_datapt,
+                "shape_orig":shape,
+                "strok_rescaled":s,
+                "strok_resid":s_resid,
+                "strok_basis":strok_basis,
+                "diam_basis":d_basis,
+            })
+
+    dfresiduals = pd.DataFrame(res)
+    return dfresiduals
+
+def basisprims_simulate_strokes_residuals_sample(dfbasis, shape_basis, dfresiduals, nsample, PLOT=False):
+    """
+    Generate n samples, each starting from basis stroke and adding on residuals.
+    
+    PARAMS:
+    - dfbasis, df holding basis strokes, usually generated using DS
+    - shape_basis, string, name of the basis stroke to sample.
+    - dfresiduals, df holding stroke residuals, each row a single trial, spatially interpoalted, and also rescaled.
+    
+    RETURNS:
+    - strokes_simulated, list of strokes, on same scale as basis, sampled by adding residual (randomly sampled) to 
+    the same basis stroke.
+    """
+    from pythonlib.tools.stroketools import strokesInterpolate2, strokes_bounding_box_dimensions
+    import random
+
+    # simulate strokes
+    if False:
+        strok_basis = dfresiduals[dfresiduals["shape_orig"] == shape_basis]["strok_basis"].values[0]
+    else:
+        tmp = dfbasis[dfbasis["shape"] == shape_basis]
+        assert len(tmp)==1
+        strok_basis = tmp["strok"].values[0]
+        # Interpolate spatially
+        strok_basis = strokesInterpolate2([strok_basis], N=["npts", len(strok_basis)], base="space")[0]
+
+    inds = random.sample(range(len(dfresiduals)), nsample)
+
+    strokes_resid = dfresiduals.iloc[inds]["strok_resid"]
+    diameters = dfresiduals.iloc[inds]["diam_basis"]
+
+    # rescale residuals to match new diam
+    d_basis = strokes_bounding_box_dimensions([strok_basis])[2]
+    weights = [d_basis/d for d in diameters]
+    strokes_resid = [s_resi*w for s_resi, w in zip(strokes_resid, weights)]
+
+    strokes_simulated = [s+strok_basis[:, :2] for s in strokes_resid]
+
+    if PLOT:
+        from pythonlib.dataset.dataset_strokes import DatStrokes
+        ds = DatStrokes()
+        strokes = dfresiduals[dfresiduals["shape_orig"] == shape_basis]["strok_rescaled"].tolist()
+        ds.plot_multiple_strok([strok_basis] + strokes[:10], overlay=False);
+        ds.plot_multiple_strok([strok_basis] + strokes_simulated[:10], overlay=False);
+        assert False, "to aboid too many plots"
+
+    return strokes_simulated
