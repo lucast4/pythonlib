@@ -3172,6 +3172,9 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     # Store index
     df["_index"] = df.index
 
+    if levels_var is not None:
+        assert lenient_allow_data_if_has_n_levels == len(levels_var), "incompatible. you made mistake in entering params"
+        
     if lenient_allow_data_if_has_n_levels is None:
         # levels_var must be extracted here from entire dataset 
         assert levels_var is None, "you cant both rerquest to get all levels and also tell me which levels to get."
@@ -4354,3 +4357,62 @@ def remove_outlier_values(df, thresh_zscore=3):
     inds_good = df[(np.abs(stats.zscore(df)) < thresh_zscore).all(axis=1)].index.tolist()
     return inds_good
 
+def remove_outlier_values_tukey(df, col, niqr = 2, method="return_indices", PLOT=False,
+                                remove_directions="both"):
+    """ remove rows with outliers, based on iqr (tukey method)
+    outlers are those either < 25th percentile - 1.5*iqr, or above...
+    INPUTS:
+    - replace_with_nan, then doesnt remove row, but instead replaces with nan.
+    RETURNS:
+    - if returns df (based on method) then it is copy
+    """
+    from scipy.stats import iqr
+
+    df = df.copy()
+
+    # Get the upper and lower limits
+    x = df[col]
+    lowerlim = np.percentile(x, [25])[0] - niqr*iqr(x)
+    upperlim = np.percentile(x, [75])[0] + niqr*iqr(x)
+    if remove_directions=="both":
+        outliers = (x<lowerlim) | (x>upperlim)
+    elif remove_directions=="lower":
+        # Then only remove outliers that are too low
+        outliers = (x<lowerlim)
+    elif remove_directions=="higher": 
+        outliers = (x>upperlim)
+    else:
+        assert False
+
+    if PLOT:
+        print("Lower and upper lim for outlier detection, feature=", col)
+        print(lowerlim, upperlim)
+        print("this many outliers / total")
+        print(sum(outliers), "/", len(outliers))
+
+    if PLOT:
+        fig, ax = plt.subplots(1,1, figsize=(10,5))
+        x.hist(ax=ax, bins=30)
+        ax.plot(x, np.ones_like(x), "o")
+        ax.axvline(lowerlim)
+        ax.axvline(upperlim)
+
+    # x[outliers] = np.nan
+    # print(outliers)
+    inds_outliers = outliers[outliers==True].index
+
+    if method=="replace_with_nan":
+        # print("Replacing outliers with nan")
+        # print(inds_outliers)
+        df[col] = df[col].mask(outliers)
+        return df
+    elif method=="remove_rows":
+        # print("Removing outliers")
+        # print(inds_outliers)
+        df = df.drop(inds_outliers).reset_index(drop=True)
+        return df
+    elif method=="return_indices":
+        return inds_outliers
+    else:
+        print(method)
+        assert False
