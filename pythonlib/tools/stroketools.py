@@ -2089,6 +2089,113 @@ def split_strokes_large_jumps(strokes, thresh=50):
 
     return strokes_new
 
+def split_strok_into_two_by_time(strok, off_time_1, on_time_2, PRINT=False):
+    """
+    Split a trajectory into two by inserting a gap.
+    PARAMS:
+    - off_time_1, the time (in sec) to cut off first stroke (ie start of gap)
+    - on_time_2, the time onset of 2nd stroke (ie end of gap).
+    RETURNS:
+    - strok1, strok2
+    """
+    
+    # sanity checks
+    assert isinstance(strok, np.ndarray)
+    idx_time = strok.shape[1]-1
+    times = strok[:, idx_time]
+
+    assert off_time_1 > times[0]
+    assert on_time_2 < times[-1]
+    assert on_time_2 > off_time_1
+
+    ind_off = np.argmin(np.abs(times - off_time_1))
+    ind_on = np.argmin(np.abs(times - on_time_2))
+    
+    strok1 = strok[:ind_off+1, :].copy()
+    strok2 = strok[ind_on:, :].copy()
+
+    if PRINT:
+        print(strok.shape, ind_off, ind_on)
+        print(strok[0, idx_time], strok[-1, idx_time])
+        print(strok1[0, idx_time], strok1[-1, idx_time])
+        print(strok2[0, idx_time], strok2[-1, idx_time])
+
+    return strok1, strok2
+
+def split_strokes2_to_align_to_strokes1(strokes1, strokes2, DEBUG=False):
+    """
+    You believe that strokes1 is subset fo strokes2 (in correct order),
+    except that one strok in strokes2 is actually split into two in
+    strokes1. e..g,
+    strokes1 = [3, 4, 5a, 5b, 6]
+    strokes2 = [1, 2, 3, 4, 5, 6, 7]. 
+
+    And the onsets (in sec) for the strokes are aligned.
+
+    Then this finds how to split storkes2 to mach strokes1.
+    i.e, returns:
+    strokes2 = [1, 2, 3, 4, 5a, 5b, 6, 7]. 
+    """
+
+    assert len(strokes1) <= len(strokes2), "this is assumed, in step that pads strokes 1"
+
+    ### Get the arrays of onset times
+    idx_time_1 = strokes1[0].shape[1]-1
+    idx_time_2 = strokes2[0].shape[1]-1
+    onset_times_dataset = np.array([s[0,idx_time_1] for s in strokes1])
+    onset_times_cam = np.array([s[0,idx_time_2] for s in strokes2])
+
+    ### Find where strok1 matches strok2
+    # - hacky, to make sure that edge strokes for strokes 2 are not incorrectly matched to strokes in storkes1
+    tmp = np.insert(onset_times_dataset, 0, onset_times_dataset[0]-0.2)
+    tmp = np.append(tmp, tmp[-1]+0.2)
+    matches = [np.argmin(np.abs(tmp - t)) for t in onset_times_cam]
+    if matches[0]<matches[1]:
+        matches = [m-1 for m in matches]
+
+    if DEBUG:
+        print("for each cam stroke, which dataset stroke does it match: ", matches)
+        print(np.   diff(matches))
+
+    ### Get the cam stroke that skips an index
+    if False:
+        if len(np.argwhere(np.diff(matches)==2))==1:
+            # Then something like matches = [0, 0, 1, 2, 4].
+            idx_cam_stroke_split = int(np.argwhere(np.diff(matches)==2)[0]) # the strok to split into two
+        elif len(np.argwhere(np.diff(matches)==2))==0:
+            # Still possible. This means the last strok in strokes2 should be split.
+            idx_cam_stroke_split = len(strokes2)-1
+        else:
+            print(matches)
+            assert False, "probably strokes2 and strokes1 are not related"
+    else:
+        assert len(np.argwhere(np.diff(matches)==2))==1
+        idx_cam_stroke_split = int(np.argwhere(np.diff(matches)==2)[0]) # the strok to split into two
+    
+    # Which dataset strokes to consider
+    idx_dataset_first_stroke = matches[idx_cam_stroke_split]
+    idx_dataset_second_stroke = idx_dataset_first_stroke+1
+
+    if DEBUG:
+        print("Splitting cam stroke: ", idx_cam_stroke_split, "to match dataset strokes : ", idx_dataset_first_stroke, idx_dataset_second_stroke)
+        # strokes1[idx_dataset_first_stroke][0, 2], strokes1[idx_dataset_second_stroke][0, 2]
+        # strokes2[idx_cam_stroke_split][0, 3], strokes2[idx_cam_stroke_split+1][0, 3]
+
+    # Check that the onset of the next cam stroke is after the offset of the 2nd dataset stroke
+    if len(strokes2)>idx_cam_stroke_split+1:
+        assert strokes2[idx_cam_stroke_split+1][0, 3] > strokes1[idx_dataset_second_stroke][-1, 2]
+    off_time_first_stroke = strokes1[idx_dataset_first_stroke][-1, 2]
+    on_time_second_stroke = strokes1[idx_dataset_second_stroke][0, 2]
+
+    # Split the cam stroke into two
+    strok1, strok2 = split_strok_into_two_by_time(strokes2[idx_cam_stroke_split], off_time_first_stroke, on_time_second_stroke)
+    if DEBUG:
+        print(strok1.shape, strok2.shape)
+
+    # Replace the cam stroke with these two
+    strokes2_split = strokes2[:idx_cam_stroke_split] + [strok1, strok2] + strokes2[idx_cam_stroke_split+1:] 
+
+    return strokes2_split
 
 def insert_strok_into_strokes_to_maximize_alignment(strokes_template, strokes_mod, traj, 
     do_insertion=False):
