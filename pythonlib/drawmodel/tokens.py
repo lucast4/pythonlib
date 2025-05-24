@@ -170,6 +170,41 @@ map_shsem_to_new_shsem = {
     "zigzagSq-UU-0.0":"squiggle3-UU-0.0"
 }
 
+map_sh_to_new_sh = {
+    'zigzagSq-1-1-0': 'squiggle3-3-2-0',
+    'zigzagSq-1-1-1': 'squiggle3-3-2-1',
+    'zigzagSq-1-2-0': 'squiggle3-3-1-0',
+    'zigzagSq-1-2-1': 'squiggle3-3-1-1',
+    'usquare-1-1-0': 'arcdeep-4-1-0',
+    'usquare-1-2-0': 'arcdeep-4-2-0',
+    'usquare-1-3-0': 'arcdeep-4-3-0',
+    'usquare-1-4-0': 'arcdeep-4-4-0',
+}
+
+# Main 21 used in paper
+LIST_SHAPES_MAIN_21 = [
+    'Lcentered-4-2-1',
+    'Lcentered-4-2-0',
+    'Lcentered-4-3-0',
+    'Lcentered-4-4-0',
+    'V-2-1-0',
+    'V-2-2-0',
+    'V-2-3-0',
+    'V-2-4-0',
+    'arcdeep-4-1-0',
+    'arcdeep-4-2-0',
+    'arcdeep-4-3-0',
+    'arcdeep-4-4-0',
+    'circle-6-1-0',
+    'line-8-1-0',
+    'line-8-2-0',
+    'line-8-3-0',
+    'line-8-4-0',
+    'squiggle3-3-1-0',
+    'squiggle3-3-2-0',
+    'squiggle3-3-2-1'
+    ]
+
 # Main 21 used in paper
 LIST_SHAPES_SEM_MAIN_21 =     [
     'Lcentered-UL-UL',

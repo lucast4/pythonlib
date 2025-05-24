@@ -1206,7 +1206,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         annotate_heatmap=True, zlims=(None, None),
         diverge=False, dosort_colnames=False,
         list_cat_1 = None, list_cat_2 = None,
-        sort_rows_by_mean_col_value=False):
+        sort_rows_by_mean_col_value=False,
+        diverge_center_dark=False):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
@@ -1313,7 +1314,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
 
     if plot_heatmap:
         fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims,
-                                       diverge=diverge, norm_method=norm_method)
+                                       diverge=diverge, norm_method=norm_method,
+                                       diverge_center_dark=diverge_center_dark)
         ax.set_xlabel(col2)
         ax.set_ylabel(col1)
         ax.set_title(agg_method)
@@ -2391,7 +2393,8 @@ def grouping_plot_n_samples_heatmap_var_vs_grpvar(df, var, vars_grp):
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
     norm_method=None, annotate_heatmap=True, row_levels=None,
     sort_rows_by_mean_col_value=False, also_return_df=False,
-    n_columns=3):
+    n_columns=3,
+    zlims=None, diverge=False):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2450,7 +2453,8 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         _df, _, _, _ = convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
             list_cat_1 = list_var1, list_cat_2 = list_var2,
             norm_method=norm_method, annotate_heatmap=annotate_heatmap,
-            sort_rows_by_mean_col_value=sort_rows_by_mean_col_value)
+            sort_rows_by_mean_col_value=sort_rows_by_mean_col_value,
+            zlims=zlims, diverge=diverge)
 
         ax.set_title(dum)
 
@@ -3788,7 +3792,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
                           ZLIMS=None, title_size=6, ncols=3,
-                        row_values= None, col_values=None, W=5, agg_method="mean"):
+                        row_values= None, col_values=None, W=5, agg_method="mean",
+                        diverge_center_dark=False):
     """ 
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
@@ -3869,7 +3874,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                                 val_name,
                                 ax=ax, annotate_heatmap=annotate_heatmap,
                                 diverge=diverge, zlims=zlims, norm_method=norm_method,
-            list_cat_1 = row_values, list_cat_2=col_values
+            list_cat_1 = row_values, list_cat_2=col_values, diverge_center_dark=diverge_center_dark
         )
         ax.set_title(lev_subplot, color="r", fontsize=title_size)
         DictSubplotsDf[lev_subplot] = df2d

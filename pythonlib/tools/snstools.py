@@ -324,9 +324,9 @@ def heatmap_mat(datamat, ax=None, annotate_heatmap=True, zlims=(None, None),
                    cbar=cbar, continuous_axes=continuous_axes)
 
 def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
-        robust=False, diverge=False, labels_row=None, labels_col=None,
+            robust=False, diverge=False, labels_row=None, labels_col=None,
             rotation=90, rotation_y=0, SHAPE="square", norm_method=None,
-            cbar=True, continuous_axes=False):
+            cbar=True, continuous_axes=False, diverge_center_dark=False):
     """ 
     Plot a heatmap dictated by cols and rows of df, where the cells correspond to values
     in df
@@ -460,7 +460,10 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         # 
         # center = 0
         # cmap = sns.color_palette("vlag")
-        cmap = sns.diverging_palette(220, 20, as_cmap=True)
+        if diverge_center_dark:
+            cmap = sns.diverging_palette(220, 20, center="dark", as_cmap=True)
+        else:
+            cmap = sns.diverging_palette(220, 20, as_cmap=True)
         lab_add = 0.5
     else:
         # center = None
