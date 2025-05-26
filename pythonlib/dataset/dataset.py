@@ -291,7 +291,7 @@ class Dataset(object):
         else:
             # then you passed in pandas dataframes directly.
             self._store_dataframes(inputs, append_list)
-
+        
         if not self._reloading_saved_state:
             self._cleanup(
                 remove_dot_strokes = self.ParamsCleanup["remove_dot_strokes"],
@@ -12157,7 +12157,7 @@ class Dataset(object):
     def plot_strokes_timecourse_speed_vel(self, strokes, ax, plotver="speed", 
             align_to="first_touch", 
             overlay_stroke_periods=False,
-            nolegend=False, alpha=0.8):
+            nolegend=False, alpha=0.8, color="b"):
         """ Helper to plot strokes on ax, represnting either speed or velocity
         PARAMS;
         - 
@@ -12178,7 +12178,7 @@ class Dataset(object):
         # Which plotting function?
         return plotDatStrokesVelSpeed(strokes, ax, fs, plotver,
             overlay_stroke_periods=overlay_stroke_periods, nolegend=nolegend,
-            alpha=alpha)
+            alpha=alpha, pcol=color)
 
         
     def plotMultStrokesTimecourse(self, strokes_list, idxs=None, plotver="speed",

@@ -183,7 +183,7 @@ map_sh_to_new_sh = {
 
 # Main 21 used in paper
 LIST_SHAPES_MAIN_21 = [
-    'Lcentered-4-2-1',
+    'Lcentered-4-1-0',
     'Lcentered-4-2-0',
     'Lcentered-4-3-0',
     'Lcentered-4-4-0',
@@ -201,9 +201,11 @@ LIST_SHAPES_MAIN_21 = [
     'line-8-3-0',
     'line-8-4-0',
     'squiggle3-3-1-0',
+    'squiggle3-3-1-1',
     'squiggle3-3-2-0',
     'squiggle3-3-2-1'
     ]
+assert len(LIST_SHAPES_MAIN_21)==21
 
 # Main 21 used in paper
 LIST_SHAPES_SEM_MAIN_21 =     [
