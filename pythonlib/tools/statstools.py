@@ -446,7 +446,7 @@ def empiricalPval(stat_actual, stats_shuff, side="two"):
         # n = sum(np.abs(stats_shuff)<=np.abs(stat_actual)) + 1 # THIS WAS BUG
         n = sum(np.abs(stats_shuff)>np.abs(stat_actual)) + 1
     elif side=="left":
-        # n = sum(stats_shuff<=stat_actual) + 1
+        # predict that data is to left
         n = sum(stats_shuff<=stat_actual) + 1
     elif side=="right":
         n = sum(stats_shuff>=stat_actual) + 1
@@ -1364,3 +1364,55 @@ def decode_upsample_dataset(X_train, labels_train, plot_resampled_data_path_nosu
     # return X_train, labels_train
 
 
+def balanced_subsamples(N, K=5, S=None, seed=None, PRINT=False):
+    """
+    Generate K subsamples from N datapoints such that:
+    - Each subsample has size S (default: N // K)
+    - Each datapoint appears approximately evenly across subsamples
+    - Sampling is without replacement within each subsample
+
+    PARAMS:
+    - N, length of original indices to sample from
+    - K, number of subsamples to return.
+    - S, size of each subsammple
+
+    Returns:
+    - list of lits of ints, each are indices.
+
+    Exmaple usage:
+
+    N = 60  # number of datapoints
+    K = 5    # number of subsamples
+    S = 30   # size of each subsample
+
+    subsamples, counts = balanced_subsamples(N, K=K, S=S, PRINT=True)
+    """
+    rng = np.random.default_rng(seed)
+    if S is None:
+        S = N // K
+
+    counts = np.zeros(N, dtype=int)
+    subsamples = []
+
+    for _ in range(K):
+        # Prioritize items with lowest counts (i.e., least used so far)
+        probs = (counts.max() - counts + 1).astype(float) ** 5 # exponent, to more strongly bias towards those not yet gotten
+        probs /= probs.sum()
+        if False:
+            print(probs)
+
+        # Sample without replacement, weighted by inverse usage
+        chosen = rng.choice(N, size=S, replace=False, p=probs)
+        counts[chosen] += 1
+        assert len(chosen)==len(set(chosen))
+        subsamples.append(sorted(chosen))
+
+    if PRINT:
+        # Print each subsample
+        for i, subsample in enumerate(subsamples):
+            print(f"Subsample {i+1}: {subsample}")
+
+        # Check how often each datapoint was used
+        print("Usage counts per index:", counts)
+
+    return subsamples, counts

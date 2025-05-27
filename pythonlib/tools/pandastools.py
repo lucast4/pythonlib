@@ -1206,7 +1206,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         annotate_heatmap=True, zlims=(None, None),
         diverge=False, dosort_colnames=False,
         list_cat_1 = None, list_cat_2 = None,
-        sort_rows_by_mean_col_value=False):
+        sort_rows_by_mean_col_value=False,
+        diverge_center_dark=False):
     """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
@@ -1313,7 +1314,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
 
     if plot_heatmap:
         fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims,
-                                       diverge=diverge, norm_method=norm_method)
+                                       diverge=diverge, norm_method=norm_method,
+                                       diverge_center_dark=diverge_center_dark)
         ax.set_xlabel(col2)
         ax.set_ylabel(col1)
         ax.set_title(agg_method)
@@ -2390,7 +2392,9 @@ def grouping_plot_n_samples_heatmap_var_vs_grpvar(df, var, vars_grp):
 
 def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None, FIGSIZE=7,
     norm_method=None, annotate_heatmap=True, row_levels=None,
-    sort_rows_by_mean_col_value=False, also_return_df=False):
+    sort_rows_by_mean_col_value=False, also_return_df=False,
+    n_columns=3,
+    zlims=None, diverge=False):
     """ Plot heatmap of num cases of 2 variables (conjucntions), each subplot conditioned
     on a third variable (value of conjcjtions of vars_others).
     NOTE: this is better than extract_with_levels_of_conjunction_vars because here
@@ -2431,7 +2435,7 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     if len(list_dummy)<3:
         ncols = len(list_dummy)
     else:
-        ncols = 3
+        ncols = n_columns
     nrows = int(np.ceil(len(list_dummy)/ncols))
     
     # avoid bug
@@ -2449,7 +2453,8 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
         _df, _, _, _ = convert_to_2d_dataframe(dfthis, var1, var2, plot_heatmap=True, ax=ax,
             list_cat_1 = list_var1, list_cat_2 = list_var2,
             norm_method=norm_method, annotate_heatmap=annotate_heatmap,
-            sort_rows_by_mean_col_value=sort_rows_by_mean_col_value)
+            sort_rows_by_mean_col_value=sort_rows_by_mean_col_value,
+            zlims=zlims, diverge=diverge)
 
         ax.set_title(dum)
 
@@ -2539,10 +2544,14 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
 
     if sorted_by_keys:
         list_keys = list(outdict.keys())
-        # print(list_keys)
+        # print(list_keys[:5])
         list_keys = sort_mixed_type(list_keys)
-        # print(list_keys)
+        # print(list_keys[:30])
+        # print(sorted(list_keys[:30]))
+        # print(sort_mixed_type(list_keys[:30]))
+        # assert False
         # adsfsf
+        
         outdict = {k:outdict[k] for k in list_keys}
         # print(k)
         # asdsad
@@ -3167,6 +3176,9 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     # Store index
     df["_index"] = df.index
 
+    if levels_var is not None:
+        assert lenient_allow_data_if_has_n_levels == len(levels_var), "incompatible. you made mistake in entering params"
+        
     if lenient_allow_data_if_has_n_levels is None:
         # levels_var must be extracted here from entire dataset 
         assert levels_var is None, "you cant both rerquest to get all levels and also tell me which levels to get."
@@ -3542,7 +3554,7 @@ def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
                           maintain_block_temporal_structure=False, shift_level="datapt",
                           return_in_input_order=True):
     """ Hierarhical, this means shuffle only the variables in list_var_shuff, within
-    each level of list_var_noshuff. Moreover, all var in lisT_var_shuff will
+    each level of list_var_noshuff. Moreover, all var in list_var_shuff will
     remain correlated. e.g., if want to shuffle all cases of (char, seq) within
     each epoch, have list_var_noshuff = ["epoch"], and list_var_shuff = ["char", "seq"],
     which does dfs for each level of "epoch" one by one, and within each one, shuffle
@@ -3562,7 +3574,7 @@ def shuffle_dataset_hierarchical(df, list_var_shuff, list_var_noshuff,
 
     # For each group of var, shuffle the othervar
     list_grp = []
-    for i, grp in df.groupby(list_var_noshuff):
+    for _, grp in df.groupby(list_var_noshuff):
         if len(list_var_shuff)==1:
             grp = shuffle_dataset_singlevar(grp, list_var_shuff[0], maintain_block_temporal_structure=maintain_block_temporal_structure,
                                    shift_level=shift_level)
@@ -3780,7 +3792,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                           diverge=False, share_zlim=False, norm_method=None,
                           annotate_heatmap=False, return_dfs=False,
                           ZLIMS=None, title_size=6, ncols=3,
-                        row_values= None, col_values=None, W=5, agg_method="mean"):
+                        row_values= None, col_values=None, W=5, agg_method="mean",
+                        diverge_center_dark=False):
     """ 
     Plot heatmaps, one for each level of var_subplot, with each having columsn and rows
     given by those vars. Does aggregation to generate one scalar perc
@@ -3861,7 +3874,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
                                 val_name,
                                 ax=ax, annotate_heatmap=annotate_heatmap,
                                 diverge=diverge, zlims=zlims, norm_method=norm_method,
-            list_cat_1 = row_values, list_cat_2=col_values
+            list_cat_1 = row_values, list_cat_2=col_values, diverge_center_dark=diverge_center_dark
         )
         ax.set_title(lev_subplot, color="r", fontsize=title_size)
         DictSubplotsDf[lev_subplot] = df2d
@@ -4349,3 +4362,62 @@ def remove_outlier_values(df, thresh_zscore=3):
     inds_good = df[(np.abs(stats.zscore(df)) < thresh_zscore).all(axis=1)].index.tolist()
     return inds_good
 
+def remove_outlier_values_tukey(df, col, niqr = 2, method="return_indices", PLOT=False,
+                                remove_directions="both"):
+    """ remove rows with outliers, based on iqr (tukey method)
+    outlers are those either < 25th percentile - 1.5*iqr, or above...
+    INPUTS:
+    - replace_with_nan, then doesnt remove row, but instead replaces with nan.
+    RETURNS:
+    - if returns df (based on method) then it is copy
+    """
+    from scipy.stats import iqr
+
+    df = df.copy()
+
+    # Get the upper and lower limits
+    x = df[col]
+    lowerlim = np.percentile(x, [25])[0] - niqr*iqr(x)
+    upperlim = np.percentile(x, [75])[0] + niqr*iqr(x)
+    if remove_directions=="both":
+        outliers = (x<lowerlim) | (x>upperlim)
+    elif remove_directions=="lower":
+        # Then only remove outliers that are too low
+        outliers = (x<lowerlim)
+    elif remove_directions=="higher": 
+        outliers = (x>upperlim)
+    else:
+        assert False
+
+    if PLOT:
+        print("Lower and upper lim for outlier detection, feature=", col)
+        print(lowerlim, upperlim)
+        print("this many outliers / total")
+        print(sum(outliers), "/", len(outliers))
+
+    if PLOT:
+        fig, ax = plt.subplots(1,1, figsize=(10,5))
+        x.hist(ax=ax, bins=30)
+        ax.plot(x, np.ones_like(x), "o")
+        ax.axvline(lowerlim)
+        ax.axvline(upperlim)
+
+    # x[outliers] = np.nan
+    # print(outliers)
+    inds_outliers = outliers[outliers==True].index
+
+    if method=="replace_with_nan":
+        # print("Replacing outliers with nan")
+        # print(inds_outliers)
+        df[col] = df[col].mask(outliers)
+        return df
+    elif method=="remove_rows":
+        # print("Removing outliers")
+        # print(inds_outliers)
+        df = df.drop(inds_outliers).reset_index(drop=True)
+        return df
+    elif method=="return_indices":
+        return inds_outliers
+    else:
+        print(method)
+        assert False

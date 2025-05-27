@@ -291,7 +291,7 @@ class Dataset(object):
         else:
             # then you passed in pandas dataframes directly.
             self._store_dataframes(inputs, append_list)
-
+        
         if not self._reloading_saved_state:
             self._cleanup(
                 remove_dot_strokes = self.ParamsCleanup["remove_dot_strokes"],
@@ -747,37 +747,39 @@ class Dataset(object):
         - replace_with_nan, then doesnt remove row, but instead replaces with nan.
         """
 
-        from scipy.stats import iqr
+        from pythonlib.tools.pandastools import remove_outlier_values_tukey
+        self.Dat = remove_outlier_values_tukey(self.Dat, col, niqr, method="replace_with_nan")
+        # from scipy.stats import iqr
 
-        # Get the upper and lower limits
-        x = self.Dat[col]
-        lowerlim = np.percentile(x, [25])[0] - niqr*iqr(x)
-        upperlim = np.percentile(x, [75])[0] + niqr*iqr(x)
-        outliers = (x<lowerlim) | (x>upperlim)
+        # # Get the upper and lower limits
+        # x = self.Dat[col]
+        # lowerlim = np.percentile(x, [25])[0] - niqr*iqr(x)
+        # upperlim = np.percentile(x, [75])[0] + niqr*iqr(x)
+        # outliers = (x<lowerlim) | (x>upperlim)
 
-        print("Lower and upper lim for outlier detection, feature=", col)
-        print(lowerlim, upperlim)
-        print("this many outliers / total")
-        print(sum(outliers), "/", len(outliers))
+        # print("Lower and upper lim for outlier detection, feature=", col)
+        # print(lowerlim, upperlim)
+        # print("this many outliers / total")
+        # print(sum(outliers), "/", len(outliers))
 
-        if False:
-            fig, ax = plt.subplots(1,1, figsize=(10,5))
-            x.hist(ax=ax, bins=30)
-            ax.plot(x, np.ones_like(x), "o")
-            ax.axvline(lowerlim)
-            ax.axvline(upperlim)
+        # if False:
+        #     fig, ax = plt.subplots(1,1, figsize=(10,5))
+        #     x.hist(ax=ax, bins=30)
+        #     ax.plot(x, np.ones_like(x), "o")
+        #     ax.axvline(lowerlim)
+        #     ax.axvline(upperlim)
 
-        # x[outliers] = np.nan
-        # print(outliers)
-        inds_outliers = outliers[outliers==True].index
-        if replace_with_nan:
-            print("Replacing outliers with nan")
-            print(inds_outliers)
-            self.Dat[col] = self.Dat[col].mask(outliers)
-        else:
-            print("Removing outliers")
-            print(inds_outliers)
-            self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
+        # # x[outliers] = np.nan
+        # # print(outliers)
+        # inds_outliers = outliers[outliers==True].index
+        # if replace_with_nan:
+        #     print("Replacing outliers with nan")
+        #     print(inds_outliers)
+        #     self.Dat[col] = self.Dat[col].mask(outliers)
+        # else:
+        #     print("Removing outliers")
+        #     print(inds_outliers)
+        #     self.Dat = self.Dat.drop(inds_outliers).reset_index(drop=True)
 
     ################# BLOCKPARAMS
     # (NOTE: default blockaprams, not hotkey updated)
@@ -10728,7 +10730,8 @@ class Dataset(object):
         dflab["locs_drawn_x"] = list_locs_drawn_x   
         
     ##################################### CHAR CLUSTER RESULTS
-    def charclust_shape_labels_extract_presaved_from_DS(self, skip_if_labels_not_found=False):
+    def charclust_shape_labels_extract_presaved_from_DS(self, skip_if_labels_not_found=False,
+                                                        which_shapes=None, Diego_use_main_21=True):
         """ Good - Load the shape labels already computed and saved using
         DS (see character_cluster_extract_shape_labels.py). And then
         stores in self.Dat['charclust_shape_seq'], each item is
@@ -10754,10 +10757,18 @@ class Dataset(object):
 
         nstart = len(self.Dat)
 
+        if Diego_use_main_21 and self.animals(True)[0]=="Diego":
+            # Then use the main 21 prims, not all the prims (i.e not U and ZZ)
+            which_shapes = "main_21"
+        else:
+            which_shapes = None
+        
         # First, get all the strokes.
         DS = preprocess_dataset_to_datstrokes(self, "all_no_clean") # get all strokes.
-        DS, params_clust = DS.clustergood_load_saved_cluster_shape_classes(
-            skip_if_labels_not_found=skip_if_labels_not_found)
+        DS, _ = DS.clustergood_load_saved_cluster_shape_classes(
+            skip_if_labels_not_found=skip_if_labels_not_found,
+            which_shapes=which_shapes)
+        
         if DS is None:
             # Then no data found
             print("Skipping cluster labels extractioun! no data found")
@@ -12146,7 +12157,7 @@ class Dataset(object):
     def plot_strokes_timecourse_speed_vel(self, strokes, ax, plotver="speed", 
             align_to="first_touch", 
             overlay_stroke_periods=False,
-            nolegend=False, alpha=0.8):
+            nolegend=False, alpha=0.8, color="b"):
         """ Helper to plot strokes on ax, represnting either speed or velocity
         PARAMS;
         - 
@@ -12167,7 +12178,7 @@ class Dataset(object):
         # Which plotting function?
         return plotDatStrokesVelSpeed(strokes, ax, fs, plotver,
             overlay_stroke_periods=overlay_stroke_periods, nolegend=nolegend,
-            alpha=alpha)
+            alpha=alpha, pcol=color)
 
         
     def plotMultStrokesTimecourse(self, strokes_list, idxs=None, plotver="speed",

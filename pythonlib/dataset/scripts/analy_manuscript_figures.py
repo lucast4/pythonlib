@@ -2174,11 +2174,316 @@ def recording_units_counts_plot(DFall, savedir):
 
     writeStringsToFile(f"{savedir}/count_summary_split_strings-2.txt", strings)
 
+def stroke_shape_cluster_database_save_shuffled(animal):
+    """
+    Generate and save new shuffled prims, splitting into two halves and reconnecting them.
+    Takes the original prims, and makes a new prim from each pair, and then samples a new set, doing this 
+    like 5 times. Each time apply filters to make sure the prims are different from eahc other, and different
+    from the base prims (to some sufficient extent).
+
+    RETURNS:
+    - Saves the shuffled prims, each of the sets, as pickled strokes, along with figures of the prims
+    in a grid.
+    """
+    from pythonlib.dataset.dataset_strokes import DatStrokes
+    from pythonlib.tools.stroketools import merge_interpolate_concat_strokes_halves
+
+    ### (1) Load original basis set
+    DS = DatStrokes()
+    which_basis_set = animal
+    which_shapes = "main_21"
+    dfbasis, _, _ = DS.stroke_shape_cluster_database_load_helper(
+        which_basis_set=which_basis_set,
+        which_shapes=which_shapes, plot_examples=True)
+    # list_strok_basis = dfbasis["strok"].tolist()
+    # list_shape_basis = dfbasis["shape"].tolist()
+
+    ### (2) Get new basis that concats halves, doing this across all possible pairs
+    dfbasis_merged = merge_interpolate_concat_strokes_halves(dfbasis)
+    
+    if False: # using different method, it checks distance to orig stroke below.
+        strokes_base = dfbasis["strok"].tolist()
+        Clorig = DS.distgood_compute_beh_beh_strok_distances(strokes_base, strokes_base, PLOT=False, invert_score=True)
+        # Filter this list to those that are not too close to any of the original prims.
+        ma = Clorig._rsa_matindex_generate_upper_triangular()
+        fig, ax = plt.subplots()
+        x = Clorig.Xinput[ma].flatten()
+        ax.hist(x, bins=20)
+
+        min_score = np.percentile(x, [5])[0]
+
+        ma_bad_close_to_orig = Clmerged.Xinput<min_score
+
+        Clmerged.rsa_matindex_plot_bool_mask(ma_bad_close_to_orig)
+    
+    # Find the cases that are too twisted (intersect with self)
+    from pythonlib.tools.stroketools import has_self_intersection
+    dfbasis_merged["self_intersects"] = [has_self_intersection(strok) for strok in dfbasis_merged["strok"]]
+    inds_bad_self_intersect = dfbasis_merged[dfbasis_merged["self_intersects"]==True].index.tolist()
+
+    ### (3) Determine how many new base prims to sample from each bin (binning pairwise distances)
+    # Extract a random subset of prims
+    # Do this in separate subsets of data based on their similarity, trying to match
+    # the original data's distribtuion of pairwise distances
+    from pythonlib.tools.nptools import bin_values
+    strokes_base = dfbasis["strok"].tolist()
+    Clorig = DS.distgood_compute_beh_beh_strok_distances(strokes_base, strokes_base, PLOT=False, invert_score=True)
+    ma_ut = Clorig._rsa_matindex_generate_upper_triangular()
+    dists_orig = Clorig.Xinput[ma_ut].flatten()
+
+    nbins = 6
+    dists_orig_binned, bins = bin_values(dists_orig, nbins, return_bins=True) # 1, 2, 3. ,, (strings). 
+    dict_bins_nsamp = {}
+    for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
+        key = f"{i+1}"
+        n = sum([x==key for x in dists_orig_binned]) # num cases (pairs of strokes)
+        dict_bins_nsamp[key] = [(b1, b2), n]
+
+    # Normalize the n, i.e., determine how many strokes to take per bin
+    ntot = sum([v[1] for v in dict_bins_nsamp.values()])
+    ntake_per_bin = [int(np.ceil(len(dfbasis)*v[1]/ntot)) for v in dict_bins_nsamp.values()]
+    print(ntake_per_bin)
+    ntake_per_bin = [np.max([2, n]) for n in ntake_per_bin] # make sure at least 2, so that you are taking a distance too.
+    while sum(ntake_per_bin)>len(dfbasis):
+        indmax = np.argmax(ntake_per_bin)
+        ntake_per_bin[indmax] -= 1
+
+    # Update the final dict.
+    for i, (k, v) in enumerate(dict_bins_nsamp.items()):
+        v[1] = ntake_per_bin[i]
+    print("Final n indices to take per bin:", ntake_per_bin)
+    print(dict_bins_nsamp)
+
+    ### (4) Prep, get pairwise between all new strokes vs. base strokes, for use below.
+    if False:
+        strokes_base = dfbasis["strok"].tolist()
+        strokes_merged = dfbasis_merged["strok"].tolist()
+        Clmerged = DS.distgood_compute_beh_beh_strok_distances(strokes_merged, strokes_base, PLOT=False, invert_score=True)
+
+    ### (5) Sample random sets
+    # MIN_SCORE_VS_OTHERS, MIN_SCORE_VS_BASIS = np.percentile(dists_orig, [0, 2.5])
+    MIN_SCORE_VS_OTHERS, MIN_SCORE_VS_BASIS = np.percentile(dists_orig, [0, 0])
+    if animal=="Diego":
+        MIN_SCORE_VS_OTHERS = MIN_SCORE_VS_OTHERS - 0.02
+    elif animal=="Pancho":
+        # He has fewer prims, pool of prims, so this is more lenient.
+        MIN_SCORE_VS_OTHERS = MIN_SCORE_VS_OTHERS - 0.05
+        MIN_SCORE_VS_BASIS = MIN_SCORE_VS_BASIS - 0.05
+    else:
+        print(animal)
+        assert False
+
+    # Params for testing curvature
+    from pythonlib.tools.stroketools import strokesCurvature, sample_rate_from_strokes
+    MAX_CURV = 0.8 # curvature
+    strok = dfbasis_merged["strok"].values[0]
+    npts = strok.shape[0]
+    curv_fs = sample_rate_from_strokes([strok])
+    curv_on = int(np.ceil(0.1*npts))
+    curv_off = int(np.floor(0.9*npts))
+
+    from pythonlib.tools.expttools import makeTimeStamp
+    timestamp = makeTimeStamp()
+    SAVEDIR, _ = DS._stroke_shape_cluster_database_path(animal=which_basis_set, 
+                                                        expt="shuffled_first_second_half", 
+                                                        date=timestamp)
+    os.makedirs(SAVEDIR, exist_ok=True)
+    
+    ### Save dataframes Save additional things
+    dfbasis.to_pickle(f"{SAVEDIR}/dfbasis_orig.pkl")
+    dfbasis_merged.to_pickle(f"{SAVEDIR}/dfbasis_merged.pkl")
+
+    n_iters = 10
+    for iter_num in range(n_iters):
+        
+        try:
+            # For each bin, sample n cases
+            import random
+
+            # For each bin, sample n cases
+            inds_take_all = []
+            inds_taken_orig_onset = []
+            inds_taken_orig_offset = []
+
+            for key, (vals, nget) in dict_bins_nsamp.items():
+                print(key, (vals, nget))
+
+                if False:
+                    # This was incorrect -- it was using novel_prim vs. old_prims, where in fact
+                    # I wanted to use novel_prim vs. novel_prim. But the problem is that ocmputing those
+                    # takes a long time. In the end it doesnt seem to make much of a difference.
+                    Clmerged.Xinput>vals[0]
+                    Clmerged.Xinput<=vals[1]
+                    inds = np.argwhere((Clmerged.Xinput>vals[0]) & (Clmerged.Xinput<=vals[1]))
+                    inds_pool = sorted(set(inds.flatten()))
+                else:
+                    # Hacky, just take all inds and place in pool.
+                    inds_pool = list(range(len(dfbasis_merged)))
+
+                # Exclude those that self-intersect
+                inds_pool = [i for i in inds_pool if i not in inds_bad_self_intersect]
+                
+                # sample randomly from pool
+                random.shuffle(inds_pool)
+
+                # inds_take_this = []
+                ngotten=0
+                while ngotten<nget:
+                    ind_candidate = inds_pool.pop()
+                    
+                    if ind_candidate in inds_take_all:
+                        # This already taken. 
+                        continue
+
+                    # Skip if the onset of this merged has already been taken
+                    ind_basis_onset = dfbasis_merged.iloc[ind_candidate]["i1"] # index into original bases
+                    ind_basis_offset = dfbasis_merged.iloc[ind_candidate]["i2"] # index into original bases
+                    if False: # Skip, since it restricts it a lot, and ends up using up all inds and faling.
+                        if ind_basis_onset in inds_taken_orig_onset:
+                            print("skipping, since onset already gotten: ", ind_basis_onset)
+                            continue
+                    else:
+                        # More lenient, allow max 2 cases
+                        if sum([i==ind_basis_onset for i in inds_taken_orig_onset])>=2:
+                            print("skipping, since onset already gotten: ", ind_basis_onset)
+                            continue
+
+                    if False: # Skip, since it restricts it a lot, and ends up using up all inds and faling.
+                        if ind_basis_offset in inds_taken_orig_offset:
+                            print("skipping, since offset already gotten: ", ind_basis_offset)
+                            continue
+
+                    # Checks, based on stroke similarty
+                    strok_this = dfbasis_merged["strok"].values[ind_candidate]
+                    
+                    # (1) Check that its not too similar to previous strokes
+                    if len(inds_take_all)>0:
+                        strokes_taken_so_far = dfbasis_merged.iloc[inds_take_all]["strok"].tolist()
+                        cl = DS.distgood_compute_beh_beh_strok_distances([strok_this], strokes_taken_so_far, invert_score=True)
+                        if np.any(cl.Xinput<MIN_SCORE_VS_OTHERS):
+                            # Then this strok is too close to one already in the pool
+                            print("skipping, since too similar to one already gotten")
+                            continue    
+                    
+                    # (2) Check that this is not too similar to any of the original basis strokes
+                    strokes_basis = dfbasis["strok"].tolist()
+                    cl = DS.distgood_compute_beh_beh_strok_distances([strok_this], strokes_basis, invert_score=True)
+                    if np.any(cl.Xinput<MIN_SCORE_VS_BASIS):
+                        # Then this strok is too close to one already in the pool
+                        print("skipping, since too similar to basis stroke")
+                        # print("skipping, since too similar to basis stroke", cl.Xinput)
+                        continue   
+
+                    # (3) Check that is not too acute of an angle
+                    plot_final_simple = False # make this True to see how this works
+                    strokcurv = strokesCurvature([strok_this], curv_fs, plot_final_simple=plot_final_simple)[0]
+                    if np.any(strokcurv[curv_on:curv_off, 0] > MAX_CURV):
+                        continue                      
+                    
+                    ### Got here, good, means keep it
+                    inds_take_all.append(ind_candidate)
+                    inds_taken_orig_onset.append(ind_basis_onset)
+                    inds_taken_orig_offset.append(ind_basis_offset)
+
+                    ngotten+=1
+                    print("taking :", ind_candidate, ", now got: ", ngotten)
+            assert len(set(inds_take_all))==len(dfbasis)
+
+            ### Take the set of new prims
+            strokes_basis_new = dfbasis_merged.iloc[inds_take_all]["strok"].tolist()
+            dfbasis_merged_take = dfbasis.copy()
+            dfbasis_merged_take["strok"] = strokes_basis_new
+            dfbasis_merged_take["inds_from_dfbasis_merged"] = inds_take_all
+            for col_bad in ["strok_task", "shape_cat_abstract", "char_first_instance"]:
+                del dfbasis_merged_take[col_bad]
+
+            ### Save
+            savedir = f"{SAVEDIR}/iter={iter_num}"
+            os.makedirs(savedir, exist_ok=True)
+            dfbasis_merged_take.to_pickle(f"{savedir}/dfbasis_merged_take.pkl")
+
+            ### Plots
+            from pythonlib.tools.plottools import savefig
+
+            # Get pariwise dist between each other
+            cl = DS.distgood_compute_beh_beh_strok_distances(dfbasis_merged_take["strok"].tolist(), 
+                                                                    dfbasis_merged_take["strok"].tolist(), invert_score=True)
+            fig, X, labels_col, labels_row, ax = cl.plot_heatmap_data();
+            ax.set_ylabel("new prim")
+            ax.set_xlabel("new prim")
+            savefig(fig, f"{savedir}/heatmap_self_pairs.pdf")
+            ma_ut = cl._rsa_matindex_generate_upper_triangular()
+            dists_final_within = cl.Xinput[ma_ut].flatten()
+
+            # Get pariwise dist to original basis set
+            cl = DS.distgood_compute_beh_beh_strok_distances(dfbasis_merged_take["strok"].tolist(), 
+                                                                dfbasis["strok"].tolist(), invert_score=True)
+            fig, X, labels_col, labels_row, ax = cl.plot_heatmap_data();
+            ax.set_ylabel("new prim")
+            ax.set_xlabel("original prim")
+            savefig(fig, f"{savedir}/heatmap_vs_basis_orig.pdf")
+            dists_final_vs_orig = cl.Xinput.flatten()
+
+            assert np.all(dists_final_within >= MIN_SCORE_VS_OTHERS)
+            assert np.all(dists_final_vs_orig >= MIN_SCORE_VS_OTHERS)
+
+            ### Plot the distances
+            fig, axes = plt.subplots(2, 2, sharex=True, figsize=(10, 10))
+
+            # ax = axes.flatten()[0]
+            # ax.hist(dists_merged, bins=20);
+            # for v in bins:
+            #     ax.axvline(v, color="k")
+            # ax.set_title("pairs of ALL merged strokes")
+
+            ax = axes.flatten()[1]
+            ax.hist(dists_orig, bins=20);
+            for v in bins:
+                ax.axvline(v, color="k")
+            ax.set_title("original bases")
+
+            ax = axes.flatten()[2]
+            ax.hist(dists_final_within, bins=20);
+            for v in bins:
+                ax.axvline(v, color="k")
+            ax.set_title("pairs of TAKEN merged strokes")
+
+            ax = axes.flatten()[3]
+            ax.hist(dists_final_vs_orig, bins=20);
+            for v in bins:
+                ax.axvline(v, color="k")
+            ax.set_title("taken merged vs. orig bases")
+
+            savefig(fig, f"{savedir}/distances_hist.pdf")
+
+            # Plot each stroke
+            # sort by name of prim
+            # dfbasis_merged_take = dfbasis_merged_take.sort_values("shape").reset_index(drop=True)
+            dfbasis_merged_take = dfbasis_merged_take.sort_values("inds_from_dfbasis_merged").reset_index(drop=True)
+            list_strok = dfbasis_merged_take["strok"].tolist()
+            list_shape = dfbasis_merged_take["shape"].tolist()
+            list_inds_orig = dfbasis_merged_take["inds_from_dfbasis_merged"].tolist()
+            # # centerize task strokes, otherwise they are in space
+            # list_strok_task = dfdat["strok_task"].tolist()
+            # list_strok_task = [x-np.mean(x, axis=0, keepdims=True) for x in list_strok_task]
+
+            for i, titles in enumerate([list_inds_orig]):
+                fig, axes = DS.plot_multiple_strok(list_strok, overlay=False, ncols=9, titles=titles)
+                savefig(fig, f"{savedir}/mean_stroke_each_shape-{i}-BEH.pdf")
+
+                # fig, axes = self.plot_multiple_strok(list_strok_task, ver="task", overlay=False, ncols=9, titles=titles);
+                # savefig(fig, f"{sdir}/mean_stroke_each_shape-{i}-TASK.pdf")
+
+            plt.close("all")
+        except Exception as e:
+            print("Error in iter_num: ", iter_num)
+            print(e)
+            continue
 
 if __name__=="__main__":
     import sys
 
-    PLOTS_DO = [4.1]
+    PLOTS_DO = [6]
     # PLOTS_DO = [5.1]
     
     ###
@@ -2326,6 +2631,16 @@ if __name__=="__main__":
             from pythonlib.dataset.scripts.analy_manuscript_figures import fig2_categ_extract_dist_scores
             DFDISTS, DFINDEX = fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version=cetegory_expt_version)
 
+        elif plot_do==6:
+            """
+            Generate and save new shuffled prims, splitting into two halves and reconnecting them.
+            Takes the original prims, and makes a new prim from each pair, and then samples a new set, doing this 
+            like 5 times. Each time apply filters to make sure the prims are different from eahc other, and different
+            from the base prims (to some sufficient extent).
+            """
+
+            animal = "Pancho"
+            stroke_shape_cluster_database_save_shuffled(animal)
 
         else:
             assert False

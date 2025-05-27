@@ -21,13 +21,15 @@ def bin_values_by_rank(values, nbins=8, assert_all_vals_within_bins=True):
     return ranks_binned
 
 def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001,
-    assert_all_vals_within_bins=True):
+    assert_all_vals_within_bins=True, return_bins=False):
     """ REturn vals, but binned, unofrmly from min to max
     Values binned to new categories called 1...nbins.
     Any nan inputs will be nan outoput (ignored).
     PARAMS;
     - nbins, num bbins.
     - epsilon, scalar, small number to pad, to make sure get all values.
+    - return_bins, bool, if True, the return (values, bins) where bins are 
+    the edges
     RETIURNS:
     - list of len(n), with string ints, and IGN where input is nan.
     e.g. [np.nan, 1, 2, 3] --> ['IGN', '1', '5', '8']
@@ -70,7 +72,7 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
 
         # for v in vals_binned:
         #     assert i
-        return vals_binned
+        return vals_binned, bins
 
     # bin only the non-nan values.
     inds = ~np.isnan(vals_input)
@@ -78,7 +80,7 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
     # print(vals_input)
     vals_to_bin = vals_input[inds]
     try:
-        vals_to_bin_binned = _bin_values(vals_to_bin, valmin, valmax)
+        vals_to_bin_binned, bins = _bin_values(vals_to_bin, valmin, valmax)
     except Exception as err:
         print(vals_to_bin)
         print(vals_input)
@@ -95,7 +97,10 @@ def bin_values(vals_input, nbins=8, valmin = None, valmax=None, epsilon = 0.0001
     vals_out = [str(int(v)) if ~np.isnan(v) else "IGN" for v in vals_out]
     # vals_out = vals_out.tolist()
 
-    return vals_out
+    if return_bins:
+        return vals_out, bins
+    else:
+        return vals_out
 
 def rankItems(arr):
     """ for each item, returns its

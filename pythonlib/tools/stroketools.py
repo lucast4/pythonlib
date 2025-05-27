@@ -7,7 +7,8 @@ from pythonlib.drawmodel.features import *
 from pythonlib.drawmodel.strokedists import distanceDTW
 import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
-from pythonlib.tools.camtools import euclidAlign, corrAlign, get_lags, fps, fps2, plotTrialsTrajectories, normalizeGaps
+from pythonlib.tools.camtools import euclidAlign, corrAlign, get_lags, fps, fps2, plotTrialsTrajectories, normalizeGaps, plotHeat
+import pandas as pd
 
 # =============== TIME SERIES TOOLS
 def create_generate_strokes_fake_debug(nstrokes):
@@ -379,7 +380,9 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                 for idx_pt in [0, -1]:
                     
                     dist_old_to_new = np.linalg.norm(s[idx_pt, :2] - sf[idx_pt, :2])
-                    duration = s[-1,2] - s[0,2]
+                    # print(s)
+                    # print('meow')
+                    duration = s[-1,-1] - s[0,-1]
 
                     # Shorter duration strokes are more likely to have larger diff from filtering, so
                     # give them a bit more leweway
@@ -548,7 +551,8 @@ def strokesFilter(strokes, Wn, fs, N=9, plotresponse=False,
     return strokesfilt
         
 
-def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filter=True, ploton=False):
+def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filter=True, ploton=False,
+                     plot_final_simple=False):
     """ from Abend Bizzi 1982:
     Trajectory curvature = (X Y—X Y)/X 2 + Y 2 ) 3p , where X and
     Y are the time derivatives of the X-Y co-ordinates of the hand in the horizontal plane, and X and Y are
@@ -610,7 +614,22 @@ def strokesCurvature(strokes, fs, LP=5, fs_new = 30, absval = True, do_pre_filte
 
         plt.ylim([YMIN, YMAX])
         plt.ylabel("1/pix (1/radius)")
-        
+
+    if plot_final_simple:
+        # Plot the final result. Just plot one exmaple.
+        strok = strokes[0]
+        strokcurv = strokes_curv[0]
+        fig, axes = plt.subplots(2,1)
+
+        ax = axes.flatten()[0]
+        ax.plot(strokcurv[:, 1], strokcurv[:, 0],"-x")
+        ax.set_ylim([0, 1])
+        ax.set_ylabel("curvature")
+        ax.set_xlabel("time")
+
+        ax = axes.flatten()[1]
+        ax.scatter(strok[:, 0], strok[:, 1], c=strokcurv[:, 0], alpha=1)        
+
     return strokes_curv
 
 
@@ -1889,9 +1908,6 @@ def intersect_traj_by_circle(traj, circle_radius, max_dist_along_pts=0.25):
         ind = None
     return ind
 
-
-
-
 def merge_pts(pts1, pts2, up_to_idx):
     """
     Given two identical shape pts, finds an in-between traj by
@@ -2073,6 +2089,113 @@ def split_strokes_large_jumps(strokes, thresh=50):
 
     return strokes_new
 
+def split_strok_into_two_by_time(strok, off_time_1, on_time_2, PRINT=False):
+    """
+    Split a trajectory into two by inserting a gap.
+    PARAMS:
+    - off_time_1, the time (in sec) to cut off first stroke (ie start of gap)
+    - on_time_2, the time onset of 2nd stroke (ie end of gap).
+    RETURNS:
+    - strok1, strok2
+    """
+    
+    # sanity checks
+    assert isinstance(strok, np.ndarray)
+    idx_time = strok.shape[1]-1
+    times = strok[:, idx_time]
+
+    assert off_time_1 > times[0]
+    assert on_time_2 < times[-1]
+    assert on_time_2 > off_time_1
+
+    ind_off = np.argmin(np.abs(times - off_time_1))
+    ind_on = np.argmin(np.abs(times - on_time_2))
+    
+    strok1 = strok[:ind_off+1, :].copy()
+    strok2 = strok[ind_on:, :].copy()
+
+    if PRINT:
+        print(strok.shape, ind_off, ind_on)
+        print(strok[0, idx_time], strok[-1, idx_time])
+        print(strok1[0, idx_time], strok1[-1, idx_time])
+        print(strok2[0, idx_time], strok2[-1, idx_time])
+
+    return strok1, strok2
+
+def split_strokes2_to_align_to_strokes1(strokes1, strokes2, DEBUG=False):
+    """
+    You believe that strokes1 is subset fo strokes2 (in correct order),
+    except that one strok in strokes2 is actually split into two in
+    strokes1. e..g,
+    strokes1 = [3, 4, 5a, 5b, 6]
+    strokes2 = [1, 2, 3, 4, 5, 6, 7]. 
+
+    And the onsets (in sec) for the strokes are aligned.
+
+    Then this finds how to split storkes2 to mach strokes1.
+    i.e, returns:
+    strokes2 = [1, 2, 3, 4, 5a, 5b, 6, 7]. 
+    """
+
+    assert len(strokes1) <= len(strokes2), "this is assumed, in step that pads strokes 1"
+
+    ### Get the arrays of onset times
+    idx_time_1 = strokes1[0].shape[1]-1
+    idx_time_2 = strokes2[0].shape[1]-1
+    onset_times_dataset = np.array([s[0,idx_time_1] for s in strokes1])
+    onset_times_cam = np.array([s[0,idx_time_2] for s in strokes2])
+
+    ### Find where strok1 matches strok2
+    # - hacky, to make sure that edge strokes for strokes 2 are not incorrectly matched to strokes in storkes1
+    tmp = np.insert(onset_times_dataset, 0, onset_times_dataset[0]-0.2)
+    tmp = np.append(tmp, tmp[-1]+0.2)
+    matches = [np.argmin(np.abs(tmp - t)) for t in onset_times_cam]
+    if matches[0]<matches[1]:
+        matches = [m-1 for m in matches]
+
+    if DEBUG:
+        print("for each cam stroke, which dataset stroke does it match: ", matches)
+        print(np.   diff(matches))
+
+    ### Get the cam stroke that skips an index
+    if False:
+        if len(np.argwhere(np.diff(matches)==2))==1:
+            # Then something like matches = [0, 0, 1, 2, 4].
+            idx_cam_stroke_split = int(np.argwhere(np.diff(matches)==2)[0]) # the strok to split into two
+        elif len(np.argwhere(np.diff(matches)==2))==0:
+            # Still possible. This means the last strok in strokes2 should be split.
+            idx_cam_stroke_split = len(strokes2)-1
+        else:
+            print(matches)
+            assert False, "probably strokes2 and strokes1 are not related"
+    else:
+        assert len(np.argwhere(np.diff(matches)==2))==1
+        idx_cam_stroke_split = int(np.argwhere(np.diff(matches)==2)[0]) # the strok to split into two
+    
+    # Which dataset strokes to consider
+    idx_dataset_first_stroke = matches[idx_cam_stroke_split]
+    idx_dataset_second_stroke = idx_dataset_first_stroke+1
+
+    if DEBUG:
+        print("Splitting cam stroke: ", idx_cam_stroke_split, "to match dataset strokes : ", idx_dataset_first_stroke, idx_dataset_second_stroke)
+        # strokes1[idx_dataset_first_stroke][0, 2], strokes1[idx_dataset_second_stroke][0, 2]
+        # strokes2[idx_cam_stroke_split][0, 3], strokes2[idx_cam_stroke_split+1][0, 3]
+
+    # Check that the onset of the next cam stroke is after the offset of the 2nd dataset stroke
+    if len(strokes2)>idx_cam_stroke_split+1:
+        assert strokes2[idx_cam_stroke_split+1][0, 3] > strokes1[idx_dataset_second_stroke][-1, 2]
+    off_time_first_stroke = strokes1[idx_dataset_first_stroke][-1, 2]
+    on_time_second_stroke = strokes1[idx_dataset_second_stroke][0, 2]
+
+    # Split the cam stroke into two
+    strok1, strok2 = split_strok_into_two_by_time(strokes2[idx_cam_stroke_split], off_time_first_stroke, on_time_second_stroke)
+    if DEBUG:
+        print(strok1.shape, strok2.shape)
+
+    # Replace the cam stroke with these two
+    strokes2_split = strokes2[:idx_cam_stroke_split] + [strok1, strok2] + strokes2[idx_cam_stroke_split+1:] 
+
+    return strokes2_split
 
 def insert_strok_into_strokes_to_maximize_alignment(strokes_template, strokes_mod, traj, 
     do_insertion=False):
@@ -2407,3 +2530,118 @@ def strokes_to_hash_unique(strokes, nhash = 6, centerize=False, align_to_onset=F
     _hash = tmp[2:nhash+2]
 
     return _hash
+
+def merge_interpolate_concat_strokes_halves(dfbasis, PLOT = False):
+    """
+    Create new strokes by taking first half of one stroke and 2nd half of another. Does this across all pairs of 
+    rows in dfbasis.
+    E.g., useful for created shuffled, null-hypothesis strokes
+
+    PARAMS:
+    - dfbasis, a dataframe with a column "strok". Will get pairwise merges across all pairs of values (rows) 
+    of strok. Usualyl get this from DS...
+    RETURNS:
+    - dfbasis_merged, each row is a pair from dfbasis.
+    """
+    from pythonlib.tools.stroketools import strokes_bounding_box_dimensions
+
+    # Confirm that all strokes are same length (assumes so below)
+    tmp = list(set([len(strok) for strok in dfbasis["strok"]]))
+    assert len(tmp)==1, "I thought basis strokes are all same length"
+    npts = tmp[0]
+    print("N pts in strokes: ", npts)
+    idx_join = int(np.floor(npts/2))
+
+    # Make sigmoid
+    def sigmoid(x):
+        # Note: slope of 5 was chosen by eye. is reasonable, the transition window is about 1/4 of total window.
+        return 1 / (1 + np.exp(-5*x))
+    x = np.linspace(-2, 2, npts)
+    y = 1-sigmoid(x)[:, None] # (npts, 1)
+
+    if PLOT:
+        fig, ax = plt.subplots()
+        ax.plot(x, y)
+
+    ### Go thru al pairs of strokes
+    res =[]
+    for i1 in range(len(dfbasis)):
+        for i2 in range(len(dfbasis)):
+            if i1!=i2: # Do both ways, as the below is not symmetric
+                print("Running: ", i1, i2)
+                strok1 = dfbasis.iloc[i1]["strok"].copy()[:, :2]
+                strok2 = dfbasis.iloc[i2]["strok"].copy()[:, :2]
+
+                # transalte stroke 2, so that the onset location of 2nd half matches offset location of first half.
+                on_second_half = strok2[idx_join, :]
+                off_first_half = strok1[idx_join, :]
+
+                shift_second_half = off_first_half - on_second_half
+                strok2 = strok2 + shift_second_half
+                strok_merged = (y * strok1) + ((1-y)*strok2)
+
+                # Rescale so it matches size of the starting prims
+                d1 = strokes_bounding_box_dimensions([strok1])[2]
+                d2 = strokes_bounding_box_dimensions([strok2])[2]
+                d3 = strokes_bounding_box_dimensions([strok_merged])[2]
+                dmean = np.mean([d1, d2])
+                strok_merged *= dmean/d3
+                d3_final = strokes_bounding_box_dimensions([strok_merged])[2]
+                # print(d1, d2, d3, d3_final)
+
+                # recenter to onset.
+                strok_merged -= strok_merged[0, :]
+
+                # Put back time axis
+                t = (dfbasis.iloc[i1]["strok"].copy()[:, 2] + dfbasis.iloc[i2]["strok"].copy()[:, 2])/2
+                strok_merged = np.concatenate([strok_merged, t[:,None]], axis=1)
+
+                if PLOT:
+                    DS.plot_multiple_strok([strok1, strok2, strok_merged], overlay=False)
+
+                ### Collect
+                res.append({
+                    "i1":i1,
+                    "i2":i2,
+                    "strok":strok_merged
+                })
+
+    # This holds each new merged basis set
+    dfbasis_merged = pd.DataFrame(res)
+
+    return dfbasis_merged
+
+def has_self_intersection(traj):
+    """
+    Determine whether trajectory intersects itself (doesnt count if it's just one endpoint touching
+    the traj).
+
+    traj: numpy array of shape (n, 2)
+    Returns True if the trajectory intersects itself, False otherwise
+
+        # Example
+        trajectory = np.array([
+            [0, 0],
+            [1, 1],
+            [2, 0],
+            [1, -1],
+            [0, 0]  # back to start — self-intersection
+        ])
+
+        print(has_self_intersection(trajectory))  # Output: True
+    """
+    from shapely.geometry import LineString
+
+    line = LineString(traj)
+    return not line.is_simple  # is_simple is False if it self-intersects
+
+def add_noise_jitter_to_stroke(strok, nland = 7, dist_int = 10.,
+                               sigma = 20., plot=False):
+    """
+    Add noise (Generate new samples of a stroke), by converting to spline, jittering control pts,
+    then reconverting to trajectory.
+    """
+    from pythonlib.drawmodel.splines import add_noise_jitter_to_stroke
+    return add_noise_jitter_to_stroke(strok, nland, dist_int, sigma, plot)
+
+   

@@ -754,9 +754,11 @@ class BehModelHolder(object):
             split_plots_by = "epoch_orig", savedir=None, nperms=1000,
             suffix="", df=None):
         """
-        Is perofrmanc significantly difference across epochs? (<var>)
-        Permtuation test, where shuffling of scores (success/fail) is done within each level of 
-        INDEX. Uses metric that takes difference from max vs. min scoring level of epoch.
+        Is perofrmanc significantly difference across epochs (e.g., stim vs. no stim)? (<var>)
+        Permtuation test, where shuffling of each trial's scores (success/fail) is done within each level of 
+        INDEX. 
+        
+        Uses metric that takes difference from max vs. min scoring level of epoch (summary statistic for doing stats)
         By default runs separately for each epoch_orig,<split_plots_by>, since this was for microstim, where epoch orig is
         different from epoch (includes microstim info).
         PARAMS:

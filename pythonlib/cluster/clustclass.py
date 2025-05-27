@@ -112,8 +112,8 @@ class Clusters(object):
             "raw":self.Labels
             } # tracks different ways of labeling, always aligned to self.Xinput
 
-        self.XDict = {
-            "raw":self.Xinput}
+        # self.XDict = {
+            # "raw":self.Xinput}
 
         self.ClusterResults = {}
         self.DistanceMatrices = {}
@@ -249,7 +249,8 @@ class Clusters(object):
     def extract_dat(self, datkind="raw"):
         """ Rerutrn data matrix, but possibly processed
         """
-        return self.XDict[datkind]
+        return self.Xinput
+        # return self.XDict[datkind]
 
     def extract_labels(self, labelkind="raw", axis=0):
         """ Return labels, various kinds
@@ -995,7 +996,7 @@ class Clusters(object):
         #     assert False
         elif self.Version=="dist" and isinstance(self.Labels[0], tuple):
             return True
-        elif self.Labels == self.LabelsCols:
+        elif self.Labels == self.LabelsCols and isinstance(self.Labels[0], tuple):
             # Then is symmetric.
             return True
         else:
@@ -2042,7 +2043,8 @@ class Clusters(object):
                 res.append({
                     "labels_1":grp1,
                     "labels_2":grp2,
-                    "dist_mean":np.mean(X)
+                    "dist_mean":np.mean(X),
+                    "n_1_2":(len(inds1), len(inds2)),
                 })
                 
                 # Expand, to get each variable in label.
@@ -2175,31 +2177,34 @@ class Clusters(object):
         RETURNS:
         - copy of dfdists
         """
-        from pythonlib.tools.pandastools import append_col_with_grp_index
+        from neuralmonkey.analyses.euclidian_distance import dfdist_extract_label_vars_specific
+        dfdists = dfdist_extract_label_vars_specific(dfdists, label_vars)
 
-        if "labels_1_datapt" in dfdists.columns:
-            var1 = "labels_1_datapt"
-            var2 = "labels_2_grp"
-        else:
-            var1 = "labels_1"
-            var2 = "labels_2"
+        # from pythonlib.tools.pandastools import append_col_with_grp_index
 
-        dfdists = dfdists.copy()
+        # if "labels_1_datapt" in dfdists.columns:
+        #     var1 = "labels_1_datapt"
+        #     var2 = "labels_2_grp"
+        # else:
+        #     var1 = "labels_1"
+        #     var2 = "labels_2"
+
+        # dfdists = dfdists.copy()
         
-        # Replace columns which are now incorrect
-        # label_vars = ["seqc_0_shape", "seqc_0_loc"]
-        assert isinstance(label_vars[0], str)
+        # # Replace columns which are now incorrect
+        # # label_vars = ["seqc_0_shape", "seqc_0_loc"]
+        # assert isinstance(label_vars[0], str)
 
-        # e..g, seqc_0_shape_1
-        for i, var in enumerate(label_vars):
-            dfdists[f"{var}_1"] = [x[i] for x in dfdists[var1]]
-            dfdists[f"{var}_2"] = [x[i] for x in dfdists[var2]]
-            dfdists = append_col_with_grp_index(dfdists, [f"{var}_1", f"{var}_2"], f"{var}_12")
-            dfdists[f"{var}_same"] = dfdists[f"{var}_1"] == dfdists[f"{var}_2"]
+        # # e..g, seqc_0_shape_1
+        # for i, var in enumerate(label_vars):
+        #     dfdists[f"{var}_1"] = [x[i] for x in dfdists[var1]]
+        #     dfdists[f"{var}_2"] = [x[i] for x in dfdists[var2]]
+        #     dfdists = append_col_with_grp_index(dfdists, [f"{var}_1", f"{var}_2"], f"{var}_12")
+        #     dfdists[f"{var}_same"] = dfdists[f"{var}_1"] == dfdists[f"{var}_2"]
 
-        if len(label_vars)==2:
-            for i, var in enumerate(label_vars):
-                dfdists = append_col_with_grp_index(dfdists, [f"{label_vars[0]}_same", f"{label_vars[1]}_same"], f"same-{label_vars[0]}|{label_vars[1]}")
+        # if len(label_vars)==2:
+        #     for i, var in enumerate(label_vars):
+        #         dfdists = append_col_with_grp_index(dfdists, [f"{label_vars[0]}_same", f"{label_vars[1]}_same"], f"same-{label_vars[0]}|{label_vars[1]}")
 
         return dfdists
 
@@ -2213,37 +2218,41 @@ class Clusters(object):
         RETURNS:
         - copy of dfdists, but more rows.
         """
-        from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+        from neuralmonkey.analyses.euclidian_distance import dfdist_expand_convert_from_triangular_to_full
 
-        if PLOT:
-            grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
-
-        dftmp = dfdists.copy()
-
-        # Flip labels
-        dftmp["labels_1"] = dfdists["labels_2"]
-        dftmp["labels_2"] = dfdists["labels_1"]
+        dfdists = dfdist_expand_convert_from_triangular_to_full(dfdists, label_vars, PLOT, repopulate_relations)
         
-        # Remove diagonal
-        dftmp = dftmp[dftmp["labels_1"]!=dftmp["labels_2"]]
+        # from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
+
+        # if PLOT:
+        #     grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
+
+        # dftmp = dfdists.copy()
+
+        # # Flip labels
+        # dftmp["labels_1"] = dfdists["labels_2"]
+        # dftmp["labels_2"] = dfdists["labels_1"]
         
-        # concat
-        dfdists = pd.concat([dfdists, dftmp]).reset_index(drop=True)
+        # # Remove diagonal
+        # dftmp = dftmp[dftmp["labels_1"]!=dftmp["labels_2"]]
+        
+        # # concat
+        # dfdists = pd.concat([dfdists, dftmp]).reset_index(drop=True)
 
-        if repopulate_relations:
-            # Repopulation all label columns
-            assert label_vars is not None        
-            # label_vars = ["seqc_0_shape", var_other]
-            # from pythonlib.cluster.clustclass import Clusters
-            # cl = Clusters(None)
-            dfdists = self.rsa_distmat_population_columns_label_relations(dfdists, label_vars)
+        # if repopulate_relations:
+        #     # Repopulation all label columns
+        #     assert label_vars is not None        
+        #     # label_vars = ["seqc_0_shape", var_other]
+        #     # from pythonlib.cluster.clustclass import Clusters
+        #     # cl = Clusters(None)
+        #     dfdists = self.rsa_distmat_population_columns_label_relations(dfdists, label_vars)
 
-        if PLOT:
-            grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
+        # if PLOT:
+        #     grouping_plot_n_samples_conjunction_heatmap(dfdists, "labels_1", "labels_2");
 
-        # Sanity check that populated all cells in distance matrix
-        if False: # I know this code works, so no need for this.
-            assert dfdists.groupby(["labels_2"]).size().min() == dfdists.groupby(["labels_2"]).size().max()
+        # # Sanity check that populated all cells in distance matrix
+        # if False: # I know this code works, so no need for this.
+        #     assert dfdists.groupby(["labels_2"]).size().min() == dfdists.groupby(["labels_2"]).size().max()
 
         return dfdists
 
@@ -3289,7 +3298,7 @@ class Clusters(object):
         labels_cols = [self.LabelsCols[i] for i in cols]
         X = self.rsa_index_sliceX_rect_copy(rows, cols, allow_copy=True)
         Cl = Clusters(X = X, labels_rows=labels,
-                        labels_cols=labels_cols, ver="dist", params=self.Params)
+                        labels_cols=labels_cols, ver=self.Version, params=self.Params)
         return Cl
 
     def transpose(self):

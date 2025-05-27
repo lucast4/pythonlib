@@ -3,3 +3,4 @@ log_parse.txt
 .DS_Store
 globals.py
 *logs/*
+pythonlib.egg-info/PKG-INFO
