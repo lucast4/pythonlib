@@ -430,14 +430,11 @@ def fps2(x, fs):
     a = [(-x[i+2] + 16*x[i+1] - 30*x[i] + 16*x[i-1] - x[i-2])/12 for i in range(len(x)) if 2<=i<len(x)-2]
     return np.array(a) * fs**2
 
-def plotTrialsTrajectories(fd,dat, trial_ml2, data_use='trans'):
+def plotTrialsTrajectories(fd,dat, trial_ml2, ax, data_use='trans'):
     """Plot some relevant trajectories, dat should be structured like the one from
         handtrack pipeline (with coeffs selected already)"""
     from pythonlib.tools.stroketools import strokesInterpolate2, smoothStrokes
     from drawmonkey.tools.utils import getTrialsTimesOfMotorEvents
-
-
-    
 
     assert len(dat) > 0, "No data here"
     dat = dat[trial_ml2+1]
@@ -483,32 +480,30 @@ def plotTrialsTrajectories(fd,dat, trial_ml2, data_use='trans'):
     if_zt = smoothStrokes([int_zt], 1000, window_type='flat')[0]
     if_vt = smoothStrokes([int_vt], 1000, window_type='flat')[0]
 
-    fig = plt.figure(figsize=(20,10))
     #Plot data
-    plt.plot(if_vt[:,1], if_vt[:,0], label='v_filt')
-    plt.plot(if_zt[:,1], if_zt[:,0], label='z_filt')
-    plt.plot(cam_pts_raw[:,3],cam_pts_raw[:,2], '.',color='orange',label='raw z')
+    ax.plot(if_vt[:,1], if_vt[:,0], label='v_filt')
+    ax.plot(if_zt[:,1], if_zt[:,0], label='z_filt')
+    ax.plot(cam_pts_raw[:,3],cam_pts_raw[:,2], '.',color='orange',label='raw z')
     #plot calculated strokes (intersection method, see handtrack.py calcOnsetOffset)
     if 'strokes_cam_calc_onoff' in dat.keys():
         for stroke in dat['strokes_cam_calc_onoff']:
-            plt.plot(stroke[:,3],stroke[:,2],'.-',color='red',zorder=10, label = 'calc_strokes')
+            ax.plot(stroke[:,3],stroke[:,2],'.-',color='red',zorder=10, label = 'calc_strokes')
     else:
         assert False, 'Why not have this data?'
     #Plot ts strokes in grey
-    ymin,ymax = plt.ylim()
+    ymin,ymax = ax.get_ylim()
     for stroke,onoff in on_offs.items():
         if stroke == 'on_fix':
-            plt.fill_between([plt.xlim()[0],onoff[1]], plt.ylim()[0], plt.ylim()[1], fc='lightgreen',alpha=0.2, zorder=0)
+            ax.fill_between([plt.xlim()[0],onoff[1]], plt.ylim()[0], plt.ylim()[1], fc='lightgreen',alpha=0.2, zorder=0)
         elif stroke == 'off_fix' or stroke == 'last_stroke':
-            plt.fill_between([onoff[0],plt.xlim()[1]], plt.ylim()[0], plt.ylim()[1], fc='indianred',alpha=0.2, zorder=0)
+            ax.fill_between([onoff[0],plt.xlim()[1]], plt.ylim()[0], plt.ylim()[1], fc='indianred',alpha=0.2, zorder=0)
         else:
-            plt.fill_between(onoff, plt.ylim()[0], plt.ylim()[1], fc='lightgrey',alpha=0.2, zorder=0)
-        plt.autoscale(False)
-    plt.ylim(ymin,ymax)
+            ax.fill_between(onoff, plt.ylim()[0], plt.ylim()[1], fc='lightgrey',alpha=0.2, zorder=0)
+        ax.autoscale(False)
+    ax.set_ylim(ymin,ymax)
     # plt.xlim(xmin,xmax)
-    plt.legend()
-    plt.title(f'Beh {trial_ml2} : Vid {trial_ml2-1}')
-    return fig
+    ax.legend()
+    ax.set_title(f'Beh {trial_ml2} : Vid {trial_ml2-1}')
 
 def normalizeGaps(gaps):
     """Normalize all gaps ts in list to occur in t=[0,1]. Will use minmax normal
