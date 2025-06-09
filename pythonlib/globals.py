@@ -21,7 +21,7 @@ if MACHINE == "lucast4-MS-7B98":
 elif MACHINE == "lemur":
 	HOME = "/home/lucas"
 	PATH_DRAGMONKEY = f"{HOME}/code/dragmonkey" # monkeylogic task
-	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey/drawmonkey"
+	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
 	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = f"{HOME}/mnt/Freiwald/ltian/recordings"
 	PATH_DATA_NEURAL_PREPROCESSED = "/lemur2/lucas/neural_preprocess"
@@ -69,8 +69,7 @@ elif MACHINE == 'ltbonobo':
 	PATH_DATASET_BEH = f"{HOME}/freiwaldDrive/kgupta/analyses/database"
 	PATH_KS_RAW = f"{HOME}/freiwaldDrive/kgupta/neural_data"
 	PATH_CODE = f"{HOME}/code"
-	PATH_SAVE_CLUSTERFIX = f"/data4/dan/eyetracking_analyses"
-	PATH_HANDTRACK = f'{HOME}/friewaldDrive/dhanuska/handtrack_processed'	# for using clusterfix and saving the necessary .mat/.csv files, specify a directory (see neuralmonkey/classes/session.py)
+	PATH_SAVE_CLUSTERFIX = f"{HOME}/Desktop/eyetracking_analyses"	# for using clusterfix and saving the necessary .mat/.csv files, specify a directory (see neuralmonkey/classes/session.py)
 elif MACHINE=="Lucass-MacBook-Air.local":
 	HOME = "/Users/lucastian"
 	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
@@ -103,6 +102,25 @@ elif MACHINE=="helmholtz.rockefeller.edu":
 	PATH_KS_RAW = f"{HOME2}/Freiwald/kgupta/neural_data"
 	PATH_CODE = f"{HOME1}/code"
 	PATH_SAVE_CLUSTERFIX = f"{HOME2}/Desktop/eyetracking_analyses"
+elif MACHINE=="Toadman":
+	HOME = "/home/danhan"
+	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey/drawmonkey"
+	PATH_DATA_BEHAVIOR_RAW = f"{HOME}/freiwaldDrive/kgupta/macaque_data"
+	PATH_DATA_BEHAVIOR_RAW_SERVER = f"{HOME}/freiwaldDrive/kgupta/macaque_data"
+	PATH_DATA_BEHAVIOR_RAW_SERVER2 = f"{HOME}/freiwaldDrive/ltian/backup/gorilla/gorilla1/animals"
+	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
+	PATH_DATA_NEURAL_RAW = f"{HOME}/freiwaldDrive/ltian/recordings"
+	PATH_DATA_NEURAL_PREPROCESSED = "/data4/dan/neural_preprocess"
+	# PATH_MATLAB = "/usr/local/MATLAB/R2022b/bin/matlab"
+	PATH_MATLAB = "/data1/programs/MATLAB/R2021a/bin/matlab"
+	# PATH_ANALYSIS_OUTCOMES = f"{home}/Desktop/analyses"
+	PATH_ANALYSIS_OUTCOMES = f"{HOME}/freiwaldDrive/dhanuska/analyses"
+	PATH_ANALYSIS_OUTCOMES_SERVER = f"{HOME}/freiwaldDrive/kgupta/analyses"
+	# PATH_DATASET_BEH = f"{home}/Desktop/analyses/database"
+	PATH_DATASET_BEH = f"{HOME}/freiwaldDrive/kgupta/analyses/database"
+	PATH_KS_RAW = f"{HOME}/freiwaldDrive/kgupta/neural_data"
+	PATH_CODE = f"{HOME}/code"
+	PATH_SAVE_CLUSTERFIX = f"{HOME}/Desktop/eyetracking_analyses"	# for using clusterfix and saving the necessary .mat/.csv files, specify a directory (see neuralmonkey/classes/session.py)
 else:
 	print(MACHINE)
 	assert False, "add this machine"
