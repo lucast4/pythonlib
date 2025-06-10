@@ -37,6 +37,8 @@ elif MACHINE == "lemur":
 	PATH_KS_RAW = f"{HOME}/mnt/Freiwald/kgupta/neural_data"
 	PATH_CODE = f"{HOME}/code"
 	PATH_SAVE_CLUSTERFIX = f"{PATH_DATASET_BEH}/eyetracking_analyses"
+	PATH_PROCESSED_HT_DATA = f"{HOME}/mnt/Freiwald/dhanuska/handtrack_processed"
+
 elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan" or MACHINE == "kggs-macbook.lan.rockefeller.edu":
 	PATH_DRAWMONKEY_DIR = "/Users/kdu/Desktop/rockefeller/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/Users/kdu/data2/animals"
@@ -71,6 +73,8 @@ elif MACHINE == 'ltbonobo':
 	PATH_CODE = f"{HOME}/code"
 	PATH_SAVE_CLUSTERFIX = f"/data4/dan/eyetracking_analyses"
 	PATH_HANDTRACK = f'{HOME}/friewaldDrive/dhanuska/handtrack_processed'	# for using clusterfix and saving the necessary .mat/.csv files, specify a directory (see neuralmonkey/classes/session.py)
+	PATH_PROCESSED_HT_DATA = f"{HOME}/freiwaldDrive/dhanuska/handtrack_processed"
+
 elif MACHINE=="Lucass-MacBook-Air.local":
 	HOME = "/Users/lucastian"
 	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
