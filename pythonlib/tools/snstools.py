@@ -397,22 +397,48 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
     # print("SIZE:", w,h)
 
     dfthis = df
+    if norm_method in ["col_div", "row_div", "all_div"]:
+        assert np.all(dfthis.values[np.isfinite(dfthis.values)] >= 0), "Found negative finite values"
+        # if np.all(dfthis==0):
+        #     dfthis += 0.0001
+
     if norm_method=="all_sub":
         # minus mean over all cells
         dfthis = dfthis - dfthis.mean().mean()
         diverge = True
     elif norm_method=="col_div":
         # normalize so that for each col, the sum across rows is 1
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
+        if False:
+            assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+            dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
+        else:
+            col_sums = dfthis.sum(axis=0, skipna=True)
+            col_sums[col_sums == 0.0] = 0.001
+            dfthis = dfthis.div(col_sums, axis=1)
     elif norm_method=="row_div":
         # same, but for rows
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+        if False: # fails if any nans
+            assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+            dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
+        else:
+            row_sums = dfthis.sum(axis=1, skipna=True) # one value for each row
+            row_sums[row_sums==0.]=0.001 # So no divide by 0.
+            dfthis = dfthis.div(row_sums, axis=0) 
     elif norm_method=="all_div":
         # divide by sum of all counts
-        assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-        dfthis = dfthis/dfthis.sum().sum()
+        if True:
+            assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
+            dfthis = dfthis/dfthis.sum().sum()
+        else:
+            print("---")
+            print(dfthis)
+            global_mean = np.nansum(dfthis.values.flatten())
+            if global_mean == 0.0:
+                global_mean = 0.001
+            print(global_mean)
+            dfthis = dfthis / global_mean
+            print(dfthis)
+            
     elif norm_method=="col_sub":
         # normalize so by subtracting from each column its mean across rows
         dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
@@ -526,3 +552,67 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
         raise err
 
     return fig, ax, rgba_values
+
+
+def scatter_color_by_value(data, ax, xvar, yvar, cvar, cmin=None, cmax=None, plot_colorbar=False):
+    """
+    Scatterplot, with helper to ensure range of colors.
+
+    NOTE cmin, cmax ensures that the color mapping is fixed so that one nedpoint color represents cmin, 
+    and the other cmax
+
+    PARAMS:
+    - cmin, cmax, values of cvar, which will define the min/max range for colormap. If None, then computes
+    here using values of cvar [1, 99] prctile.
+    """
+
+    # For each dim make a figure, with subplot being the shapes
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import matplotlib as mpl
+
+    # ------------------------------------------------------------------
+    x = data[xvar].values
+    y = data[yvar].values
+    c = data[cvar].values
+
+    if cmin is None:
+        cmin, cmax = np.percentile(c, [1, 99])
+
+    # 1 .  Decide once what the colour scale should cover
+    # ------------------------------------------------------------------
+    norm = plt.Normalize(vmin=cmin, vmax=cmax)   # shared normalisation
+    norm  = mpl.colors.Normalize(vmin=cmin, vmax=cmax)
+
+    # ------------------------------------------------------------------
+    # 2 .  Build a palette that is light→dark
+    #     ‘rocket’ is dark→light, so just reverse it
+    # ------------------------------------------------------------------
+    cmap = sns.color_palette("rocket", as_cmap=True).reversed()
+
+    # ------------------------------------------------------------------
+    # 2 .  Dummy mappable that *defines* the colour‑bar
+    # ------------------------------------------------------------------
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])                     # nothing to plot; just carries scale
+
+    # sns.scatterplot(x=x[::jump], y=y[::jump], c=c[::jump], alpha=0.1, size=2, ax=ax, cmap=cmap)
+    sc = sns.scatterplot(
+        x=x,
+        y=y,
+        hue=c,          # use `hue`, not `c`, for seaborn
+        hue_norm=norm,          # ← identical mapping everywhere
+        palette=cmap,
+        alpha=0.10,
+        s=20,                   # `s`, not `size`, for fixed marker size
+        edgecolor="none",
+        legend=False,           # suppress seaborn’s categorical legend
+        ax=ax
+    )
+
+    # One colour‑bar per subplot
+    if plot_colorbar:
+        ax.figure.colorbar(sm, ax=ax, orientation='vertical',
+                    shrink=0.8, pad=0.02, label='c value')
+

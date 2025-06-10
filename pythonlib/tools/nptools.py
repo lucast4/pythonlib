@@ -169,7 +169,7 @@ def isin_array(arr, list_arr, atol=1e-06):
     - arr, np array
     - list_arr, list of arrays
     """
-    tmp = [(arr == x).all() for x in list_arr] # array of bools.
+    # tmp = [(arr == x).all() for x in list_arr] # array of bools.
     tmp = [np.allclose(arr, x, atol) for x in list_arr] # array of bools.
     return any(tmp)
 

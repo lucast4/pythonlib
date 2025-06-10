@@ -340,9 +340,10 @@ def curve_fit_and_test(func, bounds, x_train, y_train, x_test, y_test, doplot=Fa
     return y_pred, R2, residuals_pred, residuals_mean
     
 
-def coeff_determination_R2(yvals, yvals_pred, doplot=False):
+def coeff_determination_R2(yvals, yvals_pred, doplot=False, return_ss=False):
     """
-    Compute R2 manually.
+    Compute R2 manually, given data and predicted data. Assumes that yvals has been
+    cetnered -- ie tkaes its mean as the intercept, for totla SS.
     """
     residuals_pred = yvals - yvals_pred
     ss_resid = np.sum(residuals_pred**2)
@@ -353,7 +354,7 @@ def coeff_determination_R2(yvals, yvals_pred, doplot=False):
     R2 = 1 - ss_resid/ss_tot
 
     if doplot:
-        fig, axes = plt.subplots(2,2, figsize=(10,10))
+        fig, axes = plt.subplots(2,2, figsize=(10,10), sharex=True, sharey=True)
 
         ax = axes.flatten()[0]
         ax.plot(yvals, yvals_pred, "xk")
@@ -370,7 +371,10 @@ def coeff_determination_R2(yvals, yvals_pred, doplot=False):
         ax.set_xlabel("yvals")
         ax.set_ylabel("residuals_mean")
 
-    return R2, residuals_pred, residuals_mean   
+    if return_ss:
+        return R2, residuals_pred, residuals_mean, ss_resid, ss_tot
+    else:
+        return R2, residuals_pred, residuals_mean   
 
     
 def statsmodel_ols(x, y, PRINT=False, 

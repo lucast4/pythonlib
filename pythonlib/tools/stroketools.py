@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from ..drawmodel.behtaskalignment import assignStrokenumFromTask
 from pythonlib.tools.camtools import euclidAlign, corrAlign, get_lags, fps, fps2, plotTrialsTrajectories, normalizeGaps, plotHeat
 import pandas as pd
+from pythonlib.tools.exceptions import NotEnoughDataException
 
 # =============== TIME SERIES TOOLS
 def create_generate_strokes_fake_debug(nstrokes):
@@ -686,7 +687,7 @@ def strokes_bin_velocity_wrapper(strokes, fs, binsize=0.01, return_as_dataframe=
 
     # from pythonlib.tools
     strokes_vel, strokes_speed = strokesVelocity(strokes, fs, clean=True)
-    out = strokes_bin_timesegments_wrapper(strokes, binsize)
+    out = strokes_bin_timesegments_wrapper(strokes_vel, binsize)
 
     for o in out:
         a, norm = cart_to_polar(o["x"], o["y"])
@@ -699,19 +700,118 @@ def strokes_bin_velocity_wrapper(strokes, fs, binsize=0.01, return_as_dataframe=
     else:
         return out
     
+def sample_rate_equalize_across_strokes(strokes):
+    """
+    Make all strok in strokes have the same sample rate, ie.. 
+    If any strok is off, then solves by interpoalting to global fs,
+    which is determined using the good strokes in strok.
 
-def sample_rate_from_strokes(strokes):
+    RETURNS:
+    - strokes, copies for anything that must interpolate. references for others.
+    """
+    from pythonlib.tools.exceptions import NotEnoughDataException
+
+    # First, get a single consistent sample rate
+    fs = sample_rate_from_strokes(strokes, allow_failures=True)
+    print("Found this sample rate automatically: ", fs)
+
+    # Now interpolate all the strokes to this, if they are not fs
+    list_strok_clean = []
+    n_bad = 0
+    n_good = 0
+    for strok in strokes:
+        try:
+            # Check if has clean sample rate. if it does, then it will surely have the right fs, due to the above step.
+            sample_rate_from_strok(strok, suppress_print=True)
+            list_strok_clean.append(strok)
+            n_good+=1
+        except NotEnoughDataException as err:
+            plt.close("all")
+            t0 = strok[0, 2]
+            t1 = strok[-1, 2]
+            period = 1/fs
+            times_new = np.arange(t0+0.0005, t1-0.0005, period)
+            strok_new = strokesInterpolate2([strok], ["input_times", times_new], plot_outcome=False)[0]
+            list_strok_clean.append(strok_new)
+            n_bad+=1
+
+    if n_bad/n_good > 0.01:
+        print(n_bad, n_good)
+        assert False
+
+    return list_strok_clean
+
+def sample_rate_from_strok(strok, suppress_print=False):
     """
     Get fs from using the time differences between samples.
     Does sanity check for low variance.
+    RETURNS:
+    - Raises NotEnoughDataException if gap durations are not consistent across
+    gaps. 
     """
-    strok = np.concatenate(strokes[:2], axis=0)
     gaps =np.diff(strok[:, 2])
     gap_mean = np.mean(gaps)
     gap_std = np.std(gaps)
-    assert gap_std<0.01 * gap_mean, "too much variation in gap durations across samples!"
+    if gap_std>=(0.01 * gap_mean):
+        if not suppress_print:
+            print(gap_std, "greater than: ", (0.01 * gap_mean))
+            print(gap_mean)
+            print(np.min(gaps), np.max(gaps))
+            print(gaps)
+
+            fig, axes = plt.subplots(1,3, figsize=(9,3))
+            ax = axes.flatten()[0]
+            ax.plot(gaps, "ok")
+
+            ax = axes.flatten()[1]
+            ax.plot(strok[:, 2], strok[:, 0], "x", label="x")
+            ax.plot(strok[:, 2], strok[:, 0], "x", label="y")
+            ax.legend()
+
+            ax = axes.flatten()[2]
+            ax.scatter(strok[:, 0], strok[:, 1], c=strok[:, 2])
+
+            fig.savefig("/tmp/debug.pdf")
+            print("too much variation in gap durations across samples!")
+        raise NotEnoughDataException
     fs = 1/gap_mean
     return fs
+
+def sample_rate_from_strokes(strokes, allow_failures=False):
+    """
+    Get fs from using the time differences between samples. 
+    Does separately fro each strok, then takes the median, doing sanity check for low variance.
+    """
+    if allow_failures:
+        # Then skip any strokes that fail (ie have periods that are not clean)
+        list_fs = []
+        for strok in strokes:
+            try:
+                list_fs.append(sample_rate_from_strok(strok, suppress_print=True))
+            except NotEnoughDataException as err:
+                pass                 
+    else:
+        list_fs = [sample_rate_from_strok(strok) for strok in strokes]
+    min_fs = np.min(list_fs)
+    med_fs = np.median(list_fs)
+    max_fs = np.max(list_fs)
+    assert max_fs<1.02*med_fs
+    assert min_fs>0.98*med_fs
+    return med_fs
+
+    # strok = np.concatenate(strokes[:2], axis=0)
+    # gaps =np.diff(strok[:, 2])
+    # gap_mean = np.mean(gaps)
+    # gap_std = np.std(gaps)
+    # if gap_std>=(0.01 * gap_mean):
+    #     print(gap_std)
+    #     print(gap_mean)
+    #     print(gaps)
+    #     fig, ax = plt.subplots()
+    #     ax.plot(gaps, "ok")
+    #     assert False, "too much variation in gap durations across samples!"
+    # fs = 1/gap_mean
+    # return fs
 
 # def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = 15,
 #     fs_new = 30, do_pre_filter=False, clean=False):
