@@ -2480,6 +2480,26 @@ def stroke_shape_cluster_database_save_shuffled(animal):
             print(e)
             continue
 
+def revision_eye_fixation_load_data(animal, date):
+    """
+    Load and concats PIG, combining fixation-aligned and regular data.
+    """
+    from neuralmonkey.classes.population_mult import load_handsaved_wrapper
+
+    combine_areas = True
+
+    # Method 2 - Combine two dfallpa
+    question = "PIG_BASE_saccade_fix_on"
+    DFallpa1 = load_handsaved_wrapper(animal=animal, date=date, version="saccade_fix_on", combine_areas=combine_areas, question=question)
+
+    which_level = "trial"
+    question = "PIG_BASE_trial"
+    DFallpa2 = load_handsaved_wrapper(animal=animal, date=date, version=which_level, combine_areas=combine_areas, question=question)
+
+    DFallpa = pd.concat([DFallpa1, DFallpa2]).reset_index(drop=True)
+
+    return DFallpa
+
 if __name__=="__main__":
     import sys
 
