@@ -21,7 +21,7 @@ if MACHINE == "lucast4-MS-7B98":
 elif MACHINE == "lemur":
 	HOME = "/home/lucas"
 	PATH_DRAGMONKEY = f"{HOME}/code/dragmonkey" # monkeylogic task
-	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey"
+	PATH_DRAWMONKEY_DIR = f"{HOME}/code/drawmonkey/drawmonkey"
 	PATH_NEURALMONKEY = f"{HOME}/code/neuralmonkey/neuralmonkey"
 	PATH_DATA_NEURAL_RAW = f"{HOME}/mnt/Freiwald/ltian/recordings"
 	PATH_DATA_NEURAL_PREPROCESSED = "/lemur2/lucas/neural_preprocess"

@@ -1373,7 +1373,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
     score_all_pairwise_within_task=False, extract_features = False, 
     only_keep_trials_across_groupings=False,
     rename_shapes_if_cluster_labels_exist=True,
-    label_as_novel_if_shape_semantic_fails_overwrite = None):
+    label_as_novel_if_shape_semantic_fails_overwrite = None,
+    Diego_use_main_21=True):
     """ wrapper for preprocessing, can differ for each expt, includes
     both general and expt-specific stuff.
     INPUT:
@@ -1440,7 +1441,8 @@ def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min
 
             # 1) Wrapper to exatract and add as columns in D, sanity checks that strokes match D
             print(" -- 1. extracting saved labels")
-            trialcodes_failed = D.charclust_shape_labels_extract_presaved_from_DS(skip_if_labels_not_found=True)
+            trialcodes_failed = D.charclust_shape_labels_extract_presaved_from_DS(Diego_use_main_21, skip_if_labels_not_found=False,
+                                                                                  which_shapes=None)
             # Remove the failed trials, their shapes are bad [actuall, just leave, since shapes ar  "IGN"
 
             # 2) Replace all tokens with extracted shapes.

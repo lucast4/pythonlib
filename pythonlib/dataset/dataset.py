@@ -22,6 +22,10 @@ from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars
 base_dir = PATH_ANALYSIS_OUTCOMES
 # base_dir = os.path.expanduser("~/data2/analyses")
 
+# Global switch, only matters for Diego, character days (and within that, task_kind=character) -- is shape, shape_semantic, etc
+# going to be named based on main_21 prims, or extended (which includes Z and U).
+DIEGO_USE_MAIN_21 = False
+
 def _checkPandasIndices(df):
     """ make sure indices are monotonic incresaing by 1, starting from 0
     """
@@ -3487,7 +3491,8 @@ class Dataset(object):
         self._analy_preprocess_done=False
         self, GROUPING, GROUPING_LEVELS, FEATURE_NAMES, SCORE_COL_NAMES = preprocessDat(self, expt,
                                                     rename_shapes_if_cluster_labels_exist=rename_shapes_if_cluster_labels_exist,
-                                                    label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite)
+                                                    label_as_novel_if_shape_semantic_fails_overwrite=label_as_novel_if_shape_semantic_fails_overwrite,
+                                                    Diego_use_main_21=DIEGO_USE_MAIN_21)
 
         # print("1.5 dfafasf", self.TokensVersion)
         assert hasattr(self, "TokensStrokesBeh"), "how is this possible? It should have run tokens_generate_replacement_quick_from_beh..."    
@@ -10730,8 +10735,9 @@ class Dataset(object):
         dflab["locs_drawn_x"] = list_locs_drawn_x   
         
     ##################################### CHAR CLUSTER RESULTS
-    def charclust_shape_labels_extract_presaved_from_DS(self, skip_if_labels_not_found=False,
-                                                        which_shapes=None, Diego_use_main_21=True):
+    def charclust_shape_labels_extract_presaved_from_DS(self, Diego_use_main_21, 
+                                                        skip_if_labels_not_found=False,
+                                                        which_shapes=None):
         """ Good - Load the shape labels already computed and saved using
         DS (see character_cluster_extract_shape_labels.py). And then
         stores in self.Dat['charclust_shape_seq'], each item is

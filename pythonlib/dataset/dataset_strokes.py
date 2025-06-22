@@ -3723,7 +3723,35 @@ class DatStrokes(object):
             else:
                 return None, None
 
+    def clustergood_load_saved_cluster_shape_classes_BASIC(self, animal_data=None, date_data=None,
+                                                     which_basis=None, which_shapes=None):
+        """ Laod cluster labels and return. This is BASIC beucase it does not try to append to self.Dat.
+        RETURNS DS, a copy, that includes ONLY those rows that found shape label.
+        """
 
+        if animal_data is None:
+            animal_data = self.animal()
+            assert animal_data is not None
+
+        if which_basis is None:
+            # First, try loading the DS, which has information about which basis set.
+            which_basis = self.animal()
+            assert which_basis is not None
+            
+        if date_data is None:
+            date_data = self.Date
+            assert date_data is not None
+
+        PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{animal_data}/basis={which_basis}-shapes={which_shapes}/{date_data}"
+        path = f"{PATHDIR}/DS_data.pkl"
+
+        if os.path.exists(path):
+            df = pd.read_pickle(path)
+        else:
+            print(path)
+            assert False, "failed to find data"
+        return df
+    
     def clustergood_load_saved_cluster_shape_classes(self, skip_if_labels_not_found=False,
                                                      which_basis=None, which_shapes=None):
         """ Laod cluster labels, make copy of self, and append labels
@@ -3740,8 +3768,9 @@ class DatStrokes(object):
 
         if which_basis is None:
             # First, try loading the DS, which has information about which basis set.
-            which_basis = DS.animal()
-        
+            which_basis = self.animal()
+            assert which_basis is not None
+
         # if which_shapes is not None:
         #     PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={which_basis}-shapes={which_shapes}/{DS.date()}"
         # else:
@@ -3750,6 +3779,8 @@ class DatStrokes(object):
         PATHDIR = f"/gorilla1/analyses/recordings/main/EXPORTED_BEH_DATA/DS/char_strokes_clusters/{DS.animal()}/basis={which_basis}-shapes={which_shapes}/{DS.date()}"
         path = f"{PATHDIR}/DS_data.pkl"
 
+        print("===Loading char stroke clusters from: ", path)
+
         if os.path.exists(path):
             df = pd.read_pickle(path)
             df = DS.datamod_append_unique_indexdatapt_copy(df=df)
@@ -3757,6 +3788,7 @@ class DatStrokes(object):
             DS, params_dict = DS._clustergood_load_saved_cluster_shape_classes_inner(df)
             return DS, params_dict
         else:
+            print("Could not find this path: ")
             print(path)
             assert False
             return None, None
@@ -5110,6 +5142,7 @@ class DatStrokes(object):
         from pythonlib.tools.pandastools import append_col_with_grp_index
         if df is None:
             df = self.Dat
+        assert df is not None and len(df)>0
         grp = ["trialcode", "stroke_index"]
         return append_col_with_grp_index(df, grp, "index_datapt", use_strings=False)
 
