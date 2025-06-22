@@ -1420,3 +1420,164 @@ def balanced_subsamples(N, K=5, S=None, seed=None, PRINT=False):
         print("Usage counts per index:", counts)
 
     return subsamples, counts
+
+
+def compute_all_pairwise_stats_wrapper(dfscores, vars_grp, var_score, doplots=False, savedir=None,
+                                       test_ver = "rank_sum"):
+    """
+    Compare pairwise between all levels of vars_grp, returning the results, and doing 
+    bonferoni correction for signfiicance, and making some plots.
+
+    Is unpaired stats.
+
+    PARAMS:
+    - vars_grp, grouping variable, defines each unuqie condirtion -- to get stats
+    across all pairs of conditions.
+    - var_score, str, the col holding the values that will comare.
+    """
+    from pythonlib.tools.statstools import signrank_wilcoxon, signrank_wilcoxon_from_df, ttest_unpaired
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    from math import factorial, comb
+    from pythonlib.tools.pandastools import plot_subplots_heatmap
+    import seaborn as sns
+    from scipy.stats import ranksums
+
+    if doplots and savedir is None:
+        savedir = "/tmp"
+
+    ### Go through each pair and do stats (For each pair of conditions, compare them)
+    res = []
+    grpdict = grouping_append_and_return_inner_items_good(dfscores, vars_grp)
+    for i, (grp1, inds1) in enumerate(grpdict.items()):
+        for j, (grp2, inds2) in enumerate(grpdict.items()):
+            if j>i and not grp1==grp2:
+                values1 = dfscores.iloc[inds1][var_score].values
+                values2 = dfscores.iloc[inds2][var_score].values
+                
+                if test_ver=="ttest":
+                    res_this = ttest_unpaired(values1, values2)
+                elif test_ver=="rank_sum":
+                    res_this = ranksums(values1, values2)
+                else:
+                    print(test_ver)
+                    assert False
+
+                res.append({
+                    "grp1":grp1,
+                    "grp2":grp2,
+                    "n1":len(values1),
+                    "n2":len(values2),
+                    "pval":res_this.pvalue
+                })
+                
+    dfres = pd.DataFrame(res)
+
+    if doplots:
+        pairwise_stats_plotter(dfres, len(grpdict), savedir)
+
+    return dfres
+
+def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_var, doplots=False, savedir=None):
+    """
+    Helper to compute pairwise sign-rank tests across all pairs of levels of <contrast_var>.
+    
+    Each datapt is a level of datapt_vars, and this level must have data across both levels of contrast_var.
+    
+    Datapts are the unique levels of <datapt_vars> which exist across both levesl of 
+    <contrast_var> within each comparison.
+
+    Plots do bonferoni correction for signfiicance, and making some plots.
+
+    PARAMS:
+    - value_var, str, the col holding the values that will comare.
+    """
+
+    levels = df[contrast_var].unique()
+    res = []
+    for i, lev1 in enumerate(levels):
+        for j, lev2 in enumerate(levels):
+
+            if savedir is not None:
+                save_text_path = f"{savedir}/{lev1}-vs-{lev2}.txt"
+            else:
+                save_text_path = None
+
+            if j==i:
+                # Then test lev vs. 0
+                out, _ = signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, [lev1], value_var, save_text_path)
+                vs_0 = True
+            elif j>i:
+                # Then test lev1 vs. lev2
+                out, _ = signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, [lev1, lev2], value_var, save_text_path)
+                vs_0 = False
+            else:
+                continue
+
+            plt.close("all")
+
+            res.append({
+                "grp1":lev1,
+                "grp2":lev2,
+                "pval":out["p"],
+                "res":out["res"],
+                "n1":len(out['dfpivot']),
+                "n2":len(out['dfpivot']),
+                "vs_0":vs_0
+            })
+    dfres = pd.DataFrame(res)
+
+    if doplots:
+        pairwise_stats_plotter(dfres, len(levels), savedir)
+        
+    return dfres
+
+
+def pairwise_stats_plotter(dfres, nitems, savedir):
+    """
+    PARAMS:
+    - nitems, n unique levels or grps. Used for computing n comparisons.
+    assumes symmetric.
+    """
+    from pythonlib.tools.statstools import signrank_wilcoxon, signrank_wilcoxon_from_df, ttest_unpaired
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    from math import factorial, comb
+    from pythonlib.tools.pandastools import plot_subplots_heatmap
+    import seaborn as sns
+    from scipy.stats import ranksums
+
+    dfres["logp"] = np.log10(dfres["pval"])
+
+    # Get bonferoni correction
+    npairs = comb(nitems, 2)
+    # assert npairs == len(dfres) # one row per comparison
+    alpha=0.05
+    alpha_bonf = alpha/npairs
+
+    print("Bonferoni stats: ", nitems, npairs, alpha, alpha_bonf)
+    
+    dfres["significant"] = dfres["pval"]<alpha_bonf
+
+    ### Plot
+    # sns.catplot(data=dfres, x=grp1, y="pval", hue=grp2, kind="bar")
+    fig = sns.catplot(data=dfres, x="grp1", y="logp", hue="grp2", kind="bar")
+    for p in [0.05, 0.005, alpha_bonf]:
+        for ax in fig.axes.flatten():
+            ax.axhline(np.log10(p))
+            ax.text(0, np.log10(p), f"p={p}")
+    savefig(fig, f"{savedir}/catplot-logp.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", None, annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatmap-logp.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", "significant", annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatmap-logp-significance_bonf.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "n1", None, annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatmap-n1.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "n2", None, annotate_heatmap=True)
+    savefig(fig, f"{savedir}/heatmap-n2.pdf")
+
+    if savedir is not None:
+        dfres.to_csv(f"{savedir}/dfres.csv")    
+

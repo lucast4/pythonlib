@@ -194,7 +194,27 @@ def merge_subset_indices_prioritizing_second(df_old, df_new, index_col=None):
 #     # df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
 #     return df
 ########################### ^^^^ OBSOLETE - USE aggregGeneral
-
+def replace_None_with_string(df):
+    """
+    Replace all cells with NoneType with the string "none".
+    This is useful to avoid throwing out rows, for some subsequent code that autooatmcialy ignores rows that have any Nones.
+    """
+    if df.isnull().values.any():
+        columns_with_nans = df.columns[df.isnull().any()]
+        if False:
+            # Example DataFrame
+            # Find and print columns with NaNs
+            print(df)
+            print("Columns with NaN values:", columns_with_nans.tolist())
+            assert False, "replace Nones using replace_values_with_this"
+        else:
+            # Make copy and do it
+            df = df.copy()
+            for col in columns_with_nans:
+                print("Making copy and replacing None with 'none', for: ", col)
+                print("* This adds compute time!!!!")
+                replace_values_with_this(df, col, None, "none")
+    return df
 
 def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     """
@@ -962,6 +982,8 @@ def append_col_with_grp_index(df, grp, new_col_name, use_strings=True,
     - df, but with new col. either values as string or tuples
     """
     from pythonlib.tools.pandastools import applyFunctionToAllRows
+
+    assert df is not None and len(df)>0
     
     for x in grp:
         assert not isinstance(x, (list, tuple)), "leads to errors. you prob want to flatten grp"
@@ -2273,6 +2295,7 @@ def stringify_values(df):
     """
     from pythonlib.tools.listtools import stringify_list
     df_str = df.copy()
+    df_str = replace_None_with_string(df_str)
     for k in df_str.columns:
         df_str[k] = [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in df_str[k].values.tolist()]
     return df_str
@@ -2513,6 +2536,11 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             # else:
             outdict[k] = n
 
+    if sorted_by_keys:
+        list_keys = list(outdict.keys())
+        list_keys = sort_mixed_type(list_keys)
+        outdict = {k:outdict[k] for k in list_keys}
+        
     if savepath is not None:
         if save_as=="dict":
             from .expttools import writeDictToYaml
@@ -2524,7 +2552,6 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             from .expttools import writeStringsToFile, writeDictToTxtFlattened
             header = "|".join(list_groupouter_grouping_vars)
             lines = writeDictToTxtFlattened(outdict, savepath, header=header, sorted_by_keys=sorted_by_keys)
-            print(lines)
             # lines = [f"{str(k)} : {v}" for k, v in outdict.items()]
             # if sorted_by_keys:
             #     # for l in lines[:10]:
@@ -2541,23 +2568,10 @@ def grouping_print_n_samples(df, list_groupouter_grouping_vars, Nmin=0, savepath
             print(save_as)
             assert False
         print("Saved to: ", savepath)
-
-    if sorted_by_keys:
-        list_keys = list(outdict.keys())
-        # print(list_keys[:5])
-        list_keys = sort_mixed_type(list_keys)
-        # print(list_keys[:30])
-        # print(sorted(list_keys[:30]))
-        # print(sort_mixed_type(list_keys[:30]))
-        # assert False
-        # adsfsf
-        
-        outdict = {k:outdict[k] for k in list_keys}
-        # print(k)
-        # asdsad
-
-    for k, v in outdict.items():
-        print(k, ':    ', v)
+    else:
+        # Then print
+        for k, v in outdict.items():
+            print(k, ':    ', v)
         
     return outdict
 
@@ -3070,7 +3084,7 @@ def extract_with_levels_of_var_good(df, grp_vars, n_min_per_var):
 
 def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_per_lev=1,
                                                    plot_counts_heatmap_savepath=None,
-                                                    lenient_allow_data_if_has_n_levels=2,
+                                                    lenient_allow_data_if_has_n_levels=None,
                                                     levels_var=None, remove_extra_columns=False,
                                                     plot_counts_also_before_prune_path=None):
     """
@@ -3087,7 +3101,9 @@ def extract_with_levels_of_conjunction_vars_helper(df, var, vars_others, n_min_p
         savefig(fig, plot_counts_also_before_prune_path)
         plt.close("all")
         
-    # lenient_allow_data_if_has_n_levels = 2
+    if lenient_allow_data_if_has_n_levels is None and levels_var is None:
+        lenient_allow_data_if_has_n_levels = 2
+
     dfout, dict_dfthis = extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var, n_min_across_all_levs_var=n_min_per_lev,
                     PRINT=False, lenient_allow_data_if_has_n_levels=lenient_allow_data_if_has_n_levels, DEBUG=False,
                     prune_levels_with_low_n=True, balance_no_missed_conjunctions=False,
@@ -3177,12 +3193,37 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     df["_index"] = df.index
 
     if levels_var is not None:
-        assert lenient_allow_data_if_has_n_levels == len(levels_var), "incompatible. you made mistake in entering params"
+        if lenient_allow_data_if_has_n_levels is not None:
+            assert len(levels_var) >= lenient_allow_data_if_has_n_levels, "incompatible. you made mistake in entering params"
+            # assert lenient_allow_data_if_has_n_levels == len(levels_var), "incompatible. you made mistake in entering params"
         
-    if lenient_allow_data_if_has_n_levels is None:
+    if lenient_allow_data_if_has_n_levels is None and levels_var is None:
         # levels_var must be extracted here from entire dataset 
-        assert levels_var is None, "you cant both rerquest to get all levels and also tell me which levels to get."
+        # assert levels_var is None, "you cant both rerquest to get all levels and also tell me which levels to get."
         levels_var = df[var].unique().tolist()
+
+    # This should replace the above? but did not test extensivbely.
+    # if levels_var is not None and lenient_allow_data_if_has_n_levels is None:
+    #     # OK, you want to explicitly ask for these levels
+    #     lenient_allow_data_if_has_n_levels = len(levels_var)
+    # elif levels_var is not None and lenient_allow_data_if_has_n_levels is not None:
+    #     # Check that you entered compatible params
+    #     assert len(levels_var) == lenient_allow_data_if_has_n_levels, "incompatible. you made mistake in entering params"
+    # elif levels_var is None and lenient_allow_data_if_has_n_levels is None:
+    #     # Then you want to get it automatically -- get all the levels
+    #     levels_var = df[var].unique().tolist()
+    #     lenient_allow_data_if_has_n_levels = len(levels_var)
+    # elif levels_var is None and lenient_allow_data_if_has_n_levels is not None:
+    #     # Good -- you specified how many
+    #     pass
+    # else:
+    #     assert False, "huh, shouldnt get here"
+
+    # if levels_var is not None:
+    #     for lev in levels_var:
+    #         print(lev)
+    #         print(df[var].unique().tolist())
+    #         assert lev in df[var].unique().tolist(), "you cant ask for level that doesnt exist"
 
     # throw out rows with "ignore?"
     if ignore_values_called_ignore:
@@ -3992,7 +4033,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
                                            map_dataptlev_to_color=None,
                                            edgecolor='none'):
     """ Multiple supblots, each plotting
-    45 deg scatter, comparing means for one lev
+    45 deg scatter, comparing means for one lev 
     vs. other lev
     PARAMS:
     - var_manip, str, name of col whose values will define x and y values.
@@ -4327,13 +4368,21 @@ def group_continuous_blocks_of_rows(df, var_group, var_sort, new_col = "group",
 
     # Display results
     if PRINT:
-        print("Sort Indices:\n", sort_indices)
+        # print("Sort Indices:\n", sort_indices)
         # print(f"\nSorted DataFrame with {new_col}s:\n", df_sorted)
         fig = sns.relplot(data=df_sorted, x=var_sort, y=new_col, hue=var_group)        
-
         if savedir is not None:
-            savefig(fig, f"{savedir}/{var_group}-bloques.pdf")
-
+            savefig(fig, f"{savedir}/{var_group}-bloques-x={var_sort}.pdf")
+        
+        # Also plot inorder
+        df_sorted["_index"] = range(len(df_sorted))
+        fig = sns.relplot(data=df_sorted, x="_index", y=new_col, hue=var_group)        
+        if savedir is not None:
+            savefig(fig, f"{savedir}/{var_group}-bloques-x=index.pdf")
+        # print(sorted(df_sorted[var_sort].unique()))
+        # display(df_sorted)
+        # assert False
+        
     # Get the indices of the group boundaries
     # group_boundaries = (
     #     df_sorted.groupby(var_group)
