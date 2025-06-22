@@ -741,9 +741,15 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
                 res.append({
                     "p":out["p"],
                     "lev1":lev1,
-                    "lev2":lev1
+                    "lev2":lev2
                 })
     pd.DataFrame(res).to_csv(f"{savedir}/stats_summary.csv")
+
+    # MORE_MORE_figs from notebook
+    from pythonlib.tools.statstools import compute_all_pairwise_signrank_wrapper
+    savedir_this = f"{savedir}/signrank_pairwise"
+    os.makedirs(savedir_this, exist_ok=True)
+    compute_all_pairwise_signrank_wrapper(dfdist_agg, ["labels_1_datapt"], "same-shape_loc_size", "dist_mean", True, savedir_this)
 
     return dfdist, dfdist_agg
 
@@ -2709,7 +2715,7 @@ def revision_eye_fixation_shape_decode(DFallpa, bregion, SAVEDIR_ALL):
 if __name__=="__main__":
     import sys
 
-    PLOTS_DO = [6]
+    PLOTS_DO = [2]
     # PLOTS_DO = [5.1]
     
     ###
