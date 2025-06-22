@@ -178,6 +178,22 @@ def pipeline_generate_and_plot_all(D,
         if len(D.Dat)==0:
             print("NO DATA!!")
             return None, None
+        
+        # Use only no-sup data for these
+        # dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+        # dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
+        bmh.DatLong = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+        bmh.DatLong = bmh.DatLong[bmh.DatLong["exclude_because_online_abort"]==False].reset_index(drop=True)
+
+        # make grouping var
+        if "epochset" in bmh.DatLong.columns:
+            from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
+            _, bmh.DatLong = grouping_append_and_return_inner_items(bmh.DatLong, ["epochset", "epoch_orig"], new_col_name="epochset_epoch", return_df=True)
+
+        ### SAVE A GOOD DATAFRAME (for connecting across expts)
+        # First, preprocess to score/extract all grammar-related stuff
+        path = f"{SDIR}/df_trial.pkl"
+        bmh.DatLong.to_pickle(path)
 
         if doplots:
 
@@ -235,11 +251,11 @@ def pipeline_generate_and_plot_all(D,
             if "taskfeat_cat" in bmh.DatLong.columns:
                 LIST_SPLIT_BY.append("taskfeat_cat")          
           
-            # Use only no-sup data for these
-            # dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
-            # dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
-            bmh.DatLong = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
-            bmh.DatLong = bmh.DatLong[bmh.DatLong["exclude_because_online_abort"]==False].reset_index(drop=True)
+            # # Use only no-sup data for these
+            # # dfthis = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+            # # dfthis = dfthis[dfthis["exclude_because_online_abort"]==False]
+            # bmh.DatLong = bmh.DatLong[bmh.DatLong["superv_SEQUENCE_SUP"]=="off"]
+            # bmh.DatLong = bmh.DatLong[bmh.DatLong["exclude_because_online_abort"]==False].reset_index(drop=True)
 
             for split_by in LIST_SPLIT_BY:
                 try:
@@ -295,11 +311,6 @@ def pipeline_generate_and_plot_all(D,
             bmh.stats_score_permutation_test(split_plots_by=None, savedir=sdir, suffix="flat")
 
             #### Separate p-vals for each epochset.
-            # make grouping var
-            if "epochset" in bmh.DatLong.columns:
-                from pythonlib.tools.pandastools import grouping_append_and_return_inner_items
-                _, bmh.DatLong = grouping_append_and_return_inner_items(bmh.DatLong, ["epochset", "epoch_orig"], new_col_name="epochset_epoch", return_df=True)
-                bmh.stats_score_permutation_test(split_plots_by = "epochset_epoch", savedir=sdir)
 
             ### MICROSTIM PLOTS
             if "microstim_epoch_code" in bmh.DatLong.columns:
@@ -349,7 +360,12 @@ def pipeline_generate_and_plot_all(D,
                 conjunctions_plot(D, DS, savedir, params_anova)
 
             ## STEPWISE action plots (e..g, classify seuqence errors)
+            # try:
             plot_stepwise_actions(D)
+            # except Exception as err:
+            #     # skip, since I usualyy dont use this.
+            #     print("-- Skipping stepwise, caught this error: ", err)
+            #     pass
             # from pythonlib.grammar.stepwise import preprocess_plot_actions
             # preprocess_plot_actions(D)
 

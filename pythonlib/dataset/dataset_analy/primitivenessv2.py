@@ -369,41 +369,42 @@ def extract_grouplevel_motor_stats(DS, grouping=None, PLOT = False,
 
 
     ################################################
-    ### Get features at single trial level.
-    list_grp = dfres["grp"].tolist()
-    list_inds = dfres["inds_DS"].tolist()
+    if len(dfres)>0:
+        ### Get features at single trial level.
+        list_grp = dfres["grp"].tolist()
+        list_inds = dfres["inds_DS"].tolist()
+            
+        for key in feature_keys:
+
+            list_vals = []
+            for grp, inds in zip(list_grp, list_inds):
+
+                val = np.mean(DS.Dat.iloc[inds][key])
+                list_vals.append(val)
+
+            dfres[key] = list_vals
+
+        ################################################
+        ## Shapes are new or old? if comparing new vs. old.
+        if map_shape_to_newold is not None:
+            # Info about whether is new or old shape category
+            list_shape = dfres["shape"].tolist()
+            list_new_old = []
+            for sh in list_shape:
+                list_new_old.append(map_shape_to_newold[sh])
+                
+            dfres["new_or_old"] = list_new_old    
+                
+        # Prune so dfres is fully balanced.
+        if microstim_version:
+            assert grouping == ["locshape_pre_this", "epoch", "block"], "assumign this...change otheriwse."
+            print("Before and after pruning dfres to balance [microstim_version]:")
+            print(len(dfres))
+            dfres, _ = extract_with_levels_of_conjunction_vars(dfres, "microstim_epoch_code",
+                                                            ["epoch_orig", "locshape_pre_this", "block"],
+                                                            n_min_across_all_levs_var=1)
+        dfres = dfres.reset_index(drop=True)
         
-    for key in feature_keys:
-
-        list_vals = []
-        for grp, inds in zip(list_grp, list_inds):
-
-            val = np.mean(DS.Dat.iloc[inds][key])
-            list_vals.append(val)
-
-        dfres[key] = list_vals
-
-    ################################################
-    ## Shapes are new or old? if comparing new vs. old.
-    if map_shape_to_newold is not None:
-        # Info about whether is new or old shape category
-        list_shape = dfres["shape"].tolist()
-        list_new_old = []
-        for sh in list_shape:
-            list_new_old.append(map_shape_to_newold[sh])
-            
-        dfres["new_or_old"] = list_new_old    
-            
-    # Prune so dfres is fully balanced.
-    if microstim_version:
-        assert grouping == ["locshape_pre_this", "epoch", "block"], "assumign this...change otheriwse."
-        print("Before and after pruning dfres to balance [microstim_version]:")
-        print(len(dfres))
-        dfres, _ = extract_with_levels_of_conjunction_vars(dfres, "microstim_epoch_code",
-                                                           ["epoch_orig", "locshape_pre_this", "block"],
-                                                           n_min_across_all_levs_var=1)
-    dfres = dfres.reset_index(drop=True)
-    
     return dfres, grouping
 
 def plot_triallevel_results_simple(DS, contrast, context, savedir, yvars=None):

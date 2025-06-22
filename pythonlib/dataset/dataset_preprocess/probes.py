@@ -310,9 +310,9 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
                     dict_probe_kind[(ep, task_probe)] = "same_beh"
             else:
                 for ep, tasks_this_epoch in train_tasks_per_epoch.items():
-                        
                     if PRINT:
                         print("probe task in epoch: ", task_probe, ep)
+
                     ### COLLECT FEATURES
                     # 1) probe is a unique location config?
                     list_same_config = []
@@ -366,36 +366,54 @@ def compute_features_each_probe(D, only_do_probes = True, CLASSIFY_PROBE_DETAILE
 
                     # 5) Diff n strokes
                     # list_shape_l    oc_in_train = []
-                    list_nstrok_in_train = []
-                    for task_train in tasks_this_epoch:
-                        Task = _extract_taskclass_from_taskname(task_train, 
+                    if len(tasks_this_epoch)==0:
+                        # Then this is usually becuase there are no training tasks in this epoch 
+                        # -- i.e., this probe's epoch only has probes. e.g, extrapolation tasks that
+                        # are so diff from training that they are their own epoch.
+                        # Give it generic result:
+
+                        # print("task_probe:", task_probe)
+                        # print(ep, tasks_this_epoch)
+                        # assert False, "will fail below.."
+                        dict_probe_features[(ep, task_probe)] = {
+                            "novel_location_config":False, 
+                            "equidistant_from_first_stroke":False,
+                            "novel_location_shape_combo":False,
+                            "more_n_strokes":False                    
+                            }
+                        dict_probe_kind[(ep, task_probe)] = "none"
+                    else:
+                        list_nstrok_in_train = []
+                        for task_train in tasks_this_epoch:
+                            Task = _extract_taskclass_from_taskname(task_train, 
+                                mapper_taskname_epoch_to_taskclass)
+                            tokens = Task.tokens_generate(assert_computed=True)
+                            n_tok = len(tokens)
+                            assert n_tok>0
+                            list_nstrok_in_train.append(n_tok)
+                        list_nstrok_in_train = set(list_nstrok_in_train)
+
+                        # for each probe, check if any of its items are in that list
+                        TaskProbe = _extract_taskclass_from_taskname(task_probe, 
                             mapper_taskname_epoch_to_taskclass)
-                        tokens = Task.tokens_generate(assert_computed=True)
+                        tokens = TaskProbe.tokens_generate(assert_computed=True)
                         n_tok = len(tokens)
-                        list_nstrok_in_train.append(n_tok)
-                    list_nstrok_in_train = set(list_nstrok_in_train)
+                        try:
+                            more_n_strokes = n_tok > max(list_nstrok_in_train)
+                        except Exception as err:
+                            raise err
+                        ### GIVE PROBE TASK CATEGORY A NAME
+                        c = _classify_probe_task(novel_location_config, equidistant, 
+                            novel_location_shape_combo, more_n_strokes, detailed=CLASSIFY_PROBE_DETAILED)
 
-                    # for each probe, check if any of its items are in that list
-                    TaskProbe = _extract_taskclass_from_taskname(task_probe, 
-                        mapper_taskname_epoch_to_taskclass)
-                    tokens = TaskProbe.tokens_generate(assert_computed=True)
-                    n_tok = len(tokens)
-                    try:
-                        more_n_strokes = n_tok > max(list_nstrok_in_train)
-                    except Exception as err:
-                        raise err
-                    ### GIVE PROBE TASK CATEGORY A NAME
-                    c = _classify_probe_task(novel_location_config, equidistant, 
-                        novel_location_shape_combo, more_n_strokes, detailed=CLASSIFY_PROBE_DETAILED)
-
-                    ### SAVE
-                    dict_probe_features[(ep, task_probe)] = {
-                        "novel_location_config":novel_location_config, 
-                        "equidistant_from_first_stroke":equidistant,
-                        "novel_location_shape_combo":novel_location_shape_combo,
-                        "more_n_strokes":more_n_strokes
-                        }
-                    dict_probe_kind[(ep, task_probe)] = c
+                        ### SAVE
+                        dict_probe_features[(ep, task_probe)] = {
+                            "novel_location_config":novel_location_config, 
+                            "equidistant_from_first_stroke":equidistant,
+                            "novel_location_shape_combo":novel_location_shape_combo,
+                            "more_n_strokes":more_n_strokes
+                            }
+                        dict_probe_kind[(ep, task_probe)] = c
 
     if False:
         # Sort by name of (epoch, probe).

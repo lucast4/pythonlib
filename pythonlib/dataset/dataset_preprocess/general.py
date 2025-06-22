@@ -429,9 +429,6 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = True            
         label_as_novel_if_shape_semantic_fails = True
 
-    elif expt == "dirshapepancho1":
-        label_as_novel_if_shape_semantic_fails = True
-
     elif "dirshape" in expt:
         # 10/17/22 - e..g, dircolro3b    
         # Reassign rules first using tasksequencer, then taking conjuctionw ith color instruction/
@@ -439,6 +436,7 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True            
+        label_as_novel_if_shape_semantic_fails = True
 
     elif "slots" in expt:
         # 9/29/23 - e..g, slotscoldiego1
@@ -447,10 +445,6 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True            
-
-    elif expt in ["shapecolor1b", "shapecolor1c"]:
-        # Hacky, since this was failing
-        label_as_novel_if_shape_semantic_fails = True
 
     elif "shapecolor" in expt:
         # 10/17/22 - e..g, dircolro3b    
@@ -464,6 +458,7 @@ def _groupingParams(D, expt):
         #     ("neuralbiasdir", 30, tuple([1, 24])): "heldout_I", # heldout, diff beh
         #     ("neuralbiasdir", 31, tuple([3, 4, 6, 10])): "heldout_I"} # .
         mapper_auto_rename_probe_taskgroups = True            
+        label_as_novel_if_shape_semantic_fails = True # Hacky, since this was failing
 
     elif "charstrokeseq" in expt:
         grouping_reassign = False
@@ -629,26 +624,81 @@ def _groupingParams(D, expt):
             (0,2):"A",
             (1,3):"B",
         }
-        map_shapeset_to_indices_syntax = {
-            "A":[0,2],
-            "B":[1,3],
-        }
+        map_shapeset_to_indices_syntax = {v:list(k) for k, v in map_syntconcr_template_to_shapeset.items()}
 
-    elif ("gramdiego3" in expt) or ("gramdiego4" in expt):
-        # Assume that if grammar in name, it has rules.
+    elif expt == "grampancho3b" and int(D.dates(force_single=True)[0])==250319:
+        # This was actually grampancho4, but was labeled incorrectly in the filename.
+        # A single AnBmCk...
+
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+
+    elif ("gramdiego5c" in expt and int(D.dates(force_single=True)[0])==250320) or ("gramsupdiego1" in expt):
+        # AnBmCk cross sets (in some cases, vs supervision, but that doesnt matter for the purpose of these params)
+        # (Named incorrectly as gramdiego5c for the first session)
+        
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+
+    elif ("grampancho3" in expt) or ("gramdiego2" in expt) or ("gramdiego3" in expt) or ("gramdiego4" in expt) or (expt in ["gramdiego5", "gramdiego5b", "gramdiego5c"]):
+        # These are AnBmCk cases with multiple shape sets in same day (interleaved, not crossed)
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True        
 
-        map_syntconcr_template_to_shapeset = {
-            (0,2,4):"A",
-            (1,3,5):"B",
-        }
-        map_shapeset_to_indices_syntax = {
-            "A":[0,2,4],
-            "B":[1,3,5],
-        }
+        if int(D.dates(force_single=True)[0])==250317:
+            # This day was weird, mixing diff expts, including SP, so this leads to misaligned elemnets in syntax_concrete.
+            map_syntconcr_template_to_shapeset = {
+                (1,4,6):"A",
+                (3,5,7):"B",
+            }
+        else:
+            map_syntconcr_template_to_shapeset = {
+                (0,2,4):"A",
+                (1,3,5):"B",
+                (0,3,5):"x035", # These combine shapes from sets A and B (they are probes)
+                (0,3,4):"x034",
+                (0,2,5):"x025",
+                (1,3,4):"x134",
+                (1,2,5):"x125",
+                (1,2,4):"x124",
+                # (1,2):"x12",
+                # (1,3):"x13",
+                # (1,4):"x14",
+                # (1,5):"x15",
+                # (0,1):"x01",
+                # (0,2):"x02",
+                # (0,3):"x03",
+                # (0,4):"x04",
+                # (0,5):"x05",
+                # (3,4):"x34",
+            }
+
+            for i in range(6):
+                for j in range(6):
+                    map_syntconcr_template_to_shapeset[(i, j)] = f"x{i}{j}"
+
+        map_shapeset_to_indices_syntax = {v:list(k) for k, v in map_syntconcr_template_to_shapeset.items()}
+
+    elif ("gramdiego5" in expt):
+        # AnBmCk cross sets 
+
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+
+    elif "gram" in expt:
+        # Assume that if grammar in name, it has rules.
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
 
     elif "gram" in expt:
         # Assume that if grammar in name, it has rules.
@@ -1020,7 +1070,7 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
         for idx in indices:
             tmp[(idx,)] = shapeset
     map_syntconcr_template_to_shapeset = tmp
-    
+
     # AnBm, with two shape ses switching by trail in same day.
     # Replace epoch and syntax_concrete so shapaes are diff epoch, but same synta concrete.
     list_epoch = []
@@ -1032,7 +1082,17 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
             syntax_concrete_new = row["syntax_concrete"]
         else:  
             inds_shapes = tuple([i for i, val in enumerate(row["syntax_concrete"]) if val>0])
-            
+
+            if inds_shapes not in map_syntconcr_template_to_shapeset:
+                # Then this means you hand-entered the syntax_concretes in map_syntconcr_template_to_shapeset incorrectly.
+                # Probably this day doenst have restricted to just the shapes used in the grammar tasks, and therefore the
+                # syntax concrete has extra elements.
+                for i, row in D.Dat.iterrows():
+                    print(row["epoch_orig"], " -- ", row["syntax_concrete"])
+                print("map_syntconcr_template_to_shapeset:", map_syntconcr_template_to_shapeset)
+                print("These was the missing inds_shapes: ", inds_shapes)
+                assert False, "Re-enter by hand what the syntax concretes are"
+
             shape_set = map_syntconcr_template_to_shapeset[inds_shapes] # e.g., "A"
             indices_syntax = map_shapeset_to_indices_syntax[shape_set]
             # indices_syntax = map_syntconcr_template_to_indices_syntax[inds_shapes] # e.g., "A"
@@ -1115,6 +1175,32 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             print(tp["task_objectclass"])
             raise err
 
+        return _condition_ver_params(ver, prms, D, ind)
+
+    def _extract_flexstrokes_params(prmsthis):
+        """
+        Returns two lists of ints.
+        """
+        # assert len(prmsthis)==4, "items 3 and 4 are flex params, by hard-coding.."
+
+        if len(prmsthis[2].shape)==0:
+            # Then is single int.
+            inds_dont_shuffle = tuple([int(prmsthis[2])]) # array([1., 2.]) --> (1,2)
+        else:
+            inds_dont_shuffle = tuple([int(x) for x in prmsthis[2]]) # array([1., 2.]) --> (1,2)
+
+        if len(prmsthis[3].shape)==0:
+            inds_must_change = tuple([int(prmsthis[3])]) # array([3., 4., 5.]) --> (3,4,5)
+        else:
+            inds_must_change = tuple([int(x) for x in prmsthis[3]]) # array([3., 4., 5.]) --> (3,4,5)
+
+        return inds_dont_shuffle, inds_must_change
+
+    def _condition_ver_params(ver, prms, D, ind):
+        """
+        Return prms (which is from MATLAB) to a common format here.
+        """
+
         if len(ver)==0 and len(prms)==0:
             # Then no supervision
             ver = None
@@ -1137,6 +1223,14 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             list_prims = prms[0]
             list_prims_str = [_convert_to_prim(x) for x in list_prims]
             p = tuple(list_prims_str)
+        
+        elif ver in ["prot_prims_chunks_in_order_FLEXSTROKES"]:
+            list_prims = prms[0]
+            list_prims_str = [_convert_to_prim(x) for x in list_prims]
+
+            inds_dont_shuffle, inds_must_change = _extract_flexstrokes_params(prms)
+            p = tuple(list_prims_str + [None] + [inds_dont_shuffle] + [inds_must_change])
+
         elif ver=="hack_220829":
             # (AB)(n), like lollipop, but hacked for today, hard coded for specific prims today.
             # 8/29/22
@@ -1161,15 +1255,17 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             # else:
             #     _inds_must_change = prms[3]
 
-            if len(prms[2].shape)==0:
-                inds_dont_shuffle = tuple([int(prms[2])]) # array([1., 2.]) --> (1,2)
-            else:
-                inds_dont_shuffle = tuple([int(x) for x in prms[2]]) # array([1., 2.]) --> (1,2)
+            inds_dont_shuffle, inds_must_change = _extract_flexstrokes_params(prms)
 
-            if len(prms[3].shape)==0:
-                inds_must_change = tuple([int(prms[3])]) # array([3., 4., 5.]) --> (3,4,5)
-            else:
-                inds_must_change = tuple([int(x) for x in prms[3]]) # array([3., 4., 5.]) --> (3,4,5)
+            # if len(prms[2].shape)==0:
+            #     inds_dont_shuffle = tuple([int(prms[2])]) # array([1., 2.]) --> (1,2)
+            # else:
+            #     inds_dont_shuffle = tuple([int(x) for x in prms[2]]) # array([1., 2.]) --> (1,2)
+
+            # if len(prms[3].shape)==0:
+            #     inds_must_change = tuple([int(prms[3])]) # array([3., 4., 5.]) --> (3,4,5)
+            # else:
+            #     inds_must_change = tuple([int(x) for x in prms[3]]) # array([3., 4., 5.]) --> (3,4,5)
 
             p = tuple(list_prims_str + [direction] + [inds_dont_shuffle] + [inds_must_change])
             # e.g,, ('zigzagSq-1-1', 'Lcentered-4-4', 'line-6-2', 'line-8-1', 'line-9-1', 'line-6-1', 'arcdeep-4-3', 'V-2-4', 'UL', (1, 2), (3, 4, 5))
@@ -1214,6 +1310,43 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             for this in prms:
                 assert isinstance(this, str)
             p = tuple(prms)
+
+        elif ver == "map_from_los_to_order":
+            # Each los is mapped to its own sequence. Ie not actualyl a rule.
+            # I used this for seqsup, to supervise on the sequence Panhco actualy used.
+
+            D.taskclass_extract_los_info_append_col()
+            los = D.Dat.iloc[ind]["los_info"]
+            los_mapper_name = prms[0] # Pancho-250322
+            map_los_to_sequence = prms[1] # {grammar__48__313': array([1, 5, 2, 3, 4])}
+            
+            key = "__".join([str(x) for x in los])
+
+            indices = map_los_to_sequence[key]
+            indices = tuple(int(x) for x in indices)
+
+            p = tuple([los_mapper_name])
+
+        elif ver == "map_from_los_to_order_FLEXSTROKES":
+            # Each los is mapped to its own sequence. Ie not actualyl a rule.
+            # I used this for seqsup, to supervise on the sequence Panhco actualy used.
+
+            D.taskclass_extract_los_info_append_col()
+            los = D.Dat.iloc[ind]["los_info"]
+            los_mapper_name = prms[0] # Pancho-250322
+            map_los_to_sequence = prms[1] # {grammar__48__313': array([1, 5, 2, 3, 4])}
+            
+            key = "__".join([str(x) for x in los])
+
+            indices = map_los_to_sequence[key]
+            indices = tuple(int(x) for x in indices)
+
+            # p = tuple([los_mapper_name])
+
+            ### Flex strokes
+            inds_dont_shuffle, inds_must_change = _extract_flexstrokes_params(prms)
+            p = tuple([los_mapper_name] + [None] + [inds_dont_shuffle] + [inds_must_change]) # ('Pancho-250322', None, (1,), (2, 3, 4, 5, 6))
+
         else:
             print(ver)
             print(prms)

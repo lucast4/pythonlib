@@ -15,11 +15,11 @@ MAP_EPOCHKIND_EPOCH = {
     "shape":["LVl1", "lVL1", "VlL1", "llV1a", "llV1b", "llV1c", "llV1d", "llV1R", "ZlA1"], # deterministic shape (ABC...)
     "(AB)n":["(AB)n"], # Any direction within chunks
     "(AB)nDir":["LolDR"], # fixed direction withoin amnd across chunks.
-    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR"],
-    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSD4", "SSP1", "SSP2", "SSP3", "SSP4", "gramP2", "gramP2b", "gramD4"],
+    "AnBm":["AnBm1a", "AnBm2", "AnBmHV", "AnBm1b", "AnBm0", "AnBmCk2NODIR", "gramP3", "gramP3b"],
+    "AnBmDir":["LCr2", "CLr2", "AnBmTR", "AnBmCk1a", "AnBmCk1b", "AnBmCk1c", "AnBmCk2", "LCr1", "CLr1", "LCr3", "llCV1", "llCV2", "llCV3", "llCV3b", "SSD1", "SSD1b", "SSD2", "SSD3", "SSD4", "SSP1", "SSP2", "SSP3", "SSP4", "gramP2", "gramP2b", "gramD4", "gramD5"],
     "rowcol":["rowsDR", "rowsUL", "colsRD", "colsLU"],
     "ranksup":["rndstr", "rank", "llCV2FstStk", "llCV3FstStk", "AnBmCk2FstStk", "AnBmCk2NOFstStk", "SSD4Rnd", "SSP4Rnd", "SSD4RndFlx1", "SSD4RndFlx2", "SSP4RndFlx1", "SSP4RndFlx2", "llCV3RndFlx1",
-        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1", "gramP2bRnd", "gramP2bRndFlx1"], # External cue, either mask or color supervision
+        "llCV3RndFlx12", "llCV3RndFlx123", "AnBmCk2RndFlx0", "AnBmCk2RndFlx1", "AnBmCk2RndFlx12", "SpcOrd1", "gramP2bRnd", "gramP2bRndFlx1", "gramD5RndFlx0", "gramD5RndFlx1", "gramP3bFlx0", "gramP3bFlx1", "gramP3dLOS", "gramP3dLOSFlx1", "gramP3dLOSFlx0"], # External cue, either mask or color supervision
     "baseline":["base", "baseline"]
 }
 
@@ -94,6 +94,17 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2'))] = "AnBm1b"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('line-11-1', 'line-11-2'))] = "AnBmHV"
     grouping_map_tasksequencer_to_rule[("prot_prims_chunks_in_order", ('squiggle3-3-1', 'V-2-4'))] = "AnBm0"
+
+    grouping_map_tasksequencer_to_rule[('prot_prims_chunks_in_order', ('line-8-4', 'line-11-1', 'line-8-3', 'line-11-2', 'V-2-4', 'V-2-2'))] = "gramP3"
+    grouping_map_tasksequencer_to_rule[('prot_prims_chunks_in_order', ('line-8-3', 'line-11-1', 'line-8-4', 'line-11-2', 'V-2-4', 'V-2-2'))] = "gramP3b"
+
+    grouping_map_tasksequencer_to_rule[('prot_prims_chunks_in_order_FLEXSTROKES', ('line-8-3', 'line-11-1', 'line-8-4', 'line-11-2', 'V-2-4', 'V-2-2', None, (1,), (2, 3, 4, 5, 6)))] = "gramP3bFlx1"
+    grouping_map_tasksequencer_to_rule[('prot_prims_chunks_in_order_FLEXSTROKES', ('line-8-3', 'line-11-1', 'line-8-4', 'line-11-2', 'V-2-4', 'V-2-2', None, (), (1, 2, 3, 4, 5, 6)))] = "gramP3bFlx0"
+    
+    grouping_map_tasksequencer_to_rule[('map_from_los_to_order', ('Pancho-250322',))] = "gramP3dLOS"
+    grouping_map_tasksequencer_to_rule[('map_from_los_to_order_FLEXSTROKES', ('Pancho-250322', None, (1,), (2, 3, 4, 5, 6)))] = "gramP3dLOSFlx1"
+    grouping_map_tasksequencer_to_rule[('map_from_los_to_order_FLEXSTROKES', ('Pancho-250322', None, (), (1, 2, 3, 4, 5, 6)))] = "gramP3dLOSFlx0"
+
 
     grouping_map_tasksequencer_to_rule[("hack_220829", tuple(["hack_220829"]))] = "(AB)n"
 
@@ -258,6 +269,18 @@ def _get_default_grouping_map_tasksequencer_to_rule():
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
         ('V-2-2', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'Lcentered-4-2', 'Lcentered-4-3', 'UL'))] = "gramD4" # Diego, gramdiego4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2', 
+        ('V-2-2', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'Lcentered-4-2', 'Lcentered-4-3', 'DR'))] = "gramD5" # Diego, gramdiego4
+    
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('V-2-2', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'Lcentered-4-2', 'Lcentered-4-3', 'DR', (), (1, 2, 3, 4, 5, 6)))] = "gramD5RndFlx0" # Diego, gramdiego4
+
+    grouping_map_tasksequencer_to_rule[(
+        'prot_prims_in_order_AND_directionv2_FLEXSTROKES', 
+        ('V-2-2', 'line-6-2', 'line-14-2', 'line-8-1', 'line-9-1', 'line-6-1', 'line-14-1', 'arcdeep-4-3', 'V-2-4', 'Lcentered-4-2', 'Lcentered-4-3', 'DR', (1,), (2, 3, 4, 5, 6)))] = "gramD5RndFlx1" # Diego, gramdiego4
 
     grouping_map_tasksequencer_to_rule[(
         'prot_prims_in_order_AND_directionv2', 
@@ -525,6 +548,19 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
                 print(e)
                 assert False
 
+        def _getRightThenDown(e):
+            """ left, but break ties using up.
+            """
+            if isinstance(e, list) and len(e)==2:
+                # e.g., ['line-8-4-0', {'x': -1.7, 'y': -1.7, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+                x = e[1]['x']
+                y = -e[1]['y']
+                return x + 0.1*y # projection onto (1,1)
+            elif isinstance(e, dict):
+                return e['x'] - 0.1*e['y']
+            else:
+                print(e)
+                assert False
         
         # print("TODO: break ties")
         # print("OBJECTS:", objects)
@@ -551,6 +587,9 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         elif direction in ["UL"]:
             # left, then break ties with up
             return sorted(objects, key=_getLeftThenUp)
+        elif direction in ["DR"]:
+            # left, then break ties with up
+            return sorted(objects, key=_getRightThenDown)
         elif direction in ["topright", "UR"]:
             # typewriter: first right, ythrn break ties by up.
             return sorted(objects, key=_getRightThenUp)
@@ -1632,6 +1671,8 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         tuple(MAP_EPOCHKIND_EPOCH["direction"]):_get_direction_variations(MAP_EPOCHKIND_EPOCH["direction"]),
         ("(AB)n", "AnBm1a"):_get_chunk_dir2_variations(["(AB)n"]) + ["ss-rank-AnBm1a"], # grammar1
         ("AnBm2", "AnBmHV"):["ss-rank-AnBm2", "ss-rank-AnBmHV"], # grammar2, diag and hv lines
+        ("gramP3",):["ss-rank-gramP3"], # grammar chunks (no direction within chunk)
+        ("gramP3b",):["ss-rank-gramP3b"], # grammar chunks (no direction within chunk)
         ("AnBm1b",):["ss-rank-AnBm1b"], # grammar2b, diag and hv lines, both within a single rule
         ("AnBmCk2NODIR",):["ss-rank-AnBmCk2NODIR"], # AnBmCk, no dir rule within shapes.
         ("LCr2", "CLr2", "LolDR"):_get_rankdir_variations(["LCr2", "CLr2"]) + [f"chmult-dirdir-LolDR"], #  gridlinecircle3
@@ -1656,6 +1697,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("gramP2",):_get_rankdir_variations(["gramP2"]), #
         ("gramP2b",):_get_rankdir_variations(["gramP2b"]), #
         ("gramD4",):_get_rankdir_variations(["gramD4"]), #
+        ("gramD5",):_get_rankdir_variations(["gramD5"]), #
         ("rndstr",): ["preset-null-rndstr"], #  
         ("SpcOrd1",): ["preset-null-SpcOrd1"], #  
         ("llCV2FstStk",): ["preset-null-llCV2FstStk"], # colorgrammardiego1??, where first stroke is like llCV2, then the others are random.
@@ -1671,6 +1713,13 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
         ("SSP4RndFlx2",): ["preset-null-SSP4RndFlx2"],
         ("SSD4RndFlx1",): ["preset-null-SSD4RndFlx1"],
         ("SSD4RndFlx2",): ["preset-null-SSD4RndFlx2"],
+        ("gramP3bFlx0",): ["preset-null-gramP3bFlx0"],
+        ("gramP3bFlx1",): ["preset-null-gramP3bFlx1"],
+        ("gramP3dLOS",): ["preset-null-gramP3dLOS"],
+        ("gramP3dLOSFlx1",): ["preset-null-gramP3dLOSFlx1"],
+        ("gramP3dLOSFlx0",): ["preset-null-gramP3dLOSFlx0"],
+        ("gramD5RndFlx1",): ["preset-null-gramD5RndFlx1"],
+        ("gramD5RndFlx0",): ["preset-null-gramD5RndFlx0"],
         ("AnBmCk2RndFlx12",): ["preset-null-AnBmCk2RndFlx12"],
         ("AnBmCk2RndFlx1",): ["preset-null-AnBmCk2RndFlx1"],
         ("AnBmCk2RndFlx0",): ["preset-null-AnBmCk2RndFlx0"],
@@ -1851,6 +1900,10 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         # Shape sequence.
         # e.g., ((3, 1, 1, 0),) means for AnBmCk, you have n=3, m=1, k=1.
         # The last 0 means no leftover items.
+        # NOTE (This is incorrect!!) for days with >1 epoch (e.g., swtiching between two shape sets), each tuple 
+        # will be specific to a shape set. e.g, (1,2,0) for shape set 1 that has 2 shapes, insstead of
+        # (1,2,0,0,0), for shape set 1.
+
         from pythonlib.drawmodel.task_features import shapes_n_each_extract
 
         shapes_pool = _extract_shapes_pool(rd)
@@ -1867,12 +1920,16 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         # Only keep shapes that actually exist in dataset.
         shapes_exist = D.taskclass_shapes_extract_unique_alltrials() # List of str
         shapes_pool = [sh for sh in shapes_pool if sh in shapes_exist]
-
         ## 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
+        # print("shapes_pool:", shapes_pool)
         list_ns = []
         for ind in range(len(D.Dat)):
             Task = D.Dat.iloc[ind]["Task"]
             nshapes, n_left_over = shapes_n_each_extract(Task, shapes_pool, shape_key)
+            # NOTE: n_left_over can be > 0 if that day has SP shapes that rae not in the shapes_pool fro this rule.
+            # if n_left_over != 0:
+            #     print("n_left_over:", n_left_over)
+            #     assert n_left_over == 0, "instead, try to assign each shape in task a proper label."
             nshapes.append(n_left_over)
 
             # tokens = D.taskclass_tokens_extract_wrapper(ind, "task")
