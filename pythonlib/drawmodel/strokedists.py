@@ -719,6 +719,86 @@ def distStrokWrapper(strok1, strok2, ver="euclidian",
                 print(np.mean(np.abs(vel1)))
                 print(np.mean(np.abs(vel2)))
                 print("Expected penalty if offset by 10 steps:", additive_penalty * 10)
+
+    elif ver=="euclid_vels_2d":
+        # euclidian distnace between velocities, using exact same preproicessing as done for DTW.
+        # i.e. this is same as DTW, but without the time-warping.
+        # Should be much quicker. 
+
+        from pythonlib.tools.timeseriestools import DTW
+        from pythonlib.tools.stroketools import strokesVelocity
+
+        plot_table = DEBUG
+
+        if ALREADY_PROCESSED:
+            vel1, vel2 = strok1, strok2
+        else:
+            tdur1 = strok1[-1,2] - strok1[0,2]
+            tdur2 = strok2[-1,2] - strok2[0,2]
+
+            if auto_interpolate_if_needed:
+                plot_outcome = DEBUG
+                strok1, strok2 = _interp(strok1, strok2, plot_outcome=plot_outcome)
+
+            # Convert strok to vels
+            METHOD = 1
+            if METHOD==0:
+                # v1, maintain temporal info - between strokes, relative vleocity
+                # is correct (i.e., faster beh leads to alrger velocities).
+
+                # Modify vel1 and vel2 so that they are asusmed to take the exact same amount
+                # of time. do this by giving fake timestamps, and making them take both 1sec.
+                times_fake = np.linspace(0, tdur1, len(strok1))
+                strok1[:,2] = times_fake
+                per = times_fake[1]-times_fake[0]
+                fs = 1/per
+                fs = 1.25 * fs # Hack, to smooth further, fake the input as if its sampled higher.
+                vel1 = strokesVelocity([strok1], fs, ploton=DEBUG)[0][0]
+                print("fs 1:", fs)
+                # print(vel1[:5,:])
+                # assert False
+
+                times_fake = np.linspace(0, tdur2, len(strok2))
+                strok2[:,2] = times_fake
+                per = times_fake[1]-times_fake[0]
+                fs = 1/per
+                fs = 1.25 * fs # Hack, to smooth further, fake the input as if its sampled higher.
+                print("fs 2:", fs)
+                vel2 = strokesVelocity([strok2], fs, ploton=DEBUG)[0][0]
+            elif METHOD==1: # throw out temporal info entirely
+                # Modify vel1 and vel2 so that they are asusmed to take the exact same amount
+                # of time. do this by giving fake timestamps, and making them take both 1sec.
+                tdur = 1
+                assert len(strok1)==len(strok2)
+                times_fake = np.linspace(0, tdur, len(strok1))
+                strok1[:,2] = times_fake
+                strok2[:,2] = times_fake
+                per = times_fake[1]-times_fake[0]
+                fs = 1/per # This is important -- must match the timebase of the data, so
+                # that the filter step works correctly within.
+                fs = 1.2 * fs # Hack, to smooth slightly, fake the input as if its sampled higher.
+                # this seems to lead to better fits.
+                vel1, vel2 = strokesVelocity([strok1, strok2], fs, ploton=DEBUG)[0]
+            elif METHOD==2:
+                # Doesnt make sense.. This was doing ok, but not in princple good, since
+                # the timebase is in (cum space) units, which have nothing to do with the input fs.
+                assert fs is not None, "to do vels, need to know sample rate"
+                vel1, vel2 = strokesVelocity([strok1, strok2], fs, ploton=DEBUG)[0]
+            else:
+                assert False
+            # print(strok1[:5,:])
+            # print(strok2[:5,:])
+        # assert False
+
+        if ONLY_RETURN_PROCESSED_STROKES:
+            strok1_processed = vel1
+            strok2_processed = vel2
+        else:
+            # Euclidian distance
+            dist = np.sum(np.sum((vel2[:, :2] - vel1[:, :2])**2, axis=1)**0.5)
+
+            # Noramlize distance by longer n
+            dist = dist/max([len(vel1), len(vel2)])
     else:
         print(ver)
         assert False
