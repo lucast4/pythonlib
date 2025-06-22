@@ -2500,6 +2500,212 @@ def revision_eye_fixation_load_data(animal, date):
 
     return DFallpa
 
+def revision_eye_fixation_shape_decode(DFallpa, bregion, SAVEDIR_ALL):
+    """
+    To show that, in PIG, decoding is strong for what going to draw, regardless of where you are looking.
+
+    Trains decoder (decoder_moment using SP data for a given day, then uses this to test alinged to fixations
+    for PIG, and plots decoding score).
+
+    To make point that PMv encodes the planned shape to draw, even when fixating on a different shape.
+
+    Code development, see:
+    # See plot_all in analyeyefixdecodemoment gen
+    # See _analy_chars_score_postsamp_plot_timecourse
+    # Also this for more splitting and stuff: _timeseries_plot_by_shape_drawn_order
+    """
+
+    from pythonlib.tools.pandastools import convert_to_2d_dataframe
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.plottools import savefig
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good, aggregGeneral, grouping_plot_n_samples_conjunction_heatmap_helper, append_col_with_grp_index, plot_45scatter_means_flexible_grouping
+
+    ########## TRAIN DECODER
+    from neuralmonkey.analyses.decode_moment import pipeline_train_test_scalar_score
+
+    PLOT_DECODER = True
+    n_min_per_var = 5
+
+    # Train a single decoder on SP data
+    event_train = "03_samp"
+    # twind_train = (0.05, 1.2)
+    twind_train = (0.05, 1.0)
+    filterdict_train = {
+        "FEAT_num_strokes_task":[1],
+        "task_kind":["prims_single"],
+    }
+    which_level_train = "trial"
+    var_train = "seqc_0_shape"
+
+    # var_test = "shape-fixation"
+    var_test = "seqc_0_shape"
+    list_twind_test = [(0.05, 0.3)]
+    assert len(list_twind_test)==1, "assumes this."
+    which_level_test = "flex"
+    event_test = "fixon_preparation"
+    filterdict_test = {
+        "FEAT_num_strokes_task":list(range(2,10)),
+        "task_kind":["prims_on_grid"],
+    }
+
+    for twind_test in list_twind_test:
+        SAVEDIR = f"{SAVEDIR_ALL}/twind={twind_test}"
+        os.makedirs(SAVEDIR, exist_ok=True)
+        print("SAVING AT: ", SAVEDIR)
+
+        savedir = f"{SAVEDIR}/decoder_training"
+        os.makedirs(savedir, exist_ok=True)
+        DFSCORES, Dc, _, PAtest = pipeline_train_test_scalar_score(DFallpa, bregion, 
+                                            var_train, event_train, twind_train, filterdict_train,
+                                            var_test, event_test, [twind_test], filterdict_test,
+                                            savedir, prune_labels_exist_in_train_and_test=True, PLOT=PLOT_DECODER,
+                                            which_level_train=which_level_train, which_level_test=which_level_test, 
+                                            n_min_per_var=n_min_per_var,
+                                            allow_multiple_twind_test=True)
+
+    ### Postprocess of dfscores (e.g., add columns)
+    dflab = PAtest.Xlabels["trials"]
+    dflab = append_col_with_grp_index(dflab, ["shape-fixation", "seqc_0_shape"], "shape-fix_draw")
+    PAtest.Xlabels["trials"] = dflab
+
+    inds_pa = DFSCORES["pa_idx"].tolist()
+    for col in ["shape-fixation", "seqc_0_shape", "early-or-late-planning-period", "shape-macrosaccade-index"]:
+        if col in DFSCORES:
+            assert DFSCORES[col].tolist()==dflab.iloc[inds_pa][col].tolist()
+        DFSCORES[col] = dflab.iloc[inds_pa][col].values
+    assert all(DFSCORES[var_test] == DFSCORES["pa_class"])
+    DFSCORES["dcd_eq_fix"] = DFSCORES["decoder_class"] == DFSCORES["shape-fixation"]
+    DFSCORES["dcd_eq_draw"] = DFSCORES["decoder_class"] == DFSCORES["seqc_0_shape"]
+    DFSCORES = append_col_with_grp_index(DFSCORES, ["dcd_eq_fix", "dcd_eq_draw"], "dcd_eq_fix|draw")
+
+    # Sanity check
+    dfscores_good = DFSCORES[DFSCORES["shape-fixation"] != DFSCORES["seqc_0_shape"]]
+    n_fix_good = len(dfscores_good["pa_idx"].unique()) # This where fix and draw are dissociated
+    assert sum(DFSCORES["dcd_eq_fix|draw"]=="0|1") == sum(DFSCORES["dcd_eq_fix|draw"]=="1|0") == n_fix_good, "sanity check, each fixation has a single datapt"
+
+    ### AGG so that the final score is not biased by frequencies of draw/fixation.
+    DFSCORES_AGG = aggregGeneral(DFSCORES, ["early-or-late-planning-period", "shape-fixation", "seqc_0_shape", "decoder_class"], ["score"], 
+                  ["dcd_eq_fix", "dcd_eq_draw", "dcd_eq_fix|draw"])
+
+    ############### PLOTS
+    ### Get timecourses 
+    # Split by (what draw, what looking at)
+    dflab = PAtest.Xlabels["trials"]
+    twind_test = (-0.35, 0.35)
+    shapes_unique = sorted(set(dflab["shape-fixation"].unique().tolist() + dflab["seqc_0_shape"].unique().tolist()))
+    for early_late_this in ["early", "late"]:
+        grpdict = grouping_append_and_return_inner_items_good(dflab, ["shape-fixation", "seqc_0_shape", "early-or-late-planning-period"])
+        grpdict = {k:v for k, v in grpdict.items() if k[2]==early_late_this} # Keep just early or late.
+        assert len(grpdict)>0
+        
+        n = len(shapes_unique)
+        SIZE = 3
+        fig, axes = plt.subplots(n, n, figsize=(SIZE*n, SIZE*n), sharex=True, sharey=True)
+
+        for i, (grp, indtrials) in enumerate(grpdict.items()):
+            
+            _, probs_mat_all, times, labels = Dc.timeseries_score_wrapper(PAtest, 
+                                                                                    twind_test, indtrials, 
+                                                                                    labels_in_order_keep=shapes_unique)
+
+            ax = axes.flatten()[i]
+            plot_legend = i==0
+            Dc._timeseries_plot_flex(probs_mat_all, times, labels, MAP_INDEX_TO_COL=None, ax=ax, plot_legend=plot_legend)
+            ax.set_title(f"shape-fixation={grp[0]}|seqc_0_shape={grp[1]}", fontsize=6)
+            ax.set_ylim([0, 1])
+
+        savefig(fig, f"{SAVEDIR}/timecourses-final-{early_late_this}.pdf")
+        plt.close("all")
+
+    ### Plot heatmap summaries
+
+    # Split by (what draw, what looking at)
+    dflab = PAtest.Xlabels["trials"]
+    grpdict = grouping_append_and_return_inner_items_good(dflab, ["shape-fixation", "early-or-late-planning-period"])
+    n = len(shapes_unique)
+    SIZE = 3
+
+    # for norm_method, annotate_heatmap in [(None, True), ("row_div", False), ("col_div", False), ("all_div", False)]:
+    for norm_method, annotate_heatmap in [(None, True), ("row_div", False), ("col_div", False)]:
+        fig, axes = plt.subplots(2, n, figsize=(SIZE*n, SIZE*2), sharex=True, sharey=True)
+        agg_method = "mean"
+        val_name = "score"
+        diverge = False
+        zlims = [0, 1]
+        # annotate_heatmap = False
+        # norm_method = "row_div"
+        for i, (grp, indtrials) in enumerate(grpdict.items()):
+            dfscores = DFSCORES[DFSCORES["pa_idx"].isin(indtrials)].reset_index(drop=True)
+            ax = axes.flatten()[i]
+            if len(dfscores)>0:
+                df2d, _, _, rgba_values = convert_to_2d_dataframe(dfscores, "pa_class", "decoder_class", True,
+                                        agg_method,
+                                        val_name,
+                                        ax=ax, annotate_heatmap=annotate_heatmap,
+                                        diverge=diverge, zlims=zlims, norm_method=norm_method,
+                                        list_cat_1 = shapes_unique, list_cat_2=shapes_unique)
+            ax.set_title(f"shape-fixation={grp[0]}", fontsize=6)
+        savefig(fig, f"{SAVEDIR}/heatmaps-final-norm={norm_method}-annot={annotate_heatmap}.pdf")    
+    # assert False
+    ### Plot scatter
+    _, fig = plot_45scatter_means_flexible_grouping(DFSCORES, "dcd_eq_fix|draw", "0|1", "1|0", "early-or-late-planning-period", 
+                                        "score", "trialcode", False, alpha=0.1, SIZE=4, plot_error_bars=False);
+    savefig(fig, f"{SAVEDIR}/scatter-datapt=trialcode.pdf")
+
+    _, fig = plot_45scatter_means_flexible_grouping(DFSCORES, "dcd_eq_fix|draw", "0|1", "1|0", "early-or-late-planning-period", 
+                                        "score", "decoder_class", True);
+    savefig(fig, f"{SAVEDIR}/scatter-datapt=decoder_class.pdf")
+    plt.close("all")
+
+    ### Final score, split by saccade idx
+    fig = sns.catplot(data=DFSCORES, x="dcd_eq_fix|draw", y="score", hue="shape-macrosaccade-index", kind="bar")
+    savefig(fig, f"{SAVEDIR}/catplot-shape-macrosaccade-index.pdf")
+
+    ### Final summary, score compare looking at vs. draw
+    for suff, dfscores in [
+        ("datapt=trial", DFSCORES), 
+        ("datapt=aggcondition", DFSCORES_AGG), 
+    ]:
+
+        # - 
+        fig = sns.catplot(data=dfscores, x="dcd_eq_fix|draw", y="score", col="early-or-late-planning-period", alpha=0.1, jitter=True)
+        savefig(fig, f"{SAVEDIR}/catplot-1-{suff}.pdf")
+
+        fig = sns.catplot(data=dfscores, x="dcd_eq_fix|draw", y="score", hue="early-or-late-planning-period", kind="boxen")
+        savefig(fig, f"{SAVEDIR}/catplot-2-{suff}.pdf")
+
+        fig = sns.catplot(data=dfscores, x="dcd_eq_fix|draw", y="score", hue="early-or-late-planning-period", kind="bar")
+        savefig(fig, f"{SAVEDIR}/catplot-4-{suff}.pdf")
+
+    ### Relationship between fixation index and early/late
+    if False:
+        grouping_print_n_samples(dflab, ["is-first-macrosaccade", "event_idx_within_trial", "early-or-late-planning-period"]) #"event_idx_within_trial"]);
+
+    fig = grouping_plot_n_samples_conjunction_heatmap_helper(dflab, ["shape-macrosaccade-index", "shape-fix_draw", "early-or-late-planning-period"]);    
+    savefig(fig, f"{SAVEDIR}/counts.pdf")   
+
+    plt.close("all")
+
+    ### STATS, pairwise
+    from pythonlib.tools.statstools import signrank_wilcoxon, signrank_wilcoxon_from_df, ttest_unpaired, compute_all_pairwise_stats_wrapper
+    vars_grp = "dcd_eq_fix|draw"
+    var_score = "score"
+
+    for test_ver in ["ttest", "rank_sum"]:
+        for early_late in ["early", "late"]:
+            savedir = f"{SAVEDIR}/stats_datpt=agg-{early_late}-test_ver={test_ver}"
+            os.makedirs(savedir, exist_ok=True)
+            dfscores_this = DFSCORES_AGG[DFSCORES_AGG["early-or-late-planning-period"] == early_late].reset_index(drop=True)
+            compute_all_pairwise_stats_wrapper(dfscores_this, vars_grp, var_score, doplots=True, savedir=savedir, test_ver=test_ver)
+
+            savedir = f"{SAVEDIR}/stats_datpt=fix-{early_late}-test_ver={test_ver}"
+            os.makedirs(savedir, exist_ok=True)
+            dfscores_this = DFSCORES[DFSCORES["early-or-late-planning-period"] == early_late].reset_index(drop=True)
+            compute_all_pairwise_stats_wrapper(dfscores_this, vars_grp, var_score, doplots=True, savedir=savedir, test_ver=test_ver)
+            plt.close("all")
+            
+    return DFSCORES, DFSCORES_AGG
+
 if __name__=="__main__":
     import sys
 
@@ -2661,6 +2867,49 @@ if __name__=="__main__":
 
             animal = "Pancho"
             stroke_shape_cluster_database_save_shuffled(animal)
+            
+        elif plot_do==7:
+            """
+            revision_eye_fixation_shape_decode
 
+            Decoding (trained on single prims) testing on fixation data, asking whether PMv cares more about what shape fixated (vision) or 
+            what prim plan to draw.
+
+            Note: There is not code to agg mult days, since in the paper I just included I day per animal.
+            """
+            from neuralmonkey.classes.population_mult import dfpa_concatbregion_preprocess_wrapper
+            from neuralmonkey.analyses.decode_moment import pipeline_get_dataset_params_from_codeword, train_decoder_helper, _test_decoder_helper
+
+            for animal, date in [
+                ("Diego", 230615),
+                ("Diego", 230628),
+                ("Diego", 230630),
+                ("Diego", 240625),
+                ("Pancho", 230620),
+                ("Pancho", 230622),
+                ("Pancho", 230623), 
+                ("Pancho", 230626),
+                ("Pancho", 240612),
+                ("Pancho", 240612),
+                ]:
+
+                try:
+                    # (1) Load data
+                    DFallpa = revision_eye_fixation_load_data(animal, date)
+                    dfpa_concatbregion_preprocess_wrapper(DFallpa, animal, date)
+
+                    # (2) Run thru each brain region
+                    SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/REVISION_PIG_eyetracking_decode/{animal}-{date}"
+                    for bregion in DFallpa["bregion"].unique():
+                        savedir = f"{SAVEDIR}/{bregion}"
+                        os.makedirs(savedir, exist_ok=True)
+                        revision_eye_fixation_shape_decode(DFallpa, bregion, savedir)
+                except FileNotFoundError as err:
+                    print(err)
+                    print("Dfallpa not yet extracted, most likely")
+                    continue
+                except Exception as err:
+                    raise err
+                    
         else:
             assert False
