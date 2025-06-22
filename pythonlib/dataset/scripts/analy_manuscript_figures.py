@@ -2882,6 +2882,11 @@ if __name__=="__main__":
             what prim plan to draw.
 
             Note: There is not code to agg mult days, since in the paper I just included I day per animal.
+
+            To get single-trial example plot, use:
+
+            sn.beh_eye_fixation_extract_and_assign_task_shape, in notebook:
+            /home/lucas/code/neuralmonkey/neuralmonkey/notebooks/230430_eyetracking_overview.ipynb
             """
             from neuralmonkey.classes.population_mult import dfpa_concatbregion_preprocess_wrapper
             from neuralmonkey.analyses.decode_moment import pipeline_get_dataset_params_from_codeword, train_decoder_helper, _test_decoder_helper
