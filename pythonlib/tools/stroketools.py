@@ -110,8 +110,8 @@ def strokesInterpolate2(strokes, N, kind="linear", base="time", plot_outcome=Fal
                         assert max(tnew)<=max(t), "interpolation timepoints must be within the data"
                         assert min(tnew)>=min(t), "interpolation timepoints must be within the data"
                     except Exception as err:
-                        print(t)
-                        print(tnew)
+                        print('pts to interp',np.min(t),np.max(t))
+                        print('ref pts',np.min(tnew),np.max(tnew))
                         raise err
                     COMPUTE_TNEW=False
                 else:
