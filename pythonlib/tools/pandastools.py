@@ -198,6 +198,8 @@ def replace_None_with_string(df):
     """
     Replace all cells with NoneType with the string "none".
     This is useful to avoid throwing out rows, for some subsequent code that autooatmcialy ignores rows that have any Nones.
+
+    RETURNS: copy
     """
     if df.isnull().values.any():
         columns_with_nans = df.columns[df.isnull().any()]

@@ -1819,7 +1819,8 @@ class DatStrokes(object):
     ####################### PLOTS
     def plot_multiple_speed_and_drawing(self, inds):
         """
-        Good wrapper to make plots, visualizing all trials both in speed and in xy drawing.
+        Good wrapper to make plots, visualizing all trials both in speed and in xy drawing, overlaid on 
+        single plot, also averaging.
         :param inds:
         :return:
         """
@@ -1877,6 +1878,38 @@ class DatStrokes(object):
 
         return fig
 
+    def plot_single_strok_timecourse(self, strok, ax, overlay_stroke_periods=False, align_onset_to_zero=False):
+        """
+        Plot this strok as timecourse, assing (N, 3), where columns are (x, y, time).
+        """
+        from pythonlib.drawmodel.strokePlots import plotDatStrokesTimecourse
+
+        if strok.shape[1] != 3:
+            print(strok.shape)
+            assert False
+
+        if align_onset_to_zero:
+            strok = strok.copy()
+            strok[:, -1] = strok[:, -1] - strok[0, -1]        
+
+        plotDatStrokesTimecourse([strok], ax=ax, overlay_stroke_periods=overlay_stroke_periods)
+
+    def plot_multiple_strok_timecourse(self, strokes, align_onset_to_zero=False, sharey=True):
+        """
+        Plot multiple strokes onto timecourse. Strokes could be anything, including 
+        velocities.
+        """
+
+        n = len(strokes)
+        ncols = 6
+        nrows = int(np.ceil(n/ncols))
+        height = 2
+        aspect = 2
+        fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*height*aspect, nrows*height), sharex=True, sharey=sharey)
+        for ax, strokvel in zip(axes.flatten(), strokes):
+            self.plot_single_strok_timecourse(strokvel, ax=ax, align_onset_to_zero=align_onset_to_zero)
+
+        return fig
 
     def plot_multiple_strok(self, list_strok, ver="beh", ax=None,
         overlay=True, titles=None, ncols=5, size_per_sublot=2, alpha=None):
