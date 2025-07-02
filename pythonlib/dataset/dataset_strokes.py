@@ -943,7 +943,7 @@ class DatStrokes(object):
 
 
     ######################### PREP THE DATASET
-    def _distgood_plot_heatmap_helper(self, Cl, savedir, dist_kind_for_label, savesuff):
+    def _distgood_plot_heatmap_helper(self, Cl, savedir, dist_kind_for_label, savesuff, plot_trials=True):
         """
         Help plot heatmap of distance matrix stored in Cl, and then save.
         Helps plot with colors flipped as well, autmoatically.
@@ -956,20 +956,22 @@ class DatStrokes(object):
         xmin, xmax = np.percentile(Clflip.Xinput.flatten(), [1, 99])
         Clflip._Xinput = 1 - (Clflip.Xinput - xmin)/(xmax - xmin)
 
-        n1 = len(Cl.Labels)
-        n2 = len(Cl.LabelsCols)
+        if plot_trials:
+            n1 = len(Cl.Labels)
+            n2 = len(Cl.LabelsCols)
 
-        if n1<200 and n2<200:
-            
-            fig, _ = Cl.rsa_plot_heatmap()
-            if fig is not None:
-                savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}.pdf")  
-            
-            fig, _ = Clflip.rsa_plot_heatmap()
-            if fig is not None:
-                savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}-FLIPPED.pdf")  
+            if n1<200 and n2<200:
+                
+                fig, _ = Cl.rsa_plot_heatmap()
+                if fig is not None:
+                    savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}.pdf")  
 
-            plt.close("all")
+                if False:
+                    fig, _ = Clflip.rsa_plot_heatmap()
+                    if fig is not None:
+                        savefig(fig, f"{savedir}/TRIAL_DISTS-{dist_kind_for_label}-{savesuff}-FLIPPED.pdf")  
+
+                plt.close("all")
 
         ### Aggregate to get distance between groups (shapes)
         _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, 
@@ -985,7 +987,6 @@ class DatStrokes(object):
         savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-{dist_kind_for_label}-{savesuff}-FLIPPED.pdf")  
 
 
-
     def distgood_compute_beh_beh_strok_distances(self, strokes1, strokes2, 
                                                  list_distance_ver = None,
                                                  labels_rows_dat= None,
@@ -993,7 +994,8 @@ class DatStrokes(object):
                                                  label_var=None,
                                                  clustclass_rsa_mode=False,
                                                  PLOT=False, savedir=None, savesuff=None,
-                                                 invert_score=False):
+                                                 invert_score=False,
+                                                 plot_trials=True):
         """
         GOOD - compute pairwise distance between all pairs across 1 and 2.
         This is motor distnace, the method used for clustreing strokes from 
@@ -1021,7 +1023,7 @@ class DatStrokes(object):
             Cl._Xinput = 1-Cl._Xinput
 
         if PLOT:
-            self._distgood_plot_heatmap_helper(Cl, savedir, "motor", savesuff)
+            self._distgood_plot_heatmap_helper(Cl, savedir, "motor", savesuff, plot_trials=plot_trials)
 
             # # also plot with colors flipped.
             # Clflip = Cl.copy_with_slicing()
@@ -1058,7 +1060,8 @@ class DatStrokes(object):
     def distgood_compute_image_strok_distances(self, strokes1, strokes2, labels1=None, labels2=None, 
                                                label_var="shape",
                                                 do_centerize=False, clustclass_rsa_mode=False,
-                                                PLOT=False, savedir=None, savesuff=None):
+                                                PLOT=False, savedir=None, savesuff=None,
+                                                plot_trials=True):
         """ COmpute and return distances between all pairs of (strokes1, strokes2), but using
         image distnace, which ignore the motor trajectory
 
@@ -1095,7 +1098,7 @@ class DatStrokes(object):
         #     fig, _ = Clagg.rsa_plot_heatmap()
         #     savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
         if PLOT:
-            self._distgood_plot_heatmap_helper(Cl, savedir, "image", savesuff)
+            self._distgood_plot_heatmap_helper(Cl, savedir, "image", savesuff, plot_trials=plot_trials)
 
         return Cl
 
@@ -1649,6 +1652,16 @@ class DatStrokes(object):
         self.Dat = self.Dat[self.Dat["trialcode"].isin(trialcodes)].reset_index(drop=True)
         # This reduces bulk, and possible issues with concatenating across sessoins.
         self.dataset_prune_to_match_self()
+
+    def dataset_prune_main_21_prims_shapes_diego(self):
+        """
+        Prune self.Dat to keep only the datapts whos shape is in the main 21 set
+        RETURNS:
+        - Modified self.Dat
+        """
+        from pythonlib.drawmodel.tokens import LIST_SHAPES_MAIN_21, LIST_SHAPES_SEM_MAIN_21
+        assert sum(self.Dat["shape_semantic"].isin(LIST_SHAPES_SEM_MAIN_21)) == sum(self.Dat["shape"].isin(LIST_SHAPES_MAIN_21))
+        self.Dat = self.Dat[self.Dat["shape_semantic"].isin(LIST_SHAPES_SEM_MAIN_21)].reset_index(drop=True)
 
     def dataset_extract(self, colname, ind):
         """ Extract value for this colname in original datset,
@@ -4823,16 +4836,24 @@ class DatStrokes(object):
 
         return sdir, path
 
-    def stroke_database_prune_to_basis_prims(self):
+    def stroke_database_prune_to_basis_prims(self, keep_only_main_21=False):
         """
         Keep only the shapes which are in this animal's basis set
+        PARAMS:
+        - For Diego, keep only the main 21 prims.
         RETURNS:
         - modifies self.Dat, so that only shapes in basis shapes are kept
         """
         dfbasis, list_strok_basis, list_shape_basis = self.stroke_shape_cluster_database_load_helper()
+        
         print("Starting len dat: ", len(self.Dat))
+        
         shapes_removed = self.Dat[~(self.Dat["shape"].isin(list_shape_basis))]["shape"].tolist()
         self.Dat = self.Dat[self.Dat["shape"].isin(list_shape_basis)].reset_index(drop=True)
+
+        if keep_only_main_21:
+            self.dataset_prune_main_21_prims_shapes_diego()
+        
         print("Ending len dat: ", len(self.Dat))
         print("Shapes removed: ", shapes_removed)
 
@@ -5262,7 +5283,8 @@ class DatStrokes(object):
             writeDictToTxt(params_dict, f"{pathdir}/params.txt")
             writeDictToYaml(params_dict, f"{pathdir}/params.yaml")
 
-    def save(self, pathdir, columns_keep_in_dataset=None):
+    def save(self, pathdir, columns_keep_in_dataset=None, filename="DS",
+             manuscript_version=False):
         """ saves self, incluind gall things, including self.Dataset.
         PARAMS;
         - columns_keep_in_dataset, if None, saves entire self.Dataset, otherwise
@@ -5270,13 +5292,19 @@ class DatStrokes(object):
         """
         import os
         os.makedirs(pathdir, exist_ok=True)
-        path = f"{pathdir}/DS.pkl"
+        path = f"{pathdir}/{filename}.pkl"
+
+        DS = self.copy()
 
         if columns_keep_in_dataset is not None:
-            DS = self.copy()
             DS.Dataset.Dat = DS.Dataset.Dat.loc[:, columns_keep_in_dataset]
-        else:
-            DS = self
+
+        if manuscript_version: 
+            # Remove things that require other class objects
+            cols_remove = ["Stroke", "datseg_beh", "datseg"]
+            for col in cols_remove:
+                if col in DS.Dat:
+                    DS.Dat = DS.Dat.drop(col, axis=1)        
 
         with open(path, "wb") as f:
             pickle.dump(DS, f)

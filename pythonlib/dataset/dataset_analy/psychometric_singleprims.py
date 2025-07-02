@@ -192,7 +192,7 @@ def params_good_morphsets_switching_ignore_trialcodes(animal, date):
 def params_good_morphsets_switching(animal, date):
     """
     By eye, looked thru all trials for all morhsets, and here noting which are the good ones. Also
-    noting whihc indices (within morphset) have at least one trial per base prim.
+    noting whihc indices (within morphset) are ambiguous -- i.e, have at least one trial per base prim ()
     Chosen to satisfy these criteria:
     - interm strokes look similar to base strokes.
     - stroke quality good.

@@ -11488,6 +11488,8 @@ class Dataset(object):
         path = f"{savedir}/{filename}.pkl"
         with open(path, "wb") as f:
             pickle.dump(D, f)
+        
+        print("Saved Dataset to: ", path)
 
     def save_state(self, SDIR_MAIN, SDIR_SUB, add_tstamp = True):
         """

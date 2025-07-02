@@ -28,7 +28,7 @@ from pythonlib.tools.snstools import rotateLabel
 import pandas as pd
 
 
-def load_pair_of_datasets(animal1, date1, animal2, date2):
+def load_pair_of_datasets(animal1, date1, animal2, date2, strokes_keep_only_main_prims=False):
     from pythonlib.tools.plottools import savefig
     from pythonlib.dataset.dataset_strokes import preprocess_dataset_to_datstrokes
     from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap
@@ -37,7 +37,7 @@ def load_pair_of_datasets(animal1, date1, animal2, date2):
     D1 = load_dataset_daily_helper(animal1, date1)
 
     # Load two datasets (each animal)
-    D2 = load_dataset_daily_helper(animal2, date2)
+    D2 = load_dataset_daily_helper(animal2, date2)        
     
     SAVEDIR = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig1_learned_primitives/{animal1}_{date1}-{animal2}_{date2}"
     os.makedirs(SAVEDIR, exist_ok=True)
@@ -47,8 +47,8 @@ def load_pair_of_datasets(animal1, date1, animal2, date2):
     DS2 = preprocess_dataset_to_datstrokes(D2, "singleprim") # get all strokes.
 
     # (prune to basis set prims)
-    DS1.stroke_database_prune_to_basis_prims()
-    DS2.stroke_database_prune_to_basis_prims()
+    DS1.stroke_database_prune_to_basis_prims(keep_only_main_21=strokes_keep_only_main_prims)
+    DS2.stroke_database_prune_to_basis_prims(keep_only_main_21=strokes_keep_only_main_prims)
 
     ##### For each animal, get its trial-by-trial distance between all trials.
     savedir = f"{SAVEDIR}/pairwise_beh_dists"
@@ -61,8 +61,6 @@ def load_pair_of_datasets(animal1, date1, animal2, date2):
     return D1, D2, DS1, DS2, SAVEDIR
 
 
-    
-
 def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_var="Cl"):
     """
     """
@@ -74,7 +72,6 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
 
     if PLOT==False or SAVEDIR is None:
         savedir = None
-
     # Quantify
     list_dfdist = []
     list_dfaccuracy = []
@@ -118,7 +115,7 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
         dfaccuracy["dist_ver"] = dist_ver
 
         list_dfaccuracy.append(dfaccuracy)
-
+        
         if PLOT:
             # Plots
             fig = sns.catplot(data=dfaccuracy, x="label_actual", y="accuracy", aspect=1.5, kind="bar")
@@ -146,10 +143,11 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
     map_distver_to_min = {}
     map_distver_to_max = {}
     for dist_ver in ["image", "motor", "image_beh_task"]:
-        minmax = np.percentile(DFDIST[DFDIST["dist_ver"]==dist_ver]["dist_mean"], [0, 100])
-        map_distver_to_min[dist_ver] = minmax[0]
-        map_distver_to_max[dist_ver] = minmax[1]
-
+        if dist_ver in DFDIST["dist_ver"].unique().tolist():
+            minmax = np.percentile(DFDIST[DFDIST["dist_ver"]==dist_ver]["dist_mean"], [0, 100])
+            map_distver_to_min[dist_ver] = minmax[0]
+            map_distver_to_max[dist_ver] = minmax[1]
+    
     DFDIST["norm_min"] = [map_distver_to_min[dist_ver] for dist_ver in DFDIST["dist_ver"]]
     DFDIST["norm_max"] = [map_distver_to_max[dist_ver] for dist_ver in DFDIST["dist_ver"]]
     DFDIST["dist_mean_norm"] = (DFDIST["dist_mean"] - DFDIST["norm_min"])/(DFDIST["norm_max"] - DFDIST["norm_min"])
@@ -234,16 +232,14 @@ def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir,
 
     return Cl
 
-def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", date2=240509):
+def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distances=None):
     """
-    Entire pipeline
+    Score all pairwise distances between strokes, stored in DS1, DS2, where these are datasets
+    for two subjects (usually)
     """
-    ### Load dataset
-    # animal1="Diego"
-    # date1=230616
-    # animal2="Pancho"
-    # date2=240509
-    D1, D2, DS1, DS2, SAVEDIR = load_pair_of_datasets(animal1, date1, animal2, date2)
+
+    if which_distances is None:
+        which_distances = ["image", "motor", "image_beh_task"]
 
     DSthis = DS1
     savedir = f"{SAVEDIR}/raw_heatmaps"
@@ -280,11 +276,9 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
 
         return Cl
 
-
     ### Compute all pairwise distances between strokes.
     from pythonlib.tools.pandastools import extract_trials_spanning_variable
 
-    N_TRIALS = 10
     LIST_TRIAL_CL = []
 
     ### Also get distnace across animals
@@ -302,20 +296,22 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
     assert shapes1 == shapes2, "then below will fail -- this is hacky, converting to rsa, which expects lables row and col to be identical. solve by updating code to also work with assymetric"
 
     ### (1) Image distance
-    Cl = _score_image_distances(strokes1, strokes2, shapes1, shapes2, "01")
-    LIST_TRIAL_CL.append({
-        "animal_pair":(0,1),
-        "dist_ver":"image",
-        "Cl":Cl
-        })    
-        
-    ### (2) Motor distance
-    Cl = _score_motor_distances(strokes1, strokes2, shapes1, shapes2, "01")
-    LIST_TRIAL_CL.append({
-        "animal_pair":(0,1),
-        "dist_ver":"motor",
-        "Cl":Cl
-        })
+    if "image" in which_distances:
+        Cl = _score_image_distances(strokes1, strokes2, shapes1, shapes2, "01")
+        LIST_TRIAL_CL.append({
+            "animal_pair":(0,1),
+            "dist_ver":"image",
+            "Cl":Cl
+            })    
+    
+    if "motor" in which_distances:
+        ### (2) Motor distance
+        Cl = _score_motor_distances(strokes1, strokes2, shapes1, shapes2, "01")
+        LIST_TRIAL_CL.append({
+            "animal_pair":(0,1),
+            "dist_ver":"motor",
+            "Cl":Cl
+            })
 
     # Get distances within each animal
     for i, DSthis in enumerate([DS1, DS2]):
@@ -326,28 +322,31 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
         shapes = DSthis.Dat.iloc[inds]["shape"].tolist()
 
         ### (1) Image distance (beh-beh)
-        Cl = _score_image_distances(strokes, strokes, shapes, shapes, i)
-        LIST_TRIAL_CL.append({
-            "animal_pair":(i,i),
-            "dist_ver":"image",
-            "Cl":Cl
-            })    
+        if "image" in which_distances:
+            Cl = _score_image_distances(strokes, strokes, shapes, shapes, i)
+            LIST_TRIAL_CL.append({
+                "animal_pair":(i,i),
+                "dist_ver":"image",
+                "Cl":Cl
+                })    
 
         ### (2) Motor distance (beh-beh)
-        Cl = _score_motor_distances(strokes, strokes, shapes, shapes, i)
-        LIST_TRIAL_CL.append({
-            "animal_pair":(i,i),
-            "dist_ver":"motor",
-            "Cl":Cl
-            })
+        if "motor" in which_distances:
+            Cl = _score_motor_distances(strokes, strokes, shapes, shapes, i)
+            LIST_TRIAL_CL.append({
+                "animal_pair":(i,i),
+                "dist_ver":"motor",
+                "Cl":Cl
+                })
         
         ### (3) Image distance (beh-task)
-        Cl = _score_image_distances(strokes, strokes_task, shapes, shapes, f"beh_task-{i}")
-        LIST_TRIAL_CL.append({
-            "animal_pair":(i,i),
-            "dist_ver":"image_beh_task",
-            "Cl":Cl
-            })    
+        if "image_beh_task" in which_distances:
+            Cl = _score_image_distances(strokes, strokes_task, shapes, shapes, f"beh_task-{i}")
+            LIST_TRIAL_CL.append({
+                "animal_pair":(i,i),
+                "dist_ver":"image_beh_task",
+                "Cl":Cl
+                })    
 
         plt.close("all")
 
@@ -355,7 +354,146 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
     import pickle
     with open(f"{SAVEDIR}/LIST_TRIAL_CL.pkl", "wb") as f:
         pickle.dump(LIST_TRIAL_CL, f)
+
+    return LIST_TRIAL_CL
+
+
+def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", date2=240509, SAVEDIR=None,
+                               resave_datasets=False, strokes_keep_only_main_prims=False):
+    """
+    Entire pipeline
+    """
+    ### Load dataset
+    # animal1="Diego"
+    # date1=230616
+    # animal2="Pancho"
+    # date2=240509
+    _, _, DS1, DS2, _SAVEDIR = load_pair_of_datasets(animal1, date1, animal2, date2, strokes_keep_only_main_prims=strokes_keep_only_main_prims)
+    if SAVEDIR is None:
+        SAVEDIR = _SAVEDIR
+
+    if resave_datasets:
+        DS1.save(SAVEDIR, filename="DS1")
+        DS2.save(SAVEDIR, filename="DS2")
+
+
+    LIST_TRIAL_CL = fig1_score_pairwise_distances(DS1, DS2, SAVEDIR)
+
+    # DSthis = DS1
+    # savedir = f"{SAVEDIR}/raw_heatmaps"
+    # os.makedirs(savedir, exist_ok=True)
+
+    # def _score_image_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
+    #     """
+    #     """
+    #     print("Scoring image distance....")
+
+    #     Cl = DSthis.distgood_compute_image_strok_distances(strokes1, strokes2, shapes1, shapes2, do_centerize=True,
+    #                                                         clustclass_rsa_mode=True, PLOT=True, savedir=savedir, savesuff=savesuff)
+    #     # Cl = Cl.convert_copy_to_rsa_dist_version("shape", "image")
+
+
+    #     # if N_TRIALS<12:
+    #     #     fig, _ = Cl.rsa_plot_heatmap()
+    #     #     if fig is not None:
+    #     #         savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
+
+    #     # ### Aggregate to get distance between groups (shapes)
+    #     # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
+
+    #     # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
+    #     # fig, _ = Clagg.rsa_plot_heatmap()
+    #     # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
+
+    #     return Cl
+
+    # def _score_motor_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
+    #     """
+    #     """
+    #     print("Scoring motor distance....")
+    #     Cl = score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff)
+
+    #     return Cl
+
+
+    # ### Compute all pairwise distances between strokes.
+    # from pythonlib.tools.pandastools import extract_trials_spanning_variable
+
+    # N_TRIALS = 10
+    # LIST_TRIAL_CL = []
+
+    # ### Also get distnace across animals
+    # # First, get common shapes
+    # shapes_common = sorted(set(DS1.Dat[DS1.Dat["shape"].isin(DS2.Dat["shape"].tolist())]["shape"]))
+
+    # inds, _ = extract_trials_spanning_variable(DS1.Dat, "shape", varlevels=shapes_common, n_examples=N_TRIALS)
+    # strokes1 = DS1.Dat.iloc[inds]["strok"].tolist()
+    # shapes1 = DS1.Dat.iloc[inds]["shape"].tolist()
+
+    # inds, _ = extract_trials_spanning_variable(DS2.Dat, "shape", varlevels=shapes_common, n_examples=N_TRIALS)
+    # strokes2 = DS2.Dat.iloc[inds]["strok"].tolist()
+    # shapes2 = DS2.Dat.iloc[inds]["shape"].tolist()
+
+    # assert shapes1 == shapes2, "then below will fail -- this is hacky, converting to rsa, which expects lables row and col to be identical. solve by updating code to also work with assymetric"
+
+    # ### (1) Image distance
+    # Cl = _score_image_distances(strokes1, strokes2, shapes1, shapes2, "01")
+    # LIST_TRIAL_CL.append({
+    #     "animal_pair":(0,1),
+    #     "dist_ver":"image",
+    #     "Cl":Cl
+    #     })    
+        
+    # ### (2) Motor distance
+    # Cl = _score_motor_distances(strokes1, strokes2, shapes1, shapes2, "01")
+    # LIST_TRIAL_CL.append({
+    #     "animal_pair":(0,1),
+    #     "dist_ver":"motor",
+    #     "Cl":Cl
+    #     })
+
+    # # Get distances within each animal
+    # for i, DSthis in enumerate([DS1, DS2]):
+
+    #     inds, _ = extract_trials_spanning_variable(DSthis.Dat, "shape", n_examples=N_TRIALS)
+    #     strokes = DSthis.Dat.iloc[inds]["strok"].tolist()
+    #     strokes_task = DSthis.extract_strokes(inds=inds, ver_behtask="task")
+    #     shapes = DSthis.Dat.iloc[inds]["shape"].tolist()
+
+    #     ### (1) Image distance (beh-beh)
+    #     Cl = _score_image_distances(strokes, strokes, shapes, shapes, i)
+    #     LIST_TRIAL_CL.append({
+    #         "animal_pair":(i,i),
+    #         "dist_ver":"image",
+    #         "Cl":Cl
+    #         })    
+
+    #     ### (2) Motor distance (beh-beh)
+    #     Cl = _score_motor_distances(strokes, strokes, shapes, shapes, i)
+    #     LIST_TRIAL_CL.append({
+    #         "animal_pair":(i,i),
+    #         "dist_ver":"motor",
+    #         "Cl":Cl
+    #         })
+        
+    #     ### (3) Image distance (beh-task)
+    #     Cl = _score_image_distances(strokes, strokes_task, shapes, shapes, f"beh_task-{i}")
+    #     LIST_TRIAL_CL.append({
+    #         "animal_pair":(i,i),
+    #         "dist_ver":"image_beh_task",
+    #         "Cl":Cl
+    #         })    
+
+    #     plt.close("all")
+
+    # ## Save the data 
+    # import pickle
+    # with open(f"{SAVEDIR}/LIST_TRIAL_CL.pkl", "wb") as f:
+    #     pickle.dump(LIST_TRIAL_CL, f)
+
+
     # Collect all pairwise distances, across all conditions, into a single dataframe
+    
     import seaborn as sns
 
     ##################################### QUANTIFICATIN
@@ -470,7 +608,7 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
 
 
 def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False,
-                          PLOT_DRAWINGS=True, ):
+                          PLOT_DRAWINGS=True):
     """
     Entire pipeline, to analyze invariance of motor parameters due to loation and size.
     Expt is assumed to have both loc and size vairation.
@@ -1449,7 +1587,8 @@ def fig3_charsyntax_transition_matrix_graph_plot(df, threshold, map_node_to_inse
     
     return fig
 
-def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="switching"):
+def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="switching", 
+                                   list_version=None, heatmap_plot_trials=True):
     """
     Extract pairiwse distances for all morphsets in DSmorphsets.Dat
 
@@ -1463,6 +1602,11 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
     from pythonlib.tools.stroketools import get_centers_strokes_list, strokes_centerize
     from pythonlib.tools.pandastools import stringify_values
     from pythonlib.tools.pandastools import extract_with_levels_of_var_good
+
+    if list_version is None:
+        list_version = ["beh_imagedist_reversed", "beh_imagedist", "beh_imagedist_bb", "beh", "task"]
+    else:
+        assert isinstance(list_version, list)
 
     ### Extract task strokes
     inds = list(range(len(DSmorphsets.Dat)))
@@ -1486,7 +1630,7 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
         else:
             assert False
 
-        for version in ["beh_imagedist_reversed", "beh_imagedist", "beh_imagedist_bb", "beh", "task"]:
+        for version in list_version:
             savedir = f"{SAVEDIR}/extraction/morphset={morphset}-ver={version}"
             os.makedirs(savedir, exist_ok=True)
 
@@ -1506,7 +1650,8 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                     labels = labels[::2]
                 Cl = DSmorphsets.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, label_var, 
                                                                         clustclass_rsa_mode=True, PLOT=True, 
-                                                                        savedir=savedir, savesuff=version, invert_score=True)
+                                                                        savedir=savedir, savesuff=version, invert_score=True,
+                                                                        plot_trials=heatmap_plot_trials)
                 # Cl = score_motor_distances(DSmorphsets, strokes, strokes, labels, labels, "/tmp", "TEST", label_var=label_var)
             elif version == "task":
                 strokes = dfdat["strok_task"].tolist()
@@ -1516,7 +1661,8 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                     labels = labels[::2]
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
                                                                 do_centerize=True, clustclass_rsa_mode=True,
-                                                                PLOT=True, savedir=savedir, savesuff=version)
+                                                                PLOT=True, savedir=savedir, savesuff=version,
+                                                                plot_trials=heatmap_plot_trials)
             elif version == "beh_imagedist":
                 strokes = dfdat["strok"].tolist()
                 strokes = strokes_centerize(strokes, method="bounding_box")
@@ -1525,7 +1671,8 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                     labels = labels[::2]
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
                                                                 do_centerize=True, clustclass_rsa_mode=True,
-                                                                PLOT=True, savedir=savedir, savesuff=version)
+                                                                PLOT=True, savedir=savedir, savesuff=version,
+                                                                plot_trials=heatmap_plot_trials)
             elif version == "beh_imagedist_bb":
                 # Same, but using bounding box.
                 strokes = dfdat["strok"].tolist()
@@ -1536,7 +1683,8 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
 
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
                                                                 do_centerize=False, clustclass_rsa_mode=True,
-                                                                PLOT=True, savedir=savedir, savesuff=version)
+                                                                PLOT=True, savedir=savedir, savesuff=version,
+                                                                plot_trials=heatmap_plot_trials)
             elif version == "beh_imagedist_reversed":
                 # Reverse the direction of one of the beh strokes. Do this as sanity check that the motor has no effect. ie. this 
                 # really is image-level
@@ -1547,7 +1695,8 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
                 strokes2 = [strok.copy()[::-1] for strok in strokes]
                 Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes1, strokes2, labels, labels, label_var,
                                                                 do_centerize=True, clustclass_rsa_mode=True,
-                                                                PLOT=True, savedir=savedir, savesuff=version)
+                                                                PLOT=True, savedir=savedir, savesuff=version,
+                                                                plot_trials=heatmap_plot_trials)
             else:
                 assert False
 

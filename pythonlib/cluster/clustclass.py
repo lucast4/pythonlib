@@ -3364,7 +3364,6 @@ class Clusters(object):
             label_actual = tmp[0]
             labels_test.append(label_actual)
 
-            print()
             # Collect, to get scores for diff slices of data
             res.append({
                 "var_datapt":grp[0],
