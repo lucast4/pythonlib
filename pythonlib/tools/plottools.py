@@ -1329,7 +1329,8 @@ def plot_2d_binned_smoothed_heatmap(data, x_min, x_max, y_min, y_max,
 def map_coord_to_color_2dgradient(x, y, xmin, xmax, ymin, ymax, plot_legend=False):
     """
     Given x and y, map to a color, where color is defined on a 2d grid (a square).
-    ChatGPT prompt: points uniformly sampled in the square between (0,0) and (1,1), 
+    
+    i.e., points uniformly sampled in the square between (0,0) and (1,1), 
     where each pt is colored based on its coordinates, where as x incresaes, 
     one hue incresaes its saturation (e.g, red), and when the other coordinate incresaes, 
     a second hue incresaes saturation. and therefore along diagonal it will be mixture of the two hues, 

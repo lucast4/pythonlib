@@ -144,7 +144,9 @@ for orient in ["LL", "RR", "DD", "UU"]:
 for orient in ["UU", "LL"]:
     for reflect in ["0.0",  "1.0"]:
         map_shapesemgroup_to_shapesem[f"ZZ-{orient}-{reflect}"] = [f"{sh}-{orient}-{reflect}" for sh in ["squiggle3", "zigzagSq", "Lzigzag1"]]
-print("TODO: Pancho -- combine circles with the tohers")
+
+# print("TODO: Pancho -- combine circles with the tohers")
+
 for sh in ['dot-XX-XX', 'circle-XX-XX', 'Lcentered-UL-UL', 'Lcentered-DL-DL', 'Lcentered-DR-DR', 'Lcentered-UR-UR', 'line-LL-LL', 'line-UU-UU', 'line-UR-UR', 'line-UL-UL']:
     map_shapesemgroup_to_shapesem[sh] = [sh]
 map_shapesemgroup_to_shapesem["NOVEL-X-X-X"] = ["NOVEL-X-X-X"]

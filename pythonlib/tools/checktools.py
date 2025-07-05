@@ -1,7 +1,8 @@
 import numpy as np
 
 def check_objects_identical(obj1, obj2, PRINT=False):
-    """ Works with commonly used objects, checks if identical,
+    """ 
+    Works with commonly used objects, checks if identical,
     Returns False if any difference found
     otherwise True.
     """

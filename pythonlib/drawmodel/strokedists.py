@@ -164,12 +164,6 @@ def distStrokWrapperMult(stroklist1, stroklist2, distancever="hausdorff_means", 
     assert len(stroklist1)>0
     assert len(stroklist2)>0
 
-    # rescale?
-    # if rescale_strokes_ver is not None:
-    #     from pythonlib.tools.stroketools import rescaleStrokes
-    #     stroklist1 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist1]
-    #     stroklist2 = [rescaleStrokes([s], ver=rescale_strokes_ver)[0] for s in stroklist2]
-
     ### Generate distance matrix
     def dist_func_combined(strokdat, strokbas):
         # no prprocess, just go from strokes to score
@@ -195,7 +189,6 @@ def distStrokWrapperMult(stroklist1, stroklist2, distancever="hausdorff_means", 
                                 debug, asymmetric_ver, fs, DEBUG,
                                 ALREADY_PROCESSED=True,
                                 )
-
 
     # preprocess the strokes here, so that you don't need to do it in each run of the
     # distance matrix construction.
@@ -301,7 +294,6 @@ def distStrokWrapperMult(stroklist1, stroklist2, distancever="hausdorff_means", 
         D = distmat_construct_wrapper(stroklist1, stroklist2, dist_func_combined, cap_dist, normalize_rows,
                                       normalize_cols_range01, normalize_by_range, range_norm, convert_to_similarity,
                                       similarity_method, DEBUG)
-
 
     if DEBUG:
         plt.figure()

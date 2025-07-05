@@ -12,6 +12,31 @@ from pythonlib.tools.plottools import savefig
 from pythonlib.tools.listtools import sort_mixed_type
 
 
+def initial_clustering_extract_and_plot_clusters_manuscript(DS, WHICH_LEVEL, WHICH_BASIS_SET, which_shapes, WHICH_FEATURE):
+    """
+    Do labeling of all strokes based on trajectory distance similarity to basis strokes.
+    
+    RETURNS:
+    - MOdiifes DS in place, and saves it.
+    """
+
+    ##### Perform clustering
+    print("Doing clustering ...")
+    ClustDict, ParamsDict, ParamsGeneral, dfdat = DS.features_wrapper_generate_all_features_manuscript(
+                    which_basis_set=WHICH_BASIS_SET, which_shapes=which_shapes)
+    plt.close("all")
+
+    # For each trial, extracting clustering score, etc and assign to DS data
+    DS.clustergood_assign_data_to_cluster(ClustDict, ParamsDict,
+                ParamsGeneral, dfdat,
+                which_features = WHICH_FEATURE,
+                trial_summary_score_ver="clust_sim_max")
+
+    # Add some columns
+    DS.Dat["shape_label"] = DS.Dat["clust_sim_max_colname"]
+    # initial angle
+    DS.features_compute_velocity_binned()
+
 def initial_clustering_extract_and_plot_clusters(DS, WHICH_LEVEL, WHICH_BASIS_SET, which_shapes, WHICH_FEATURE, SDIR,
                                                  do_save=True):
     """
@@ -1396,6 +1421,10 @@ def analy_score_base_prim_reuse_score_match(DS, savedir,
                                             match_better_if_dist_high=True, map_shape_to_mindist_input=None,
                                             remove_outliers=False):
     """
+    For each prim, determine its threhsold (trajectory distanc) for deciding if a given match to it should be 
+    called high or low quality.
+    Determine this threshold by considering its scores on single shape tasks (ground truth).
+
     [NOTE] this mixes the calculation of distance thresholds (if map_shape_to_mindist_input is None) and
     the application of thresholds (no matter what map_shape_to_mindist_input is)
 
@@ -1421,7 +1450,7 @@ def analy_score_base_prim_reuse_score_match(DS, savedir,
 
     ### Give binary score to each stroke, whether it matches base prim, based on score distribgtuion during SP and PIG trials.
     # For each shape, what fraction are within the bounds based on SP and PIG
-    def _label_whether_stroke_matches_baseprim(MIN_PRCTILE = 2.5, HACK=False):
+    def _label_whether_stroke_matches_baseprim(MIN_PRCTILE = 2.5, replace_missing_with_avg=False):
         """
         Modifies DS.Dat
         """
@@ -1467,7 +1496,7 @@ def analy_score_base_prim_reuse_score_match(DS, savedir,
                 if sh not in map_shape_to_mindist:
                     map_shape_to_mindist[sh] = np.nan
 
-        if HACK:
+        if replace_missing_with_avg:
             # Cases without neough SP or PIG, replace with avbearger over others.
             val_replacement = np.mean([x for x in map_shape_to_mindist.values() if not np.isnan(x)])        
             map_shape_to_mindist = {sh:val if ~np.isnan(val) else val_replacement for sh, val in map_shape_to_mindist.items()}
@@ -1484,9 +1513,10 @@ def analy_score_base_prim_reuse_score_match(DS, savedir,
     LIST_MIN_PRCTILE = np.linspace(0, 100, 30)
     list_frac_match = []
     for THRESH_PRCTILE in LIST_MIN_PRCTILE:
-        _label_whether_stroke_matches_baseprim(THRESH_PRCTILE, HACK=True)
+        _label_whether_stroke_matches_baseprim(THRESH_PRCTILE, replace_missing_with_avg=True)
         frac_match = 100*np.mean(DS.Dat[DS.Dat["task_kind"] == "character"]["matches_base_prim"])
         list_frac_match.append(frac_match)
+
     # Pick a single min threshold to define "good match" and make plots.
     if match_better_if_dist_high:
         THRESH_PRCTILE_FINAL = 2.5
@@ -1512,7 +1542,7 @@ def analy_score_base_prim_reuse_score_match(DS, savedir,
 
     ### Pick a single min threshold to define "good match" and make plots.
     # NOTE: this modifies DS in place.
-    map_shape_to_mindist = _label_whether_stroke_matches_baseprim(THRESH_PRCTILE_FINAL, HACK=True)
+    map_shape_to_mindist = _label_whether_stroke_matches_baseprim(THRESH_PRCTILE_FINAL, replace_missing_with_avg=True)
 
     plt.close("all")
 
@@ -1522,7 +1552,9 @@ def analy_score_base_prim_reuse_score_match_apply_(DS, map_shape_to_mindist_inpu
                                                    shape_var="clust_sim_max_colname", dist_var="clust_sim_max", 
                                                    match_better_if_dist_high=True):
     """
-    Score whether each stroke is a match or not, based on user inputed dict of match thresholds (map_shape_to_mindist_input)
+    Score whether each stroke is a match or not, based on user inputed dict of match thresholds (map_shape_to_mindist_input),
+    one for each primitve.
+
     Modifies by adding column: DS.Dat[matches_base_prim]
 
     NOTE: is component of analy_score_base_prim_reuse_score_match, but here just applies a score to determine match. Above
@@ -1531,7 +1563,7 @@ def analy_score_base_prim_reuse_score_match_apply_(DS, map_shape_to_mindist_inpu
     RETURNS:
     - modifies DS.Dat. see note above.
     """
-    # Any shapes in dataset that are not presnet, give them nan
+    # Any shapes in dataset that are not presnet, throw error
     for sh in DS.Dat[shape_var].unique():
         if sh not in map_shape_to_mindist_input:
             print("Shape missing from map_shape_to_mindist_input (possibly one of many): ", sh)
@@ -1539,11 +1571,6 @@ def analy_score_base_prim_reuse_score_match_apply_(DS, map_shape_to_mindist_inpu
             print(DS.Dat[shape_var].unique())
             assert False, "the inputed dict is missing at least one shape"
             # map_shape_to_mindist_input[sh] = np.nan
-
-    # if HACK:
-    #     # Cases without neough SP or PIG, replace with avbearger over others.
-    #     val_replacement = np.mean([x for x in map_shape_to_mindist_input.values() if not np.isnan(x)])        
-    #     map_shape_to_mindist_input = {sh:val if ~np.isnan(val) else val_replacement for sh, val in map_shape_to_mindist_input.items()}
 
     DS.Dat["match_thresh"] = [map_shape_to_mindist_input[sh] for sh in DS.Dat[shape_var]]
     if match_better_if_dist_high:
@@ -1555,15 +1582,15 @@ def analy_score_base_prim_reuse_score_recompute_thresh(DictDS, MapsShapesToMindi
     """
     To reassign, to each shape in MapsShapesToMindist, what its threahold is, 
     in order to "align" the thresholds to the mean score for the shape (across data). 
-    Does this by sorting the thresholds, and sorting the mean scores, and then taking 
-    the lowest threshold for the shape wtih lowest mean score, etc...
+    Does this by sorting the thresholds, and sorting the mean scores, and then lining
+    up both of these lists, such that you take the lowest threshold for the shape wtih lowest mean score, etc...
 
     NOTE: this is usedul for applying actual thrahsolds to data from made-up shuffled prims.
     """
 
     MapsShapesToMindistReassigned = {}
     for basis in ["Pancho", "Diego"]:
-        # # (1) For each shape, get its actual distribution of scores
+        # (1) For each shape, get its actual distribution of scores
 
         ds = DictDS[(basis, basis)]
 
@@ -1585,7 +1612,7 @@ def analy_score_base_prim_reuse_score_recompute_thresh(DictDS, MapsShapesToMindi
             values_in_incr_order = sorted(thresh_pool)
         assert len(values_in_incr_order) == len(shapes_in_incr_order)
 
-        # re-allocate values
+        # re-allocate values, aligning the two sorted lists
         MapsShapesToMindistReassigned[basis] = {sh:val for sh, val in zip(shapes_in_incr_order, values_in_incr_order)}
 
         if PLOT:
@@ -1615,8 +1642,7 @@ def analy_score_base_prim_reuse_score_match_apply_wrapper(DictDS, MapsShapesToMi
                                                           USE_REALLOCATED_THRESH=False,
                                                           SKIP_IMAGE=False):
     """
-    Helper to apply thresholds to score whether each datapt is match or not, modifying DS.
-
+    Helper to apply inputed thresholds to score whether each datapt is match or not, modifying DS.
     PARAMS:
     - MapsShapesToMindist, dict, holding thresholds.
     - USE_REALLOCATED_THRESH, bool, if True, then recomputes MapsShapesToMindist, but sorting the thresholds
@@ -1625,9 +1651,6 @@ def analy_score_base_prim_reuse_score_match_apply_wrapper(DictDS, MapsShapesToMi
     - (Modifies ds in DictDS)
     """
     from pythonlib.dataset.dataset_analy.characters import analy_score_base_prim_reuse_score_match_apply_
-
-    # import copy
-    # TMP = copy.deepcopy(MapsShapesToMindist)
 
     if USE_REALLOCATED_THRESH:
         MapsShapesToMindist = analy_score_base_prim_reuse_score_recompute_thresh(DictDS, MapsShapesToMindist, 
@@ -1689,6 +1712,7 @@ def analy_score_base_prim_reuse_score_match_apply_wrapper(DictDS, MapsShapesToMi
                                                         match_better_if_dist_high=False)
             
     if PLOT:
+        from pythonlib.tools.snstools import rotateLabel
         print("Making plots...")
         savedir = f"{SAVEDIR}/final_labeling_matches"
         os.makedirs(savedir, exist_ok=True)
@@ -1700,23 +1724,18 @@ def analy_score_base_prim_reuse_score_match_apply_wrapper(DictDS, MapsShapesToMi
                 fig = sns.catplot(data=ds.Dat, x="task_kind", y="clust_sim_max", hue="matches_base_prim", jitter=True, alpha=0.2, 
                             col="clust_sim_max_colname", col_wrap=6, order=["prims_single", "prims_on_grid", "character"])
                 savefig(fig, f"{savedir}/all_scores_and_thresholds-animal={animal}-basis={basis}.pdf")
-                        
                 plt.close("all")
 
                 # [GOOD] useful plots, show correspondance between label and ground-truth prim name 
                 for tk in ["prims_single", "prims_on_grid"]:
-
                     for only_match in [False, True]:
-                        
                         if only_match:
                             df = ds.Dat[(ds.Dat["task_kind"].isin([tk])) & (ds.Dat["matches_base_prim"]==True)]
                         else:
                             df = ds.Dat[ds.Dat["task_kind"].isin([tk])]
 
                         fig = sns.displot(df, x="clust_sim_max_colname", y="shape_semantic", height=6, aspect=1.2)
-                        from pythonlib.tools.snstools import rotateLabel
                         rotateLabel(fig)
-
                         savefig(fig, f"{savedir}/pairwise_labels-animal={animal}-basis={basis}-taskkind={tk}-onlymatch={only_match}.pdf")
                         plt.close("all")
 
@@ -1744,9 +1763,11 @@ def analy_score_base_prim_reuse_plots(DS, savedir, shape_var="clust_sim_max_coln
     if PLOT_DRAWINGS:
         ### Plot example strokes, cols = shapes, rows = sorted by feature score.
         col_levels = list_shape_basis + ["IGN"]
+
         if True: # Order columns to match the stacked bar
             shapes_ordered_by_counts = DS.Dat["clust_sim_max_colname"].value_counts().reset_index()["clust_sim_max_colname"].tolist() # High to low
             col_levels = shapes_ordered_by_counts
+
         recenter_strokes = True
         for task_kind, ds in DS_dict_task_kind.items():
             print("Plotting task_kind:", task_kind)
@@ -1754,14 +1775,26 @@ def analy_score_base_prim_reuse_plots(DS, savedir, shape_var="clust_sim_max_coln
                 niter = 1 # moreis not random, as this is interpolating. 
             else:
                 niter = 1
+
             for i_iter in range(niter):
                 fig = ds.plotshape_multshapes_trials_grid_sort_by_feature(shape_var, 
                     col_levels=col_levels, nrows=n_rows_plots, sort_rows_by_this_feature=dist_var, SIZE=2, 
                     recenter_strokes=recenter_strokes)
                 if fig is not None:
                     savefig(fig, f"{savedir}/drawings-sort_by_{dist_var}-taskkind={task_kind}-recenter={recenter_strokes}-iter={i_iter}.pdf")
-        plt.close("all")
 
+                # Also plot just matches
+                dsthis = ds.copy()
+                dsthis.Dat = dsthis.Dat[dsthis.Dat[matches_var]==True].reset_index(drop=True)
+                fig = dsthis.plotshape_multshapes_trials_grid_sort_by_feature(shape_var, 
+                    col_levels=col_levels, nrows=n_rows_plots, sort_rows_by_this_feature=dist_var, SIZE=2, 
+                    recenter_strokes=recenter_strokes)
+                if fig is not None:
+                    savefig(fig, f"{savedir}/drawings-sort_by_{dist_var}-taskkind={task_kind}-recenter={recenter_strokes}-iter={i_iter}-MATCH=True.pdf")
+
+                plt.close("all")
+
+    ### Summary stats of frac match
     # Frac strokes which are assigned as "match" to base prims
     fig = sns.catplot(data=DS.Dat, x="task_kind", y=matches_var, kind="bar")
     for ax in fig.axes.flatten():
@@ -1793,22 +1826,40 @@ def analy_score_base_prim_reuse_plots(DS, savedir, shape_var="clust_sim_max_coln
     rotateLabel(fig)
     savefig(fig, f"{savedir}/catplot-dist_vs_shape-4.pdf")
 
-    # [GOOD] stacked frequency plot
+    # [GOOD] stacked frequency plot across all data
     from pythonlib.tools.pandastools import plot_bar_stacked_histogram_counts
     from pythonlib.tools.plottools import rotate_x_labels
-    fig, ax = plt.subplots()
-    plot_bar_stacked_histogram_counts(DS.Dat, shape_var, matches_var, ax)
-    rotate_x_labels(ax, 90)
-    ax.set_ylabel("Counts")
-    savefig(fig, f"{savedir}/stackedbar-shapes_matches.pdf")
+    if False:
+        fig, ax = plt.subplots()
+        plot_bar_stacked_histogram_counts(DS.Dat, shape_var, matches_var, ax)
+        rotate_x_labels(ax, 90)
+        ax.set_ylabel("Counts")
+        savefig(fig, f"{savedir}/stackedbar-shapes_matches.pdf")
 
-    # also bar, just the matches
-    fig, ax = plt.subplots()
-    df = DS.Dat[DS.Dat[matches_var]==True].reset_index(drop=True)
-    plot_bar_stacked_histogram_counts(df, shape_var, matches_var, ax)
-    rotate_x_labels(ax, 90)
-    ax.set_ylabel("Counts")
-    savefig(fig, f"{savedir}/stackedbar-shapes-only_matches.pdf")
+        # also bar, just the matches
+        fig, ax = plt.subplots()
+        df = DS.Dat[DS.Dat[matches_var]==True].reset_index(drop=True)
+        plot_bar_stacked_histogram_counts(df, shape_var, matches_var, ax)
+        rotate_x_labels(ax, 90)
+        ax.set_ylabel("Counts")
+        savefig(fig, f"{savedir}/stackedbar-shapes-only_matches.pdf")
+
+    # Also frequency counts for each task kind
+    for task_kind, ds in DS_dict_task_kind.items():
+        fig, ax = plt.subplots()
+        plot_bar_stacked_histogram_counts(ds.Dat, shape_var, matches_var, ax)
+        rotate_x_labels(ax, 90)
+        ax.set_ylabel("Counts")
+        savefig(fig, f"{savedir}/stackedbar-shapes_matches-tk={task_kind}.pdf")
+
+        # also bar, just the matches
+        fig, ax = plt.subplots()
+        df = ds.Dat[ds.Dat[matches_var]==True].reset_index(drop=True)
+        if len(df)>0:
+            plot_bar_stacked_histogram_counts(df, shape_var, matches_var, ax)
+            rotate_x_labels(ax, 90)
+            ax.set_ylabel("Counts")
+            savefig(fig, f"{savedir}/stackedbar-shapes-only_matches-tk={task_kind}.pdf")
 
     ### Plot frac match vs. num cases (one dot for each shape)
     # vs. number of trials that exist
@@ -1970,10 +2021,11 @@ def analy_score_match_baseprim_vs_matchimage_trials(DS, savedir,  just_get_dfcou
 
     return dfcounts, dfcounts_clean
 
-
-def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
+def analy_score_combined_animals_bases_manuscript(DictDS, savedir):
     """
-    Combining animals and basis prims into a single dataset, and plots to directly compare them.
+    Combining all animals and basis prims into a single dataset, and plots to directly compare them,
+    to compare fraction matches across combos of animal x basis prims, and also split
+    between practiced and novel chars.
     
     Also finds common characters across aniamls, and plots just those.
 
@@ -1982,14 +2034,11 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
     - dfchar_shared, df, just the chars that are common across animals.
     """
     from pythonlib.dataset.dataset_strokes import concat_dataset_strokes_minimal, concat_dataset_strokes
-    from pythonlib.tools.pandastools import append_col_with_grp_index
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
-    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
-    from pythonlib.tools.pandastools import aggregGeneral, append_col_with_grp_index
-    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
-    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.pandastools import aggregGeneral
 
     def _plot(DFTHIS, savesuff):
+        """ Plots, comparing match rate """
         from pythonlib.tools.pandastools import grouping_print_n_samples, grouping_plot_n_samples_conjunction_heatmap
         from pythonlib.tools.pandastools import stringify_values
 
@@ -1998,6 +2047,7 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
         
         DFTHIS = stringify_values(DFTHIS)
 
+        ### Various catplots
         fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
                     row="animal", jitter=True, alpha=0.2)
         savefig(fig, f"{sdir}/catplot-FINAL_dist-all-1.pdf")
@@ -2025,11 +2075,9 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
         ### Print useful things       
         path = f"{sdir}/counts-1.txt"
         grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "FINAL_basis"], savepath=path)  
-
         # path = f"{sdir}/counts-2.txt"
         # grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "date", "novel_char", "FINAL_basis"], savepath=path)   
 
-        ### Print useful things       
         if "los_info" in DFTHIS.columns:
             path = f"{sdir}/counts-3.txt"
             grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "los_info", "FINAL_basis"], savepath=path)   
@@ -2044,21 +2092,183 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
                 dfthis = DFTHIS[(DFTHIS["novel_char"] == is_novel) & (DFTHIS["animal"] == animal)].reset_index(drop=True)
 
                 if "los_info" in DFTHIS.columns:
-                    datapt_vars = ["los_info"] # data
+                    datapt_vars = ["los_info"] # data (each chartacter)
                 else:
-                    datapt_vars = ["los_set"] # data
+                    datapt_vars = ["los_set"] # data (each set of characters)
 
                 value_var = "FINAL_match"
                 contrast_var = "FINAL_basis"
                 contrast_levels = ["Diego", "Pancho"]
 
                 path = f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.txt"
-                out, fig = signrank_wilcoxon_from_df(dfthis, datapt_vars, contrast_var, contrast_levels, value_var, PLOT=True,
+                _, fig = signrank_wilcoxon_from_df(dfthis, datapt_vars, contrast_var, contrast_levels, value_var, PLOT=True,
                                                 save_text_path=path)
                 savefig(fig, f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.pdf")
                 plt.close("all")
 
-        ###################
+    ### Collect all data into a single DS
+    # - Also check that columns exist and are correct. Previously I assigned these columns here, but now done in previous
+    # function.
+    list_ds = []
+    for animal_data in ["Diego", "Pancho"]:
+        ### (1) Collect df, across bases, and concat as new orjggt
+        # for basis in ["Diego", "Pancho", "image"]:
+        for basis in ["Diego", "Pancho"]:
+            ds = DictDS[(animal_data, basis)]
+            list_ds.append(ds)
+    DScomb = concat_dataset_strokes_minimal(list_ds)
+
+    # Keep just "character" task kind.
+    task_kind = "character"
+    DScomb.Dat = DScomb.Dat[(DScomb.Dat["task_kind"] == task_kind)].reset_index(drop=True)
+
+    ### Filtering steps
+    strict_mode=True
+    if strict_mode:
+        # First, a loose filtering step, to keep only the (animal, date, los_set[??]) which has both novel and trained,
+        # where both were performed on the same day -- ie so that novel vs. trained is a fair comparison.
+        # This is strict -- keeps subset of data, but is cleanest.
+        dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(DScomb.Dat,
+                                                    "novel_char", ["animal", "date", "los_set"], 
+                                                    lenient_allow_data_if_has_n_levels=2)
+        print("after pruning to jus t(animal, date, los_set) with both novel and not-novel: ", len(DScomb.Dat), " --> ",  len(dfchar_shared))
+        assert len(dfchar_shared)>0, "no common chars between them"
+    else:
+        dfchar_shared = DScomb.Dat
+
+    # Find characters that are tested for both animals
+    levels_var = ["Diego", "Pancho"]
+    n1 = len(dfchar_shared)
+    dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(dfchar_shared,
+                                                "animal", ["character"], 
+                                                lenient_allow_data_if_has_n_levels=2, 
+                                                levels_var=levels_var)
+    print("after pruning to shared cahracters between subects: ", n1, " --> ",  len(dfchar_shared))
+    assert len(dfchar_shared)>0, "no common chars between them"
+
+    # Finally, agg over trials, so that each los_info (char) has a single datapt.
+    dfchar_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], 
+                ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], 
+                aggmethod=["mean"], 
+                nonnumercols=["task_kind", "los_set", "novel_char"])
+    
+    #### PLOTS
+    # Just the ones in paper -- chars done by both animals.
+    list_conditions = [(dfchar_shared, "shared_chars")]
+    dfchar_shared_agg = None
+
+    if savedir is not None:
+        for dfthis, savesuff in list_conditions:
+            # NOTE:
+            # - DScomb.Dat is all data
+            # - dfchar_shared is stringent, shared chars, only (dates, los_set) with both novel and not-novel.
+            print("Plotting for savesuff: ", savesuff)
+            _plot(dfthis, savesuff)
+
+    # FInal dumb sanity check that chars are indeed done by both aniamls.
+    ds1 = DictDS[("Diego", "Diego")]
+    ds2 = DictDS[("Pancho", "Pancho")]
+
+    for char in dfchar_shared["character"].unique().tolist():
+        assert char in ds1.Dat["character"].unique().tolist()
+        assert char in ds2.Dat["character"].unique().tolist()
+
+    for char in dfchar_shared["los_info"].unique().tolist():
+        assert char in ds1.Dat["los_info"].unique().tolist()
+        assert char in ds2.Dat["los_info"].unique().tolist()
+
+    return DScomb, dfchar_shared, dfchar_shared_agg
+
+def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
+    """
+    Combining all animals and basis prims into a single dataset, and plots to directly compare them,
+    to compare fraction matches across combos of animal x basis prims, and also split
+    between practiced and novel chars.
+    
+    Also finds common characters across aniamls, and plots just those.
+
+    RETURNS:
+    - DScomb, DS holding all data crossing (animal, basis) [does NOT prune to common chars]
+    - dfchar_shared, df, just the chars that are common across animals.
+    """
+    from pythonlib.dataset.dataset_strokes import concat_dataset_strokes_minimal, concat_dataset_strokes
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+    from pythonlib.tools.pandastools import aggregGeneral, append_col_with_grp_index
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+    from pythonlib.tools.snstools import rotateLabel
+
+    def _plot(DFTHIS, savesuff):
+        """ Plots, comparing match rate """
+        from pythonlib.tools.pandastools import grouping_print_n_samples, grouping_plot_n_samples_conjunction_heatmap
+        from pythonlib.tools.pandastools import stringify_values
+
+        sdir = f"{savedir}/{savesuff}"
+        os.makedirs(sdir, exist_ok=True)
+        
+        DFTHIS = stringify_values(DFTHIS)
+
+        ### Various catplots
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
+                    row="animal", jitter=True, alpha=0.2)
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-1.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", 
+                        row="animal", jitter=True, alpha=0.2)
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-2.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel|blocky", 
+                    row="animal", kind="violin")
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-3.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_dist", col="task_kind", hue="novel_char", 
+                    row="animal", kind="violin")
+        savefig(fig, f"{sdir}/catplot-FINAL_dist-all-4.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_match", col="task_kind", hue="novel|blocky", 
+                    row="animal", kind="bar")
+        savefig(fig, f"{sdir}/catplot-matches_base_prim-all-3.pdf")
+
+        fig = sns.catplot(data=DFTHIS, x="FINAL_basis", y="FINAL_match", col="task_kind", hue="novel_char", 
+                    row="animal", kind="bar")
+        savefig(fig, f"{sdir}/catplot-matches_base_prim-all-4.pdf")
+
+        ### Print useful things       
+        path = f"{sdir}/counts-1.txt"
+        grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "FINAL_basis"], savepath=path)  
+        # path = f"{sdir}/counts-2.txt"
+        # grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "date", "novel_char", "FINAL_basis"], savepath=path)   
+
+        if "los_info" in DFTHIS.columns:
+            path = f"{sdir}/counts-3.txt"
+            grouping_print_n_samples(DFTHIS, ["task_kind", "animal", "novel_char", "los_info", "FINAL_basis"], savepath=path)   
+
+            path = f"{sdir}/counts-4_testing_why_los_has_mult_trials.txt"
+            grouping_print_n_samples(DFTHIS, ["task_kind", "FINAL_basis", "los_info", "animal", "novel_char"], savepath=path)   
+
+        ### Stats
+        from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+        for is_novel in [False, True]:
+            for animal in ["Diego", "Pancho"]:
+                dfthis = DFTHIS[(DFTHIS["novel_char"] == is_novel) & (DFTHIS["animal"] == animal)].reset_index(drop=True)
+
+                if "los_info" in DFTHIS.columns:
+                    datapt_vars = ["los_info"] # data (each chartacter)
+                else:
+                    datapt_vars = ["los_set"] # data (each set of characters)
+
+                value_var = "FINAL_match"
+                contrast_var = "FINAL_basis"
+                contrast_levels = ["Diego", "Pancho"]
+
+                path = f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.txt"
+                _, fig = signrank_wilcoxon_from_df(dfthis, datapt_vars, contrast_var, contrast_levels, value_var, PLOT=True,
+                                                save_text_path=path)
+                savefig(fig, f"{sdir}/stats-animal={animal}-is_novel={is_novel}-contrast_var={contrast_var}-datapt={datapt_vars}.pdf")
+                plt.close("all")
+
+        ### Catplots related to the number of strokes
         fig = sns.catplot(data=DFTHIS, x="animal", y="FEAT_num_strokes_beh", hue="novel|blocky", kind="violin", aspect=2)
         rotateLabel(fig)
         savefig(fig, f"{sdir}/catplot-FEAT_num_strokes_beh-1.pdf")
@@ -2080,14 +2290,12 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
                                                                 "FINAL_dist", "index_datapt", plot_text=False, 
                                                                 plot_error_bars=False, alpha=0.05, SIZE=3.5)
                 savefig(fig, f"{sdir}/scatter-vs-basis-animal_data={animal_data}.pdf")
-
         plt.close("all")
 
         # (1) Agg, so los_info is single datapt
         # dfcounts_shared = aggregGeneral(dfchar_shared, ["animal", "FINAL_basis", "los_info", "novel|blocky"], ["FEAT_num_strokes_beh", "FINAL_dist", "FINAL_match"], aggmethod=["mean"], nonnumercols=["task_kind", "los_set"])
         # dfchar_shared_str = stringify_values(dfchar_shared)
         # assert pd.crosstab(dfchar_shared_str["los_info"], dfchar_shared_str["animal"]).min(axis=1).min()>0, "failure means a los_info was not done by all the animals."
-
         if "los_info" in DFTHIS.columns:
             var_data = "los_info"
         else:
@@ -2104,42 +2312,14 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
                 _, fig = plot_45scatter_means_flexible_grouping(DFTHIS, "FINAL_basis", "Diego", "Pancho", "animal", 
                                                                 var_value, var_data, False, shareaxes=True, plot_error_bars=plot_error_bars, 
                                                                 alpha=alpha, SIZE=3.5)
-                savefig(fig, f"{savedir}/scatter-data={var_data}-value={var_value}-alpha={alpha}-errorbars={plot_error_bars}.pdf")
-
+                savefig(fig, f"{sdir}/scatter-data={var_data}-value={var_value}-alpha={alpha}-errorbars={plot_error_bars}.pdf")
         _, fig = plot_45scatter_means_flexible_grouping(DFTHIS, "novel_char", True, False, "animal|basis", "FINAL_match", "los_set", 
                                             False, shareaxes=True, alpha=0.5)
-        savefig(fig, f"{savedir}/scatterNOVEL.pdf")
-
+        savefig(fig, f"{sdir}/scatterNOVEL.pdf")
         plt.close("all")
 
-
-    ### Genreate single combined dataset
-    # list_ds = []
-    # for animal_data in ["Diego", "Pancho"]:
-    #     ### (1) Collect df, across bases, and concat as new orjggt
-    #     # for basis in ["Diego", "Pancho", "image"]:
-    #     for basis in ["Diego", "Pancho"]:
-    #         ds = DictDS[(animal_data, basis)]
-    #         ds.Dat["FINAL_basis"] = basis
-            
-    #         if basis in ["Diego", "Pancho"]:
-    #             ds.Dat["FINAL_shape"] = ds.Dat["clust_sim_max_colname"]
-    #             ds.Dat["FINAL_dist"] = ds.Dat["clust_sim_max"]
-    #             ds.Dat["FINAL_match"] = ds.Dat["matches_base_prim"]
-    #         elif basis == "image":
-    #             ds.Dat["FINAL_shape"] = ds.Dat["shape"]
-    #             ds.Dat["FINAL_dist"] = ds.Dat["dist_beh_task_strok"]
-    #             ds.Dat["FINAL_match"] = ds.Dat["IMAGE_matches"]
-    #             # sanity
-    #             assert ds.Dat["dist_beh_task_strok"] == ds.Dat["IMAGE_dist"]
-    #         else:
-    #             assert False
-    #         list_ds.append(ds)
-    # DScomb = concat_dataset_strokes_minimal(list_ds)
-    # DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["novel_char", "is_perfblocky"], "novel|blocky")
-    # DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["animal","FINAL_basis"], "animal|basis")
-
-    # Check that columns exist and are correct. Previously I assigned these columns here, but now done in previous
+    ### Collect all data into a single DS
+    # - Also check that columns exist and are correct. Previously I assigned these columns here, but now done in previous
     # function.
     list_ds = []
     for animal_data in ["Diego", "Pancho"]:
@@ -2148,7 +2328,6 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
         for basis in ["Diego", "Pancho"]:
             ds = DictDS[(animal_data, basis)]
             assert all(ds.Dat["FINAL_basis"] == basis)
-            
             if basis in ["Diego", "Pancho"]:
                 assert all(ds.Dat["FINAL_shape"] == ds.Dat["clust_sim_max_colname"])
                 assert all(ds.Dat["FINAL_dist"] == ds.Dat["clust_sim_max"])
@@ -2161,16 +2340,16 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
                 assert False
             list_ds.append(ds)
     DScomb = concat_dataset_strokes_minimal(list_ds)
-    # DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["novel_char", "is_perfblocky"], "novel|blocky")
-    # DScomb.Dat = append_col_with_grp_index(DScomb.Dat, ["animal","FINAL_basis"], "animal|basis")
-
-    # Just chars
+    # Keep just "character" task kind.
     task_kind = "character"
     DScomb.Dat = DScomb.Dat[(DScomb.Dat["task_kind"] == task_kind)].reset_index(drop=True)
 
     ### Filtering steps
-    if True:
-        # First, keep only those (animal, date, los_set[??]) which has both novel and trained.
+    strict_mode=True
+    if strict_mode:
+        # First, a loose filtering step, to keep only the (animal, date, los_set[??]) which has both novel and trained,
+        # where both were performed on the same day -- ie so that novel vs. trained is a fair comparison.
+        # This is strict -- keeps subset of data, but is cleanest.
         dfchar_shared, _ = extract_with_levels_of_conjunction_vars_helper(DScomb.Dat,
                                                     "novel_char", ["animal", "date", "los_set"], 
                                                     lenient_allow_data_if_has_n_levels=2)
@@ -2197,7 +2376,7 @@ def analy_score_combined_animals_bases(DictDS, savedir, QUICK=False):
     
     #### PLOTS
     if QUICK:
-        # Just the ones in paper.
+        # Just the ones in paper -- chars done by both animals.
         list_conditions = [(dfchar_shared, "shared_chars")]
         dfchar_shared_agg = None
     else:
@@ -3352,6 +3531,26 @@ def analy_update_novel_label_ALL_apply(LIST_D, LIST_ANIMAL_DATE, savesuff):
             
         # Update novels
         D.Dat["novel_char"] = novels
+
+def analy_plot_variety_wrapper_manuscript(DictDS, SAVEDIR, PLOT_DRAWINGS = False):
+    """
+    One of the main plots, variety, to get just those in paper, use SKIP_IMAGE=True
+    """
+
+    # Just the useful qucik plots, not using image distance
+    for animal in ["Pancho", "Diego"]:
+        for basis in ["Diego", "Pancho"]:
+            SAVEDIR_THIS = f"{SAVEDIR}/SEPARATE_DATA-animal={animal}-vs-basis={basis}"
+            print("Saving to: ", SAVEDIR_THIS)
+            
+            DS = DictDS[(animal, basis)] # strokes vs. his own base prims
+            
+            ### (1) Combine across all kinds of char
+            ### STROKES, summarizing match stats
+            # --- vs. Prims
+            savedir = f"{SAVEDIR_THIS}/scores_summary-clust_max_dist-allchars"
+            os.makedirs(savedir, exist_ok=True)
+            analy_score_base_prim_reuse_plots(DS, savedir, "clust_sim_max_colname", "clust_sim_max", PLOT_DRAWINGS=PLOT_DRAWINGS)
 
 def analy_plot_variety_wrapper(DictDS, SAVEDIR, DO_PLOTS=True, SKIP_IMAGE=False,
                                PLOT_DRAWINGS = False):

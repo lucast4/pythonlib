@@ -194,11 +194,12 @@ def merge_subset_indices_prioritizing_second(df_old, df_new, index_col=None):
 #     # df.columns = ['_'.join(tup).rstrip('_') for tup in df.columns.values]
 #     return df
 ########################### ^^^^ OBSOLETE - USE aggregGeneral
+
+
 def replace_None_with_string(df):
     """
     Replace all cells with NoneType with the string "none".
     This is useful to avoid throwing out rows, for some subsequent code that autooatmcialy ignores rows that have any Nones.
-
     RETURNS: copy
     """
     if df.isnull().values.any():
@@ -1232,7 +1233,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
         list_cat_1 = None, list_cat_2 = None,
         sort_rows_by_mean_col_value=False,
         diverge_center_dark=False):
-    """ Reshape dataframe (and prune) to construct a 2d dataframe useful for 
+    """ 
+    Reshape dataframe (and prune) to construct a 2d dataframe useful for 
     plotting heatmap. Eech element is unique combo of item for col1 and col2, 
     with a particular aggregation function (by default is counts). 
     PARAMS:
@@ -1251,6 +1253,8 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
     - fig, 
     - ax,
     - rgba_values, (nrows, ncols, 4), where rgba_values[0,1], means rgba value for row 0 col 1.
+
+    MS: checked
     """
     from pythonlib.tools.snstools import heatmap
 
@@ -1297,44 +1301,6 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
             arr[i, j] = valthis
 
     dfthis = pd.DataFrame(arr, index=list_cat_1, columns=list_cat_2)
-
-    # if norm_method=="all_sub":
-    #     # minus mean over all cells
-    #     dfthis = dfthis - dfthis.mean(axis=None)
-    #     diverge = True
-    # elif norm_method=="col_div":
-    #     # normalize so that for each col, the sum across rows is 1
-    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-    #     dfthis = dfthis.div(dfthis.sum(axis=0), axis=1)
-    # elif norm_method=="row_div":
-    #     # same, but for rows
-    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-    #     dfthis = dfthis.div(dfthis.sum(axis=1), axis=0)
-    # elif norm_method=="all_div":
-    #     # divide by sum of all counts
-    #     assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"
-    #     dfthis = dfthis/dfthis.sum().sum()
-    # elif norm_method=="col_sub":
-    #     # normalize so by subtracting from each column its mean across rows
-    #     dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
-    #     diverge = True
-    # elif norm_method=="col_sub_notdiverge":
-    #     # normalize so by subtracting from each column its mean across rows
-    #     dfthis = dfthis.subtract(dfthis.mean(axis=0), axis=1)
-    #     diverge = False
-    # elif norm_method=="row_sub":
-    #     # normalize so by subtracting from each column its mean across rows
-    #     dfthis = dfthis.subtract(dfthis.mean(axis=1), axis=0)
-    #     diverge = True
-    # elif norm_method=="row_sub_firstcol":
-    #     # for each item in a given row, subtract the value of the first colum in that row.
-    #     dfthis = dfthis.subtract(dfthis.iloc[:,0], axis=0)
-    # elif norm_method is None:
-    #     pass
-    # else:
-    #     print(dfthis)
-    #     print(norm_method)
-    #     assert False
 
     if plot_heatmap:
         fig, ax, rgba_values = heatmap(dfthis, ax, annotate_heatmap, zlims,
@@ -2162,7 +2128,8 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
     n_min_each_conj_outer_inner=1,
     take_top_n_inner=None,
     DEBUG=False):
-    """ Return dict of unique items (levels of groupinner), grouped
+    """ 
+    Return dict of unique items (levels of groupinner), grouped
     by groupouter levels. 
     PARAMS:
     - groupouter, string, the first grouping.
@@ -2217,7 +2184,7 @@ def grouping_get_inner_items(df, groupouter="task_stagecategory",
                     print("N, each inner, for outer:", lev, " ... ")
                     for it in itemsinner:
                         print(it, "-->", sum(dfthisgroup[groupinner]==it))
-                itemsinner = [it for it in itemsinner if sum(dfthisgroup[groupinner]==it)>=n_min_each_conj_outer_inner]
+                itemsinner = [it for it in itemsinner if sum(dfthisgroup[groupinner]==it) >= n_min_each_conj_outer_inner]
                 if DEBUG:
                     print("Keeping these items: ", itemsinner, "(ie those with n >= ", n_min_each_conj_outer_inner, ")")
             if take_top_n_inner is not None and len(itemsinner)>take_top_n_inner:
@@ -3849,6 +3816,8 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     :param ZLIMS: overwrite the zmin and max independently, 2-tuple, an item use None to 
     use the auto value. e.g,., (0., None) means fiz min to 0, but use auto for max.
     :return:
+
+    MS: checked
     """
     if var_subplot is None:
         df = df.copy()
@@ -3871,15 +3840,13 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     H = (4/5) * W
     nrows = int(np.ceil(len(list_subplot) / ncols))
 
-    # print(nrows, ncols, list_subplot, var_subplot, df.columns, len(df))
-    # assert False
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*W, nrows*H))
 
     if share_zlim:
         # Compute the min and max
         grpdict = grouping_append_and_return_inner_items(df, [varrow, varcol, var_subplot])
-        mins = []
-        maxs = []
+        # mins = []
+        # maxs = []
         groupmeans = []
         for grp, inds in grpdict.items():
             groupmeans.append(np.mean(df.iloc[inds][val_name])) 
@@ -3911,7 +3878,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     for lev_subplot, ax in zip(list_subplot, axes.flatten()):
         a = df[var_subplot]==lev_subplot
         dfthis = df[(a)]
-        df2d, _, _, rgba_values = convert_to_2d_dataframe(dfthis, varrow, varcol,
+        df2d, _, _, _ = convert_to_2d_dataframe(dfthis, varrow, varcol,
                                 True,
                                 agg_method,
                                 val_name,

@@ -54,7 +54,7 @@ def generate_clustclass_from_flat_df(dfres, var_row, var_col, var_value, var_lab
     return Cl
 
 class Clusters(object):
-    """docstring for Clusters"""
+    """Holds 2D matrix data, usually distnaces matrices, and has various methods for plotting and visualizing and manipulating"""
     def __init__(self, X, labels_rows=None, labels_cols=None, ver=None, params=None, trialcodes=None):
         """ 
         PARAMS;
@@ -79,10 +79,6 @@ class Clusters(object):
         self._Xinput = X # never changes
         self.Ndat = X.shape[0]
         self.Ndim = X.shape[1]
-
-        # if np.any(np.isnan(X)):
-        #     print(X)
-        #     assert False
 
         if labels_rows is None:
             labels_rows = list(range(self.Ndat))
@@ -111,9 +107,6 @@ class Clusters(object):
         self.LabelsDict = {
             "raw":self.Labels
             } # tracks different ways of labeling, always aligned to self.Xinput
-
-        # self.XDict = {
-            # "raw":self.Xinput}
 
         self.ClusterResults = {}
         self.DistanceMatrices = {}
@@ -535,9 +528,10 @@ class Clusters(object):
 
     ################### DO CLUSTERING
     def cluster_compute_feature_scores_assignment(self):
-        """ for each trial, assign to a feature based simply on max
-        of the similarity score
+        """ for each trial, assign it a label based simply on argmax()
+        of the similarity score.
         """
+        from scipy.stats import entropy
 
         # self.Xinput is matric similarities.
         sims_max = self.Xinput.max(axis=1)
@@ -548,11 +542,10 @@ class Clusters(object):
         sims_concentration_v2 = (sims_max - sims_median)/(sims_max + sims_median)
         
         # which shape does it match the best
-        inds_maxsim = np.argmax(self.Xinput, axis=1)
+        inds_maxsim = np.argmax(self.Xinput, axis=1) # for each row, get its best column
         cols_maxsim = [self.LabelsCols[i] for i in inds_maxsim]
 
         # entropy
-        from scipy.stats import entropy
         simmat_entropy= entropy(self.Xinput, axis=1)
 
         # Save it
@@ -1705,7 +1698,11 @@ class Clusters(object):
 
     def rsa_dfdist_to_dfproj_index_datapts(self, dfdist_pts, var_score="dist_mean", var_effect = "idx_morph_temp",
                             effect_lev_base1=0, effect_lev_base2=99):
-        """Like dfdist_to_dfproj_index, but here dfdist rows to represent datapts/trials (So this would be trial vs. group of tirals), 
+        """
+        For each datapt, get its "projection" between the two groups of datapts at the extreme ends of a ordered variable.
+        I.e. compute an index which is (d2)/(d1 + d2) where d1 is distance from this datapt to the group 1...
+
+        NOTE: Like dfdist_to_dfproj_index, but here dfdist rows to represent datapts/trials (So this would be trial vs. group of tirals), 
         as oposed to there, whihc is rows are distances between groups of trials. 
 
         PARAMS:
@@ -1731,8 +1728,10 @@ class Clusters(object):
                 assert False, "prob need to set get_only_one_direction==False or version_datapts==True"
             d2 = tmp[var_score].values[0]
 
+            # Compute index
             dist_index = d1/(d1+d2)
-
+            
+            # Store
             res_dist_index.append({
                 "idx_row_datapt":idx_datapt,
                 "labels_1_datapt":tmp["labels_1_datapt"].values[0],
@@ -1741,17 +1740,10 @@ class Clusters(object):
             })
         dfproj_index = pd.DataFrame(res_dist_index)
 
+        # Optionally append trialcode, if each row corresponds to a trial.
         if "trialcode" in dfdist_pts.columns:
             map_idx_tc = {row["idx_row_datapt"]:row["trialcode"] for _, row in dfdist_pts.iterrows()}
             dfproj_index["trialcode"] = [map_idx_tc[idx] for idx in dfproj_index["idx_row_datapt"]]
-
-            # from pythonlib.tools.pandastools import merge_subset_indices_prioritizing_second, slice_by_row_label
-            # inds = dfproj_index["idx_row_datapt"].tolist()
-            # dftmp = slice_by_row_label(dfdist_pts, "idx_row_datapt", inds, assert_exactly_one_each=False)
-            # dfproj_index["trialcode"] = dftmp["trialcode"]
-            
-            # dfproj_index = merge_subset_indices_prioritizing_second(dfproj_index, dfdist_pts.loc[:, ["idx_row_datapt", "trialcode"]], "idx_row_datapt")
-            # # dfproj_index = pd.merge(dfproj_index, , "left", on="idx_row_datapt")
 
             assert set(dfproj_index["trialcode"]) == set(dfdist_pts["trialcode"])
         return dfproj_index
@@ -1949,7 +1941,7 @@ class Clusters(object):
 
         Gets only a single direction (ie assumes symmetric score)
 
-        Gets dist_yue_diff between all pairs of different groups
+        Gets dist_yue_diff between all pairs of different groups, which is a normalized euclidean distance.
 
         PARAMS:
         - return_as_clustclass, bool, if True, then returns data as clustclass. Otherwise is a dataframe where
@@ -1960,6 +1952,8 @@ class Clusters(object):
 
         NOTE:
         - all rows with same (labels_1, labels_2) will have idnetical values for all distances, as distances are symetric.
+
+        MS: checked
         """
         from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
 
@@ -1975,8 +1969,6 @@ class Clusters(object):
         if label_vars is None:
             label_vars= self.rsa_labels_extract_label_vars()
         grpdict = grouping_append_and_return_inner_items_good(dflabels, label_vars)
-        # for k, v in grpdict.items():
-        #     print(k, "n =", len(v))
 
         # Context?
         if context_dict is not None:
@@ -2053,9 +2045,6 @@ class Clusters(object):
                         res[-1][f"{_var}_1"] = grp1[_ivar]
                         res[-1][f"{_var}_2"] = grp2[_ivar]
 
-        # print(len(res), nskips)
-        # assert False
-
         # Also get 98th percentile between pairs of pts.
         ma = self._rsa_matindex_generate_upper_triangular()
         DIST_50, DIST_98 = np.percentile(self.Xinput[ma], [50, 98])
@@ -2069,6 +2058,7 @@ class Clusters(object):
 
         # Convert scores to dist_yue_diff
         cached_distances = {} # Otherwise can get very slow
+        # var_scores = []
         def _get_within_group_dist(grp, var_score):
             """ return scalar avearge distance wtihin this group"""
             if grp not in cached_distances:
@@ -2086,22 +2076,19 @@ class Clusters(object):
             dist_within_2 = _get_within_group_dist(row["labels_2"], var_score)
             dist_within = 0.5 * (dist_within_1 + dist_within_2)
 
+            # - get the mean across-group score
             dist_across = row[var_score]
 
+            # - finally, normalize
             dist_yue_diff = dist_across - dist_within
 
+            # - collect
             list_dist_yue_diff.append(dist_yue_diff)
-
         dfres["dist_yue_diff"] = list_dist_yue_diff
 
         # Add column names reflecting the "sameness" state of variables.
         ### OTHER columns added
         dfres = self.rsa_distmat_population_columns_label_relations(dfres, label_vars)
-        # else:
-        #     from pythonlib.tools.pandastools import append_col_with_grp_index
-        #     for var in label_vars:
-        #         dfres = append_col_with_grp_index(dfres, [f"{var}_1", f"{var}_2"], f"{var}_12")
-        #         dfres[f"{var}_same"] = dfres[f"{var}_1"] == dfres[f"{var}_2"]
 
         if dfres.isnull().values.any():
             # Example DataFrame
@@ -2109,7 +2096,6 @@ class Clusters(object):
             print(dfres)
             columns_with_nans = dfres.columns[dfres.isnull().any()]
             print("Columns with NaN values:", columns_with_nans.tolist())
-
             assert False, "replace Nones using replace_values_with_this"
 
         ### Return as a ClustClass object

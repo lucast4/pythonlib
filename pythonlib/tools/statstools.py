@@ -80,7 +80,6 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
     if len(dfpivot)==0:
         return None
     
-    # display(dfpivot)
     if len(contrast_levels)==2:
         res = signrank_wilcoxon(dfpivot[var1], dfpivot[var2])
     elif len(contrast_levels)==1:
@@ -660,6 +659,8 @@ def stratified_resample_split_kfold(y, n_splits, test_size=0.5, PRINT=False):
     Returns:
     - list of 2-tuples, each holding random train and test inds (arrays) covering all data, that index into y. 
     len of the list is n_splits.
+
+    MS: checked
     """
     from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -1212,6 +1213,8 @@ def decode_resample_balance_dataset(X_train, labels_train, method="upsample",
     PARAMS:
     - X_train, scalar acgivity to decode, a single time bin, (ntrials, nchans)
     - labels_train, list of cat valuyes. len ntrials
+
+    MS: checked
     """
     from pythonlib.tools.listtools import tabulate_list
     from neuralmonkey.analyses.state_space_good import trajgood_plot_colorby_splotbydims_scalar
@@ -1246,7 +1249,7 @@ def decode_resample_balance_dataset(X_train, labels_train, method="upsample",
             savefig(fig, f"{plot_resampled_data_path_nosuff}-raw.png")
 
         # Do this or else will raise erorr.
-        labels_train_orig = labels_train
+        # labels_train_orig = labels_train
         if isinstance(labels_train, (list, tuple)):
             # Convert indiv labels, if they are list/tyuple, to str, or else will fail.
             # from pythonlib.tools.listtools import stringify_list_of_tuple
@@ -1266,6 +1269,7 @@ def decode_resample_balance_dataset(X_train, labels_train, method="upsample",
         if method=="upsample":
             from imblearn.over_sampling import SMOTE
             smote = SMOTE(sampling_strategy="not majority", k_neighbors=n_min_across_labs-1)
+
             try:
                 # if False:
                 #     assert False, "bad -- need to use X, as it does interpolation..."

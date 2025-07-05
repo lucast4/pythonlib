@@ -11,8 +11,9 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
                               inds_skip_rows_or_cols=None, PLOT=False,
                               return_as_clustclass=False, clustclass_labels_1=None, clustclass_labels_2=None,
                               clustclass_label_vars=None):
-    """ Wrapper to generate distance matrix.
-    Assumes this is symetric. Only computes upper triangle copies to lower.
+    """ Wrapper to generate distance matrix, flexibly, given any type values and apprpriate
+    distance function that takes in those types.
+    Checks if is symetric -- if so, then computes upper triangle copies to lower
     PARAMS:
     - dist_func, function mapping from (vals1[i], vals2[j]) --> scalar
     - accurately_estimate_diagonal, bool, if True, then deals with prpoblem where
@@ -24,20 +25,6 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
 
     from pythonlib.tools.checktools import check_objects_identical
     symmetric = check_objects_identical(vals1, vals2)
-
-    # if isinstance(vals1, np.ndarray):
-    #     symmetric = np.all(vals1==vals2) # This speeds things up
-    # else:
-    #     try:
-    #         symmetric = vals1==vals2 # This speeds things up
-    #     except ValueError as err:
-    #         try:
-    #             symmetric = np.all(vals1==vals2) # This speeds things up
-    #         except Exception as err:
-    #             print(vals1)
-    #             print(vals2)
-    #             print(type(vals1), type(vals2))
-    #             raise err
 
     if inds_skip_rows_or_cols is None:
         inds_skip_rows_or_cols = []
@@ -59,6 +46,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
     if accurately_estimate_diagonal:
         assert symmetric==True
         def dist_func_i_equals_j(v1, dummy):
+            # use "train-test" splits to compute distances along the diagonal.
             return dist_vs_self_split_compute_agg(v1, dist_func, nfold=10)
     else:
         dist_func_i_equals_j = None
@@ -71,7 +59,7 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
             for j, v2 in enumerate(vals2):
                 if j>=i:
                     if (i in inds_skip_rows_or_cols) or (j in inds_skip_rows_or_cols):
-                        # assert False
+                        # Then skip
                         d = np.nan
                     else:
                         if accurately_estimate_diagonal and i==j:
@@ -124,9 +112,6 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
         # print(cap_dist)
         # assert False
         D[D>cap_dist] = cap_dist
-    # print(D)
-    # print(n1, n2)
-    # assert False
 
     if normalize_rows:
         dnorm = np.sum(D, axis=1, keepdims=True)
@@ -179,7 +164,6 @@ def distmat_construct_wrapper(vals1, vals2, dist_func, cap_dist=None, normalize_
         else:
             assert False
 
-    # assert ~np.any(np.isnan(D))
     if PLOT:
         from pythonlib.tools.snstools import heatmap_mat
         fig, ax, rgba_values = heatmap_mat(D, annotate_heatmap=False)

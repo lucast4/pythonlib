@@ -88,7 +88,6 @@ def formatDatStrokesPlot(ax, naked_axes=False, mark_stroke_onset=False,
     onset with numbers. If do this, then need to pass in strokes and strokes_cols
     - strokes, list of np array, 
     - strokes_cols, list of colors. see other code for color format.
-
     """
     ax.set_facecolor((0.9, 0.9, 0.9))
     ax.set_aspect('equal')
@@ -111,12 +110,12 @@ def formatDatStrokesPlot(ax, naked_axes=False, mark_stroke_onset=False,
                 else:
                     snum = i+1
                 ax.text(s[0,0], s[0,1], f"{snum}", color=tcol, fontsize=markersize+7, alpha=0.7)
-
     
 def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None, 
     cmap="winter", markersize=6, alpha=0.55, mark_stroke_onset=True, 
     add_stroke_number=True, naked_axes=False, number_from_zero=False):
-    """ plot strokes, similar to plotDatStrokes, but the color is proportional
+    """ 
+    Plot strokes as points, similar to plotDatStrokes, but the color is proportional
     to value in strokes_values, where first remapped to range (vmin, vmax), and
     uses color gradient based on that range
     INPUT:
@@ -192,15 +191,16 @@ def plotDatStrokesMapColor(strokes, ax, strokes_values, vmin=None, vmax=None,
     formatDatStrokesPlot(ax, naked_axes=naked_axes, mark_stroke_onset=mark_stroke_onset, 
         add_stroke_number=add_stroke_number, number_from_zero=number_from_zero, 
         strokes=strokes, strokes_cols=color_list, markersize=markersize)
-    
 
 def plot_single_strok(strok, ver="beh", ax=None, 
         color=None, alpha_beh=None, label_onset=None, label_size=10, label_color=None):
-    """ [GOOD - actual clean wrapper that is easy to understand]
+    """ 
+    [GOOD - actual clean wrapper that is easy to understand]
     plot a single inputed strok on axis. 
     INPUT:
     - strok, np array,
     """
+    from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
 
     if ver=="task" and color is not None:
         ver = "task_colored"
@@ -210,7 +210,6 @@ def plot_single_strok(strok, ver="beh", ax=None,
     if ax is None:
         fig, ax = plt.subplots()
 
-    from pythonlib.drawmodel.strokePlots import plotDatStrokesWrapper, plotDatStrokes
     if ver=="beh":
         plotDatStrokesWrapper([strok], ax, color=color, add_stroke_number=False, 
             mark_stroke_onset=True, alpha=alpha_beh)
