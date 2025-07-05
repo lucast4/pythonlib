@@ -63,6 +63,7 @@ def load_pair_of_datasets(animal1, date1, animal2, date2, strokes_keep_only_main
 
 def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_var="Cl"):
     """
+    Given computed distances (in LIST_TRIAL_CL), make various plots
     """
 
     savedir = f"{SAVEDIR}/quantify"
@@ -72,6 +73,7 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
 
     if PLOT==False or SAVEDIR is None:
         savedir = None
+
     # Quantify
     list_dfdist = []
     list_dfaccuracy = []
@@ -133,7 +135,6 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
     DFDIST = pd.concat(list_dfdist).reset_index(drop=True)
     DFACCURACY = pd.concat(list_dfaccuracy).reset_index(drop=True)
 
-    
     # Normalize the distances, to allow comparison across distance kinds
     # TODO: use interpretable normalizatoins:
     # -- image: max = across task-image, min = closest trace.
@@ -163,12 +164,9 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
     from pythonlib.tools.pandastools import stringify_values
     DFDIST = stringify_values(DFDIST)
 
-    from pythonlib.tools.pandastools import append_col_with_grp_index
     print("HERE", len(DFDIST))
     DFDIST["same_animal"] = DFDIST["animal_pair"].isin(["0|0", "1|1"])
     DFDIST["same_shape"] = DFDIST["shape_1"] == DFDIST["shape_2"]
-    # DFACCURACY["same_animal"] = DFACCURACY["animal_pair"].isin(["0|0", "1|1"])
-    # DFACCURACY["same_shape"] = DFACCURACY["shape_same"]
 
     if PLOT:
         for dist, sharey in [
@@ -198,8 +196,24 @@ def convert_cl_to_dfdists_and_plot(LIST_TRIAL_CL, SAVEDIR=None, PLOT=False, cl_v
     return DFDIST, DFACCURACY
 
 def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff,
+                          label_var="shape", plot=True):
+    """
+    Score pairwise stroke trajectory distances between all pairs comparing strokes1 and strokes2
+    """
+    print("Scoring motor distance....")
+
+    # Compute similarity
+    Cl = DSthis.distgood_compute_beh_beh_strok_distances(strokes1, strokes2, labels_rows_dat=shapes1, 
+                                                         labels_cols_feats=shapes2, label_var=label_var, 
+                                                         clustclass_rsa_mode=True,
+                                                         PLOT=plot, savedir=savedir, savesuff=savesuff,
+                                                         invert_score=True)
+    return Cl
+
+def score_motor_distances_OLD(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff,
                           label_var="shape"):
     """
+    Score pairwise stroke trajectory distances between all pairs comparing strokes1 and strokes2
     """
     print("Scoring motor distance....")
 
@@ -232,57 +246,32 @@ def score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir,
 
     return Cl
 
-def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distances=None):
+
+def fig1_score_pairwise_distances_motor(DS1, DS2, SAVEDIR, N_TRIALS = 10, plot=True):
     """
     Score all pairwise distances between strokes, stored in DS1, DS2, where these are datasets
-    for two subjects (usually)
+    for two subjects (usually). Gets both within and across subejcts.
     """
+    from pythonlib.tools.pandastools import extract_trials_spanning_variable
 
-    if which_distances is None:
-        which_distances = ["image", "motor", "image_beh_task"]
-
-    DSthis = DS1
     savedir = f"{SAVEDIR}/raw_heatmaps"
     os.makedirs(savedir, exist_ok=True)
-    def _score_image_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
-        """
-        """
-        print("Scoring image distance....")
 
-        Cl = DSthis.distgood_compute_image_strok_distances(strokes1, strokes2, shapes1, shapes2, do_centerize=True,
-                                                            clustclass_rsa_mode=True, PLOT=True, savedir=savedir, savesuff=savesuff)
-        # Cl = Cl.convert_copy_to_rsa_dist_version("shape", "image")
-
-
-        # if N_TRIALS<12:
-        #     fig, _ = Cl.rsa_plot_heatmap()
-        #     if fig is not None:
-        #         savefig(fig, f"{savedir}/TRIAL_DISTS-image-{savesuff}.pdf")  
-
-        # ### Aggregate to get distance between groups (shapes)
-        # _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(return_as_clustclass=True, return_as_clustclass_which_var_score="dist_mean")
-
-        # # Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts
-        # fig, _ = Clagg.rsa_plot_heatmap()
-        # savefig(fig, f"{savedir}/TRIAL_DISTS_mean_over_shapes-image-{savesuff}.pdf")  
-
-        return Cl
+    # Helper functions
+    ds = DS1 # just for the methods.
 
     def _score_motor_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
         """
         """
         print("Scoring motor distance....")
-        Cl = score_motor_distances(DSthis, strokes1, strokes2, shapes1, shapes2, savedir, savesuff)
-
+        Cl = score_motor_distances(ds, strokes1, strokes2, shapes1, shapes2, savedir, savesuff, plot=plot)
         return Cl
 
     ### Compute all pairwise distances between strokes.
-    from pythonlib.tools.pandastools import extract_trials_spanning_variable
-
     LIST_TRIAL_CL = []
 
-    ### Also get distnace across animals
-    # First, get common shapes
+    ### (1) Score across animals    
+    # First, get common shapes, and get n trials subsampling each shape
     shapes_common = sorted(set(DS1.Dat[DS1.Dat["shape"].isin(DS2.Dat["shape"].tolist())]["shape"]))
 
     inds, _ = extract_trials_spanning_variable(DS1.Dat, "shape", varlevels=shapes_common, n_examples=N_TRIALS)
@@ -294,9 +283,93 @@ def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distan
     shapes2 = DS2.Dat.iloc[inds]["shape"].tolist()
 
     assert shapes1 == shapes2, "then below will fail -- this is hacky, converting to rsa, which expects lables row and col to be identical. solve by updating code to also work with assymetric"
+    
+    # Second, do scoring
+    Cl = _score_motor_distances(strokes1, strokes2, shapes1, shapes2, "01")
+    LIST_TRIAL_CL.append({
+        "animal_pair":(0,1),
+        "dist_ver":"motor",
+        "Cl":Cl
+        })
 
-    ### (1) Image distance
+    ### (2) Scores distances within each animal
+    for i, DSthis in enumerate([DS1, DS2]):
+
+        inds, _ = extract_trials_spanning_variable(DSthis.Dat, "shape", n_examples=N_TRIALS)
+        strokes = DSthis.Dat.iloc[inds]["strok"].tolist()
+        strokes_task = DSthis.extract_strokes(inds=inds, ver_behtask="task")
+        shapes = DSthis.Dat.iloc[inds]["shape"].tolist()
+
+        ### (2) Motor distance (beh-beh)
+        if "motor" in which_distances:
+            Cl = _score_motor_distances(strokes, strokes, shapes, shapes, i)
+            LIST_TRIAL_CL.append({
+                "animal_pair":(i,i),
+                "dist_ver":"motor",
+                "Cl":Cl
+                })
+        
+        plt.close("all")
+
+    ## Save the data 
+    import pickle
+    with open(f"{SAVEDIR}/LIST_TRIAL_CL.pkl", "wb") as f:
+        pickle.dump(LIST_TRIAL_CL, f)
+
+    return LIST_TRIAL_CL
+
+def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distances=None):
+    """
+    Score all pairwise distances between strokes, stored in DS1, DS2, where these are datasets
+    for two subjects (usually). Gets both within and across subejcts.
+    """
+    from pythonlib.tools.pandastools import extract_trials_spanning_variable
+
+    if which_distances is None:
+        which_distances = ["image", "motor", "image_beh_task"]
+
+    savedir = f"{SAVEDIR}/raw_heatmaps"
+    os.makedirs(savedir, exist_ok=True)
+
+    # Helper functions
+    ds = DS1 # just for the methods.
+    def _score_image_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
+        """
+        """
+        print("Scoring image distance....")
+
+        Cl = ds.distgood_compute_image_strok_distances(strokes1, strokes2, shapes1, shapes2, do_centerize=True,
+                                                            clustclass_rsa_mode=True, PLOT=True, savedir=savedir, savesuff=savesuff)
+        return Cl
+
+    def _score_motor_distances(strokes1, strokes2, shapes1, shapes2, savesuff):
+        """
+        """
+        print("Scoring motor distance....")
+        Cl = score_motor_distances(ds, strokes1, strokes2, shapes1, shapes2, savedir, savesuff)
+        return Cl
+
+    ### Compute all pairwise distances between strokes.
+    LIST_TRIAL_CL = []
+
+
+    ### (1) Score across animals    
+    # First, get common shapes, and get n trials subsampling each shape
+    shapes_common = sorted(set(DS1.Dat[DS1.Dat["shape"].isin(DS2.Dat["shape"].tolist())]["shape"]))
+
+    inds, _ = extract_trials_spanning_variable(DS1.Dat, "shape", varlevels=shapes_common, n_examples=N_TRIALS)
+    strokes1 = DS1.Dat.iloc[inds]["strok"].tolist()
+    shapes1 = DS1.Dat.iloc[inds]["shape"].tolist()
+
+    inds, _ = extract_trials_spanning_variable(DS2.Dat, "shape", varlevels=shapes_common, n_examples=N_TRIALS)
+    strokes2 = DS2.Dat.iloc[inds]["strok"].tolist()
+    shapes2 = DS2.Dat.iloc[inds]["shape"].tolist()
+
+    assert shapes1 == shapes2, "then below will fail -- this is hacky, converting to rsa, which expects lables row and col to be identical. solve by updating code to also work with assymetric"
+    
+    # Second, do scoring
     if "image" in which_distances:
+        ### (1) Image distance
         Cl = _score_image_distances(strokes1, strokes2, shapes1, shapes2, "01")
         LIST_TRIAL_CL.append({
             "animal_pair":(0,1),
@@ -313,7 +386,7 @@ def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distan
             "Cl":Cl
             })
 
-    # Get distances within each animal
+    ### (2) Scores distances within each animal
     for i, DSthis in enumerate([DS1, DS2]):
 
         inds, _ = extract_trials_spanning_variable(DSthis.Dat, "shape", n_examples=N_TRIALS)
@@ -357,9 +430,8 @@ def fig1_score_pairwise_distances(DS1, DS2, SAVEDIR, N_TRIALS = 10, which_distan
 
     return LIST_TRIAL_CL
 
-
 def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", date2=240509, SAVEDIR=None,
-                               resave_datasets=False, strokes_keep_only_main_prims=False):
+                               resave_datasets=False, strokes_keep_only_main_prims=False, manuscript_version=False):
     """
     Entire pipeline
     """
@@ -373,8 +445,8 @@ def fig1_learned_prims_wrapper(animal1="Diego", date1=230616, animal2="Pancho", 
         SAVEDIR = _SAVEDIR
 
     if resave_datasets:
-        DS1.save(SAVEDIR, filename="DS1")
-        DS2.save(SAVEDIR, filename="DS2")
+        DS1.save(SAVEDIR, filename="DS1", manuscript_version=manuscript_version)
+        DS2.save(SAVEDIR, filename="DS2", manuscript_version=manuscript_version)
 
 
     LIST_TRIAL_CL = fig1_score_pairwise_distances(DS1, DS2, SAVEDIR)
@@ -615,10 +687,79 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False,
 
     Does: Make drawing plots, Compute pairwise dsitances, plot scores.
 
-    TODO: Stat significance of violin plots. Should do shuffle (same as did for euclidian dist for neural).
     """
     grpvars = ["shape", "gridloc", "gridsize"]
 
+    # Just to make quicker
+    if DEBUG:
+        shapes_keep = DS.Dat["shape"].unique().tolist()[:2]
+        locs_keep = DS.Dat["gridloc"].unique().tolist()[:2]
+        sizes_keep = DS.Dat["gridsize"].unique().tolist()[:2]
+
+        a = DS.Dat["shape"].isin(shapes_keep)
+        b = DS.Dat["gridloc"].isin(locs_keep)
+        c = DS.Dat["gridsize"].isin(sizes_keep)
+
+        DS.Dat = DS.Dat[(a & b & c)].reset_index(drop=True)
+
+    # Clean up
+    from pythonlib.tools.pandastools import extract_with_levels_of_var_good
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    dfthis, inds_keep = extract_with_levels_of_var_good(DS.Dat, grpvars, min([3, N_TRIALS]))
+    DS.Dat = dfthis
+
+    DS.Dat = append_col_with_grp_index(DS.Dat, ["gridloc", "gridsize"], "locsize")
+    DS.Dat = append_col_with_grp_index(DS.Dat, grpvars, "shape_loc_size")
+
+    # Drawings
+    if PLOT_DRAWINGS:
+        n_iter_drawing = 3
+        for i in range(n_iter_drawing):
+            fig_beh, fig_task = DS.plotshape_row_col_size_loc()
+            savefig(fig_beh, f"{savedir}/drawing-1-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-1-task-iter{i}.pdf")
+
+            fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("shape", "locsize", plot_task=True, ver_behtask="task")
+            savefig(fig_beh, f"{savedir}/drawing-2-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-2-task-iter{i}.pdf")
+
+            fig_beh, fig_task = DS.plotshape_row_col_vs_othervar("locsize", plot_task=True, ver_behtask="task")
+            savefig(fig_beh, f"{savedir}/drawing-3-beh-iter{i}.pdf")
+            savefig(fig_task, f"{savedir}/drawing-3-task-iter{i}.pdf")
+
+        plt.close("all")
+
+    ### Compute pairwise trajectory distance between strokes (trials).
+    from pythonlib.tools.pandastools import extract_trials_spanning_variable, append_col_with_grp_index
+
+    inds, _ = extract_trials_spanning_variable(DS.Dat, "shape_loc_size", n_examples=N_TRIALS)
+    strokes = DS.Dat.iloc[inds]["strok"].tolist()
+    labels = [tuple(x) for x in DS.Dat.loc[inds, grpvars].values.tolist()]
+
+    print("Scoring motor distance....")
+    # list_distance_ver  = ["dtw_vels_2d"]
+    Cl = DS.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, grpvars, clustclass_rsa_mode=True, invert_score=True)
+    
+    # Save, since this takes a long time.
+    import pickle
+    with open(f"{savedir}/Cl.pkl", "wb") as f:
+        pickle.dump(Cl, f)
+
+    ### Plots
+    dfdist, dfdist_agg = fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True)
+
+    return dfdist, dfdist_agg
+
+def fig1_motor_invariance_OLD(DS, N_TRIALS, savedir, DEBUG=False,
+                          PLOT_DRAWINGS=True):
+    """
+    Entire pipeline, to analyze invariance of motor parameters due to loation and size.
+    Expt is assumed to have both loc and size vairation.
+
+    Does: Make drawing plots, Compute pairwise dsitances, plot scores.
+
+    """
+    grpvars = ["shape", "gridloc", "gridsize"]
 
     # Just to make quicker
     if DEBUG:
@@ -777,18 +918,24 @@ def fig1_motor_invariance(DS, N_TRIALS, savedir, DEBUG=False,
 
     return dfdist, dfdist_agg
 
+
 def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
     """
     After getting Cl, make the invariance plots.
-    This is split from code to construct Cl, as it is slow.
+    This is split from code to construct Cl, as the latter is slow.
     Can load pre-saved Cl and then run this from notebook
     """
-    ################### PLOTS
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.pandastools import aggregGeneral
+    from pythonlib.tools.pandastools import grouping_print_n_samples, grouping_plot_n_samples_conjunction_heatmap
+    import seaborn as sns
+
+    ### PLOTS
+    
     # Plot heatmap
     # - First agg (over trials), or else plots too large
     _, Clagg = Cl.rsa_distmat_score_all_pairs_of_label_groups(get_only_one_direction=False, return_as_clustclass=True,
                                                               return_as_clustclass_which_var_score="dist_mean")
-    
 
     ### Heatmaps
     if plot_heatmaps:
@@ -804,7 +951,6 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
     dfdist = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
     dfdist = dfdist.drop("dist_yue_diff", axis=1)
     dfdist = dfdist.dropna()
-    from pythonlib.tools.pandastools import append_col_with_grp_index
     dfdist = append_col_with_grp_index(dfdist, ["shape_same", "gridloc_same", "gridsize_same"], "same-shape_loc_size")
 
     # Get normalized score (0 good, 1 bad)
@@ -813,8 +959,6 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
     dfdist["dist_mean_norm_v2"] = 1 - (dfdist["dist_mean"] - score_min)/(score_max - score_min)
 
     # Agg, so that each (shape, loc, size) is single datapt
-    from pythonlib.tools.pandastools import aggregGeneral
-    from pythonlib.tools.pandastools import grouping_print_n_samples, grouping_plot_n_samples_conjunction_heatmap
     dfdist_agg = aggregGeneral(dfdist, ["labels_1_datapt", "same-shape_loc_size"], ["dist_mean", "dist_mean_norm_v2"])
     
     fig = grouping_plot_n_samples_conjunction_heatmap(dfdist_agg, "labels_1_datapt", "same-shape_loc_size")
@@ -826,16 +970,14 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
     path = f"{savedir}/counts-dfdist.txt"
     grouping_print_n_samples(dfdist, ["labels_1_datapt", "same-shape_loc_size"], savepath=path)        
 
-    # Print sample size
-    from pythonlib.tools.pandastools import grouping_print_n_samples
-    
+    # Print sample size   
     path = f"{savedir}/counts_trial.txt"
     grouping_print_n_samples(dfdist, ["same-shape_loc_size"], savepath=path)        
     
     path = f"{savedir}/counts_grp.txt"
     grouping_print_n_samples(dfdist_agg, ["same-shape_loc_size"], savepath=path)        
 
-    import seaborn as sns
+    ### Plots
     for y in ["dist_mean", "dist_mean_norm_v2"]:
         fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y)
         savefig(fig, f"{savedir}/catplot-trials-{y}-1.pdf")
@@ -843,7 +985,7 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
         fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y, kind="violin")
         savefig(fig, f"{savedir}/catplot-trials-{y}-2.pdf")
 
-        fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y, kind="bar", errorbar=("ci", 68))
+        fig = sns.catplot(data=dfdist, x="same-shape_loc_size", y=y, kind="bar", errorbar="se")
         savefig(fig, f"{savedir}/catplot-trials-{y}-3.pdf")
 
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y)
@@ -852,7 +994,7 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
         fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="violin")
         savefig(fig, f"{savedir}/catplot-grps-{y}-2.pdf")
 
-        fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="bar", errorbar=("ci", 68))
+        fig = sns.catplot(data=dfdist_agg, x="same-shape_loc_size", y=y, kind="bar", errorbar="se")
         savefig(fig, f"{savedir}/catplot-grps-{y}-3.pdf")
         plt.close("all")
 
@@ -890,7 +1032,6 @@ def fig1_motor_invariance_plots(Cl, savedir, plot_heatmaps=True):
     compute_all_pairwise_signrank_wrapper(dfdist_agg, ["labels_1_datapt"], "same-shape_loc_size", "dist_mean", True, savedir_this)
 
     return dfdist, dfdist_agg
-
 
 def fig3_charsyntax_wrapper(animal, DATE, SAVEDIR):
     """
@@ -1587,15 +1728,142 @@ def fig3_charsyntax_transition_matrix_graph_plot(df, threshold, map_node_to_inse
     
     return fig
 
+def fig2_categ_extract_dist_scores_manuscript(DSmorphsets, SAVEDIR, list_version=None, heatmap_plot_trials=True):
+    """
+    Extract pairiwse distances (between all trials) separately for each
+    morphsets in DSmorphsets.Dat.
+
+    Ensures that wil have accurate label for each index within (e.g., ambig, not-ambig)
+    """
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.stroketools import strokes_centerize
+    from pythonlib.tools.pandastools import stringify_values
+    from pythonlib.tools.pandastools import extract_with_levels_of_var_good
+
+
+    if list_version is None:
+        list_version = ["beh", "task"]
+    else:
+        assert isinstance(list_version, list)
+
+    ### Extract task strokes
+    inds = list(range(len(DSmorphsets.Dat)))
+    DSmorphsets.Dat["strok_task"]= DSmorphsets.extract_strokes(inds=inds, ver_behtask="task_entire")
+    DSmorphsets.Dat = append_col_with_grp_index(DSmorphsets.Dat, ["morph_idxcode_within_set", "assigned_base_simple"], 
+                                                "idxmorph_assigned", False) # To make this tuple, same as in Cl below.
+
+    ### Collect distances
+    DEBUG = False
+    list_df = []
+    list_df_index = []
+    for morphset in DSmorphsets.Dat["morph_set_idx"].unique():
+        dfdat = DSmorphsets.Dat[DSmorphsets.Dat["morph_set_idx"]==morphset].reset_index(drop=True)
+        
+        # Need at least 2 trials, or else distances will fail
+        dfdat, _ = extract_with_levels_of_var_good(dfdat, ["morph_idxcode_within_set", "assigned_base_simple"], 2)
+
+        for version in list_version:
+            savedir = f"{SAVEDIR}/extraction/morphset={morphset}-ver={version}"
+            os.makedirs(savedir, exist_ok=True)
+
+            # label
+            label_var = ["morph_idxcode_within_set", "assigned_base_simple"]
+            labels = [tuple(x) for x in dfdat.loc[:, label_var].values.tolist()]
+
+            if version == "beh":
+                strokes = dfdat["strok"].tolist()
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                Cl = DSmorphsets.distgood_compute_beh_beh_strok_distances(strokes, strokes, None, labels, labels, label_var, 
+                                                                        clustclass_rsa_mode=True, PLOT=True, 
+                                                                        savedir=savedir, savesuff=version, invert_score=True,
+                                                                        plot_trials=heatmap_plot_trials)
+            elif version == "task":
+                strokes = dfdat["strok_task"].tolist()
+                strokes = strokes_centerize(strokes, method="bounding_box")
+                if DEBUG:
+                    strokes = strokes[::2]
+                    labels = labels[::2]
+                Cl = DSmorphsets.distgood_compute_image_strok_distances(strokes, strokes, labels, labels, label_var,
+                                                                do_centerize=True, clustclass_rsa_mode=True,
+                                                                PLOT=True, savedir=savedir, savesuff=version,
+                                                                plot_trials=heatmap_plot_trials)
+            else:
+                assert False
+
+            # Plot example strokes
+            inds = sorted(set(labels))
+            strokes_this = [strokes[labels.index(i)] for i in inds]
+            for overlay in [False, True]:
+                fig, _ = DSmorphsets.plot_multiple_strok(strokes_this, overlay=overlay, titles=inds)
+                savefig(fig, f"{savedir}/example_drawings-overlay={overlay}.pdf")
+            plt.close("all")
+
+            ### Compute distances
+            dfdists = Cl.rsa_distmat_score_all_pairs_of_label_groups_datapts()
+            dfproj_index = Cl.rsa_dfdist_to_dfproj_index_datapts(dfdists, var_effect="morph_idxcode_within_set", 
+                                                                effect_lev_base1=0, effect_lev_base2=99)
+            
+            # Condition the data, i.e,, adding labels as newc olumns.
+            fig2_categ_switching_condition_dfdists(dfdat, dfdists, dfproj_index)
+
+            ### Plot
+            from pythonlib.tools.snstools import rotateLabel
+            list_x_var = ["labels_1_datapt", "morph_idxcode_within_set", "assigned_base_simple"]
+
+            # Dfdists
+            dfdists_str = stringify_values(dfdists)
+            for x_var in list_x_var:
+                x_order = sorted(dfdists_str[x_var].unique())
+                
+                fig = sns.catplot(data=dfdists_str, x=x_var, y="dist_mean", col="labels_2_grp", order=x_order)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfdists-x={x_var}-1.pdf")
+                
+                fig = sns.catplot(data=dfdists_str, x=x_var, y="dist_mean", col="labels_2_grp", order=x_order, kind="point", errorbar="se")
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfdists-x={x_var}-2.pdf")
+            
+            # Dfproj_index
+            dfproj_index_str = stringify_values(dfproj_index)
+            for x_var in ["labels_1_datapt", "morph_idxcode_within_set"]:
+                x_order = sorted(dfproj_index_str[x_var].unique())
+                
+                fig = sns.catplot(data=dfproj_index_str, x=x_var, y="dist_index", order=x_order)
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfproj_index-x={x_var}-1.pdf")
+                
+                fig = sns.catplot(data=dfproj_index_str, x=x_var, y="dist_index", order=x_order, kind="point", errorbar="se")
+                rotateLabel(fig)
+                savefig(fig, f"{savedir}/catplot-dfproj_index-x={x_var}-2.pdf")
+            plt.close("all")
+
+            ## Collect results
+            dfdists["morphset"] = morphset
+            dfdists["version"] = version
+            dfproj_index["morphset"] = morphset
+            dfproj_index["version"] = version
+
+            list_df.append(dfdists)
+            list_df_index.append(dfproj_index)
+
+    DFDISTS = pd.concat(list_df).reset_index(drop=True)
+    DFINDEX = pd.concat(list_df_index).reset_index(drop=True)
+    pd.to_pickle(DFDISTS, f"{SAVEDIR}/DFDISTS.pkl")
+    pd.to_pickle(DFINDEX, f"{SAVEDIR}/DFINDEX.pkl")
+
+    return DFDISTS, DFINDEX
+
 def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="switching", 
                                    list_version=None, heatmap_plot_trials=True):
     """
-    Extract pairiwse distances for all morphsets in DSmorphsets.Dat
+    Extract pairiwse distances (between all trials) separately for each
+    morphsets in DSmorphsets.Dat.
 
     Ensures that those morphsets that are "switching" wil have accurate label for each index within
-    (e.g., ambig, not-ambig). Does not guarantee that for "smototh" but that's ok since there
-    I don't use this label info.
-
+    (e.g., ambig, not-ambig). (Does not guarantee that for "smototh" but that's ok since there
+    I don't use this label info.)
     """
     from pythonlib.tools.pandastools import append_col_with_grp_index
     from pythonlib.dataset.scripts.analy_manuscript_figures import score_motor_distances
@@ -1770,6 +2038,7 @@ def fig2_categ_extract_dist_scores(DSmorphsets, SAVEDIR, cetegory_expt_version="
 
 def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
     """
+    Postprocessing of dataset, helper. Assigns new columns reflecting task variables.
     Run this separately for each morphset.
     PARAMS:
     - ds_dat, slice of DSmorphsets for this morphset.
@@ -1777,15 +2046,13 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
     - modifies dfdists and dfproj_index, adding columns.
     """
 
-    #  Map from idx|assign to label
-    # idxmorph_assigned = (1, base1)...
-    
     #################### ADD LABELS
+    # (1) Collect mappers
     map_idxassign_to_label = {}
     map_idxassign_to_assignedbase = {}
     # map_idxassign_to_assignedbase_simple = {}
     # map_idxassign_to_idx_morph = {}
-    for i, row in ds_dat.iterrows():
+    for _, row in ds_dat.iterrows():
         if row["idxmorph_assigned"] not in map_idxassign_to_label:
             map_idxassign_to_label[row["idxmorph_assigned"]] = row["morph_assigned_label"]
             map_idxassign_to_assignedbase[row["idxmorph_assigned"]] = row["morph_assigned_to_which_base"]
@@ -1799,13 +2066,113 @@ def fig2_categ_switching_condition_dfdists(ds_dat, dfdists, dfproj_index):
             # assert map_idxassign_to_assignedbase_simple[row["idxmorph_assigned"]] == row["assigned_base_simple"]
             # assert map_idxassign_to_idx_morph[row["idxmorph_assigned"]] == row["idx_morph_temp"]
 
+    # (2) Assign new columns based on mappers
     for df in [dfdists, dfproj_index]:
         # df["assigned_base_simple"] = [map_idxassign_to_assignedbase_simple[x] for x in df["idxmorph_assigned"]]
         df["morph_assigned_to_which_base"] = [map_idxassign_to_assignedbase[x] for x in df["labels_1_datapt"]] # (base, ambig, notambig)
         df["morph_assigned_label"] = [map_idxassign_to_label[x] for x in df["labels_1_datapt"]] # (base1, ambig1, ..., base2)
         # df["idx_morph_temp"] = [map_idxassign_to_idx_morph[x] for x in df["idxmorph_assigned"]]
 
-def fig2_categ_switching_mult_load(cetegory_expt_version):
+def fig2_categ_switching_mult_load_manuscript():
+    """
+    Load and process pre-extracted data for psychometric experimets.
+
+    RETURNS:
+    - DFINDEX, datapt = trial
+    - DFINDEX_AGG_1, datapt = labels_1_datapt (e.g., 4|base1)
+    - DFINDEX_AGG_2, datapt = morph_assigned_to_which_base (e.g., ambig_base2)
+    """
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+
+    # Load pre-computed DFDISTS
+    list_animal_date = [("Diego", 240517), ("Diego", 240521), ("Diego", 240523), ("Diego", 240730), 
+                        ("Pancho", 240516), ("Pancho", 240521), ("Pancho", 240524)]
+
+    SAVEDIR_LOAD = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/REPRODUCED_FIGURES/fig2h/switching"
+    SAVEDIR_MULT = f"{SAVEDIR_LOAD}/MULT/switching"
+    os.makedirs(SAVEDIR_MULT, exist_ok=True)
+
+    # Collect data across animals/dates
+    list_dfindex = []
+    for animal, date in list_animal_date:
+        savedir = f"{SAVEDIR_LOAD}/{animal}-{date}"
+        dfindex = pd.read_pickle(f"{savedir}/DFINDEX.pkl")
+        dfindex["animal"] = animal
+        dfindex["date"] = date
+        list_dfindex.append(dfindex)   
+
+    DFINDEX = pd.concat(list_dfindex).reset_index(drop=True)
+    DFINDEX = append_col_with_grp_index(DFINDEX, ["animal", "date", "morphset"], "ani_date_ms")
+    DFINDEX["assigned_base_simple"] = [x[1] for x in DFINDEX["labels_1_datapt"]]
+    # remove indices without at least 2 trials...
+    DFINDEX = DFINDEX[~DFINDEX["morph_assigned_label"].isin(["not_enough_trials"])].reset_index(drop=True)
+
+    ### Clean up, making sure that "ambig" groups have trials in both base1 and base2
+    list_df =[]
+    for morph_assigned_label in ["not_ambig", "ambig", "base"]:
+        dfthis = DFINDEX[DFINDEX["morph_assigned_label"] == morph_assigned_label].reset_index(drop=True)
+        if morph_assigned_label=="ambig":
+            # any cases that are ambiguous -- they must have trials for both (base1 and base2)
+            # ie. every (ani, date, ms, idxcode) must have at least 1 trial each in base1, base2
+            _dfthis, _ = extract_with_levels_of_conjunction_vars_helper(dfthis, "assigned_base_simple", 
+                                                        ["ani_date_ms", "morph_idxcode_within_set"],
+                                                        plot_counts_heatmap_savepath=None,
+                                                        lenient_allow_data_if_has_n_levels=2)
+            print(len(dfthis), len(_dfthis), len(_dfthis)/len(dfthis))
+            assert len(_dfthis)>0.75*len(dfthis), "pruned so many. unexpcted"
+            dfthis = _dfthis
+        list_df.append(dfthis)
+    DFINDEX = pd.concat(list_df).reset_index(drop=True)
+    DFINDEX = DFINDEX.drop(["_index", "vars_others"], axis=1)
+
+    # Add a "label_good" column
+    def _new_x_label(morph_assigned_to_which_base):
+        """Helper to rename labels for a certain purpose"""
+        if morph_assigned_to_which_base in ["base1", "base2", "not_ambig_base1", "not_ambig_base2"]:
+            return morph_assigned_to_which_base
+        elif morph_assigned_to_which_base in ["ambig_base1", "ambig_base2"]:
+            return "ambig"
+        else:
+            print(morph_assigned_to_which_base)
+            assert False
+    DFINDEX["label_good"] = [_new_x_label(x) for x in DFINDEX["morph_assigned_to_which_base"]]
+
+    # Normalized dist_index, so that ranges from (0,1) for index (0, 99)
+    # NOTE: this is not acrtually used in plots.
+    grpvars = ["animal", "date", "morphset", "version"] # norm within this group
+    grpdict = grouping_append_and_return_inner_items_good(DFINDEX, grpvars)
+    list_df = []
+    for grp, inds in grpdict.items():
+        dfindex = DFINDEX.iloc[inds].reset_index(drop=True)
+
+        # Normalize to range of min,max (of means)
+        valmin = dfindex.groupby(["labels_1_datapt"])["dist_index"].mean().min()
+        valmax = dfindex.groupby(["labels_1_datapt"])["dist_index"].mean().max()
+        dfindex["dist_index_norm"] = (dfindex["dist_index"]-valmin)/(valmax-valmin)
+
+        list_df.append(dfindex)
+    DFINDEX = pd.concat(list_df).reset_index(drop=True)
+
+    # Make aggregrated across trials.
+    # datapt = labels_1_datapt (e.g., 4|base1)
+    from pythonlib.tools.pandastools import aggregGeneral
+    DFINDEX_AGG_1 = aggregGeneral(DFINDEX, ["label_good", "animal", "date", "morphset", "labels_1_datapt", "version"], 
+                                  ["dist_index", "dist_index_norm"], nonnumercols="all")
+
+    from pythonlib.tools.pandastools import stringify_values
+    DFINDEX = stringify_values(DFINDEX)
+    DFINDEX_AGG_1 = stringify_values(DFINDEX_AGG_1)
+
+    # Also agg again to label categories.
+    # datapt = morph_assigned_to_which_base (e.g., ambig_base2)
+    DFINDEX_AGG_2 = aggregGeneral(DFINDEX_AGG_1, ["label_good", "animal", "date", "morphset", "morph_assigned_to_which_base", "version"], ["dist_index", "dist_index_norm"], nonnumercols="all")
+    DFINDEX_AGG_2 = stringify_values(DFINDEX_AGG_2)
+
+    return DFINDEX, DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT
+
+def fig2_categ_switching_mult_load(cetegory_expt_version, manuscript_version=False):
     """
     Load pre-extracted data, for categ switching.
     """
@@ -1823,8 +2190,10 @@ def fig2_categ_switching_mult_load(cetegory_expt_version):
     else:
         assert False
 
-    SAVEDIR_LOAD = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{cetegory_expt_version}"
-
+    if manuscript_version:
+        SAVEDIR_LOAD = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/REPRODUCED_FIGURES/fig2h/{cetegory_expt_version}"
+    else:
+        SAVEDIR_LOAD = f"/lemur2/lucas/analyses/manuscripts/1_action_symbols/fig2_categorization/{cetegory_expt_version}"
     SAVEDIR_MULT = f"{SAVEDIR_LOAD}/MULT/{cetegory_expt_version}"
     os.makedirs(SAVEDIR_MULT, exist_ok=True)
 
@@ -1858,11 +2227,9 @@ def fig2_categ_switching_mult_load(cetegory_expt_version):
             dfindex = dfindex[[(animal, date, ms) not in bad_expts for ms in dfindex["morphset"]]].reset_index(drop=True)        
         else:
             assert False
-
         list_dfindex.append(dfindex)   
 
     DFINDEX = pd.concat(list_dfindex).reset_index(drop=True)
-
 
     ### Plot, separately for each (animal, date, morphset)
     from pythonlib.tools.pandastools import append_col_with_grp_index
@@ -1939,60 +2306,61 @@ def fig2_categ_switching_mult_load(cetegory_expt_version):
 
     return DFINDEX, DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT
 
-def fig2_categ_switching_mult_plot_stats(DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_expt_version):
+def fig2_categ_switching_mult_plot_stats(DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_expt_version, manuscript_version=False):
     """
-    Plot stats, results for switching beh
+    PARAMS:
+    - DFINDEX_AGG_2, datapt = morph_assigned_to_which_base (e./g., ambig_base1), rows also split by "version", 
+    which is beh or task.
+
+    Plot stats, results for psychometric categories, switching beh
     """
-    from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap, grouping_append_and_return_inner_items_good
     from pythonlib.tools.pandastools import grouping_plot_n_samples_conjunction_heatmap, grouping_append_and_return_inner_items_good
     from pythonlib.tools.pandastools import aggregGeneral
+    from pythonlib.tools.statstools import signrank_wilcoxon_from_df
 
-    if cetegory_expt_version=="switching":
+    assert cetegory_expt_version == "switching"
+    
+    # Plot counts
+    fig = grouping_plot_n_samples_conjunction_heatmap(DFINDEX_AGG_2, "ani_date_ms", "morph_assigned_to_which_base", ["version"])
+    savefig(fig, f"{SAVEDIR_MULT}/stats-counts.pdf")
+
+    ### (1) Show the the change from base --> not_ambig is small for beh compared to for image. 
+    # (i.e., test that the flat part of sigmoid is flat)
+    # The test compares flatness of beh to flatness of task(image) score.
+    grpdict = grouping_append_and_return_inner_items_good(DFINDEX_AGG_2, ["ani_date_ms", "version"])
+    res = []
+    for grp, inds in grpdict.items():
+        dfthis = DFINDEX_AGG_2.iloc[inds]
+
+        # (1) Not-ambig minus base
+        a = dfthis[dfthis["morph_assigned_to_which_base"]=="base1"]["dist_index_norm"].mean()
+        b = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base1"]["dist_index_norm"].mean()
+        c = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base2"]["dist_index_norm"].mean()
+        d = dfthis[dfthis["morph_assigned_to_which_base"]=="base2"]["dist_index_norm"].mean()
         
-        ### Stats
-        fig = grouping_plot_n_samples_conjunction_heatmap(DFINDEX_AGG_2, "ani_date_ms", "morph_assigned_to_which_base", ["version"])
-        savefig(fig, f"{SAVEDIR_MULT}/stats-counts.pdf")
+        res.append({
+            "ani_date_ms":grp[0],
+            "version":grp[1],
+            "score_name":"notambig-base",
+            "score":np.nanmean([(b-a), (d-c)]) # the smaller this value, the more sigmoidal it is.
+        })
+    dfstats = pd.DataFrame(res)
+    assert not any(dfstats["score"].isna())
+    # Plot
+    _, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "version", ["beh", "task"], 
+                            "score", True, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.txt", assert_no_na_rows=True)
+    savefig(fig, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.pdf")
+    dfstats.to_csv(f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.csv")
 
-        ### (1) Show the the change from base --> not_ambig is small for beh compared to for image. (i.e., the flat part of sigmoid)
-        grpdict = grouping_append_and_return_inner_items_good(DFINDEX_AGG_2, ["ani_date_ms", "version"])
-        res = []
-        for grp, inds in grpdict.items():
-            dfthis = DFINDEX_AGG_2.iloc[inds]
+    ### (2) Test for trial by trial switching (ambig: base 2 minus base 1)
+    dfthis = DFINDEX_AGG_2[DFINDEX_AGG_2["version"]=="beh"].reset_index(drop=True)
+    _, fig = signrank_wilcoxon_from_df(dfthis, ["ani_date_ms"], "morph_assigned_to_which_base", ["ambig_base1", "ambig_base2"], 
+                            "dist_index_norm", True, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.txt", assert_no_na_rows=True)
+    savefig(fig, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.pdf")
+    plt.close("all")
 
-            # (1) Not-ambig minus base
-            a = dfthis[dfthis["morph_assigned_to_which_base"]=="base1"]["dist_index_norm"].mean()
-            b = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base1"]["dist_index_norm"].mean()
-            c = dfthis[dfthis["morph_assigned_to_which_base"]=="not_ambig_base2"]["dist_index_norm"].mean()
-            d = dfthis[dfthis["morph_assigned_to_which_base"]=="base2"]["dist_index_norm"].mean()
-
-            res.append({
-                "ani_date_ms":grp[0],
-                "version":grp[1],
-                "score_name":"notambig-base",
-                "score":np.nanmean([(b-a), (d-c)])
-            })
-
-        dfstats = pd.DataFrame(res)
-        assert not any(dfstats["score"].isna())
-        
-        from pythonlib.tools.statstools import signrank_wilcoxon_from_df
-        out, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "version", ["beh", "task"], 
-                                "score", True, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.txt", assert_no_na_rows=True)
-        savefig(fig, f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.pdf")
-
-        dfstats.to_csv(f"{SAVEDIR_MULT}/stats-flat_from_base_to_notambig.csv")
-
-        ### (2) trial by trial switching (ambig, base 2 minus base 1)
-        dfthis = DFINDEX_AGG_2[DFINDEX_AGG_2["version"]=="beh"].reset_index(drop=True)
-        out, fig = signrank_wilcoxon_from_df(DFINDEX_AGG_2, ["ani_date_ms"], "morph_assigned_to_which_base", ["ambig_base1", "ambig_base2"], 
-                                "dist_index_norm", True, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.txt", assert_no_na_rows=True)
-        savefig(fig, f"{SAVEDIR_MULT}/stats-ambig_base2_vs_base1.pdf")
-        
-        plt.close("all")
-
-        ### (3) At each condition (base1, base2,...) compare image to beh, to show that beh is more sigmoidal than image. 
-
-
+    ### (3) At each condition (base1, base2,...) compare image to beh, to show that beh is more sigmoidal than image. 
+    if not manuscript_version:
         grpdict = grouping_append_and_return_inner_items_good(DFINDEX_AGG_2, ["ani_date_ms", "morph_assigned_to_which_base"])
         y = "dist_index_norm"
         res = []
@@ -2001,13 +2369,11 @@ def fig2_categ_switching_mult_plot_stats(DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_e
 
             val_beh = dfthis[dfthis["version"]=="beh"][y].mean()
             val_task = dfthis[dfthis["version"]=="task"][y].mean()    
-
             morph_assigned_to_which_base = grp[1]
-
             assert len(dfthis["morph_assigned_label"].unique())==1
             morph_assigned_label = dfthis["morph_assigned_label"].values[0]
 
-            # The diff is always in the direction where if it is positive, then it is consistent
+            # The diff is defined such that it is always in the direction where if it is positive, then it is consistent
             # with a sigmoidal curve for beh (i.e, beh more sigmoidal than task)
             if morph_assigned_to_which_base in ["base1", "not_ambig_base1", "ambig_base1"]:
                 val_diff = val_task - val_beh
@@ -2023,26 +2389,80 @@ def fig2_categ_switching_mult_plot_stats(DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_e
                 "score":val_diff,
                 "morph_assigned_label":morph_assigned_label
             })
-
         dfstats = pd.DataFrame(res)
 
         # Further, average across two bases, to get 3 values per (ani, date, ms): base, notambig, ambig.
         dfstats = aggregGeneral(dfstats, ["ani_date_ms", "morph_assigned_label"], ["score"], ["score_name"])
         
         for morph_assigned_label in ["base", "not_ambig", "ambig"]:
-            out, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "morph_assigned_label", [morph_assigned_label], 
+            _, fig = signrank_wilcoxon_from_df(dfstats, ["ani_date_ms"], "morph_assigned_label", [morph_assigned_label], 
                                     "score", True, f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image-{morph_assigned_label}.txt", assert_no_na_rows=True)
             savefig(fig, f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image-{morph_assigned_label}.pdf")
 
         dfstats.to_csv(f"{SAVEDIR_MULT}/stats-sigmoidalness_beh_vs_image.csv")
 
+    plt.close("all")
+
+
+def fig2_categ_switching_mult_plot_manuscript(DFINDEX, DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT):
+    """
+    Plot prim indices scores in many ways, across all data, combining
+    single-trial scatterplots and average summary plots.
+
+    Combines "each_expt" and "all_expt" plots
+
+    Combines two sets of plots:
+    - fig2_categ_switching_mult_plot_eachexpt()
+    - fig2_categ_switching_mult_plot_allexpt()
+    """
+
+    map_xlabel_to_orders = {
+        "label_good":["base1", "not_ambig_base1", "ambig",  "not_ambig_base2", "base2"],
+        "morph_assigned_label":["base", "not_ambig", "ambig"],
+        "morph_assigned_to_which_base":["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"],
+    }
+
+    y_vars = ["dist_index"]
+    for y in y_vars:
+        
+        # Single-trial plots
+        x_var = "morph_idxcode_within_set"
+        x_order = sorted(DFINDEX[x_var].unique())
+        fig = sns.catplot(data=DFINDEX, x=x_var, y=y, hue="assigned_base_simple", 
+                        col="ani_date_ms", row="version", order=x_order, alpha=0.5, jitter=True)
+        savefig(fig, f"{SAVEDIR_MULT}/eachexpt-x_var={x_var}-y={y}-2.pdf")
         plt.close("all")
-    else:
-        assert False
+
+        # Summary plots
+        x_var = "label_good"
+        x_order = map_xlabel_to_orders[x_var]
+        for row in [None, "animal"]:
+            fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="version", order=x_order, jitter=True, row=row)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-1.pdf")
+
+            fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="version", order=x_order, kind="violin", row=row)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-2.pdf")
+
+            fig = sns.catplot(data=DFINDEX_AGG_2, x=x_var, y=y, hue="assigned_base_simple", 
+                            col="version", order=x_order, kind="point", row=row)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-3.pdf")
+
+            order =["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"]
+            fig = sns.catplot(data=DFINDEX_AGG_2, x="morph_assigned_to_which_base", y=y, hue="version", 
+                            kind="point", order=order, row=row)
+            rotateLabel(fig)
+            savefig(fig, f"{SAVEDIR_MULT}/summary-x_var={x_var}-y={y}-row={row}-4.pdf")
+
+            plt.close("all")
 
 def fig2_categ_switching_mult_plot_eachexpt(DFINDEX, DFINDEX_AGG_1, SAVEDIR_MULT, cetegory_expt_version):
     """
-    Plot stats, results for each expt
+    Plot prim indices scores in many ways, across all data
     """
 
     if cetegory_expt_version=="switching":
@@ -2052,7 +2472,8 @@ def fig2_categ_switching_mult_plot_eachexpt(DFINDEX, DFINDEX_AGG_1, SAVEDIR_MULT
             "morph_assigned_to_which_base":["base1", "not_ambig_base1", "ambig_base1", "ambig_base2", "not_ambig_base2", "base2"],
         }
     else:
-        assert False
+        assert False, "Add labels here."
+
 
     ### Plot, separately for each (animal, date, morphset)
     if cetegory_expt_version=="switching":
@@ -2109,7 +2530,7 @@ def fig2_categ_switching_mult_plot_eachexpt(DFINDEX, DFINDEX_AGG_1, SAVEDIR_MULT
 
 def fig2_categ_switching_mult_plot_allexpt(DFINDEX_AGG_1, DFINDEX_AGG_2, SAVEDIR_MULT, cetegory_expt_version):
     """
-    Plot stats, results for each expt
+    Plot summary plots across experiments
     """
     
     ### Summarize across all expts.

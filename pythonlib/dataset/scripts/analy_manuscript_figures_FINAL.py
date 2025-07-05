@@ -4,15 +4,13 @@ import os
 
 SAVEDIR_ALL = "/lemur2/lucas/analyses/manuscripts/1_action_symbols/REPRODUCED_FIGURES"
 
-
 def fig2k_cluster_label(animal, date, SAVEDIR_THIS, WHICH_BASIS_SET, which_shapes, HACK=False):
     """
-    Extract all cluster labels, starting from DS (raw strokes) and save
+    Extract all cluster labels, one for each stroke(trial) in the DS dataset (raw strokes) and save.
+    To specify which basis set basis set if primitives to use for labeling, (WHICH_BASIS_SET, which_shapes) defines it
     """
-    from pythonlib.dataset.dataset_analy.characters import initial_clustering_extract_and_plot_clusters
+    from pythonlib.dataset.dataset_analy.characters import initial_clustering_extract_and_plot_clusters_manuscript
 
-    WHICH_LEVEL = "trial"
-    WHICH_FEATURE = "beh_motor_sim" # For clustering/scoring.
     if WHICH_BASIS_SET is None:
         WHICH_BASIS_SET = animal
 
@@ -20,25 +18,22 @@ def fig2k_cluster_label(animal, date, SAVEDIR_THIS, WHICH_BASIS_SET, which_shape
     savedir = f"{SAVEDIR_THIS}/DS_before_cluster"
     path = f"{savedir}/{animal}-{date}.pkl"
     with open(path, "rb") as f:
-        DSorig = pickle.load(f)
+        DS = pickle.load(f)
 
     # (1) Perform clustering
-    # becuase overwrites below
-    DS = DSorig.copy()
 
     ### Run --> to assign cluster label
     savedir = f"{SAVEDIR_THIS}/DS_after_cluster/basis_{WHICH_BASIS_SET}-shapes_{which_shapes}"
     os.makedirs(savedir, exist_ok=True)
     print("Running... ", savedir)
 
-    # savedir = f"{SAVEDIR_THIS}/{animal}-{date}/{WHICH_LEVEL}-basis_{WHICH_BASIS_SET}-shapes_{which_shapes}"
     if HACK:
         # Quickly load old version
         DS, params_dict = DS.clustergood_load_saved_cluster_shape_classes(which_basis=WHICH_BASIS_SET, which_shapes=which_shapes)            
     else:
         _savedir = f"{savedir}/{animal}-{date}"
-        initial_clustering_extract_and_plot_clusters(DS, WHICH_LEVEL, WHICH_BASIS_SET, which_shapes, WHICH_FEATURE, _savedir, 
-                                                    do_save=False)
+        initial_clustering_extract_and_plot_clusters_manuscript(DS, "trial", WHICH_BASIS_SET, which_shapes, "beh_motor_sim")
+
     # Save DS
     DS.save(savedir, filename=f"{animal}-{date}")
 
@@ -133,7 +128,6 @@ if __name__=="__main__":
             fig2k_cluster_label(animal, date, SAVEDIR_THIS, WHICH_BASIS_SET, which_shapes)
 
     elif plot_do=="5dh":
-
         from neuralmonkey.scripts.analy_decode_moment_psychometric import analy_switching_GOOD_euclidian_index
 
         DO_RSA_HEATMAPS = True # May take time..
@@ -159,8 +153,7 @@ if __name__=="__main__":
                                                         manuscript_version=manuscript_version)
 
     elif plot_do == "6f":
-        
-        from neuralmonkey.scripts.analy_euclidian_chars_sp import euclidian_time_resolved_fast_shuffled
+        from neuralmonkey.scripts.analy_euclidian_chars_sp import euclidian_time_resolved_fast_shuffled_manuscript
 
         SAVEDIR_THIS = f"{SAVEDIR_ALL}/fig6f"
         os.makedirs(SAVEDIR_THIS, exist_ok=True)
@@ -169,17 +162,18 @@ if __name__=="__main__":
         date = sys.argv[3]
 
         DFallpa = fig6_load_data(animal, date)
-
         DO_RSA_HEATMAPS = False
-        for DO_REGRESS_HACK in [True, False]:
+        remove_trials_too_fast = True
+        for DO_REGRESS_FIRST_STROKE in [True, False]:
             
-            savedir = f"{SAVEDIR_THIS}/{animal}-{date}-regrhack={DO_REGRESS_HACK}"
+            savedir = f"{SAVEDIR_THIS}/{animal}-{date}-regrhack={DO_REGRESS_FIRST_STROKE}"
             os.makedirs(savedir, exist_ok=True)
             print(savedir)
 
-            euclidian_time_resolved_fast_shuffled(DFallpa, animal, date, savedir, DO_RSA_HEATMAPS=DO_RSA_HEATMAPS, 
-                                    HACK = True, DEBUG_bregion_list=None, DO_REGRESS_HACK=DO_REGRESS_HACK,
-                                    manuscript_version=True)
+            euclidian_time_resolved_fast_shuffled_manuscript(DFallpa, animal, date, savedir, DO_RSA_HEATMAPS=DO_RSA_HEATMAPS, 
+                                    DEBUG_bregion_list=None, DO_REGRESS_FIRST_STROKE=DO_REGRESS_FIRST_STROKE,
+                                    remove_trials_too_fast=remove_trials_too_fast)
+
     else:
         print(plot_do)
         assert False
