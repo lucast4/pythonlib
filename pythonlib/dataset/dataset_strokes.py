@@ -5318,10 +5318,21 @@ class DatStrokes(object):
 
         if manuscript_version: 
             # Remove things that require other class objects
-            cols_remove = ["Stroke", "datseg_beh", "datseg"]
-            for col in cols_remove:
+            # These cause issues sometimes when try to load.
+            cols_remove_ds = ["Stroke", "datseg_beh", "datseg"]
+            for col in cols_remove_ds:
                 if col in DS.Dat:
                     DS.Dat = DS.Dat.drop(col, axis=1)        
+
+            # cols_remove_dataset = ["Task", "BehClass", "Tkbeh_stkbeh", "Tkbeh_stktask", "Tktask"]
+            # Actually keep Task, need it to get task strokes
+            cols_remove_dataset = ["BehClass", "Tkbeh_stkbeh", "Tkbeh_stktask", "Tktask"] 
+            for col in cols_remove_dataset:
+                if col in DS.Dataset.Dat:
+                    DS.Dataset.Dat = DS.Dataset.Dat.drop(col, axis=1)        
+            
+        DS.Dat = DS.Dat.reset_index(drop=True)
+        DS.Dataset.Dat = DS.Dataset.Dat.reset_index(drop=True)
 
         with open(path, "wb") as f:
             pickle.dump(DS, f)
