@@ -50,6 +50,9 @@ def lme_categorical_fit_plot(df, y, fixed_treat, lev_treat_default=None,
 
     str_treat = f"C({fixed_treat}, Treatment('{lev_treat_default}'))"
     formula = f"{y} ~ {str_treat}"
+
+    # display(formula)
+    # display(df)
     md = smf.mixedlm(formula, df, groups=df[rand_grp])
     mdf = md.fit()
 

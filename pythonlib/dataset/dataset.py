@@ -4562,7 +4562,6 @@ class Dataset(object):
             fs = fs[0]
 
         return fs
-            
     def get_motor_stats(self, ind):
         """ 
         Simple - returns dict with all the motortiming and motorevent stats
@@ -4581,6 +4580,20 @@ class Dataset(object):
 
         return out
 
+    def  motor_get_response_time(self, ind):
+        """
+        Return response time, which is defined as onset of first stroke minus go cue.
+        """
+
+        # {'go_cue': 5.49855639999987,
+        #  'raise': 5.71,
+        #  'done_touch': 14.502,
+        #  'done_triggered': 15.282270400000016,
+        #  'ons': [6.048, 10.5, 12.234, 13.052, 13.702],
+        #  'offs': [6.512, 10.796, 12.464, 13.314, 13.932]}
+        rt = self.Dat.iloc[ind]["motorevents"]["ons"][0] - self.Dat.iloc[ind]["motorevents"]["go_cue"]
+
+        return rt
     # def motor_get_stats_append_columns(self):
     #     """
     #     """
@@ -9131,7 +9144,7 @@ class Dataset(object):
 
         return tokens_correct_order
 
-    def grammarparses_rules_shape_AnBmCk_get_shape_order(self):
+    def grammarparses_rules_shape_AnBmCk_get_shape_order(self, keep_only_existing_shapes=False):
         """
         Return correct shape order for this rule, only works if one rule exists.
         Returns list of shape str.
@@ -9140,6 +9153,11 @@ class Dataset(object):
         assert len(self.Dat["epoch"].unique())==1, "assume only one shape set today..."
         epoch = self.Dat["epoch"].values[0]
         shape_sequence = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["params_good"][0]
+
+        if keep_only_existing_shapes:
+            # Then just those shapes that are in data for self
+            shapes_exist = self.taskclass_shapes_extract_unique_alltrials()
+            shape_sequence = [sh for sh in shape_sequence if sh in shapes_exist]            
         return shape_sequence
 
     def grammarparses_rules_shape_AnBmCk(self):
@@ -9646,7 +9664,7 @@ class Dataset(object):
             res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
         return res
 
-    def grammarparses_chunk_transitions_gaps_extract(self, ind):
+    def grammarparses_chunk_transitions_gaps_extract(self, ind, also_get_response_time=False):
         """
         REturn info for each gap between strokes (transition), realted to chunk transitions, gap durations etc.
         Useful for analyzing how gap duration relates to chunk transitions.
@@ -9654,13 +9672,26 @@ class Dataset(object):
         """
 
         # Get data
-        durations, gaps = self.strokes_durations_gaps(ind)
+        _, gaps = self.strokes_durations_gaps(ind)
         Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
 
         assert len(gaps) == len(Tk.Tokens)-1
 
         # Collect data across gaps.
         res = [] # length num gaps
+        
+        # First, get "response time" (on of first storke minus go)
+        if also_get_response_time:
+            rt = self.motor_get_response_time(ind)
+            dat = {
+                "index_trial":ind,
+                "index_gap":-1,
+                "gap_dur":rt,
+            }
+            for feat in ["chunk_rank", "chunk_within_rank", "shape"]:
+                dat[f"gap_{feat}"] = (None, Tk.Tokens[0][feat])
+            res.append(dat)
+
         for i, (tok1, tok2) in enumerate(zip(Tk.Tokens[:-1], Tk.Tokens[1:])):
             # Iterate over each gap
 
@@ -9675,13 +9706,13 @@ class Dataset(object):
             for feat in ["chunk_rank", "chunk_within_rank", "shape"]:
                 dat[f"gap_{feat}"] = (tok1[feat], tok2[feat])
 
+                
             res.append(dat)
-
+        
         return pd.DataFrame(res)
 
-
     def grammarparses_chunk_transitions_gaps_extract_batch(self, bin_gaps=True, PLOT=True,
-                                                           plot_savedir=None):
+                                                           plot_savedir=None, also_get_response_time=False):
         """
         Extract dataframe holding each gap, with information about that gap related to gap duration and
         chunk trnaitions.
@@ -9703,22 +9734,43 @@ class Dataset(object):
             # 1. Collect gaps dataframe across all trials
             list_df = []
             for ind in range(len(self.Dat)):
-                df = self.grammarparses_chunk_transitions_gaps_extract(ind)
+                df = self.grammarparses_chunk_transitions_gaps_extract(ind, also_get_response_time=also_get_response_time)
                 df["syntax_concrete"] = [self.Dat.iloc[ind]["syntax_concrete"] for _ in range(len(df))]
-                df["behseq_locs"] = [self.Dat.iloc[ind]["behseq_locs"] for _ in range(len(df))]
-                df["behseq_shapes"] = [self.Dat.iloc[ind]["behseq_shapes"] for _ in range(len(df))]
                 df["epoch"] = self.Dat.iloc[ind]["epoch"]
-
+                if "behseq_locs" in self.Dat:
+                    df["behseq_locs"] = [self.Dat.iloc[ind]["behseq_locs"] for _ in range(len(df))]
+                    df["behseq_shapes"] = [self.Dat.iloc[ind]["behseq_shapes"] for _ in range(len(df))]
+                
                 list_df.append(df)
             dfgaps = pd.concat(list_df).reset_index(drop=True)
 
             # 2. Append new columns
             dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete", "gap_chunk_rank"], "ep_sy_gcr")
             dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete"], "epoch_syntax")
+            if "behseq_locs" not in dfgaps:
+                dfgaps["behseq_locs"] = "IGNORE"
+                dfgaps["behseq_shapes"] = "IGNORE"
+
             dfgaps = append_col_with_grp_index(dfgaps, ["epoch", "syntax_concrete", "behseq_shapes", "behseq_locs"], "ep_sy_sh_lo")
             dfgaps = append_col_with_grp_index(dfgaps, ["syntax_concrete", "behseq_shapes", "behseq_locs"], "sy_sh_lo")
             dfgaps = append_col_with_grp_index(dfgaps, ["behseq_shapes", "behseq_locs"], "sh_lo")
             dfgaps["gap_chunk_rank_str"] = ["".join([str(xx) for xx in x]) for x in dfgaps["gap_chunk_rank"]]
+
+            # Get chunk using global shapes order
+            if len(self.Dat["epoch"].unique())==1:
+                # Then this will not fail
+                shapes = self.grammarparses_rules_shape_AnBmCk_get_shape_order(keep_only_existing_shapes=True)
+                map_sh_to_chunk_global = {sh:i for i, sh in enumerate(shapes)}
+                map_sh_to_chunk_global[None] = -1
+                tmp = []
+                for gap_shape in dfgaps["gap_shape"]:
+                    tmp.append(tuple([map_sh_to_chunk_global[sh] for sh in gap_shape]))
+                dfgaps["gap_chunk_rank_global"] = tmp   
+            else:
+                # Then the above would fail.
+                dfgaps["gap_chunk_rank_global"] = dfgaps["gap_chunk_rank"]   
+
+            ### Additional processed parameters
 
             # 3. Classify gaps as short or long. (Bin all gaps)
             # NOTE: This may leave many or most rows without a bin (in which case they are bin -1) because it conditions
@@ -9802,12 +9854,14 @@ class Dataset(object):
             if len(dfgaps_this)>0:
                 fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
                 savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
+
                 fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4,
                             kind="point")
                 savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-2.pdf")
 
                 fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4, alpha=0.25)
                 savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-1.pdf")
+                
                 fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4,
                             kind="point")
                 savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-2.pdf")
