@@ -278,7 +278,7 @@ def corrAlign(cam_pts, touch_pts, ploton=True, UB = 0.15, method='corr'):
 
     return lag,fig,'success'
 
-def get_lags(dfs_func, sdir, coefs, ploton=True):
+def get_lags(dfs_func, sdir, fd, ploton=True):
     """Function to get different types to calc lag vetween the ts and teh cam data. The euclid lag calc
     minimizes the euclidean distacne between ts stroke and cam data. This method is not as good as corr method. 
     Corr maximizes correlation between touch creen stroke and cam data. Nonetheless, funcotin will output results fo rboth methods.
@@ -287,7 +287,7 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
 
     Args:
         dfs_func (dict): dfs for function. Should have extracted dat from ht.process_data_single_trials with trial num keys 
-            (assuming vid indexing, 0 indexing)
+            (assuming ml2 indexing, 1 indexing)
         sdir (str, dir-like): Name of dir to save alignment plots
         coefs (str): Coeff name used for coordinates
 
@@ -304,34 +304,54 @@ def get_lags(dfs_func, sdir, coefs, ploton=True):
     if os.path.exists(corr_dir):
         shutil.rmtree(corr_dir)
     os.makedirs(corr_dir, exist_ok=True)
-    dfs_func = dfs_func[coefs]
 
     for trial, dat in dfs_func.items():
         if dat['skipped'] is not None:
             continue
         corr_lags[trial] = []
         euc_lags[trial] = []
-        cam_pts = dat['pts_time_cam_all']
+        try:
+            cam_pts = dat['pts_time_cam_all']
+        except:
+            #if not fixed soon must fail
+            from datetime import datetime
+            import sys
+
+            # Define cutoff date (YYYYMMDD)
+            CUTOFF_DATE_STR = "20250725"
+            CUTOFF_DATE = datetime.strptime(CUTOFF_DATE_STR, "%Y%m%d")
+
+            # Get today's date
+            today = datetime.today()
+
+            # Compare dates
+            if today > CUTOFF_DATE:
+                print(f"Error: This script is disabled after {CUTOFF_DATE_STR}.")
+                sys.exit(1)
+
+            cam_pts = dat['trans_pts_time_cam_all']
         strokes_touch = dat['strokes_touch']
-        pnut_strokes_touch = dat['pnut_strokes']
 
         touch_fs = 1/np.mean(np.diff(strokes_touch[0][:,2]))
         cam_fs = 1/np.mean(np.diff(cam_pts[:,3]))
 
-        
-        t_stroke_start = pnut_strokes_touch[0][0,2]
-        t_stroke_end = pnut_strokes_touch[-1][-1,2]
+        from drawmonkey.tools.utils import getTrialsTimesOfMotorEvents
+        motor_ts = getTrialsTimesOfMotorEvents(fd, trial)
+        done = motor_ts['done_touch']
 
-        cush = 0.5
+        if np.isnan(done):
+            strokes_touch = strokes_touch[1:]
+        else:
+            strokes_touch = strokes_touch[1:-1]
+
+
+        t_stroke_start = strokes_touch[0][0,2]
+        t_stroke_end = strokes_touch[-1][-1,2]
+
+        kush = 0.5 #comment
 
         # restrict data to be within desired times
-        all_cam = cam_pts[(cam_pts[:,3] >= t_stroke_start-cush) & (cam_pts[:,3] <= t_stroke_end+cush)]
-        touch_strokes_rest = []
-        for strok in strokes_touch:
-            if strok[0,2] >= t_stroke_start and strok[-1,2] <= t_stroke_end:
-                touch_strokes_rest.append(strok)
-        strokes_touch = touch_strokes_rest
-        assert len(strokes_touch) == len(pnut_strokes_touch), f'{len(strokes_touch)}, {len(pnut_strokes_touch)}'
+        all_cam = cam_pts[(cam_pts[:,3] >= t_stroke_start-kush) & (cam_pts[:,3] <= t_stroke_end+kush)]
 
         
         if len(all_cam) == 0:
@@ -374,8 +394,8 @@ def finalize_alignment_data(lags, good_inds):
     
     all_corr_lags = []
     corr_lag_nums = []
-    for lag_trial in lags['corr_lags'].values():
-        for lag in lag_trial:
+    for lags_trial in lags.values():
+        for lag in lags_trial:
             if lag is None:
                 continue
             else:
@@ -383,7 +403,7 @@ def finalize_alignment_data(lags, good_inds):
     for index in good_inds:
         trial = int(index.split('-')[0])
         stroke = int(index.split('-')[1])
-        this_lag = lags['corr_lags'][trial][stroke]
+        this_lag = lags[trial][stroke]
         if this_lag is None:
             continue
         lag_num = this_lag[0]-this_lag[1]
@@ -416,7 +436,7 @@ def finalize_alignment_data(lags, good_inds):
     ax[2].set_title(f'Good inds lags boxplot, mean: {corr_mean}')
     ax[3].plot(all_corr_lags,'.-')
     ax[3].set_title('Lags over trials')
-    return fig,corr_mean
+    return fig,corr_mean,corr_lag_nums
 
 ## Gap tools
 ## General tools for gaps, may overlap with stroke tools but with different intentionbs
