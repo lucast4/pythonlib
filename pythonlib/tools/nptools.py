@@ -146,22 +146,26 @@ def sortPop(X, dim, filt):
 
 def isin_close(a, v, atol=1e-06):
     """ returns True if a (scalar) is in v (vector) allowing
-    for tolerace. essentially a for loop using np.isclose
+    for tolerace. essentially a for loop over all elements in v, each time
+    using np.isclose.
+
+    NOTE: if both a is a vector, then 
+
     RETURNS:
-    - bool, whether a is in v
-    - idx, location of a in v.
+    - bool, whether a is in any location in b
+    - idx, location of a in v. Length of v.
     """
     x = [np.isclose(a, b, atol=atol) for b in v]
     return np.any(x), np.where(x)[0]
 
-def isnear(arr1, arr2):
+def isnear(arr1, arr2, atol=1e-06):
     """
     Return True if arr1==arr2 elementwise, allowing for tolerance.
     :param arr1:
     :param arr2:
     :return:
     """
-    return isin_array(arr1, [arr2])
+    return isin_array(arr1, [arr2], atol=1e-06)
 
 def isin_array(arr, list_arr, atol=1e-06):
     """ Returns True if arr (array) is equal to at least one of arrays in list_arr
@@ -342,6 +346,24 @@ def optimize_offset_to_align_tdt_ml2(vals_tdt, vals_ml2):
     return res.x
 
 
+def filter_array_to_include_minimum_n_items(arr, min_occurences=3):
+    """
+    Return just those unique values which have at least <min_occurences> cases
+    # Example array
+    arr = np.array([1, 1, 1, 2, 2, 3, 3, 3, 4, 5, 5])
+    """
+
+    # Count occurrences
+    vals, counts = np.unique(arr, return_counts=True)
+
+    # Keep only values with >= 3 occurrences
+    keep = vals[counts >= min_occurences]
+
+    # Filter original array
+    inds_keep = np.where(np.isin(arr, keep))[0]
+    filtered_arr = arr[inds_keep]
+
+    return filtered_arr, inds_keep
 
 ################ PLAYING AROUND WITH INDEXING
 # # pull out square slice

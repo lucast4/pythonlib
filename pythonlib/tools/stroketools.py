@@ -741,7 +741,7 @@ def sample_rate_equalize_across_strokes(strokes):
 
     return list_strok_clean
 
-def sample_rate_from_strok(strok, suppress_print=False):
+def sample_rate_from_strok(strok, suppress_print=False, allow_outlier_timestamp_intervals=False):
     """
     Get fs from using the time differences between samples.
     Does sanity check for low variance.
@@ -753,31 +753,37 @@ def sample_rate_from_strok(strok, suppress_print=False):
     gap_mean = np.mean(gaps)
     gap_std = np.std(gaps)
     if gap_std>=(0.01 * gap_mean):
-        if not suppress_print:
-            print(gap_std, "greater than: ", (0.01 * gap_mean))
-            print(gap_mean)
-            print(np.min(gaps), np.max(gaps))
-            print(gaps)
+        if allow_outlier_timestamp_intervals:
+            from pythonlib.tools.stroketools import times_ensure_all_equal
+            strok = times_ensure_all_equal(strok)
+            return sample_rate_from_strok(strok, suppress_print)
+        else:
+            if not suppress_print:
+                print(gap_std, "greater than: ", (0.01 * gap_mean))
+                print(gap_mean)
+                print(np.min(gaps), np.max(gaps))
+                print(gaps)
 
-            fig, axes = plt.subplots(1,3, figsize=(9,3))
-            ax = axes.flatten()[0]
-            ax.plot(gaps, "ok")
+                fig, axes = plt.subplots(1,3, figsize=(9,3))
+                ax = axes.flatten()[0]
+                ax.plot(gaps, "ok")
 
-            ax = axes.flatten()[1]
-            ax.plot(strok[:, 2], strok[:, 0], "x", label="x")
-            ax.plot(strok[:, 2], strok[:, 0], "x", label="y")
-            ax.legend()
+                ax = axes.flatten()[1]
+                ax.plot(strok[:, 2], strok[:, 0], "x", label="x")
+                ax.plot(strok[:, 2], strok[:, 0], "x", label="y")
+                ax.legend()
 
-            ax = axes.flatten()[2]
-            ax.scatter(strok[:, 0], strok[:, 1], c=strok[:, 2])
+                ax = axes.flatten()[2]
+                ax.scatter(strok[:, 0], strok[:, 1], c=strok[:, 2])
 
-            fig.savefig("/tmp/debug.pdf")
-            print("too much variation in gap durations across samples!")
-        raise NotEnoughDataException
-    fs = 1/gap_mean
-    return fs
+                fig.savefig("/tmp/debug.pdf")
+                print("too much variation in gap durations across samples!")
+            raise NotEnoughDataException
+    else:
+        fs = 1/gap_mean
+        return fs
 
-def sample_rate_from_strokes(strokes, allow_failures=False):
+def sample_rate_from_strokes(strokes, allow_failures=False, allow_outlier_timestamp_intervals=False):
     """
     Get fs from using the time differences between samples. 
     Does separately fro each strok, then takes the median, doing sanity check for low variance.
@@ -787,11 +793,11 @@ def sample_rate_from_strokes(strokes, allow_failures=False):
         list_fs = []
         for strok in strokes:
             try:
-                list_fs.append(sample_rate_from_strok(strok, suppress_print=True))
+                list_fs.append(sample_rate_from_strok(strok, suppress_print=True, allow_outlier_timestamp_intervals=allow_outlier_timestamp_intervals))
             except NotEnoughDataException as err:
                 pass                 
-    else:
-        list_fs = [sample_rate_from_strok(strok) for strok in strokes]
+    else:  
+        list_fs = [sample_rate_from_strok(strok, allow_outlier_timestamp_intervals=allow_outlier_timestamp_intervals) for strok in strokes]
     min_fs = np.min(list_fs)
     med_fs = np.median(list_fs)
     max_fs = np.max(list_fs)
@@ -820,7 +826,8 @@ def sample_rate_from_strokes(strokes, allow_failures=False):
 def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
     fs_new = None, do_pre_filter=True, clean=True,
     DEBUG = False, SKIP_POST_FILTERING_LOWPASS = False,
-                    ADAPTIVE_FS_NEW = True):
+                    ADAPTIVE_FS_NEW = True,
+                    fs_allow_outlier_timestamp_intervals=False):
     """
     UPDATE 1/3/23 - Lots of testing.
     Tested vairation in parasm here. And cleaned up code in strokeFilter().
@@ -894,7 +901,7 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
 
     if fs is None:
         # get it autoamtically.
-        fs = sample_rate_from_strokes(strokes)
+        fs = sample_rate_from_strokes(strokes, allow_outlier_timestamp_intervals=fs_allow_outlier_timestamp_intervals)
 
     # Prep variables.
     strokes = [x.copy() for x in strokes]
@@ -1122,7 +1129,7 @@ def strokesVelocity(strokes, fs, ploton=False, lowpass_freq = None,
     return strokes_vels, strokes_speeds
 
 
-def feature_velocity_vector_angle_norm(strok):
+def feature_velocity_vector_angle_norm(strok, fs_allow_outlier_timestamp_intervals=False):
     """
     A single vector, which is the average vector over all timesteps
     RETURNS:
@@ -1133,7 +1140,7 @@ def feature_velocity_vector_angle_norm(strok):
     from pythonlib.tools.vectools import cart_to_polar
 
     # First, convert to velocity
-    strok_vel = strokesVelocity([strok], fs=None)[0][0]
+    strok_vel = strokesVelocity([strok], fs=None, fs_allow_outlier_timestamp_intervals=fs_allow_outlier_timestamp_intervals)[0][0]
 
     # tvals = strok[:,2]
     # tvals = tvals-tvals[0] # get relative to onset
@@ -1309,6 +1316,28 @@ def splitStrokes(strokes, num=2):
             plotDatStrokes(S, ax, plotver="strokes_order")
 
 
+def times_ensure_all_equal(strok):
+    """
+    Replaces timestamps with new values starting from the first time and then 
+    incrementing using the median period. This is useful if you have a single outlier inter-stamp
+    interval
+
+    RETURNS:
+    - copy of strok, with timestamps replaced (first time will always be identical)
+    """
+
+    period = np.median(np.diff(strok[:, 2], axis=0))
+
+    t0 = strok[0, 2]
+    n = len(strok)
+    t1 = t0 + (n-1)*period
+
+    times_new = np.linspace(t0, t1, n)
+
+    strok = strok.copy()
+    strok[:, 2] = times_new
+
+    return strok
 
 def fakeTimesteps(strokes, point=None, ver="in_order"):
     """strokes is a list with each stroke an nparray 

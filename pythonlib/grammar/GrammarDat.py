@@ -7,6 +7,8 @@ following:
 - Compute performance (fraction correct) as used in things like neuralbiasdir
 """
 
+from pythonlib.tools.plottools import savefig
+
 class GrammarDat(object):
     """
     See docs above.
@@ -232,7 +234,7 @@ class GrammarDat(object):
         return fig1, fig2, axes2, indsthis, parses
 
     #################
-    def print_plot_summary(self, doplot=True, only_this_rulestring=None):
+    def print_plot_summary(self, doplot=True, only_this_rulestring=None, savedir=None):
         """ Print and plot things summarizing this grammardat, including parses"""
 
 
@@ -249,7 +251,12 @@ class GrammarDat(object):
                 print(self.ParsesGenerated[rule][:20])
 
             if doplot:
-                self.plot_beh_and_parses(rule)
+                fig1, fig2, axes2, indsthis, parses = self.plot_beh_and_parses(rule)
+                if savedir is not None:
+                    savefig(fig1, f"{savedir}/grammarplot-1.pdf")
+                    savefig(fig2, f"{savedir}/grammarplot-2.pdf")
 
         if doplot:
-            self.Beh.alignsim_plot_summary()
+            fig1, fig2 = self.Beh.alignsim_plot_summary()
+            savefig(fig1, f"{savedir}/grammarplot-beh-1.pdf")
+            savefig(fig2, f"{savedir}/grammarplot-beh-2.pdf")

@@ -235,6 +235,10 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     - aggmethod, list of str, applies each of these agg methods.
     """
 
+    if nonnumercols is None:
+        # Then throw out those columns -- this saves time if some of those columns are nan
+        df = df.loc[:, group+values]
+
     # check that there are no nones... any cells with None will be left out erroneously.
     if df.isnull().values.any():
         columns_with_nans = df.columns[df.isnull().any()]
@@ -292,11 +296,14 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
         # Throw out cols that fail this test.
         cols_exclude = []
         for col in nonnumercols_exist: 
-            # print("---")
-            # print(group)
-            # print(col)
-            
-            list_col_levels_per_grp_level = df.groupby(group)[col].unique()
+            try:
+                list_col_levels_per_grp_level = df.groupby(group)[col].unique()
+            except Exception as err:
+                print("---")
+                print(group)
+                print(col)
+                raise err
+
             for list_lev in list_col_levels_per_grp_level: # list of col levels
                 if len(list_lev)!=1:
                     cols_exclude.append(col)
@@ -865,7 +872,7 @@ def filterPandasMultOrs(df, list_varnames, list_filts, return_as = "inds",
     else:
         assert False
 
-def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int)):
+def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int), must_not_fail=False):
     """ for each level in df[colname] prune all of its instances if
     the n rows is less than n_min_per_level
     PARAMS;
@@ -898,6 +905,10 @@ def filter_by_min_n(df, colname, n_min_per_level, types_to_consider=(str, int)):
                 print(f"level {lev}, REMOVING, n={n}")
             else:
                 print(f"level {lev}, keeping, n={n}")
+        else:
+            if must_not_fail:
+                print("Skipping this lev, as it numerical: ", lev, type(lev))
+                assert False, "this is not categirical.. make it so."
     print('(removing this many indices): ', len(set(indstoremove)))
     df = df.copy()
     df = df.drop(list(set(indstoremove))).reset_index(drop=True)
@@ -1293,8 +1304,11 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
                 n = len(dfsub)
                 valthis = n
             elif agg_method=="mean":
-                # valthis = dfsub[val_name].mean()
-                valthis = np.nanmean(dfsub[val_name])
+                if len(dfsub)==0:
+                    valthis==np.nan
+                else:
+                    # valthis = dfsub[val_name].mean()
+                    valthis = np.nanmean(dfsub[val_name])
             else:
                 print(agg_method)
                 assert False
@@ -2363,12 +2377,19 @@ def grouping_plot_n_samples_conjunction_heatmap_helper(df, list_vars):
     Plot heatmap shwoing grouping counts along multiple dimensions and their conjunctions, 
 
     Very quick wrapper, which works no matter the length of list_vars"""
-    if len(list_vars)==1:
-        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], None)
-    elif len(list_vars)==2:
-        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1])
-    else:
-        fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1], [list_vars[2]])
+    try:
+        if len(list_vars)==1:
+            fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], None)
+        elif len(list_vars)==2:
+            fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1])
+        else:
+            fig = grouping_plot_n_samples_conjunction_heatmap(df, list_vars[0], list_vars[1], [list_vars[2]])
+    except Exception as err:
+        path = f"/tmp/ERROR.txt"
+        print("error saved to: ", path)
+        grouping_print_n_samples(df, list_vars, savepath=path)
+        print("list_vars: ", list_vars)
+        raise err
 
     return fig
 
@@ -2419,8 +2440,12 @@ def grouping_plot_n_samples_conjunction_heatmap(df, var1, var2, vars_others=None
     else:
         list_var1 = row_levels
 
+    if var2 is None:
+        df["dummy_var2"] = "dummy"
+        var2 = "dummy_var2"
+    
     list_var2 = sort_mixed_type(df[var2].unique().tolist())
-
+    
     if len(list_var1)>30 or len(list_var2)>30:
         annotate_heatmap = False
 
@@ -3827,7 +3852,7 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
     assert isinstance(var_subplot, str)
 
     # list_row = df[varrow].unique().tolist()
-    list_subplot = df[var_subplot].unique().tolist()
+    list_subplot = sort_mixed_type(df[var_subplot].unique().tolist())
     if ncols is None:
         # Then ncols is the num suibplots
         ncols = max([len(list_subplot), 2]) # for axes sake
@@ -3921,10 +3946,14 @@ def plot_pointplot_errorbars(df, xvar, yvar, ax, hue=None, yvar_err=None):
         # sns.barplot(data=dfthisthis, x="bregion", y="same_mean", yerr=dfthisthis["same_sem"])
     return list_hue
 
-def convert_wide_to_long(dfwide, list_columns_to_fold, vars_extra=None):
+def convert_wide_to_long(dfwide, list_columns_to_fold, vars_extra=None, 
+                         new_col_name_level="col_from_wide", new_col_name_value="col_from_wide_value"):
     """
-    Returns df with 2x n rows of dfwide, beucase each row of dfwide contributes a value each 
-    taken from the columns <x_lev_manip>, <y_lev_manip>
+    Returns df with M x N rows of dfwide, where N is the len(dfwide) and M is len(list_columns_to_fold).
+    
+    Each column in list_columns_to_fold is a level, which populates new column <new_col_name_level>. The
+    value is stored in another oclumn <new_col_name_value>
+
     PARAMS:
     - list_columns_to_fold, list of colymns in dfwide. each of these will be a level of new column <col_from_wide>
     """
@@ -3935,8 +3964,8 @@ def convert_wide_to_long(dfwide, list_columns_to_fold, vars_extra=None):
     for scorevar in list_columns_to_fold:
 
         dftmp = dfwide.loc[:, [scorevar]+vars_extra].copy()
-        dftmp["col_from_wide"] = scorevar
-        dftmp["col_from_wide_value"] = dftmp[scorevar]
+        dftmp[new_col_name_level] = scorevar
+        dftmp[new_col_name_value] = dftmp[scorevar]
         dftmp = dftmp.drop(scorevar, axis=1)
 
         list_df.append(dftmp)

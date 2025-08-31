@@ -1097,8 +1097,8 @@ def split_stratified_constrained_multiple(y, nsplits, fraction_constrained_set, 
     """
 
     folds = []
-    for i in range(nsplits):
-        unconstrained_indices, constrained_indices, unconstrained_labels, constrained_labels = split_stratified_constrained(y, 
+    for _ in range(nsplits):
+        unconstrained_indices, constrained_indices, _, _ = split_stratified_constrained(y, 
                                     fraction_constrained_set, n_constrained, list_labels_need_n,
                                     min_frac_datapts_unconstrained, min_n_datapts_unconstrained, 
                                     PRINT=PRINT, PLOT=PLOT)
@@ -1130,8 +1130,8 @@ def split_stratified_constrained(y, fraction_constrained_set, n_constrained, lis
     """
     from pythonlib.tools.exceptions import NotEnoughDataException
 
-    assert isinstance(y[0], (str, int, tuple))
-    assert isinstance(y, list)
+    assert isinstance(y[0], (str, int, tuple, np.integer))
+    assert isinstance(y, (list, np.ndarray))
     
     np.random.seed(random_state)
     labels = set(y)

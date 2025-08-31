@@ -104,7 +104,7 @@ def check_objects_identical(obj1, obj2, PRINT=False):
     return True
         
 
-def check_is_categorical(item, types_categorical=(str, int)):
+def check_is_categorical(item, types_categorical=(str, int, np.integer)):
     """ Check the type, returen whether is categorical.
     PARAMS;
     - types_categorical, tuple of types. if item is in this, or is 
@@ -117,4 +117,5 @@ def check_is_categorical(item, types_categorical=(str, int)):
         # check taht each inner item is in good types
         return all([isinstance(x, types_categorical) for x in item])
     else:
+        # print(type(item))
         return isinstance(item, types_categorical)

@@ -1207,6 +1207,10 @@ class Clusters(object):
             # 1,2,3. ... further apart.
             return np.abs(x-y)
 
+        def dist_func_cont(x,y):
+            # continuos data, use euclidean
+            np.sum((x - y)**2) ** 0.5
+            
         def dist_func_tuple_of_ordinal(x, y):
             # compares each item in tuple, then sums up across items.
             assert isinstance(x, tuple)
@@ -1270,9 +1274,10 @@ class Clusters(object):
         vals = self.rsa_index_values_this_var(var)
         list_types = list(set([type(v) for v in vals]))
         at_least_one_type_is_tuple = any([isinstance(t, tuple) for t in list_types])
+        at_least_one_type_is_string = any([t is str for t in list_types])
         from pythonlib.behavior.strokeclass import StrokeClass
 
-        if len(list_types)>1 and at_least_one_type_is_tuple:
+        if len(list_types)>1 and (at_least_one_type_is_tuple or at_least_one_type_is_string):
             # Mxing these types, usually is categorical
             print("... using distfunc: dist_func_cat")
             return dist_func_cat
@@ -1280,12 +1285,16 @@ class Clusters(object):
             # Then not sure.
             print(var)
             print(vals)
+            print("list_types:", list_types)
             assert False, "dont know what distance functin to use"
         else:
             # Only one type
             t = list_types[0]
             v = vals[0]
-            if t in (str, bool, tuple):
+            if t in (float,):
+                # euclidean
+                return dist_func_cont
+            elif t in (str, bool, tuple):
                 print("... using distfunc: dist_func_cat")
                 return dist_func_cat
             elif t in (int,):
@@ -2069,6 +2078,7 @@ class Clusters(object):
             
         var_score = "dist_norm"
         list_dist_yue_diff = []
+        list_dist_within = []
         for i, row in dfres.iterrows():
             
             # - get average within-group score for the two groups
@@ -2084,7 +2094,9 @@ class Clusters(object):
 
             # - collect
             list_dist_yue_diff.append(dist_yue_diff)
+            list_dist_within.append(dist_within)
         dfres["dist_yue_diff"] = list_dist_yue_diff
+        dfres["dist_within_norm"] = list_dist_within
 
         # Add column names reflecting the "sameness" state of variables.
         ### OTHER columns added

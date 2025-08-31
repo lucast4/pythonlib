@@ -9160,6 +9160,16 @@ class Dataset(object):
             shape_sequence = [sh for sh in shape_sequence if sh in shapes_exist]            
         return shape_sequence
 
+    def grammarparses_rules_shape_AnBmCk_get_map_shape_to_chunk_rank(self, keep_only_existing_shapes=True):
+        """
+        Return mapping from shape to chunk rank (global, in that each sahpe has same rank regardless of a
+        what is in a given tsak)
+        """
+        shapes = self.grammarparses_rules_shape_AnBmCk_get_shape_order(keep_only_existing_shapes=keep_only_existing_shapes)
+        map_shape_to_chunk_rank_global = {sh:cr for cr, sh in enumerate(shapes)}
+        map_chunk_rank_global_to_shape = {cr:sh for cr, sh in enumerate(shapes)}
+        return map_shape_to_chunk_rank_global, map_chunk_rank_global_to_shape
+    
     def grammarparses_rules_shape_AnBmCk(self):
         """
         For each row, appends column "epoch_is_AnBmCk", bool, indicating
@@ -9394,7 +9404,7 @@ class Dataset(object):
         return list_rulestring
 
     # def grammar_rules_extract_rul
-    def grammarparses_print_plot_summarize(self, ind):
+    def grammarparses_print_plot_summarize(self, ind, savedir=None):
         """
         [Good] print and plot all things to summarize things about this trial.
         Wrapper to help me remmember how to plot summary of
@@ -9412,7 +9422,7 @@ class Dataset(object):
             print("chunk_n_in_chunk:", [(t["chunk_n_in_chunk"]) for t in tokens])
         
         print("=========================================")
-        self.grammarparses_grammardict_return(ind, True)
+        self.grammarparses_grammardict_return(ind, True, savedir=savedir)
 
     # def grammarparses_print_plot_summary(self, ind):
     #     """ Wrapper to help me remmember how to plot summary of
@@ -9420,7 +9430,7 @@ class Dataset(object):
     #     """
     #     self.grammarparses_grammardict_return(ind, True)
 
-    def grammarparses_grammardict_return(self, ind, doplot=False):
+    def grammarparses_grammardict_return(self, ind, doplot=False, savedir=None):
         """
         Return the grammardict, correct sequence, for this trail.
         """
@@ -9429,7 +9439,7 @@ class Dataset(object):
         if doplot:
             # only plot parses for the active rule on this trial
             rs = self.grammarparses_ruledict_rulestring_extract(ind)[0]
-            gd.print_plot_summary(doplot=doplot, only_this_rulestring=rs)
+            gd.print_plot_summary(doplot=doplot, only_this_rulestring=rs, savedir=savedir)
         return gd
 
     def _grammarparses_parses_generate(self, ind, list_rulestring = None):
@@ -9737,6 +9747,7 @@ class Dataset(object):
                 df = self.grammarparses_chunk_transitions_gaps_extract(ind, also_get_response_time=also_get_response_time)
                 df["syntax_concrete"] = [self.Dat.iloc[ind]["syntax_concrete"] for _ in range(len(df))]
                 df["epoch"] = self.Dat.iloc[ind]["epoch"]
+                df["trialcode"] = self.Dat.iloc[ind]["trialcode"]
                 if "behseq_locs" in self.Dat:
                     df["behseq_locs"] = [self.Dat.iloc[ind]["behseq_locs"] for _ in range(len(df))]
                     df["behseq_shapes"] = [self.Dat.iloc[ind]["behseq_shapes"] for _ in range(len(df))]
@@ -9848,9 +9859,13 @@ class Dataset(object):
                     ax.plot(range(len(gaps)), gaps, "-or",)
 
             ####### compare epochs, diff gap durations?
-            dfgaps_this, dict_dfthis = extract_with_levels_of_conjunction_vars(dfgaps, "epoch", ["behseq_locs", "behseq_shapes"],
+            if plot_savedir is None:
+                plot_counts_heatmap_savepath = None
+            else:
+                plot_counts_heatmap_savepath=f"{plot_savedir}/epoch_counds.pdf"
+            dfgaps_this, _ = extract_with_levels_of_conjunction_vars(dfgaps, "epoch", ["behseq_locs", "behseq_shapes"],
                                                     n_min_across_all_levs_var=2, lenient_allow_data_if_has_n_levels=2,
-                                                    prune_levels_with_low_n=True, plot_counts_heatmap_savepath=f"{plot_savedir}/epoch_counds.pdf")
+                                                    prune_levels_with_low_n=True, plot_counts_heatmap_savepath=plot_counts_heatmap_savepath)
             if len(dfgaps_this)>0:
                 fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
                 savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
@@ -10262,9 +10277,10 @@ class Dataset(object):
         """
         from  pythonlib.dataset.dataset_analy.grammar import preprocess_dataset_recomputeparses
 
-
-        if "base" in self.Dat["epoch"] or "baseline" in self.Dat["epoch"]:
-            assert False, "You must remove baseline epochs, they dont have defined parses."
+        if False:
+            # Is done automatically below in preprocess_dataset_recomputeparses(0)
+            if "base" in self.Dat["epoch"].unique() or "baseline" in self.Dat["epoch"].unique():
+                assert False, "You must remove baseline epochs, they dont have defined parses."
 
         if self.grammarparses_check_if_dataset_has_defined_rules()==False:
             # Then today not all trials uses rules...
