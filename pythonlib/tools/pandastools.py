@@ -235,9 +235,18 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     - aggmethod, list of str, applies each of these agg methods.
     """
 
-    if nonnumercols is None:
+    if nonnumercols == "all":
+        # Then dont do this, you want piotentilaly all the columns
+        pass
+    elif nonnumercols is None:
         # Then throw out those columns -- this saves time if some of those columns are nan
         df = df.loc[:, group+values]
+    elif isinstance(nonnumercols, (list, tuple)):
+        df = df.loc[:, group+values+list(nonnumercols)]
+    else:
+        print(nonnumercols)
+        print(type(nonnumercols))
+        assert False
 
     # check that there are no nones... any cells with None will be left out erroneously.
     if df.isnull().values.any():
@@ -1305,7 +1314,7 @@ def convert_to_2d_dataframe(df, col1, col2, plot_heatmap=False,
                 valthis = n
             elif agg_method=="mean":
                 if len(dfsub)==0:
-                    valthis==np.nan
+                    valthis = np.nan
                 else:
                     # valthis = dfsub[val_name].mean()
                     valthis = np.nanmean(dfsub[val_name])
