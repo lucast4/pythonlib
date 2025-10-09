@@ -4477,3 +4477,328 @@ def remove_outlier_values_tukey(df, col, niqr = 2, method="return_indices", PLOT
     else:
         print(method)
         assert False
+
+
+# Update: make shading truly graded by using a light→color colormap per class
+# (instead of passing a single 'colors' value, which makes all filled levels look identical).
+# This creates a perceptible gradient where darker/stronger color = higher density.
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KernelDensity
+from matplotlib.lines import Line2D
+from matplotlib.colors import LinearSegmentedColormap, to_rgba
+import pandas as pd
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KernelDensity
+from matplotlib.lines import Line2D
+from matplotlib.colors import LinearSegmentedColormap, to_rgba
+from matplotlib.patches import Ellipse
+import pandas as pd
+
+def _make_light_to_color_cmap(base_color, name):
+    """Return a colormap that fades from fully transparent white to the given base color."""
+    r, g, b, _ = to_rgba(base_color)
+    # Start nearly white (low density), end at the base color (high density)
+    colors = [
+        (1.0, 1.0, 1.0, 0.0),        # transparent white
+        (r, g, b, 0.35),             # light tint
+        (r*0.9, g*0.9, b*0.9, 0.6),  # mid
+        (r*0.8, g*0.8, b*0.8, 0.8),  # darker
+        (r*0.7, g*0.7, b*0.7, 1.0),  # darkest
+    ]
+    return LinearSegmentedColormap.from_list(name, colors)
+
+def _cov_ellipse_params(mu, cov, nsig=2.0):
+    vals, vecs = np.linalg.eigh(cov)
+    order = np.argsort(vals)[::-1]
+    vals = vals[order]
+    vecs = vecs[:, order]
+    width = 2 * nsig * np.sqrt(vals[0])
+    height = 2 * nsig * np.sqrt(vals[1])
+    angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
+    return width, height, angle
+
+def plot_class_kde(
+    df,
+    x="var1",
+    y="var2",
+    label="class",
+    bandwidth=None,
+    levels=10,
+    grid_size=250,
+    scatter=True,
+    normalize="per_class",
+    cmap_per_class=None,
+    alpha=None,
+    xlim=None,
+    ylim=None,
+    seed=0,
+    equalize_xylim=False,
+    ellipses=True,
+    ellipse_nsig=2.0,
+    ellipse_kwargs=None,
+    text_labels=True,          # NEW: toggle class text labels
+    text_kwargs=None,           # NEW: kwargs for ax.text
+    ax=None,
+):
+    """
+    Plot per-class 2D kernel density estimates (KDE) with graded shading, and optional covariance ellipses.
+
+    For each class, this function estimates a 2D density via KDE and renders it as
+    filled contour bands using a light→color colormap so shading reflects density.
+    Optionally overlays raw scatter points and draws per-class covariance ellipses
+    at `ellipse_nsig` standard deviations about the class mean.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Must contain columns `x`, `y`, and `label`.
+    x, y : str, default: "var1", "var2"
+        Column names for the two variables to plot.
+    label : str, default: "class"
+        Column name for class labels (used to group points).
+    bandwidth : float or None, default: None
+        KDE bandwidth. If None, uses Scott's rule per class.
+    levels : int or sequence, default: 12
+        If int: number of evenly spaced contour levels up to the max density.
+        If sequence: explicit contour levels (absolute values or fractions ≤ 1.0
+        of max density depending on `normalize`).
+    grid_size : int, default: 250
+        Resolution of the evaluation grid in each axis.
+    scatter : bool, default: True
+        Whether to overlay raw data points.
+    normalize : {"per_class", "global"}, default: "per_class"
+        - "per_class": scale each class density to its own maximum (good for shape comparison).
+        - "global": scale all densities to a single max (good for absolute density comparison).
+    cmap_per_class : dict or None, default: None
+        Mapping {class: colormap OR color}. If a color is given, a light→color gradient is
+        constructed automatically for that class; if a colormap is given, it is used directly.
+        If None, base colors are drawn from Matplotlib’s default cycle.
+    alpha : float or None, default: None
+        Unused (the gradient transparency is built into the colormap).
+    xlim, ylim : tuple or None, default: None
+        Axis limits; when None, computed from the data with small padding.
+    seed : int, default: 0
+        Random seed (reserved for any stochastic steps you may add).
+    ellipses : bool, default: False
+        If True, draw per-class mean+covariance ellipses.
+    ellipse_nsig : float, default: 2.0
+        The k-sigma radius for the ellipse. For a Gaussian, 1σ ~ 68%, 2σ ~ 95%, 3σ ~ 99.7%.
+    ellipse_kwargs : dict or None, default: None
+        Extra keyword args forwarded to `matplotlib.patches.Ellipse`, e.g.
+        `{"linestyle": "--", "linewidth": 2.0, "edgecolor": "k"}`.
+        If `edgecolor` is not provided, the ellipse uses the class base color.
+    text_labels : bool, default=True
+        Whether to add text labels for each class at the mean position.
+    text_kwargs : dict or None, default=None
+        Extra kwargs passed to ax.text (e.g., fontsize, weight).
+        Color is automatically set to the class color, and a white outline is added for readability.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created figure.
+    ax : matplotlib.axes.Axes
+        The axes with the plot.
+
+    Notes
+    -----
+    - KDE uses `sklearn.neighbors.KernelDensity` (Gaussian kernel).
+    - With very few points (<~20 per class), KDE contours can be noisy; ellipses may be clearer.
+    - Set `levels` higher (e.g., 20) for smoother shading; reduce `grid_size` to speed up.
+
+    Examples
+    --------
+    >>> fig, ax = plot_class_kde(
+    ...     df, x="var1", y="var2", label="class",
+    ...     levels=14, normalize="per_class",
+    ...     scatter=True,
+    ...     ellipses=True, ellipse_nsig=2.0,
+    ...     ellipse_kwargs={"linestyle": "--", "linewidth": 2.0}
+    ... )
+    >>> plt.show()
+    """
+    import matplotlib.patheffects as path_effects
+
+    classes = df[label].unique()
+    cycle_colors = plt.rcParams['axes.prop_cycle'].by_key().get('color', None)
+
+    xdata = df[x].to_numpy()
+    ydata = df[y].to_numpy()
+    if xlim is None:
+        xr = np.nanmax(xdata) - np.nanmin(xdata)
+        xpad = 0.05 * xr if np.isfinite(xr) and xr > 0 else 1.0
+        xlim = (np.nanmin(xdata) - xpad, np.nanmax(xdata) + xpad)
+    if ylim is None:
+        yr = np.nanmax(ydata) - np.nanmin(ydata)
+        ypad = 0.05 * yr if np.isfinite(yr) and yr > 0 else 1.0
+        ylim = (np.nanmin(ydata) - ypad, np.nanmax(ydata) + ypad)
+
+    if equalize_xylim:
+        _min = np.min([xlim[0], ylim[0]])
+        _max = np.max([xlim[1], ylim[1]])
+        xlim = np.array([_min, _max])
+        ylim = np.array([_min, _max])
+        print(xlim)
+
+    Xgrid, Ygrid = np.meshgrid(
+        np.linspace(*xlim, grid_size),
+        np.linspace(*ylim, grid_size),
+        indexing="xy"
+    )
+    XY = np.column_stack([Xgrid.ravel(), Ygrid.ravel()])
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(7.8, 6.5))
+    else:
+        fig = None
+
+    density_per_class = {}
+    stats_per_class = {}
+    global_max = -np.inf
+
+    def scott_bandwidth(X):
+        n, d = X.shape
+        if n <= 1:
+            return 1.0
+        factor = n ** (-1.0 / (d + 4))
+        stds = X.std(axis=0, ddof=1)
+        bw = np.mean(stds) * factor
+        return max(bw, np.finfo(float).eps)
+
+    from numpy.linalg import LinAlgError
+
+    for c in classes:
+        sub_df = df[df[label] == c][[x, y]].dropna()
+        sub = sub_df.to_numpy()
+        if sub.shape[0] < 2:
+            continue
+        mu = sub.mean(axis=0)
+        cov = np.cov(sub, rowvar=False)
+        stats_per_class[c] = (mu, cov)
+
+        bw = bandwidth if bandwidth is not None else scott_bandwidth(sub)
+        kde = KernelDensity(kernel="gaussian", bandwidth=bw).fit(sub)
+        D = np.exp(kde.score_samples(XY)).reshape(grid_size, grid_size)
+        density_per_class[c] = D
+        if normalize == "global":
+            global_max = max(global_max, float(np.nanmax(D)))
+
+    if normalize == "global":
+        global_max = global_max if np.isfinite(global_max) and global_max > 0 else 1.0
+
+    handles = []
+    for i, c in enumerate(classes):
+        D = density_per_class.get(c)
+        if D is None:
+            continue
+
+        base_color = None
+        cmap = None
+        if cmap_per_class and c in cmap_per_class:
+            cc = cmap_per_class[c]
+            if hasattr(cc, 'colors') or hasattr(cc, 'name'):
+                cmap = cc
+            else:
+                base_color = cc
+        else:
+            base_color = cycle_colors[i % len(cycle_colors)] if cycle_colors else None
+
+        if cmap is None:
+            cmap = _make_light_to_color_cmap(base_color or "#1f77b4", f"cmap_{i}")
+
+        vmax = float(np.nanmax(D)) if normalize == "per_class" else (global_max or 1.0)
+        if isinstance(levels, int):
+            level_vals = np.linspace(0.05 * vmax, vmax, levels)
+        else:
+            level_vals = [(lv * vmax if lv <= 1.0 else lv) for lv in levels]
+
+        ax.contourf(Xgrid, Ygrid, D, levels=level_vals, cmap=cmap, antialiased=True)
+        ax.contour(Xgrid, Ygrid, D, levels=[level_vals[-1]], colors=[base_color] if base_color else None, linewidths=1.6)
+        # ax.contourf(Xgrid, Ygrid, D, levels=level_vals, colors="b", antialiased=True)
+        # ax.contour(Xgrid, Ygrid, D, levels=[level_vals[-1]], colors="b", linewidths=1.6)
+
+        if scatter:
+            sub = df[df[label] == c]
+            ax.scatter(sub[x], sub[y], s=10, alpha=0.45, edgecolors='none', c=base_color)
+
+        if ellipses and c in stats_per_class:
+            mu, cov = stats_per_class[c]
+            try:
+                width, height, angle = _cov_ellipse_params(mu, cov, nsig=ellipse_nsig)
+                e_kwargs = dict(fill=False, linewidth=2.0, linestyle='--')
+                if ellipse_kwargs:
+                    e_kwargs.update(ellipse_kwargs)
+                if 'edgecolor' not in e_kwargs and base_color is not None:
+                    e_kwargs['edgecolor'] = base_color
+                ell = Ellipse(xy=mu, width=width, height=height, angle=angle, **e_kwargs)
+                ax.add_patch(ell)
+            except LinAlgError:
+                pass
+
+        # Optional text label
+        if text_labels and c in stats_per_class:
+            mu, _ = stats_per_class[c]
+            t_kwargs = dict(
+                fontsize=12, weight="bold",
+                ha="center", va="center",
+                color=base_color
+            )
+            # t_kwargs = dict(
+            #     fontsize=12, 
+            #     ha="center", va="center",
+            #     color=base_color
+            # )
+            if text_kwargs:
+                t_kwargs.update(text_kwargs)
+            txt = ax.text(mu[0], mu[1], str(c), **t_kwargs)
+            # add outline for readability
+            txt.set_path_effects([
+                path_effects.Stroke(linewidth=2.5, foreground="white"),
+                path_effects.Normal()
+            ])
+
+        handles.append(Line2D([0], [0], marker='o', linestyle='', markersize=8,
+                              markerfacecolor=base_color if base_color else 'k', alpha=0.9, label=str(c)))
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+    ax.legend(handles=handles, title=label, frameon=True)
+    ax.set_title("Per-class 2D KDE with graded shading + covariance ellipses")
+    ax.grid(True, alpha=0.15)
+    plt.tight_layout()
+
+    return fig, ax
+
+def plot_class_kde_example():
+    """
+    Demo with the previously simulated dataset ---
+    """
+    rng = np.random.default_rng(42)
+    n_classes = 3
+    n_points_per_class = [200, 150, 180]
+    class_means = [(0, 0), (3, 3), (-3, 4)]
+    class_covs = [
+        [[1.0, 0.3], [0.3, 1.0]],
+        [[1.2, -0.4], [-0.4, 1.0]],
+        [[0.8, 0.2], [0.2, 0.8]]
+    ]
+    dfs = []
+    for i in range(n_classes):
+        pts = rng.multivariate_normal(mean=class_means[i], cov=class_covs[i], size=n_points_per_class[i])
+        df_i = pd.DataFrame(pts, columns=["var1", "var2"])
+        df_i["class"] = f"class_{i+1}"
+        dfs.append(df_i)
+    df_example = pd.concat(dfs, ignore_index=True)
+
+    fig, ax = plot_class_kde(df_example, x="var1", y="var2", label="class", levels=4, normalize="per_class", scatter=False, ellipses=True,
+    ellipse_nsig=2.0,
+    ellipse_kwargs={"linestyle": "--", "linewidth": 2.5}, text_labels=True,
+    text_kwargs={"fontsize": 14}  # override defaults if you like
+)
+    plt.show()
