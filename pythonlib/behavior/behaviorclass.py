@@ -542,12 +542,6 @@ class BehaviorClass(object):
             else:
                 assert False, "you expect it to already be computed"
 
-        # If you are computing, then you should pass in input_grid_xy
-        if input_grid_xy is None:
-            print("recompute:", recompute)
-            print("self.Alignsim_Datsegs:", self.Alignsim_Datsegs)
-            print("SOLUTION: run D.taskclass_preprocess_wrapper() first")
-            assert False, "you need to pass in input_grid_xy if you are recompujting... to make sure all tasks in this dataset have same grid..."
 
         if expt is None:
             expt = self.Expt
@@ -556,9 +550,17 @@ class BehaviorClass(object):
         params = {
             "expt":expt}
 
+        hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "gridlinecircle1", "gridlinecircle2", "chunkbyshape2"]
+
+        # If you are computing, then you should pass in input_grid_xy
+        if (hack_is_gridlinecircle==False) and (input_grid_xy is None):
+            print("recompute:", recompute)
+            print("self.Alignsim_Datsegs:", self.Alignsim_Datsegs)
+            print("SOLUTION: run D.taskclass_preprocess_wrapper() first")
+            assert False, "you need to pass in input_grid_xy if you are recompujting... to make sure all tasks in this dataset have same grid..."
+
         # Genrate tokens, taskstroke inds order.
         Task = self.task_extract()
-        hack_is_gridlinecircle = params["expt"] in ["gridlinecircle", "chunkbyshape2"]
         Task.tokens_generate(hack_is_gridlinecircle=hack_is_gridlinecircle, 
             assert_computed=False,
             include_scale=include_scale, input_grid_xy=input_grid_xy,

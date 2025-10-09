@@ -28,7 +28,7 @@ elif MACHINE == "lemur":
 	PATH_DATA_BEHAVIOR_RAW = f"{HOME}/mnt/Freiwald/ltian/backup/gorilla/gorilla1/animals"
 	# PATH_DATA_BEHAVIOR_RAW_SERVER = f"{HOME}/mnt/Freiwald_kgupta/kgupta/macaque_data"
 	PATH_DATA_BEHAVIOR_RAW_SERVER = f"{HOME}/mnt/Freiwald/kgupta/macaque_data"
-	PATH_DATA_BEHAVIOR_RAW_SERVER2 = f"{HOME}/mnt/Freiwald/ltian/backup/gorilla/gorilla1/animals"
+	PATH_DATA_BEHAVIOR_RAW_SERVER2 = f"{HOME}/mnt/Freiwald/ltian/backup/bonobo/data2/animals"
 	PATH_ANALYSIS_OUTCOMES = "/lemur2/lucas/analyses"
 	PATH_ANALYSIS_OUTCOMES_SERVER = f"{HOME}/mnt/Freiwald_kgupta/kgupta/analyses"
 	PATH_DATASET_BEH = f"{HOME}/mnt/Freiwald_kgupta/kgupta/analyses/database"

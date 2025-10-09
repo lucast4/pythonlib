@@ -397,6 +397,9 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         key = (ruledict["categ"], ruledict["subcat"])
         tmp = map_rule_to_notfixedorder[key] # [False, True]
 
+        # print(hier, tmp[0], tmp[1])
+        # print(fixed_order_for_this_hier(hier, tmp[0], tmp[1]))
+        # assert False
         return fixed_order_for_this_hier(hier, tmp[0], tmp[1])
 
 
@@ -603,6 +606,13 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
     def _get_sequences_on_ordering_rule(objects, rule, shape_order):
         """Get set of parses for ordering by shapes, using
         specific strategy (e.g., rank or chain)
+
+        PARAMS:
+        - objects, list of dicts, for this trial.
+        - rule, str, {rank or chain}
+        - shape_order, the correct order of shapes (same for all trials). e.g,:
+        ['circle-6-1-0', 'line-8-1-0']
+
         """ 
         # objects: [
         # ['Lcentered-3-0', {'x': -2.342, 'y': 0.05}],
@@ -776,8 +786,29 @@ def find_chunks_hier(Task, rulestring, strokes=None, params=None,
         shape_order = ruledict["params_good"][0] # list of shape strings.
         direction_within_shape = ruledict["params_good"][1] # string, direction.
         max_n_repeats = ruledict["params_good"][2] # either None (no cap) or int.
+        shape_key = ruledict["params_good"][3] # {shapeabstract or shape}
 
-        list_hier = _get_sequences_on_ordering_rule(objects, "rank", shape_order)
+        # Someimtes, the shape_order is defined abstractly (e.g, [circle, line]) but the objects are not.
+        if shape_key=="shapeabstract":
+            # In such a case, replace objects with the abstract shapes
+            import copy
+            _objects = copy.deepcopy(objects)
+            for o, t in zip(_objects, tokens):
+                o[0] = t["shapeabstract"] # o = ['circle-6-1-0', {'x': -1.7, 'y': 0.05, 'sx': None, 'sy': None, 'theta': None, 'order': None}]
+            list_hier = _get_sequences_on_ordering_rule(_objects, "rank", shape_order)            
+        elif shape_key=="shape":
+            # OK
+            list_hier = _get_sequences_on_ordering_rule(objects, "rank", shape_order)
+        else:
+            assert False
+
+        # print(ruledict)
+        # print(direction_within_shape)
+        # print(max_n_repeats)
+        # print(objects)
+        # print(shape_order)
+        # print(list_hier)
+        # assert False
 
         assert len(list_hier)==1, "should onlye be a single" # e.g., list_hier[0] = [[1,2], [3,4]]
         hier = list_hier[0]
@@ -1245,7 +1276,8 @@ def rules_map_rulestring_to_ruledict(rulestring):
                 assert False, "if this not potenitaly using reflection, should add it to elif.."
 
             return f"{shape}-{scale}-{rot}-{refl}"
-        elif len(substrings)==1:
+        elif len(substrings) in [0, 1]:
+            # s = circle, for example
             return s
         elif len(substrings)==4:
             # then is like Lcentered-4-3-0
@@ -1326,7 +1358,20 @@ def rules_map_rulestring_to_ruledict(rulestring):
         #     print(list_shapestring_good)
         #     print(params)
         #     assert False, "get unique shapes here?"
-        params_good = (list_shapestring_good, direction, max_n_repeats)
+
+        ### Determine if shape order is using abstract shapes (e.g, circle) or concrete (e.g, circle-6-1-0)
+        tmp = [len(decompose_string(s)) for s in list_shapestring_good]
+        if all([x in [0, 1] for x in tmp]):
+            # e.g, list_shapestring_good = ['circle', 'arcdeep', 'line']
+            shape_key = "shapeabstract"
+        elif all([x in [4] for x in tmp]):
+            # ["circle-6-1-0"]
+            shape_key = "shape"
+        else:
+            print(list_shapestring_good)
+            print(tmp)
+            assert False, "add another row"
+        params_good = (list_shapestring_good, direction, max_n_repeats, shape_key)
 
     elif categ=="ch" and subcat=="dir2":
         # Concrete chunk (e.g. lolli), with direction across chunks fixed, but
@@ -1592,14 +1637,21 @@ def _rules_consistent_rulestrings_extract_auto(list_rules, debug=False, return_a
 
 
 
-def rules_map_rule_to_ruledict_extract_auto(D, include_alternative_rules=False):
+def rules_map_rule_to_ruledict_extract_auto(D, include_alternative_rules=False, also_get_these_rules=None):
     """for each related to the the data in this D, get its ruledict
+    
+    PARAMS:
+    - also_get_these_rules, list of str, e.g., ["CLr2"]. Appends this to the rules that are found automiatcally in D. Useful 
+    if you are getting ruledict for a rule not in this dataset.
+
     RETURNS:
     - dicst, rule (epoch_orig) --> ruledict, where rule is single string like "llV1", not the rulestring.
     Ensures this is the uqniue ruledict for this rule, otherwise fals.
+
+
     """
 
-    list_rulestring = rules_related_rulestrings_extract_auto(D)
+    list_rulestring = rules_related_rulestrings_extract_auto(D, also_get_these_rules=also_get_these_rules)
     # RUNS INTO INFINITE RECURSION
     # # - get rules autoamticlaly.
     # if include_alternative_rules:
@@ -1620,11 +1672,15 @@ def rules_map_rule_to_ruledict_extract_auto(D, include_alternative_rules=False):
     #
     if not include_alternative_rules:
         # Prune to just epochs
-        map_rule_to_ruledict = {epoch_orig:ruledict for epoch_orig, ruledict in map_rule_to_ruledict.items() if epoch_orig in D.Dat["epoch_orig"].unique().tolist()}
+        if also_get_these_rules is not None:
+            rules_keep = D.Dat["epoch_orig"].unique().tolist() + also_get_these_rules
+        else:
+            rules_keep = D.Dat["epoch_orig"].unique().tolist()
+        map_rule_to_ruledict = {epoch_orig:ruledict for epoch_orig, ruledict in map_rule_to_ruledict.items() if epoch_orig in rules_keep}
 
     return map_rule_to_ruledict
 
-def rules_related_rulestrings_extract_auto(D):
+def rules_related_rulestrings_extract_auto(D, also_get_these_rules=None):
     """ Helper to try to extract all relevant rules, based on:
     (i) the groundt truth rules in D< and (ii) related rules that
     are alternative huypotjeses to those rules
@@ -1632,6 +1688,10 @@ def rules_related_rulestrings_extract_auto(D):
     # list_rules = D.Dat["epoch_rule_tasksequencer"].unique().tolist()
     # try:
     list_rules = D.Dat["epoch_orig"].unique().tolist()
+
+    if also_get_these_rules is not None:
+        assert isinstance(also_get_these_rules, list)
+        list_rules = list(set(list_rules + also_get_these_rules))
     return _rules_related_rulestrings_extract_auto(list_rules)
     # except AssertionError as err:
     #     # Fails soemtimes if you have merged epochs..
@@ -1780,19 +1840,39 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
 
 #################### CATEGORIZE TASKS BASED ON SEQUENCE FEATURES
 # e..g, ngram (AABBB)
-def tasks_categorize_based_on_rule_mult(D):
+def tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=False):
     """
     Assign each task to a category, where cats are defined (hard coded) based on rules, 
     e.g,,m for repeat tasks, categorize tasks based on n repeats.
+    
     NOTE: This reflects that task (and rule) and NOT the behavior. THis means for random beh (color sup superviion), it might
     reflect the task and
+
+    PARAMS:
+    - list_rule, list of str, which are the simple rules (not the rulestrings), such as:
+        Will concatenat the taskcat for each rule into a tuple. e.g., 
+
+        list_rule = ["LCr2", "CLr2", "LolDR"] -->
+        ((2, 0, 2, 0), (2, 0, 2, 0), 0) is one row of D.Dat["taskcat_by_rule"], where this means ("2C2L", "2C2L", "0 lolli")
+
     """
     # Extract for each rule each tasks' categroyes
     from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule, rules_map_rule_to_ruledict_extract_auto
     from pythonlib.tools.pandastools import applyFunctionToAllRows
 
     # Get list of rules
-    list_rule = D.grammarparses_rules_extract_info()["list_rules_exist"]
+    if list_rule is None:
+        # Then get it automatilcaly
+        list_rule = D.grammarparses_rules_extract_info()["list_rules_exist"]
+    else:
+        # Append todays rules to list_rule
+        assert isinstance(list_rule, list)
+        list_rule = list(set(list_rule + D.grammarparses_rules_extract_info()["list_rules_exist"]))
+
+    if False:
+        print(list_rule)
+        print(D.grammarparses_rules_extract_info()["list_rules_exist"])
+        assert False
     # ALL_OUT = []
     # ALL_LIST_COL = []
 
@@ -1826,6 +1906,8 @@ def tasks_categorize_based_on_rule_mult(D):
         D.Dat = applyFunctionToAllRows(D.Dat, F, "taskcat_by_rule")
     print("New col: taskcat_by_rule")
 
+    if return_list_rule:
+        return list_rule
 
 def tasks_categorize_based_on_rule(D, rule, HACK=True):
     """ fore ach task, categorize it based on a given rule and on its
@@ -1846,6 +1928,7 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
 
     # for a given trial, get what shapes it should be mapped to.
     def _extract_shapes_pool(ruledict):
+        assert False, "dont use this, instead, see how this was replaced below."
         if ruledict["categ"]=="ss": # shape sequence
             if ruledict["subcat"]=="rank":
                 shapes_pool = ruledict["params_good"]
@@ -1860,7 +1943,7 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
         return shapes_pool
 
     # Get ruledict, to decide what features are relevant
-    map_rule_ruledict = rules_map_rule_to_ruledict_extract_auto(D)
+    map_rule_ruledict = rules_map_rule_to_ruledict_extract_auto(D, also_get_these_rules=[rule])
     rd = map_rule_ruledict[rule]
     if rd["rulestring"]=="chmult-dirdir-LolDR":
         # grid line circle, count the number of lollis.
@@ -1906,23 +1989,72 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
 
         from pythonlib.drawmodel.task_features import shapes_n_each_extract
 
-        shapes_pool = _extract_shapes_pool(rd)
-        # print(decompose_string(shapes_pool[0]))
-        # assert False
-        if len(decompose_string(shapes_pool[0]))==1:
-            shape_key = "shapeabstract"
-        elif len(decompose_string(shapes_pool[0]))==4:
-            shape_key = "shape"
-        else:
-            print(shapes_pool)
-            assert False
+        if False:
+            shapes_pool = _extract_shapes_pool(rd)
+            # assert False
+            if len(decompose_string(shapes_pool[0])) in [0, 1]:
+                # e.g, shapes_pool = ['circle', 'arcdeep', 'line']
+                shape_key = "shapeabstract"
+            elif len(decompose_string(shapes_pool[0]))==4:
+                shape_key = "shape"
+            else:
+                print(decompose_string(shapes_pool[0]))
+                print(shapes_pool)
+                assert False
+            # Only keep shapes that actually exist in dataset.
+            shapes_exist = D.taskclass_shapes_extract_unique_alltrials(shape_kind=shape_key) # List of str
 
-        # Only keep shapes that actually exist in dataset.
-        shapes_exist = D.taskclass_shapes_extract_unique_alltrials() # List of str
-        shapes_pool = [sh for sh in shapes_pool if sh in shapes_exist]
-        ## 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
-        # print("shapes_pool:", shapes_pool)
-        list_ns = []
+            # print(shapes_exist)
+            # print(shapes_pool)
+            print("1: ", shapes_pool, shapes_exist)
+
+            # 1) ngrams, e.g, (4,3, 1) means category A4B3 and 1 left over (unidentified)
+
+            if shape_key == "shapeabstract":
+                # Then convert shapes_exist to abstract.
+                # e.g, from ['arcdeep-4-4-0', 'circle-6-1-0', 'line-8-1-0', 'line-8-2-0', 'line-8-3-0', 'line-8-4-0']
+                # to ['arcdeep', 'circle', 'line']
+                shapes_exist = list(set([decompose_string(s)[0] for s in shapes_exist]))
+                for s in shapes_exist:
+                    assert isinstance(s, str)
+
+            if False:
+                print(shape_key)
+                print(shapes_exist)
+                print(shapes_pool)
+                print(_extract_shapes_pool(rd))
+                
+            # (Actually, commented this section out. Decided that should always do things within date. Deal with across date stuff afterrwards)
+            # if (D.animals(force_single=True)[0]=="Pancho") and ("grammar2" in D.expts(force_single=True)[0]):
+            #     # Then dont prune shaeps pool. Thre reasons is that there are two resaons for pruning 
+            #     # 1. is to clean up messy list. 2. is fi this day doesnt have the shapes for this rule. 
+            #     # Conflated.
+            #     # For this expt, it is multi-day, so I need to maintian the same list across dates, or else
+            #     # len(nshapes) will be 0 for some dates.
+            #     if not shapes_pool==2:
+            #         print(shape_key)
+            #         print(shapes_exist)
+            #         print(shapes_pool)
+            #         print(_extract_shapes_pool(rd))
+            #         assert False
+            # else:
+            shapes_pool_1 = [sh for sh in shapes_pool if sh in shapes_exist]
+        else:
+            # Wrapping the above.
+            shapes_pool, shape_key = D._grammarparses_rules_shape_AnBmCk_get_shape_order(rule, keep_only_existing_shapes=True, return_shape_key=True)
+            # shapes_pool_2, shape_key = D.grammarparses_rules_shape_AnBmCk_get_shapes_UNORDERED(list_rule=[rule], 
+            #                                                                               keep_only_existing_shapes=True, 
+            #                                                                               return_shape_key=True)
+        
+        # if not shapes_pool_1 == shapes_pool_2:
+        #     print(shapes_pool_1, shapes_pool_2)
+        #     assert False
+        # shapes_pool = shapes_pool_1
+
+        if True: 
+            # Even if you input rule on a date withou tit, it should have shapes, see what I did for Pancho grammar2 above
+            assert len(shapes_pool)>0
+
         for ind in range(len(D.Dat)):
             Task = D.Dat.iloc[ind]["Task"]
             nshapes, n_left_over = shapes_n_each_extract(Task, shapes_pool, shape_key)
@@ -1931,7 +2063,13 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
             #     print("n_left_over:", n_left_over)
             #     assert n_left_over == 0, "instead, try to assign each shape in task a proper label."
             nshapes.append(n_left_over)
+            # print(nshapes, n_left_over, shapes_pool, shape_key)
+            # assert False
 
+            # print(nshapes)
+            # if len(shapes_pool)==0:
+            #     print(nshapes, n_left_over)
+            #     assert False
             # tokens = D.taskclass_tokens_extract_wrapper(ind, "task")
             # shapes = [t[shape_key] for t in tokens]
             

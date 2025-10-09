@@ -81,7 +81,7 @@ def extract_strokes_monkey_vs_self(Dlist, GROUPING, GROUPING_LEVELS, remove_bad_
         
 
 
-def concatDatasets(Dlist, do_cleanup=False):
+def concatDatasets(Dlist, do_cleanup=False, dfdeep=True):
     """ concatenates datasets in Dlist into a single dataset.
     Main goal is to concatenate D.Dat. WIll attempt to keep track of 
     Metadats, but have not confirmed that this is reliable yet.
@@ -94,10 +94,9 @@ def concatDatasets(Dlist, do_cleanup=False):
     from pythonlib.tools.checktools import check_objects_identical
 
     # First make copy
-    Dlist = [D.copy() for D in Dlist]
+    Dlist = [D.copy(dfdeep) for D in Dlist]
 
     Dnew = Dataset([])
-
     ct = 0
     dflist = []
     metadatlist = []

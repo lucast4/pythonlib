@@ -118,9 +118,11 @@ class BehModelHolder(object):
 
     def datextract_datlong_agg(self, cols_grpby_append=None):
         """
+        Agg so that datapts are levels of 
+        ["character", "score_name", "agent", "epoch", "epoch_orig"] + cols_grpby_append.
         """
         from pythonlib.tools.pandastools import aggregGeneral
-        cols_grpby = ["character", "score_name", "agent", "epoch", "epoch_orig"]
+        cols_grpby = ["character", "score_name", "agent", "epoch", "epoch_orig", "probe", "monkey_train_or_test"]
         if cols_grpby_append is not None:
             assert isinstance(cols_grpby_append, list)
             cols_grpby.extend(cols_grpby_append)
@@ -132,19 +134,28 @@ class BehModelHolder(object):
         print("TODO! _preprocess_sanity_check")
 
 
-    def _input_data_long_form(self, data):
-        """ Help to melt from long-form to necessary wide form 
+    def _input_data_long_form(self, data=None):
+        """ 
+        Help to melt from long-form to necessary wide form 
+
         RETURNS:
         - data_wide_trial, data_wide_agg
+
         """
         from pythonlib.tools.pandastools import pivot_table
         from pythonlib.tools.pandastools import grouping_get_inner_items
 
-        # Decide what kind of data is in each row:
-        this = grouping_get_inner_items(data, "character", "epoch")
+        if data is None:
+            # This is all the data, store it.
+            data = self.DatLong
+            do_store = True
+        else:
+            do_store = False
 
+        # Decide what kind of data is in each row:
         INDEX = None
         if False:
+            this = grouping_get_inner_items(data, "character", "epoch")
             # Stop this, since agent laready differs by epochj.
             EPOCHS_IGNORE = ["IGNORE"]
             for char, epochs_this_char in this.items():
@@ -171,6 +182,9 @@ class BehModelHolder(object):
                               flatten_col_names=True, flatten_separator="|",
                               col_strings_ignore=["score"])
 
+        if do_store:
+            self.DatWide = data_wide_trial
+            self.DatWideAgg = data_wide_agg
 
         return data_wide_trial, data_wide_agg
 
@@ -489,7 +503,7 @@ class BehModelHolder(object):
                 plt.close("all")
 
     def plot_score_cross_prior_model_splitby_v2(self, df=None, split_by="taskgroup",
-            savedir=None):
+            savedir=None, plot_each_char=True, col = "epoch_orig"):
         """Plot score as function of "split_by" categorical levels, where levels are on
         x-axis. Useful for comparing across levels.
         PARAMS;
@@ -500,13 +514,15 @@ class BehModelHolder(object):
         if df is None:
             df = self.DatLong
 
-        col = "epoch_orig"
+        from pythonlib.tools.pandastools import stringify_values
+        df = stringify_values(df)
+        
         # col = "score_name"
         fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
                    col=col, col_wrap = 3, kind="point", errorbar=("ci", 68), aspect=1.5)
         rotateLabel(fig)
         if savedir:
-            fig.savefig(f"{savedir}/splitby_{split_by}-pointsmean.pdf")
+            savefig(fig, f"{savedir}/splitby_{split_by}-pointsmean.pdf")
 
         if False:
             fig = sns.catplot(data = df, x=split_by, y="score", hue="agent", 
@@ -532,7 +548,7 @@ class BehModelHolder(object):
                        row="score_name", kind="point", errorbar=('ci', 68), aspect=1.5)
             rotateLabel(fig)
             if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-1.pdf")
+                savefig(fig, f"{savedir}/splitby_{split_by}-points-agents-1.pdf")
         except ValueError as err:
             pass
 
@@ -541,7 +557,7 @@ class BehModelHolder(object):
                        row="score_name", alpha=0.25, jitter=True)
             rotateLabel(fig)
             if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-points-agents-2.pdf")
+                savefig(fig, f"{savedir}/splitby_{split_by}-points-agents-2.pdf")
         except ValueError as err:
             pass
 
@@ -549,83 +565,84 @@ class BehModelHolder(object):
 
 
         ###################################
-        # Split into characters
-        n_chars = len(df["character"].unique())
-        list_block = df["block"].unique().tolist()
-        NMIN_PER_BLOCK = 10
-        if n_chars<80:
-            aspect = n_chars/20
-            if aspect<1:
-                aspect=1
-            if aspect>4:
-                aspect=4
+        if plot_each_char:
+            # Split into characters (ie show each character)
+            n_chars = len(df["character"].unique())
+            list_block = df["block"].unique().tolist()
+            NMIN_PER_BLOCK = 10
+            if n_chars<80:
+                aspect = n_chars/20
+                if aspect<1:
+                    aspect=1
+                if aspect>4:
+                    aspect=4
 
-            ####### CHARS, split by agent
-            fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-                aspect=aspect, alpha=0.4, jitter=True, row="agent")
-            rotateLabel(fig)        
-            if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-characters-agent-1.pdf")
+                ####### CHARS, split by agent
+                fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+                    aspect=aspect, alpha=0.4, jitter=True, row="agent")
+                rotateLabel(fig)        
+                if savedir:
+                    savefig(fig, f"{savedir}/splitby_{split_by}-characters-agent-1.pdf")
 
-            fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
-                kind="point", aspect=aspect,
-                row="agent")
-            rotateLabel(fig)        
-            if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-characters-agent-2.pdf")
+                fig = sns.catplot(data=df, x="character", y="score", hue=split_by, 
+                    kind="point", aspect=aspect,
+                    row="agent")
+                rotateLabel(fig)        
+                if savedir:
+                    savefig(fig, f"{savedir}/splitby_{split_by}-characters-agent-2.pdf")
 
-            plt.close("all")
+                plt.close("all")
 
-            ###################################
-            # Split into characters
-            ####### CHARS, split by agent
-            # fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-            #     kind="strip", aspect=aspect, alpha=0.2, jitter=True,
-            #     col="agent")
-            fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                aspect=aspect, alpha=0.4, jitter=True, col="agent")
-            rotateLabel(fig)        
-            if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
+                ###################################
+                # Split into characters
+                ####### CHARS, split by agent
+                # fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+                #     kind="strip", aspect=aspect, alpha=0.2, jitter=True,
+                #     col="agent")
+                fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+                    aspect=aspect, alpha=0.4, jitter=True, col="agent")
+                rotateLabel(fig)        
+                if savedir:
+                    savefig(fig, f"{savedir}/splitby_{split_by}-v2-characters-agent-1.pdf")
 
-            fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
-                kind="point", errorbar=("ci", 68), aspect=aspect, col="agent")
-            rotateLabel(fig)        
-            if savedir:
-                fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
+                fig = sns.catplot(data=df, x="character", y="score", row=split_by, 
+                    kind="point", errorbar=("ci", 68), aspect=aspect, col="agent")
+                rotateLabel(fig)        
+                if savedir:
+                    savefig(fig, f"{savedir}/splitby_{split_by}-v2-characters-agent-2.pdf")
 
-            plt.close("all")
+                plt.close("all")
 
-            for bk in list_block:
-                dfthis = df[df["block"]==bk]
-                if len(dfthis)>NMIN_PER_BLOCK:
-                    fig = sns.catplot(data=dfthis, x="character", y="score", hue=split_by,
-                        aspect=aspect, alpha=0.4, jitter=True)
-                    rotateLabel(fig)        
-                    if savedir:
-                        fig.savefig(f"{savedir}/splitby_{split_by}-characters-1-bk_{bk}.pdf")
+                for bk in list_block:
+                    dfthis = df[df["block"]==bk]
+                    if len(dfthis)>NMIN_PER_BLOCK:
+                        fig = sns.catplot(data=dfthis, x="character", y="score", hue=split_by,
+                            aspect=aspect, alpha=0.4, jitter=True)
+                        rotateLabel(fig)        
+                        if savedir:
+                            savefig(fig, f"{savedir}/splitby_{split_by}-characters-1-bk_{bk}.pdf")
 
-                    fig = sns.catplot(data=dfthis, x="character", y="score", hue=split_by,
-                        kind="point", errorbar=("ci", 68), aspect=aspect)
-                    rotateLabel(fig)        
-                    if savedir:
-                        fig.savefig(f"{savedir}/splitby_{split_by}-characters-2-bk_{bk}.pdf")
+                        fig = sns.catplot(data=dfthis, x="character", y="score", hue=split_by,
+                            kind="point", errorbar=("ci", 68), aspect=aspect)
+                        rotateLabel(fig)        
+                        if savedir:
+                            savefig(fig, f"{savedir}/splitby_{split_by}-characters-2-bk_{bk}.pdf")
 
-                    fig = sns.catplot(data=dfthis, x="character", y="score", hue="agent", 
-                        row=split_by, col="block",
-                        aspect=aspect, alpha=0.3, jitter=True)
-                    rotateLabel(fig)        
-                    if savedir:
-                        fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-1-bk_{bk}.pdf")
+                        fig = sns.catplot(data=dfthis, x="character", y="score", hue="agent", 
+                            row=split_by, col="block",
+                            aspect=aspect, alpha=0.3, jitter=True)
+                        rotateLabel(fig)        
+                        if savedir:
+                            savefig(fig, f"{savedir}/splitby_{split_by}-v2-characters-1-bk_{bk}.pdf")
 
-                    fig = sns.catplot(data=dfthis, x="character", y="score", hue="agent", 
-                        row=split_by, col="block",
-                        kind="point", errorbar=("ci", 68), aspect=aspect)
-                    rotateLabel(fig)        
-                    if savedir:
-                        fig.savefig(f"{savedir}/splitby_{split_by}-v2-characters-2-bk_{bk}.pdf")
+                        fig = sns.catplot(data=dfthis, x="character", y="score", hue="agent", 
+                            row=split_by, col="block",
+                            kind="point", errorbar=("ci", 68), aspect=aspect)
+                        rotateLabel(fig)        
+                        if savedir:
+                            savefig(fig, f"{savedir}/splitby_{split_by}-v2-characters-2-bk_{bk}.pdf")
 
-                    plt.close("all")
+                        plt.close("all")
 
     def plot_score_cross_prior_model(self, df, monkey_prior_col_name="epoch", monkey_prior_list=None,
         list_classes=None, model_score_name_list =None, ALPHA = 0.2, sdir=None):

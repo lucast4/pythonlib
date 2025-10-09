@@ -258,5 +258,6 @@ class GrammarDat(object):
 
         if doplot:
             fig1, fig2 = self.Beh.alignsim_plot_summary()
-            savefig(fig1, f"{savedir}/grammarplot-beh-1.pdf")
-            savefig(fig2, f"{savedir}/grammarplot-beh-2.pdf")
+            if savedir is not None:
+                savefig(fig1, f"{savedir}/grammarplot-beh-1.pdf")
+                savefig(fig2, f"{savedir}/grammarplot-beh-2.pdf")

@@ -15,16 +15,25 @@ import numpy as np
 
 
 def generate_diagnostic_model_data(D, LIST_MODELS=None, LIST_MOTIFS=None,
-    COLS_TO_KEEP = ("taskcat_by_rule")):
-    """ From Dataset, genberate DiagnosticModel, and also convert to BM.
+    COLS_TO_KEEP = ("taskcat_by_rule",)):
+    """ 
+    From Dataset, genberate DiagnosticModel, and also convert to BM.
+
     See grammar.diagnostic_model
     - Diagnostic means scores are counting num instances of given motifs (seuqnece).
     PARAMS:
     - LIST_MODELS, list of rulestrings (sdaf-asdfa-asdf)
-    - LIST_MODELS, list of dicts, each a set of params for findings motifs (for scoring)
+    - LIST_MOTIFS, list of dicts, each a set of params for findings motifs (for scoring)
+    - COLS_TO_KEEP, columns from D.Dat which you want to keep in output.
     """
     
     from pythonlib.grammar.diagnostic_model import DiagnosticModel
+    
+    if COLS_TO_KEEP is not None and len(COLS_TO_KEEP)>0:
+        for col in COLS_TO_KEEP:
+            if col not in D.Dat.columns:
+                print(col)
+                assert False
     
     DM = DiagnosticModel()
     DM.preprocess_dataset_extract_scores(D, LIST_MODELS=LIST_MODELS, 

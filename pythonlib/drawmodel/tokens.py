@@ -917,4 +917,41 @@ class Tokens(object):
         tokens = self.Tokens
         tokens = [{k:v for k, v in tok.items() if not k=="Prim"} for tok in tokens]
         return tokens
+    
+    def copy(self):
+        """
+        Return copy, which copies tokens, but inner items (dicts) are still references (!),
+        ie it is NOT a deepcopy
+        """
+        datsegs = tuple([tok for tok in self.Tokens]) # Copy the outer object
+        Tk = Tokens(datsegs, version="beh")
+        Tk.sequence_context_relations_calc()
+        return Tk
 
+def prune_keep_only_first_touched(tokens, PRINT=False):
+    """
+    Prune tokens to keep just the first time a given task toekn is touched.
+    Assumes that tokens are task tokens, and in order of touch.
+
+    This is same as beh_firsttouch.
+    """
+    list_taskinds = [t["ind_taskstroke_orig"] for t in tokens]
+    if len(list_taskinds) == len(set(list_taskinds)):
+        # Then each token is unique
+        return tokens
+    else:
+        # Prune to first touched.
+        tokens_keep = []
+        used_inds = []
+        for tok in tokens:
+            if tok["ind_taskstroke_orig"] not in used_inds:
+                tokens_keep.append(tok)
+            else:
+                # remove it
+                pass
+            used_inds.append(tok["ind_taskstroke_orig"])
+        if PRINT:
+            print([t["ind_taskstroke_orig"] for t in tokens])
+            print([t["ind_taskstroke_orig"] for t in tokens_keep])
+        return tokens_keep
+    

@@ -22,8 +22,21 @@ def datenum2obj(date, dtformat="%y%m%d"):
         assert False, "what type is this (date)?"
     return dt
     
+def trialcode_to_scalar(tc, allow_failure=True, input_tuple_directly=False):
+    """
+    Convert trialcode to a scalar that is sortable (globally, within a subject, guaranteed to be currect)
 
-def getDateList(sdate=None, edate=None):
+    date.1
+    240115.28 means
+    date = 240115
+    sess = 2
+    trial = 800
+    
+    """
+    from pythonlib.tools.stringtools import trialcode_to_scalar
+    return trialcode_to_scalar(tc, allow_failure, input_tuple_directly)
+
+def getDateList(sdate=None, edate=None, as_ints=False):
     """ get list of dates between (including) sdate and edate
     - dates can either be None (defualt, see below), strings, or
     ints (in format yymmdd).
@@ -49,6 +62,9 @@ def getDateList(sdate=None, edate=None):
     #     day = sdate + timedelta(days=i)
     #     print(day)
     date_list = [d.strftime("%y%m%d") for d in date_list]
+
+    if as_ints:
+        date_list = [int(d) for d in date_list]
     return date_list
 
 def standardizeTime(datetime, datestart, daystart=9/24, dayend=22/24, staybounded=True):

@@ -171,6 +171,8 @@ class Dataset(object):
         self.TokensPreprocessWrapperLabelNovel = None
 
         self.GrammarRuleDictEachEpochOrig = None
+        self.MapRuleToOrderedShapes = {}
+        self.ShapesExist = {}
 
         self.ML2_FILEDATA = {}
 
@@ -1667,6 +1669,8 @@ class Dataset(object):
         RETURNS:
         - gridx, np array of scalars, sorted increasing
         - gridy, np array of scalars, sorted increasing
+        or
+        - None, None (if no grid specified -- this is older dates)
         """
         # Get grid across all tasks.
         # Generate new grid based on all tasks in dataset
@@ -1674,27 +1678,38 @@ class Dataset(object):
         ys = np.array([])
         for ind in range(len(self.Dat)):
             T = self.Dat.iloc[ind]["Task"]
-            xgrid, ygrid, grid_ver = T.get_grid_xy()
+            _xgrid, _ygrid, grid_ver = T.get_grid_xy()
             if grid_ver=="on_grid":
-                xs = np.append(xs, xgrid)
-                ys = np.append(ys, ygrid)
-                
-        xgrid = np.sort(np.unique(xs.round(decimals=3)))
-        ygrid = np.sort(np.unique(ys.round(decimals=3)))
+                xs = np.append(xs, _xgrid)
+                ys = np.append(ys, _ygrid)
+            # else:
+                # Then can't use the grid in task.
+                # Ignore this.
+                # print(grid_ver)
+                # print(xs, ys)
+                # print(_xgrid, _ygrid)
+                # assert False
+        
+        if len(xs)>0:
+            xgrid = np.sort(np.unique(xs.round(decimals=3)))
+            ygrid = np.sort(np.unique(ys.round(decimals=3)))
 
-        try:
-            assert len(xgrid)<12, "this is weird, numerical precision?"
-            assert len(ygrid)<12, "this is weird, numerical precision?"
-            assert np.all(np.diff(xgrid)>0.01), "weird, numerical precision?"
-            assert np.all(np.diff(ygrid)>0.01)    
-        except AssertionError as err:
-            print(xgrid)
-            print(ygrid)
-            print(xs)
-            print(ys)
-            print(np.diff(xgrid))
-            print(np.diff(ygrid))
-            raise err
+            try:
+                assert len(xgrid)<12, "this is weird, numerical precision?"
+                assert len(ygrid)<12, "this is weird, numerical precision?"
+                assert np.all(np.diff(xgrid)>0.01), "weird, numerical precision?"
+                assert np.all(np.diff(ygrid)>0.01)    
+            except AssertionError as err:
+                print(xgrid)
+                print(ygrid)
+                print(xs)
+                print(ys)
+                print(np.diff(xgrid))
+                print(np.diff(ygrid))
+                raise err
+        else:
+            xgrid = None
+            ygrid = None
 
         return xgrid, ygrid    
 
@@ -2271,6 +2286,36 @@ class Dataset(object):
             self.tokens_generate_replacement_from_raw(shape_sequence_col="TASK_SHAPES",
                                                       force_regenerate=force_regenerate)
 
+    def _get_gridlocs(self, ind, tokens_beh_old):
+        """
+        Helper to get gridlocs, checking task types, and so on.
+        """
+        # (2) Strokes beh, what locations to call each beh stroke
+        if self.taskclass_get_grid_ver(ind)=="undefined" and self.Dat.iloc[ind]["task_kind"]=="undefined":
+            # These are older dates.. 
+            # [t["gridloc"] for t in tokens_beh_old]) --> [('IGN', 'IGN')]
+            gridlocs = [t["gridloc"] for t in tokens_beh_old]
+            gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+        elif self.taskclass_get_grid_ver(ind)=="on_grid":
+            assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+            # Then keep locations...
+            gridlocs = [t["gridloc"] for t in tokens_beh_old]
+            gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+        else:
+            # For char, this should be recomputed later, by binning across all data
+            # print("1")
+            # print(self.taskclass_get_grid_ver(ind))
+            # print(self.Dat.iloc[ind]["task_kind"])
+            # print([t["gridloc"] for t in tokens_beh_old])
+            # print([t["gridloc_local"] for t in tokens_beh_old])
+            # assert False
+            assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
+            # Fill with Nones.
+            gridlocs = None
+            gridlocs_local = None
+
+        return gridlocs, gridlocs_local
+
     def tokens_generate_replacement_quick_from_beh(self):
         """
         QWUick and dirtly, always ruin this in preprocess, to generate beh datsegs.
@@ -2303,17 +2348,29 @@ class Dataset(object):
                 assert False, "did you prune data? eg substrokes? fix this"
 
             # (2) Strokes beh, what locations to call each beh stroke
-            if self.taskclass_get_grid_ver(ind)=="on_grid":
-                assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
-                # Then keep locations...
-                gridlocs = [t["gridloc"] for t in tokens_beh_old]
-                gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
-            else:
-                # For char, this should be recomputed later, by binning across all data
-                assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
-                # Fill with Nones.
-                gridlocs = None
-                gridlocs_local = None
+            gridlocs, gridlocs_local = self._get_gridlocs(ind, tokens_beh_old)
+            # if self.taskclass_get_grid_ver(ind)=="undefined" and self.Dat.iloc[ind]["task_kind"]=="undefined":
+            #     # These are older dates.. 
+            #     # [t["gridloc"] for t in tokens_beh_old]) --> [('IGN', 'IGN')]
+            #     gridlocs = [t["gridloc"] for t in tokens_beh_old]
+            #     gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+            # elif self.taskclass_get_grid_ver(ind)=="on_grid":
+            #     assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+            #     # Then keep locations...
+            #     gridlocs = [t["gridloc"] for t in tokens_beh_old]
+            #     gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+            # else:
+            #     # For char, this should be recomputed later, by binning across all data
+            #     # print("1")
+            #     # print(self.taskclass_get_grid_ver(ind))
+            #     # print(self.Dat.iloc[ind]["task_kind"])
+            #     # print([t["gridloc"] for t in tokens_beh_old])
+            #     # print([t["gridloc_local"] for t in tokens_beh_old])
+            #     # assert False
+            #     assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
+            #     # Fill with Nones.
+            #     gridlocs = None
+            #     gridlocs_local = None
 
             # Generate tokens: strokesbeh_using_beh
             Tk = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local,
@@ -2362,10 +2419,12 @@ class Dataset(object):
         if A or force_regenerate:
             TokensStrokesBeh = {} # len beh, using strokes beh
             TokensStrokesBehUsingTaskStrokes = {} # len beh, using best-aligned task strok
+            TokensStrokesBehUsingTaskStrokes_FirstTouch = {} # len num task strokes gotten, in order they were gotten
             TokensTask = {} # len task, using task strokes.
             for ind in range(len(self.Dat)):
                 tc = self.Dat.iloc[ind]["trialcode"]
                 tokens_beh_old = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data")
+                tokens_beh_firsttouch_old = self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")
 
                 # (1) Strokes beh, what sahpes to call each beh stroke
                 if shape_sequence_col == "TASK_SHAPES":
@@ -2378,18 +2437,19 @@ class Dataset(object):
                 assert len(strokes)==len(shape_seq)
 
                 # (2) Strokes beh, what locations to call each beh stroke
-                if self.taskclass_get_grid_ver(ind)=="on_grid":
-                    assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
-                    # Then keep locations...
-                    gridlocs = [t["gridloc"] for t in tokens_beh_old]
-                    gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
+                gridlocs, gridlocs_local = self._get_gridlocs(ind, tokens_beh_old)
+                # if self.taskclass_get_grid_ver(ind)=="on_grid":
+                #     assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
+                #     # Then keep locations...
+                #     gridlocs = [t["gridloc"] for t in tokens_beh_old]
+                #     gridlocs_local = [t["gridloc_local"] for t in tokens_beh_old]
 
-                else:
-                    # For char, this should be recomputed later, by binning across all data
-                    assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
-                    # Fill with Nones.
-                    gridlocs = None
-                    gridlocs_local = None
+                # else:
+                #     # For char, this should be recomputed later, by binning across all data
+                #     assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
+                #     # Fill with Nones.
+                #     gridlocs = None
+                #     gridlocs_local = None
 
                 # Generate tokens: strokesbeh_using_beh
                 TokensStrokesBeh[tc] = generate_tokens_from_raw(strokes, shape_seq, gridlocs, gridlocs_local,
@@ -2400,7 +2460,11 @@ class Dataset(object):
                 TokensTask[tc] = Task.tokens_generate(assert_computed=True, return_as_tokensclass=True)
 
                 #### HOW TO DEFINE TASK STROKE TOKENS
-                if self.taskclass_get_grid_ver(ind)=="on_grid":
+                if self.taskclass_get_grid_ver(ind)=="undefined" and self.Dat.iloc[ind]["task_kind"]=="undefined":
+                    # (3) Also save the old "beh strokes, aligned to task"
+                    TokensStrokesBehUsingTaskStrokes[tc] = Tokens(tokens_beh_old)
+                    TokensStrokesBehUsingTaskStrokes_FirstTouch[tc] = Tokens(tokens_beh_firsttouch_old)
+                elif self.taskclass_get_grid_ver(ind)=="on_grid":
                     assert self.Dat.iloc[ind]["task_kind"] in ["prims_single", "prims_on_grid"], "downstream code assumes this"
                     # Use the standard.
                     # (2) Also save task tokens, so that can safely delete task tokens and still use it here.
@@ -2409,12 +2473,14 @@ class Dataset(object):
 
                     # (3) Also save the old "beh strokes, aligned to task"
                     TokensStrokesBehUsingTaskStrokes[tc] = Tokens(tokens_beh_old)
+                    TokensStrokesBehUsingTaskStrokes_FirstTouch[tc] = Tokens(tokens_beh_firsttouch_old)
                 else:
                     # For char, should ignore entirely any task tokens, since they are meaninglesss. This avoids erros later.
                     # Make them identical to Beh
                     assert self.Dat.iloc[ind]["task_kind"] in ["character"], "downstream code assumes this"
                     # TokensTask[tc] = TokensStrokesBeh[tc]
                     TokensStrokesBehUsingTaskStrokes[tc] = TokensStrokesBeh[tc]
+                    TokensStrokesBehUsingTaskStrokes_FirstTouch[tc] = None # to throw error downstream
 
             # Switch so that always uses these tokens
             # MAKE sure that if "regenerated_from_raw", then these three tokens must not be empty
@@ -2422,18 +2488,22 @@ class Dataset(object):
             assert TokensStrokesBeh is not None
             assert TokensTask is not None
             assert TokensStrokesBehUsingTaskStrokes is not None
+            assert TokensStrokesBehUsingTaskStrokes_FirstTouch is not None
             assert len(TokensStrokesBeh)>0
             assert len(TokensTask)>0
             assert len(TokensStrokesBehUsingTaskStrokes)>0
+            assert len(TokensStrokesBehUsingTaskStrokes_FirstTouch)>0
             
             self.TokensStrokesBeh = TokensStrokesBeh
             self.TokensTask = TokensTask
             self.TokensStrokesBehUsingTaskStrokes = TokensStrokesBehUsingTaskStrokes
+            self.TokensStrokesBehUsingTaskStrokes_FirstTouch = TokensStrokesBehUsingTaskStrokes_FirstTouch
 
             # # Save, so that can clear derived keys that are extra from these..
             self.TokensStrokesBeh_OriginalKeys = list(list(self.TokensStrokesBeh.values())[0].Tokens[0].keys())
             self.TokensTask_OriginalKeys = list(list(self.TokensTask.values())[0].Tokens[0].keys())
             self.TokensStrokesBehUsingTaskStrokes_OriginalKeys = list(list(self.TokensStrokesBehUsingTaskStrokes.values())[0].Tokens[0].keys())
+            self.TokensStrokesBehUsingTaskStrokes_FirstTouch_OriginalKeys = list(list(self.TokensStrokesBehUsingTaskStrokes_FirstTouch.values())[0].Tokens[0].keys())
 
     def tokens_generate_replacement_clear_derived_keys(self):
         """
@@ -2507,6 +2577,19 @@ class Dataset(object):
                     print(self.TokensTask)
                     print("run tokens_generate_replacement_from_raw_helper(). Was this messed up when concatting?")
                     raise err
+            elif which_order=="beh_firsttouch":
+                # length of the taskstrokes that are NOT pruned, in the order
+                # that sorts them so that they best match beahvior. No taskstroke is used more than once. 
+                # But a single beh stroke could get multiple taskstrokes.
+                # Can think of this as the gotten taskstroke inds ordered by their "first touich"
+                if False:
+                    assert False, "this fails, since if you use one beh stroke for mult task stroke, it just gets the first one"
+                    from pythonlib.drawmodel.tokens import prune_keep_only_first_touched
+                    Tk = self.TokensStrokesBehUsingTaskStrokes[tc].copy()
+                    Tk.Tokens = prune_keep_only_first_touched(Tk.Tokens)
+                else:
+                    Tk = self.TokensStrokesBehUsingTaskStrokes_FirstTouch[tc]
+                    assert Tk is not None, "I put None there for characters... you shouldn't ask for beh_firsttouch if this is character"
             elif which_order == "task":
                 assert self.TokensTask is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensTask[tc]
@@ -2517,11 +2600,7 @@ class Dataset(object):
 
             if plot:                
                 self.plotSingleTrial(ind)
-                if which_order == "beh_using_beh_data":
-                    list_feat = ["shape", "shape_semantic", "gridloc"]
-                elif which_order == "beh_using_task_data":
-                    list_feat = ["shape", "shape_semantic", "gridloc"]
-                elif which_order == "task":
+                if which_order in ["beh_using_beh_data", "beh_using_task_data", "task", "beh_firsttouch"]:
                     list_feat = ["shape", "shape_semantic", "gridloc"]
                 else:
                     assert False
@@ -2577,6 +2656,11 @@ class Dataset(object):
                 tokens = Beh.alignsim_extract_datsegs_both_beh_task()[1]
                 # tokens = self.behclass_extract_beh_and_task(ind)[1]
             elif which_order=="beh_firsttouch":
+                # - Identical to self.Alignsim_Datsegs, 
+                # length of the taskstrokes that are NOT pruned, in the order
+                # that sorts them so that they best match beahvior. No taskstroke is used more than once.
+                # This means Alignsim_Datsegs[2] doesnt necesasiyl match strokes_beh[2]. Can think of this
+                # as taskstroke inds ordered by their "first touich"
                 tokens = Beh.alignsim_extract_datsegs_both_beh_task()[2]
                 # tokens = self.behclass_extract_beh_and_task(ind)[2]
             else:
@@ -2745,19 +2829,23 @@ class Dataset(object):
 
             print(self.Dat.loc[inds, [f"taskconfig_shploc{suffix}"]].values)
         
-    def taskclass_shapes_extract_unique_alltrials(self, SHAPES_EXIST = {}, shape_kind="shape", token_kind="task"):
+    def taskclass_shapes_extract_unique_alltrials(self, SHAPES_EXIST = None, shape_kind="shape", token_kind="task"):
         """ REturn list of (sorted) shapes across all trial sin dataset,
         unqiue. 
         """
         
-        if (shape_kind, token_kind) not in SHAPES_EXIST:
+        # SHAPES_EXIST = {}
+        if not hasattr(self, "ShapesExist"):
+            self.ShapesExist = {}
+            
+        if (shape_kind, token_kind) not in self.ShapesExist:
             shapes_exist =[]
             for ind in range(len(self.Dat)):
                 shapes_exist.extend(self.taskclass_shapes_extract(ind, shape_kind=shape_kind, token_kind=token_kind))
             shapes_exist = sorted(list(set(shapes_exist)))
-            SHAPES_EXIST[(shape_kind, token_kind)] = shapes_exist
+            self.ShapesExist[(shape_kind, token_kind)] = shapes_exist
 
-        return SHAPES_EXIST[(shape_kind, token_kind)]
+        return self.ShapesExist[(shape_kind, token_kind)]
 
     def taskclass_extract_prims_extra_params_tforms(self, ind):
         """
@@ -4770,6 +4858,17 @@ class Dataset(object):
         edges = get_sketchpad_edges_from_strokes(strokes_list)
         return edges
 
+    def recomputeSketchpadEdgesXlimYlim(self, strokes_ver="strokes_beh"):
+        """ 
+        Gets smallest bounding box over all data.
+        RETURNS:
+        - xlim, [xmin, xmax]
+        - ylim, [ymin, ymax]
+        """
+        ((x1, y1), (x2, y2))=self.recomputeSketchpadEdgesAll()
+        XLIM = [x1, x2]
+        YLIM = [y1, y2]
+        return XLIM, YLIM
 
     def recomputeSketchpadEdges(self):
         """ recompute sketchpad size, since tasks are now recentered.
@@ -7919,6 +8018,8 @@ class Dataset(object):
 
         if use_global_grid:
             input_grid_xy = self.taskclass_get_grid_xy_over_all_tasks()
+            if input_grid_xy[0] is None:
+                input_grid_xy = None
         else:
             input_grid_xy = None
 
@@ -8566,6 +8667,8 @@ class Dataset(object):
             pass
         elif prms["SEQUENCE_SUP"]=="char_strokes":
             supervstr+="|seqsup"
+        elif prms["SEQUENCE_SUP"]=="not_sure":
+            supervstr+="|not_sure"
         else:
             print(prms)
             assert False
@@ -8588,7 +8691,9 @@ class Dataset(object):
             elif prms["COLOR_METHOD"] == "":
                 # Older data...
                 date = int(self.dates(force_single=True)[0])
-                assert (self.animals(force_single=True)[0]=="Pancho" and date<220606 and date>220525), "allow using dummy for these days, as not really analyzing them.."
+                a = (self.animals(force_single=True)[0]=="Pancho" and date<220606 and date>220525)
+                b = (date>=210820 and date<=210902), "allow using dummy for these days, as not really analyzing them.."
+                assert a or b, "allow using dummy for these days, as not really analyzing them.."
                 supervstr+="|coldummy"
             else:
                 print(prms)
@@ -9144,22 +9249,275 @@ class Dataset(object):
 
         return tokens_correct_order
 
-    def grammarparses_rules_shape_AnBmCk_get_shape_order(self, keep_only_existing_shapes=False):
+    def grammarparses_rules_shape_AnBmCk_get_shapekey(self):
         """
-        Return correct shape order for this rule, only works if one rule exists.
+        Gets shape key, ASSUMING all trials use rules that have same
+        shape key
+        RETURNS:
+        - shape_key, string, either "shape" or "shapeabstract"
+        """
+        from pythonlib.dataset.modeling.discrete import rules_map_rule_to_ruledict_extract_auto
+
+        list_rule = self.grammarparses_rules_extract_info()["list_rules_exist"]
+
+        # Collect shapes
+        for rule in list_rule:
+            rd = rules_map_rule_to_ruledict_extract_auto(self, also_get_these_rules=[rule])[rule]
+            _, shape_key = self._grammarparses_map_ruledict_to_shapeseq_shapekey(rd)
+            return shape_key
+        
+    def _grammarparses_map_shapes_to_shapekey(self, shapes):
+        """
+        Determine if shape order is using abstract shapes (e.g, circle) or concrete (e.g, circle-6-1-0)
+        RETURNS:
+        - shape_key, either "shape" or "shapeabstract"
+        """
+        from pythonlib.tools.stringtools import decompose_string
+
+        tmp = [len(decompose_string(s)) for s in shapes]
+        if all([x in [0, 1] for x in tmp]):
+            # e.g, list_shapestring_good = ['circle', 'arcdeep', 'line']
+            shape_key = "shapeabstract"
+        elif all([x in [4] for x in tmp]):
+            # ["circle-6-1-0"]
+            shape_key = "shape"
+        else:
+            print(shapes)
+            print(tmp)
+            assert False, "add another row"
+        return shape_key
+
+    def grammarparses_rules_shape_AnBmCk_locationmatters(self, ind):
+        """
+        Return True if location matters for this rule (ie is shape seueqnce and location squence are defined by rule)
+        """
+
+        subcat = self.grammarparses_ruledict_rulestring_extract(ind)[1]["subcat"] # rank or rankdir
+        if subcat=="rank":
+            rule_includes_location = False
+        elif subcat=="rankdir":
+            rule_includes_location = True
+        else:
+            print(subcat)
+            assert False
+        
+        return rule_includes_location
+
+    def grammarparses_rules_shape_AnBmCk_get_shapes_UNORDERED(self, list_rule=None, keep_only_existing_shapes=True,
+                                                         return_shape_key=False):
+        """
+        REgardless of todays expt, et list of all unique sahpes ued in these rules. The combined set across
+        all rules. The order will be in the order it is found in the ruledict, which usually reflects the 
+        sequence order.
+
+        PARAMS:
+        - list_rule, list of str, like ['AnBmHV', 'AnBm2', '(AB)n', 'AnBm1a']
+        None to use those from this day.
+
+        RETURNS:
+        - shapes, list of shapes, like 
+            ['line-11-1-0',
+            'line-11-2-0',
+            'line-8-1-0',
+            'line-8-2-0',
+            'line-8-4-0',
+            'line-8-3-0',
+            'line-8-4-0',
+            'line-8-3-0']
+        """
+        from pythonlib.dataset.modeling.discrete import rules_map_rule_to_ruledict_extract_auto
+
+        assert keep_only_existing_shapes == True, "so that things that index into shapes remain accurate"
+
+        if list_rule is None:
+            # Get rules from this day
+            list_rule = self.grammarparses_rules_extract_info()["list_rules_exist"]
+
+        # Collect shapes
+        shapes = []
+        for rule in list_rule:
+            rd = rules_map_rule_to_ruledict_extract_auto(self, also_get_these_rules=[rule])[rule]
+            _shapes, shape_key = self._grammarparses_map_ruledict_to_shapeseq_shapekey(rd)
+            shapes.extend(_shapes)
+        shapes = list(set(shapes))
+
+        for s in shapes:
+            assert isinstance(s, str)    
+ 
+        if keep_only_existing_shapes:
+            # Then just those shapes that are in data for self
+            shapes_exist = self.taskclass_shapes_extract_unique_alltrials(shape_kind=shape_key)
+            # print("2: ", shapes, shapes_exist)
+            shapes = [sh for sh in shapes if sh in shapes_exist]
+
+        if return_shape_key:
+            return shapes, shape_key
+        else:
+            return shapes
+
+    # def _grammarparses_map_shapes_to_shapekey(self, shapes):
+    #     """
+    #     Determine if shape order is using abstract shapes (e.g, circle) or concrete (e.g, circle-6-1-0)
+    #     RETURNS:
+    #     - shape_key, either "shape" or "shapeabstract"
+    #     """
+    #     from pythonlib.tools.stringtools import decompose_string
+
+    #     tmp = [len(decompose_string(s)) for s in shapes]
+    #     if all([x in [0, 1] for x in tmp]):
+    #         # e.g, list_shapestring_good = ['circle', 'arcdeep', 'line']
+    #         shape_key = "shapeabstract"
+    #     elif all([x in [4] for x in tmp]):
+    #         # ["circle-6-1-0"]
+    #         shape_key = "shape"
+    #     else:
+    #         print(shapes)
+    #         print(tmp)
+    #         assert False, "add another row"
+    #     return shape_key
+
+    def _grammarparses_map_ruledict_to_shapeseq_shapekey(self, rule_or_ruledict, keep_only_existing_shapes=True):
+        """
+        LOW-LEVEL getter of the shape (in order) and shapekey for this rule.
+        Should ALWAYS run this if you want to get the shape sequence, beucase it guarantees same result on each run.
+
+        Map from ruledict to list of str (sequence of shpes) in order
+        that is correct rule.
+
+        PARAMS:
+        - rule_or_ruledict, either rule (str) or ruledict
+        """
+
+        if not hasattr(self, "MapRuleToOrderedShapes"):
+            self.MapRuleToOrderedShapes = {}
+
+        if isinstance(rule_or_ruledict, str):
+            rule = rule_or_ruledict
+            ruledict = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][rule]
+        else:
+            assert isinstance(rule_or_ruledict, dict)
+            ruledict = rule_or_ruledict
+            rule = rule_or_ruledict["params"] # eg AnBm1b
+
+        ### Use cached data.
+        # This is improtant, becuase you want that every run returns the same. But if keep_only_existing_shapes==True, then
+        # this might be true if, for example, you remove trials from the dataset.
+        key = (rule, keep_only_existing_shapes)
+        if key not in self.MapRuleToOrderedShapes:
+            # -- Recompute
+            # Differet rules have different formats for where the shape strings are stored.  
+            if (ruledict["categ"]=="ss") and (ruledict["subcat"] == "rankdir"):
+                shapes = ruledict["params_good"][0]
+            elif (ruledict["categ"]=="ss") and (ruledict["subcat"] == "rank"):
+                shapes = ruledict["params_good"]
+            elif (ruledict["categ"]=="ch") and (ruledict["subcat"] == "dir2"):
+                shapes = ruledict["params_good"][0]
+            else:
+                print(ruledict)
+                print(ruledict["params_good"])
+                assert False, "add an elif, determining how to index into params_good to get the list of strings."    
+
+            ### Determine if shape order is using abstract shapes (e.g, circle) or concrete (e.g, circle-6-1-0)
+            shape_key = self._grammarparses_map_shapes_to_shapekey(shapes)
+            
+            if keep_only_existing_shapes:
+                # Then just those shapes that are in data for self
+                shapes_exist = self.taskclass_shapes_extract_unique_alltrials(shape_kind=shape_key)
+                shapes = [sh for sh in shapes if sh in shapes_exist]
+
+            self.MapRuleToOrderedShapes[key] = (shapes, shape_key)
+
+        shapes, shape_key = self.MapRuleToOrderedShapes[key]
+
+        return shapes, shape_key
+
+    def _grammarparses_rules_shape_AnBmCk_get_shape_order_MultShapeSetHack(self, keep_only_existing_shapes=True):
+        """
+        In some cases, hacky, with two shape sets, the shape sets have been split into two epochs,
+        such as AnBm1b --> AnBm1b|A and AnBm1b|B. 
+        Thus the syntax concrete doesnt correctly index into the original shape sets.
+        
+        This solves that problem by storing the shape seuqence
+
+        RETURNS:
+        - map_rulenew_to_shapesordered, dict, mapping from "epoch" to sequence of shapes.
+        """ 
+
+        if not hasattr(self, "MapRuleNewToOrderedShapes"):
+            self.MapRuleNewToOrderedShapes = None
+
+        keep_only_existing_shapes = True
+        if self.MapRuleNewToOrderedShapes is None:
+            self.MapRuleNewToOrderedShapes = {}
+            for ind in range(len(self.Dat)):
+                indices_syntax_orig = self.Dat.iloc[ind]["indices_syntax_orig"] # indiices into shapes_rule_orig
+                rule_old = self.Dat.iloc[ind]["epoch_orig"] # AnBm1b
+                rule_new = self.Dat.iloc[ind]["epoch"] # AnBm1b|A
+                shapes_rule_orig = self._grammarparses_rules_shape_AnBmCk_get_shape_order(rule_old, 
+                                                                                          keep_only_existing_shapes=keep_only_existing_shapes)
+                shapes_rule_new = [shapes_rule_orig[i] for i in indices_syntax_orig]
+
+                if rule_new in self.MapRuleNewToOrderedShapes:
+                    assert self.MapRuleNewToOrderedShapes[rule_new] == shapes_rule_new
+                else:
+                    self.MapRuleNewToOrderedShapes[rule_new] = shapes_rule_new
+        
+        map_rulenew_to_shapesordered = self.MapRuleNewToOrderedShapes
+        
+        return map_rulenew_to_shapesordered
+        
+    def _grammarparses_rules_shape_AnBmCk_get_shape_order(self, rule, keep_only_existing_shapes=True, 
+                                                          return_shape_key=False):
+        """
+        Return correct shape order for this rule
+
+        PARAMS:
+        - rule, str, same as epoch.
+
+        RETURNS:
+        - Returns list of shape str.
+        """
+        
+        # # Get ground truth ordering of shapes
+        # rd = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][rule]
+        # shape_sequence, shape_key = self._grammarparses_map_ruledict_to_shapeseq_shapekey(rd)
+        # if keep_only_existing_shapes:
+        #     # Then just those shapes that are in data for self
+        #     shapes_exist = self.taskclass_shapes_extract_unique_alltrials(shape_kind=shape_key)
+        #     shape_sequence = [sh for sh in shape_sequence if sh in shapes_exist]
+        # if len(shape_sequence)==0:
+        #     print(rd)
+        #     print(self._grammarparses_map_ruledict_to_shapeseq_shapekey(rd))
+        #     assert False
+
+        rule_is_orig = rule in self.Dat["epoch_orig"].unique().tolist()
+
+        if all(self.Dat["epoch"] == self.Dat["epoch_orig"]) or (rule_is_orig): 
+            # Then this is defualt -- there is you have not split yet into multiple shape sets.
+            shape_sequence, shape_key = self._grammarparses_map_ruledict_to_shapeseq_shapekey(rule, 
+                                                                                            keep_only_existing_shapes=keep_only_existing_shapes)
+        else:
+            # Then you cannot do the above. it will fail.
+            # Instead, get the pre-extracted here.
+            map_rulenew_to_shapesordered = self._grammarparses_rules_shape_AnBmCk_get_shape_order_MultShapeSetHack()
+            shape_sequence = map_rulenew_to_shapesordered[rule]
+            shape_key = self._grammarparses_map_shapes_to_shapekey(shape_sequence)
+
+        if return_shape_key:
+            return shape_sequence, shape_key
+        else:
+            return shape_sequence
+    
+    def grammarparses_rules_shape_AnBmCk_get_shape_order(self, keep_only_existing_shapes=True):
+        """
+        Return correct shape order across all rules, only works if one rule exists.
         Returns list of shape str.
         """
         # Get ground truth ordering of shapes
         assert len(self.Dat["epoch"].unique())==1, "assume only one shape set today..."
         epoch = self.Dat["epoch"].values[0]
-        shape_sequence = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["params_good"][0]
-
-        if keep_only_existing_shapes:
-            # Then just those shapes that are in data for self
-            shapes_exist = self.taskclass_shapes_extract_unique_alltrials()
-            shape_sequence = [sh for sh in shape_sequence if sh in shapes_exist]            
-        return shape_sequence
-
+        return self._grammarparses_rules_shape_AnBmCk_get_shape_order(epoch, keep_only_existing_shapes=keep_only_existing_shapes)
+    
     def grammarparses_rules_shape_AnBmCk_get_map_shape_to_chunk_rank(self, keep_only_existing_shapes=True):
         """
         Return mapping from shape to chunk rank (global, in that each sahpe has same rank regardless of a
@@ -9305,7 +9663,36 @@ class Dataset(object):
         map_epochorig_to_rulekind = {epoch_orig:(ruledict["categ"],ruledict["subcat"]) for epoch_orig, ruledict in ruledict_for_each_rule.items()}
         return map_epochorig_to_rulekind
 
-    def grammarparses_rules_extract_info(self):
+
+    def grammarparses_rules_shapes_summary_simple(self):
+        """
+        [GOOD] summarize the rules, specifically for shape seuqence rules. 
+        """
+        info = self.grammarparses_rules_extract_info()
+        rules = info["list_rules_exist"]
+        rulestrings = info["list_rules_exist_as_rulestring"]
+        shapes_this_date = self.grammarparses_rules_shape_AnBmCk_get_shapes_UNORDERED(keep_only_existing_shapes=True)    
+
+        # Only score for the shapes that at some point act as the first shape
+        # Get the sahpes that play role of "A" (ie first shape in sequence)
+        first_shapes_this_date = []
+        map_rule_to_shapeseq = {}
+        for rule in rules:
+            shapes = self._grammarparses_rules_shape_AnBmCk_get_shape_order(rule, keep_only_existing_shapes=True)
+            first_shapes_this_date.append(shapes[0])
+            map_rule_to_shapeseq[rule] = shapes
+
+        rule_params = {
+            "rules":rules,
+            "rulestrings":rulestrings,
+            "shapes_used":shapes_this_date,
+            "shapes_used_first_in_seq":first_shapes_this_date,
+            "map_rule_to_shapeseq":map_rule_to_shapeseq
+        }
+
+        return rule_params
+    
+    def grammarparses_rules_extract_info(self, list_rules_exist=None):
         """ Return dict holding infor for all rules (epochs)
         epoch: Dict holding:
         - rule_dict
@@ -9316,10 +9703,12 @@ class Dataset(object):
         # list_rule = 
         # dict_rules_consistent_with_each_rule = {}
 
-        if self.GrammarRuleDictEachEpochOrig is None:
+        if list_rules_exist is None:
             list_rules_exist = self.Dat["epoch_orig"].unique().tolist()
             list_rules_exist = [r for r in list_rules_exist if not r in ["base", "baseline"]]
-
+        
+        if self.GrammarRuleDictEachEpochOrig is None:
+            
             # For each existing rule, get ruledicts consistent with it
             dict_ruledicts_consistent_with_each_existing_rule = {}
             map_rulestr_ruledict = {}
@@ -9364,6 +9753,13 @@ class Dataset(object):
             self.GrammarRuleDictEachEpochOrig = out
         
         return self.GrammarRuleDictEachEpochOrig
+
+    def grammarparses_ruledict_rulestring_extract_flexible(self, rule):
+        """ Return the ruledict and rulestring for this rule (e.g., AnBm1a, identical to epoch)
+        """
+        from pythonlib.dataset.modeling.discrete import rules_map_rule_to_ruledict_extract_auto
+        rd = rules_map_rule_to_ruledict_extract_auto(self, also_get_these_rules=[rule])[rule]
+        return rd
 
     def grammarparses_ruledict_rulestring_extract(self, ind):
         """ Return the ruledict and rulestring for this trial, based on
@@ -9866,20 +10262,21 @@ class Dataset(object):
             dfgaps_this, _ = extract_with_levels_of_conjunction_vars(dfgaps, "epoch", ["behseq_locs", "behseq_shapes"],
                                                     n_min_across_all_levs_var=2, lenient_allow_data_if_has_n_levels=2,
                                                     prune_levels_with_low_n=True, plot_counts_heatmap_savepath=plot_counts_heatmap_savepath)
-            if len(dfgaps_this)>0:
-                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
-                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
+            if PLOT:
+                if len(dfgaps_this)>0:
+                    fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
+                    savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
 
-                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4,
-                            kind="point")
-                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-2.pdf")
+                    fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4,
+                                kind="point")
+                    savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-2.pdf")
 
-                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4, alpha=0.25)
-                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-1.pdf")
-                
-                fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4,
-                            kind="point")
-                savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-2.pdf")
+                    fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4, alpha=0.25)
+                    savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-1.pdf")
+                    
+                    fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="sy_sh_lo", col_wrap=5, height=4,
+                                kind="point")
+                    savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-sy_sh_lo-2.pdf")
 
         else:
             dfgaps = None
@@ -10123,7 +10520,8 @@ class Dataset(object):
         from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule_mult
         tasks_categorize_based_on_rule_mult(self)
 
-    def grammarparses_classify_sequence_error(self, ind, PRINT_PLOT=False):
+    def grammarparses_classify_sequence_error(self, ind, PRINT_PLOT=False,
+                                              shape_key = "shape"):
         """
         Errors in rule choice
 
@@ -10179,8 +10577,8 @@ class Dataset(object):
             t_correct = map_taskind_tok[taskind_correct]
 
             # Error: same shape wrong location?
-            shape_correct = t_correct["shape"]
-            shape_chosen = t_chosen["shape"]
+            shape_correct = t_correct[shape_key]
+            shape_chosen = t_chosen[shape_key]
             error_same_shape = shape_correct==shape_chosen
 
             # Error: jumped to closest stroke?
@@ -10261,9 +10659,11 @@ class Dataset(object):
         """
         """
 
-        assert False, "see todo"
+        # NOTE: I commented out the assertion below, since I didn' trememebr what it meant.
+        # assert False, "see todo"
         # Check that success_binary_quick is from parses analysis.
         # Then run grammar_successbinary_print_summary
+        self.grammarmatlab_successbinary_print_summary()
 
 
     def grammarparses_successbinary_score_wrapper(self, print_summary=False, DEBUG=False, recompute_taskfeat_cat=True):
@@ -12060,6 +12460,8 @@ class Dataset(object):
         from ..drawmodel.strokePlots import plotDatStrokes
         from pythonlib.tools.plottools import plotGridWrapper
 
+        assert len(idxs)>0
+
         strokes_list, idxs, titles = self._plot_prepare_strokes(which_strokes, idxs, 
             nrand=nrand, titles=titles)
         if len(idxs)==0:
@@ -12374,8 +12776,11 @@ class Dataset(object):
 
 
     def plotwrapper_training_task_examples(self, SDIR, niter = 3, nrand = 10):
-        """ Plot grid of example training tasks, separating plots for each 
-        epoch
+        """ 
+        Plot grid of example training tasks, separating plots for each 
+        epoch.
+        
+        "Training" means these are not probe tasks.
 
         """
         # For each epoch, plot tasks and beh
@@ -12390,25 +12795,26 @@ class Dataset(object):
             for epoch in list_epoch:
                 print(epoch)
                 inds = self.Dat[(self.Dat["probe"] == False) & (self.Dat["epoch"]==epoch)].index.tolist()
-                titles = ["" for _ in range(len(inds))]
-                for j, titlesthis in enumerate([titles, None]):
-                    if j==0:
-                        # randomly sample inds
-                        figbeh, _, indsthis = self.plotMultTrials(inds, "strokes_beh", return_idxs=True, nrand=nrand,
-                                                                naked_axes=True, add_stroke_number=False, titles=titlesthis)
-                    else:
-                        # use the current sampled inds
-                        figbeh, _, _ = self.plotMultTrials(indsthis, "strokes_beh", return_idxs=False, nrand=nrand,
-                                                                naked_axes=True, add_stroke_number=False, titles=titlesthis)
-                    figtask = self.plotMultTrials(indsthis, "strokes_task", return_idxs=False, nrand=nrand,
-                                                           naked_axes=True, add_stroke_number=False, titles=titlesthis)
+                if len(inds)>0:
+                    titles = ["" for _ in range(len(inds))]
+                    for j, titlesthis in enumerate([titles, None]):
+                        if j==0:
+                            # randomly sample inds
+                            figbeh, _, indsthis = self.plotMultTrials(inds, "strokes_beh", return_idxs=True, nrand=nrand,
+                                                                    naked_axes=True, add_stroke_number=False, titles=titlesthis)
+                        else:
+                            # use the current sampled inds
+                            figbeh, _, _ = self.plotMultTrials(indsthis, "strokes_beh", return_idxs=False, nrand=nrand,
+                                                                    naked_axes=True, add_stroke_number=False, titles=titlesthis)
+                        figtask = self.plotMultTrials(indsthis, "strokes_task", return_idxs=False, nrand=nrand,
+                                                            naked_axes=True, add_stroke_number=False, titles=titlesthis)
 
-                    if titlesthis is None:
-                        figbeh.savefig(f"{sdir}/{epoch}-iter_{i}-beh.pdf")
-                        figtask.savefig(f"{sdir}/{epoch}-iter_{i}-task.pdf")
-                    else:
-                        figbeh.savefig(f"{sdir}/{epoch}-iter_{i}-beh-notitles.pdf")
-                        figtask.savefig(f"{sdir}/{epoch}-iter_{i}-task-notitles.pdf")
+                        if titlesthis is None:
+                            savefig(figbeh, f"{sdir}/{epoch}-iter_{i}-beh.pdf")
+                            savefig(figtask, f"{sdir}/{epoch}-iter_{i}-task.pdf")
+                        else:
+                            savefig(figbeh, f"{sdir}/{epoch}-iter_{i}-beh-notitles.pdf")
+                            savefig(figtask, f"{sdir}/{epoch}-iter_{i}-task-notitles.pdf")
                         
         plt.close("all")   
 

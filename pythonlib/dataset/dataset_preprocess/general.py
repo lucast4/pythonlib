@@ -471,9 +471,10 @@ def _groupingParams(D, expt):
         grouping_reassign_methods_in_order = ["tasksequencer"]
         traintest_reassign_method = "supervision_except_color"
         mapper_auto_rename_probe_taskgroups = True
-        epoch_merge_dict = {
-            "LCr2":["LCr1", "LCr2"]
-        }
+        if True: 
+            epoch_merge_dict = {
+                "LCr2":["LCr1", "LCr2"]
+            }
 
     elif "dirfullvar" in expt or "dirdir" in expt:
         grouping_reassign = True
@@ -851,6 +852,16 @@ def _groupingParams(D, expt):
                 print(grmeth)
                 assert False
 
+    # (2) Modify the columns of self.Dat related to epoch, and append conjunctive epoch_<> vairables.
+    # Merge epochs;
+    if len(epoch_merge_dict)>0:
+        print("MERGING EPOCHS...")
+        for k, v in epoch_merge_dict.items():
+            print(k, " --- ", v)
+        for epoch_new, list_epoch_old in epoch_merge_dict.items():
+            print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
+            D.supervision_epochs_merge_these(list_epoch_old, epoch_new, assert_list_epochs_exist=False)
+
     #### SUPERVISION - get supervision stages, i.e, tuples
     # Copied from below, used to be end of preproicess, but better to do up here since other stuff depends on this -- making sure to retain original order of opertaion.
 
@@ -870,14 +881,17 @@ def _groupingParams(D, expt):
     # Add column "INSTRUCTION_COLOR"
     D.supervision_check_is_instruction_using_color_assign()
 
-    # (2) Modify the columns of self.Dat related to epoch, and append conjunctive epoch_<> vairables.
-    # Merge epochs;
-    if len(epoch_merge_dict)>0:
-        print("MERGING EPOCHS...")
-        assert False, "do outside of preprocessing"
-        for epoch_new, list_epoch_old in epoch_merge_dict.items():
-            print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
-            D.supervision_epochs_merge_these(list_epoch_old, epoch_new)
+    # NOTE: moved this above, where epoch changing all occurs.
+    # # (2) Modify the columns of self.Dat related to epoch, and append conjunctive epoch_<> vairables.
+    # # Merge epochs;
+    # if len(epoch_merge_dict)>0:
+    #     print("MERGING EPOCHS...")
+    #     for k, v in epoch_merge_dict.items():
+    #         print(k, " --- ", v)
+    #     assert False, "You should do outside of preprocessing"
+    #     for epoch_new, list_epoch_old in epoch_merge_dict.items():
+    #         print("Merging these epochs:", list_epoch_old, "... into this:", epoch_new)
+    #         D.supervision_epochs_merge_these(list_epoch_old, epoch_new)
 
     # Since epoch might change...
     D.Dat["epoch_rule_tasksequencer"] = D.Dat["epoch"] # since epoch _might_ change, save a veresion here.
@@ -1056,8 +1070,6 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
         "A":[0,2,4],
         "B":[1,3,5],
     }
-
-
     """
     assert D._LockSyntaxConcrete == False
     if "syntax_concrete" not in D.Dat.columns:
@@ -1075,11 +1087,16 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
     # Replace epoch and syntax_concrete so shapaes are diff epoch, but same synta concrete.
     list_epoch = []
     list_syntax_concrete = []
-    for i, row in D.Dat.iterrows():
+    list_shape_set = []
+    # list_syntax_concrete_orig = []
+    list_indices_syntax = []
+    for _, row in D.Dat.iterrows():
         if row["epoch_orig"] in ["base", "baseline"]:
             # Just keep, usually sc = ("IGNORE",)
             epoch_new = row["epoch"]
             syntax_concrete_new = row["syntax_concrete"]
+            indices_syntax = tuple(range(len(syntax_concrete_new)))
+            shape_set = "none"
         else:  
             inds_shapes = tuple([i for i, val in enumerate(row["syntax_concrete"]) if val>0])
 
@@ -1087,7 +1104,7 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
                 # Then this means you hand-entered the syntax_concretes in map_syntconcr_template_to_shapeset incorrectly.
                 # Probably this day doenst have restricted to just the shapes used in the grammar tasks, and therefore the
                 # syntax concrete has extra elements.
-                for i, row in D.Dat.iterrows():
+                for _, row in D.Dat.iterrows():
                     print(row["epoch_orig"], " -- ", row["syntax_concrete"])
                 print("map_syntconcr_template_to_shapeset:", map_syntconcr_template_to_shapeset)
                 print("These was the missing inds_shapes: ", inds_shapes)
@@ -1097,18 +1114,39 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
             indices_syntax = map_shapeset_to_indices_syntax[shape_set]
             # indices_syntax = map_syntconcr_template_to_indices_syntax[inds_shapes] # e.g., "A"
 
+            # print(inds_shapes, indices_syntax)
+            assert tuple(inds_shapes) == tuple(indices_syntax), "sanity check, I dont know why I have both "
+
             epoch_orig = row["epoch_orig"]
             epoch_new = f"{epoch_orig}|{shape_set}"
             syntax_concrete_new = tuple([row["syntax_concrete"][i] for i in indices_syntax]) # get the syntax concrete
+
+            if False: # Debuggin
+                print(row["syntax_concrete"])
+                print(indices_syntax)
+                if len(indices_syntax)>1:
+                    assert False
+            
+            # Also save the indices into the original sahpe set. This useful for indexing into the rule later.
+            # Save:
+            # - indices_syntax
+            # - shape_set
         
         list_epoch.append(epoch_new)
         list_syntax_concrete.append(syntax_concrete_new)
+
+        # list_syntax_concrete_orig.append(row["syntax_concrete"])
+        list_indices_syntax.append(indices_syntax)
+        list_shape_set.append(shape_set)
 
         print(row["syntax_concrete"], " -- ", epoch_new, " -- ", syntax_concrete_new)
 
     # Update things
     D.Dat["epoch"] = list_epoch # must update epoch_orig (and not epoch) or else grammarparses_syntax_role_append_to_tokens
+    D.Dat["syntax_concrete_orig"] = D.Dat["syntax_concrete"]
     D.Dat["syntax_concrete"] = list_syntax_concrete
+    D.Dat["indices_syntax_orig"] = list_indices_syntax
+    D.Dat["shape_set"] = list_shape_set
     D._LockSyntaxConcrete = True # Or else new syntax concrete might overrtie this
 
 def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
@@ -1171,7 +1209,9 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
             ver = tp["task_objectclass"]["tasksequencer_ver"]
             prms = tp["task_objectclass"]["tasksequencer_params"] # list.
         except Exception as err:
-            print(tp)
+            print(tp.keys())
+            for k, v in tp.items():
+                print(k, " --- ", v)
             print(tp["task_objectclass"])
             raise err
 
@@ -1355,18 +1395,22 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         return map_tasksequencer_to_rule[(ver, p)]
 
     # For each trial, get its rule
-    list_rule =[]
-    for ind in range(len(D.Dat)):
-        list_rule.append(_index_to_rule(ind))
-        
-    # Assign rule back into D.Dat
-    D.Dat["epoch"] = list_rule
-    D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
-    print("Modified D.Dat[epoch]")
-    print("These counts for epochs levels: ")
-    print(D.Dat["epoch"].value_counts())
-    print("These counts for epoch_rule_tasksequencer levels: ")
-    print(D.Dat["epoch_rule_tasksequencer"].value_counts())
+    if int(D.dates(True)[0]) > 220918:
+        list_rule =[]
+        for ind in range(len(D.Dat)):
+            list_rule.append(_index_to_rule(ind))
+            
+        # Assign rule back into D.Dat
+        D.Dat["epoch"] = list_rule
+        D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
+        print("Modified D.Dat[epoch]")
+        print("These counts for epochs levels: ")
+        print(D.Dat["epoch"].value_counts())
+        print("These counts for epoch_rule_tasksequencer levels: ")
+        print(D.Dat["epoch_rule_tasksequencer"].value_counts())
+    # else:
+    #     print(D.Dat["epoch"].unique())
+    #     assert False
 
 def preprocessDat(D, expt, get_sequence_rank=False, sequence_rank_confidence_min=None,
     remove_outliers=False, sequence_match_kind=None, extract_motor_stats=False,

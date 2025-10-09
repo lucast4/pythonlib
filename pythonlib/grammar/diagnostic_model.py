@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from pythonlib.tools.plottools import savefig
 
 class DiagnosticModel(object):
     """"""
@@ -12,17 +13,22 @@ class DiagnosticModel(object):
 
     def preprocess_dataset_extract_scores(self, D, LIST_MODELS = None,
         LIST_MOTIFS= None, GET_MODELS=True, 
-        COLS_TO_KEEP = ("taskcat_by_rule")):
-        """ Full pipeline to extract diagnostic features/scores, given a dataset and 
+        COLS_TO_KEEP = ("taskcat_by_rule",)):
+        """ 
+        Full pipeline to extract diagnostic features/scores, given a dataset and 
         scorers (models)
+
+
         """
 
         ## PARAMS
         animal = "|".join(D.animals())
 
+        # Which models are tested
         if LIST_MODELS is None:
             LIST_MODELS = ["rand-null-uni"] # just random
 
+        # Which scores are computed
         if LIST_MOTIFS is None:
             # This determines what kinds of scores are collected
             expt = D.expts()[0]
@@ -54,7 +60,8 @@ class DiagnosticModel(object):
                 ]
 
         self.Dataset = D
-        self.DatasetCopy = D.copy()
+        if False: # Not used anywhere...
+            self.DatasetCopy = D.copy()
         self.Params = {
             "LIST_MODELS":LIST_MODELS,
             "LIST_MOTIFS":LIST_MOTIFS
@@ -106,7 +113,6 @@ class DiagnosticModel(object):
         ##### EXTRACT FOR MODELS
         # For model, collect across all unique tasks
         # For behvior, collect across all trials
-
         list_characters = D.Dat["character"].unique().tolist()
         def _get_single_trial(char):
             """ Get the first trial that uses this char
@@ -114,6 +120,7 @@ class DiagnosticModel(object):
             return D.Dat[D.Dat["character"]==char].index.tolist()[0]
 
         if GET_MODELS:
+            print("Getting model scores...")
             for i, character in enumerate(list_characters):
                 if i%10==0:
                     print("character", i, "/", len(list_characters), character)
@@ -138,6 +145,14 @@ class DiagnosticModel(object):
                             list_ntok_used = [_count_num_tokens_used(dict_match) for dict_match in list_matches]
                             ntok_expected_pertrial = np.mean(list_ntok_used)
 
+                        # print(parses)
+                        # print(list_matches)
+                        # print(motifkind)
+                        # print(rule_control_model)
+                        # print(indtrial)
+                        # print(ntok_expected_pertrial)
+                        # print(list_ntok_used)
+                        # assert False
                         DAT.append({
                             "indtrial":indtrial,
                             "agent":f"model-{rule_control_model}",
@@ -237,15 +252,15 @@ class DiagnosticModel(object):
 
         for char in list_char:
             fig1, fig2, fig3, fig4, fig5 = self.plot_example_character_beh_scores(char)
-            fig1.savefig(f"{sdir}/{char}|taskimage.pdf")
-            fig2.savefig(f"{sdir}/{char}|beh_strokes.pdf")
-            fig3.savefig(f"{sdir}/{char}|beh_discrete.pdf")
-            fig4.savefig(f"{sdir}/{char}|scores_raw.pdf")
-            fig5.savefig(f"{sdir}/{char}|scores_mean.pdf")
+            savefig(fig1, f"{sdir}/{char}|taskimage.pdf")
+            savefig(fig2, f"{sdir}/{char}|beh_strokes.pdf")
+            savefig(fig3, f"{sdir}/{char}|beh_discrete.pdf")
+            savefig(fig4, f"{sdir}/{char}|scores_raw.pdf")
+            savefig(fig5, f"{sdir}/{char}|scores_mean.pdf")
 
             for rulestring in list_rule:
                 figbehtask, figparses = self.plot_example_character_model_parses(rulestring, char)
-                figparses.savefig(f"{sdir}/{char}|parses|{rulestring}.pdf")
+                savefig(figparses, f"{sdir}/{char}|parses|{rulestring}.pdf")
             plt.close("all")
 
     def plot_example_character_model_parses(self, rulestring, character):
@@ -267,8 +282,10 @@ class DiagnosticModel(object):
         this = dfthis["indtrial"].unique().tolist()
         assert len(this)==1
         indtrial = this[0]
+
         # Plot each parse, overlay the scores
-        GD = self.Dataset.GrammarDict[indtrial]
+        GD = self.Dataset.grammarparses_grammardict_return(indtrial)
+        # GD = self.Dataset.GrammarDict[indtrial]
         figbehtask, figparses, axes2, list_ind_parses, parses_plotted = GD.plot_beh_and_parses(rulestring, nrand=10)
 
         # titles the plots with thier score
