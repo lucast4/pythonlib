@@ -184,3 +184,62 @@ def lme_categorical_fit_plot(df, y, fixed_treat, lev_treat_default=None,
         # ax.set_xlabel("fitted value")
         # ax.set_ylabel("residual")
 
+
+
+def lme_summary_extract_plot(result):
+    """
+    Helper to extract results and plot summary for each coeff (value, CI, pval)
+
+    PARAMS:
+    - result, returned from: result = md.fit()
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    # 1. Print summary
+    print(result.summary())
+
+    # 2. Extract fixed effects results
+    params = result.params               # coefficients (fixed effects)
+    conf = result.conf_int()             # confidence intervals
+    pvals = result.pvalues               # p-values
+
+    # Organize into a dataframe
+    summary_df = pd.DataFrame({
+        "coef": params,
+        "ci_lower": conf[0],
+        "ci_upper": conf[1],
+        "pval": pvals
+    })
+
+    print("\nFixed effects summary:")
+    print(summary_df)
+
+    # 3. Plot coefficients with error bars
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    ax.errorbar(
+        summary_df.index,
+        summary_df["coef"],
+        yerr=[summary_df["coef"] - summary_df["ci_lower"], 
+            summary_df["ci_upper"] - summary_df["coef"]],
+        fmt="o",
+        capsize=5,
+        color="black"
+    )
+
+    # Add horizontal line at 0
+    ax.axhline(0, color="gray", linestyle="--")
+
+    # Annotate p-values
+    for i, (idx, row) in enumerate(summary_df.iterrows()):
+        ax.text(i, row["coef"], f"p={row['pval']:.3g}", 
+                ha="center", va="bottom", fontsize=9, color="blue")
+
+    ax.set_ylabel("Coefficient")
+    ax.set_title("Fixed effects with 95% CI and p-values")
+    plt.xticks(rotation=45)
+    # plt.tight_layout()
+    # plt.show()    
+
+    return summary_df, fig

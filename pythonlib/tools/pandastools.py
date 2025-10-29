@@ -221,6 +221,30 @@ def replace_None_with_string(df):
 
 def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     """
+    Wrapper of _aggregGeneral, which first deals with values that are tuples bu stringfying (the output 
+    will not be stringified)
+    
+    """
+    
+    # Deal with case where items are tuples, and the tuples have different inner types across rows. This leads to error.
+    df_str, vars_with_tuples = stringify_values(df, replace_none=False, cols_with_tuples_append_orig=True, 
+                                                return_vars_with_tuples=True, cols_to_check_for_tuples=group)
+
+    # display(df_str)
+    # print(vars_with_tuples)
+    # assert False
+    df_str_agg = _aggregGeneral(df_str, group, values, nonnumercols, aggmethod, 
+        nonnumercols_extra=[f"{v}_orig" for v in vars_with_tuples])
+    
+    # Finally, replace the string with original values
+    for v in vars_with_tuples:
+        df_str_agg[f"{v}"] = df_str_agg[f"{v}_orig"]
+        df_str_agg = df_str_agg.drop(f"{v}_orig", axis=1)
+    
+    return df_str_agg
+
+def _aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None, nonnumercols_extra=None):
+    """
     Aggregate by first grouping (across multiple dimensions) and then applyiong
     arbnitrary method.
     PARAMS;
@@ -232,17 +256,67 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
     - nonnumercols, list of str. these columsn will be retained, keeping only the 
     first encountered value.
     -- or "all", in which case keeps all columns which have only single value for each level of group.
-    - aggmethod, list of str, applies each of these agg methods.
+    - aggmethod, either:
+    --- list of str, applies each of these agg methods. 
+    --- list of function handles. where the function F:pd.series-->object. Applies each of these.
+    For example: 
+        agg = ["coeff"]
+        aggmethod=[F]
+        def F(x):
+            X = np.stack(x)
+            return np.mean(X, axis=0)
+        Where "coeff" is a 1D vector for each row.
+    --- dict, which bypases the automaitc stuff. This directly specifies the mapping from value_variable:agg_function.
+    Example:
+        def F(x):
+            X = np.stack(x)
+            return np.mean(X, axis=0)
+        aggdict = {
+            "coeff":[F],
+            "balanced_accuracy": ["mean"],
+            "balanced_accuracy_adjusted": ["mean"],
+            "accuracy": ["mean"],
+            "score_train": ["mean"],
+        }
     """
 
+    # Only the unique items
+    group = list(set(group))
+
+    if nonnumercols_extra is None:
+        nonnumercols_extra = []
+
+    if len(df)==0:
+        return df
+
+    if values is None:
+        # use dummy (you just want to check which classes exist)
+        df = df.copy()
+        df["_dummy"] = 1
+        values = ["_dummy"]
+        DELETE_DUMMY = True
+    else:
+        DELETE_DUMMY = False
+
+    for v in values:
+        assert v in df.columns, f"entered a value that doesnt exist, {v}"
+
+    if aggmethod is not None:
+        assert isinstance(aggmethod, (dict, list))
+    else:
+        aggmethod = ["mean"]
+    assert isinstance(values, list)
+    assert isinstance(group, list)
+
+    # Prune the columns
     if nonnumercols == "all":
         # Then dont do this, you want piotentilaly all the columns
         pass
     elif nonnumercols is None:
         # Then throw out those columns -- this saves time if some of those columns are nan
-        df = df.loc[:, group+values]
+        df = df.loc[:, group+values+nonnumercols_extra]
     elif isinstance(nonnumercols, (list, tuple)):
-        df = df.loc[:, group+values+list(nonnumercols)]
+        df = df.loc[:, group+values+list(nonnumercols)+nonnumercols_extra]
     else:
         print(nonnumercols)
         print(type(nonnumercols))
@@ -264,27 +338,6 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
                 print("Making copy and replacing None with 'none', for: ", col)
                 print("* This adds compute time!!!!")
                 replace_values_with_this(df, col, None, "none")
-
-        
-    if len(df)==0:
-        return df
-
-    if values is None:
-        # use dummy
-        df = df.copy()
-        df["_dummy"] = 1
-        values = ["_dummy"]
-        DELETE_DUMMY = True
-    else:
-        DELETE_DUMMY = False
-        
-    for v in values:
-        assert v in df.columns, f"entered a value that doesnt exist, {v}"
-
-    if aggmethod is not None:
-        assert isinstance(aggmethod, list)
-    assert isinstance(values, list)
-    assert isinstance(group, list)
 
     # if nonnumercols == "all":
     #     nonnumercols = df.columns.tolist()
@@ -392,16 +445,64 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
         print(type(nonnumercols))
         assert False
 
-    if aggmethod is None:
-        aggmethod = ["mean"]
+    if nonnumercols_extra is not None:
+        nonnumercols = list(set(nonnumercols + nonnumercols_extra))
 
-    agg = {c:aggmethod for c in df.columns if c in values}
+    if isinstance(aggmethod, dict):
+        agg = aggmethod
+        for k, v in aggmethod.items():
+            assert isinstance(v, (list, tuple)), "assumed so below"
+    else:
+        # Construct the dict
+        agg = {c:aggmethod for c in df.columns if c in values}
+
+    # Add the nonnumer columns
     agg.update({c:"first" for c in df.columns if c in nonnumercols})
+    if False: # this is not actually true... Not sure why it sometimes failes
+        for v in group:
+            if isinstance(df[v].values[0], tuple):
+                if len(df[v].map(len).unique())>1:
+                    print(df[v].map(len).unique())
+                    print(df[v].unique())
+                    assert False, "this will fail groupby. Solve by first applying pad_tuple_values_to_same_length."
 
-    dfagg = df.groupby(group).agg(agg).reset_index()
+    # print(df.columns)
+    # print(nonnumercols)
+    # print(agg)
+    # assert False
+
+    try:
+        dfagg = df.groupby(group).agg(agg).reset_index()
+    except Exception as err:
+        print(df[:2])
+        print(df.columns)
+        print(group)
+        print(agg)
+
+        for v in group:
+            print(v, " --> ", df[v].unique())
+
+        import pickle
+
+        print("Saved data to tmp")
+        with open("/tmp/df.pkl", "wb") as f:
+            pickle.dump(df, f)
+
+        with open("/tmp/group.pkl", "wb") as f:
+            pickle.dump(group, f)
+
+        with open("/tmp/agg.pkl", "wb") as f:
+            pickle.dump(agg, f)
+
+        raise err
     # df.columns = df.columns.to_flat_index()
+    # display(dfagg)
+    # display(nonnumercols)
+    # assert False
 
-    if len(aggmethod)==1:
+    # print(dfagg.columns.values)
+    # assert False
+    if len(aggmethod)==1 or isinstance(aggmethod, dict):
         # then reanme columns so same as how they came in:
         # e.g., dist instead of dist_mean. can't do if 
         # multiple aggmethods, since will then be ambiguos.
@@ -415,6 +516,34 @@ def aggregGeneral(df, group, values=None, nonnumercols=None, aggmethod=None):
         del dfagg["_dummy"]
 
     return dfagg
+
+# def pad_tuple_values_to_same_length_all_cols(df):
+#     """
+#     If df[col].values are tuples, this ensures that they all have the
+#     same length by padding the shorter ones with Nones. This is necessary if you
+#     want to do df.groupby[col] and not fail.
+    
+#     RETURNS:
+#     - (nothing) Modifies df with new column colnew.
+#     """
+#     maxlen = df[col].map(len).max()
+#     df[col_new] = df[col].apply(
+#         lambda t: tuple(list(t) + [None]*(maxlen - len(t)))
+#     )
+
+def pad_tuple_values_to_same_length(df, col, col_new):
+    """
+    If df[col].values are tuples, this ensures that they all have the
+    same length by padding the shorter ones with Nones. This is necessary if you
+    want to do df.groupby[col] and not fail.
+    
+    RETURNS:
+    - (nothing) Modifies df with new column colnew.
+    """
+    maxlen = df[col].map(len).max()
+    df[col_new] = df[col].apply(
+        lambda t: tuple(list(t) + [None]*(maxlen - len(t)))
+    )
 
 def df2dict(df):
     return df.to_dict("records")
@@ -1587,8 +1716,9 @@ def summarize_featurediff(df, GROUPING, GROUPING_LEVELS, FEATURE_NAMES,
                           INDEX= ("character", "animal", "expt"), 
                           func = None, return_dfpivot=False, 
                           do_normalize=False, normalize_grouping = ("animal", "expt"),
-                          get_absolute_val = False
-                         ):
+                          get_absolute_val = False,
+                          diff_func = "minus", diff_col_name_include_feature=True,
+                          ):
     """ High level summary, for each task (or grouping), get its difference 
     across two levels for grouping (e..g, epoch 1 epoch2), with indices seaprated
     by INDEX (usually, animal/expt/character).
@@ -1659,15 +1789,36 @@ score_test_mean-stroke_onsetmingo_cue   score_test_mean-stroke_onsetmingo_cue-AB
     COLNAMES_DIFF = []
 
     # 2) all other features, take difference
+    if diff_col_name_include_feature == False:
+        assert len(FEATURE_NAMES)==1, "otherwqis they end up with same name"
     for val2 in FEATURE_NAMES:
         if val2=="alignment":
             # 1) alignemnt, take mean
-            colname = f"{val2}-MEAN"
+            if diff_col_name_include_feature:
+                colname = f"{val2}-MEAN"
+            else:
+                colname = f"MEAN"
+
             colvals = np.nanmean(np.c_[dfpivot[val2][GROUPING_LEVELS[0]].values, 
                                                 dfpivot[val2][GROUPING_LEVELS[1]].values], axis=1)
         else:
-            colname = f"{val2}-{GROUPING_LEVELS[1]}min{GROUPING_LEVELS[0]}"
-            colvals = dfpivot[val2][GROUPING_LEVELS[1]] - dfpivot[val2][GROUPING_LEVELS[0]]
+            if diff_func=="minus":
+                if diff_col_name_include_feature:
+                    colname = f"{val2}-{GROUPING_LEVELS[1]}min{GROUPING_LEVELS[0]}"
+                else:
+                    colname = f"{GROUPING_LEVELS[1]}min{GROUPING_LEVELS[0]}"
+
+                colvals = dfpivot[val2][GROUPING_LEVELS[1]] - dfpivot[val2][GROUPING_LEVELS[0]]
+            elif diff_func=="div":
+                if diff_col_name_include_feature:
+                    colname = f"{val2}-{GROUPING_LEVELS[1]}div{GROUPING_LEVELS[0]}"
+                else:
+                    colname = f"{GROUPING_LEVELS[1]}div{GROUPING_LEVELS[0]}"
+
+                colvals = dfpivot[val2][GROUPING_LEVELS[1]]/dfpivot[val2][GROUPING_LEVELS[0]]
+            else:
+                print(diff_func)
+                assert False
             COLNAMES_DIFF.append(colname)
 
         out[colname] = colvals
@@ -2276,21 +2427,70 @@ def grouping_append_and_return_inner_items_good(df, list_groupouter_grouping_var
     
     return groupdict
 
-def stringify_values(df):
+def integerify_values(df, col):
+    """
+    Anything that is num within this col, converts to integer 
+    (except if its nan, string, or None)
+
+    RETURNS:
+    - nothing (modifies df in place, just column <col>)
+    """
+    def is_num(x):
+        if x is None:
+            return False
+        elif np.isnan(x):
+            return False
+        elif isinstance(x, str):
+            return False
+        else:
+            return True
+    df[col] = [int(x) if is_num(x) else x for x in df[col]]
+
+def stringify_values_column(df, col):
+    """
+    Modifies df[col] to be stringified
+    """
+    from pythonlib.tools.listtools import stringify_list
+    df[col] = [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in df[col].values.tolist()]
+
+def stringify_values(df, replace_none=True, cols_with_tuples_append_orig=False, return_vars_with_tuples=False,
+                     cols_to_check_for_tuples=None):
     """
     Convert any values that are tuples or lists into strings, with
     separator | nbetween items.
     Useful for grouping, seaborn, and other plotting stuff, which can
     often throw error in these cases.
     :param df:
+    -cols_with_tuples_append_orig, bool, if True, then, for columns that
+    have a tuple as their first item, appends them to the final as <colname>_orig
     :return: copy of df, with modifications descrtibed above,.
     """
-    from pythonlib.tools.listtools import stringify_list
     df_str = df.copy()
-    df_str = replace_None_with_string(df_str)
+
+    if replace_none:
+        df_str = replace_None_with_string(df_str)
+    
+    # Run
     for k in df_str.columns:
-        df_str[k] = [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in df_str[k].values.tolist()]
-    return df_str
+        stringify_values_column(df_str, k)
+        # df_str[k] = [stringify_list(v, return_as_str=True, separator="|") if isinstance(v, (list, tuple)) else v for v in df_str[k].values.tolist()]
+
+    def col_has_tuples(_df, col):
+        return any(_df[col].map(lambda x: isinstance(x, (tuple, list))))
+    
+    if cols_with_tuples_append_orig or return_vars_with_tuples:
+        vars_with_tuples = [v for v in df.columns if col_has_tuples(df, v)]
+        if cols_to_check_for_tuples is not None:
+            vars_with_tuples = [v for v in vars_with_tuples if v in cols_to_check_for_tuples]
+
+    if cols_with_tuples_append_orig:
+        for v in vars_with_tuples:
+            df_str[f"{v}_orig"] = df[v]
+
+    if return_vars_with_tuples:
+        return df_str, vars_with_tuples
+    else:
+        return df_str
 
 def grouping_append_and_return_inner_items(df, list_groupouter_grouping_vars, 
     groupinner="index", groupouter_levels=None, new_col_name="grp",
@@ -2649,8 +2849,9 @@ def slice_by_row_label(df, colname, rowvalues, reset_index=True,
     - prune_to_value_exist_in_df, if true, then keeps only rowvalues that exist in df.
     otherwise: error if rowvalues contains value not in df
     NOTE: if a value occurs in multipel rows, it extracts all rows.
-    - assert_exactly_one_each, if True, then each val in rowvalues
-    matches exactly one and only one. Can be confident that the OUTPUT
+
+    - assert_exactly_one_each, if True, then asserts that each val in rowvalues
+    must matche exactly one and only one row in df. Can be confident that the OUTPUT
     matches input rowvalues exactly.
     NOTES:
         - enforces that even item in rowvalues must exist in df[col] (if prune_to_value_exist_in_df==False)
@@ -3968,10 +4169,14 @@ def convert_wide_to_long(dfwide, list_columns_to_fold, vars_extra=None,
     """
     if vars_extra is None:
         vars_extra = []
+    
+    for v in vars_extra:
+        assert v is not None
+
     # Collect two vertical slices taking the two lev_manip                                        
     list_df = []
     for scorevar in list_columns_to_fold:
-
+        # print([scorevar]+vars_extra)
         dftmp = dfwide.loc[:, [scorevar]+vars_extra].copy()
         dftmp[new_col_name_level] = scorevar
         dftmp[new_col_name_value] = dftmp[scorevar]
@@ -4005,7 +4210,15 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
         y_lev_manip = "dist_index_diff_max"
     """
 
-    dflong = convert_wide_to_long(dfwide, [x_lev_manip, y_lev_manip], [var_datapt, var_subplot])
+    if var_subplot is not None:
+        vars_extra = [var_datapt, var_subplot]
+    else:
+        vars_extra = [var_datapt]
+
+    dflong = convert_wide_to_long(dfwide, [x_lev_manip, y_lev_manip], vars_extra)
+
+    # display(dflong)
+    # assert False
     # # Collect two vertical slices taking the two lev_manip                                        
     # list_df = []
     # for scorevar in [x_lev_manip, y_lev_manip]:
@@ -4025,7 +4238,74 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
     
     return dfres, fig                                                
 
-                                                
+def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
+                                           var_subplot, var_value, var_datapt, var_color):
+                                        #    plot_text=True,
+                                        #    alpha=0.8, SIZE=3, shareaxes=False,
+                                        #    plot_error_bars=True,
+                                        #    map_subplot_var_to_new_subplot_var=None,
+                                        #    fontsize=4, xymin_zero=False, jitter_value=None,
+                                        #    color_by_var_datapt=False, force_all_on_same_axis=False,
+                                        #    color=None,
+                                        #    map_datapt_lev_to_colorlev=None,
+                                        #    colorlevs_that_exist=None,
+                                        #    map_dataptlev_to_color=None,
+                                        #    edgecolor='none'):
+    """
+    Helper to plot datapts (levels of <var_datapt>) along two axes (x_lev_manip, y_lev_manip, which are levels of
+    var_manip) and colored by var_color, which can be continuous or integer (if categorical, use plot_45scatter_means_flexible_grouping)
+
+    """    
+    from pythonlib.tools.plottools import set_axis_lims_square_bounding_data_45line
+
+    # Get columns for each level of var_manip
+    dfeffect_pivot = pivot_table(dfthis, [var_subplot, var_datapt], var_manip, [var_value, var_color], flatten_col_names=True)
+
+    x_var = f"{var_value}-{x_lev_manip}"
+    y_var = f"{var_value}-{y_lev_manip}"
+    # remove cases with na
+    dfeffect_pivot = dfeffect_pivot[~(dfeffect_pivot.loc[:, [x_var, y_var]].isna().any(axis=1))].reset_index(drop=True)
+
+    if False:
+        # This fails, as I assuemd that the two columns are same, but they can actually differ, therefore take their average to get the color value
+        # color_var = f"{var_color}-{x_lev_manip}"
+        color_var = f"{var_color}-{y_lev_manip}"
+
+        # # Sanity check that indeed could be etiher of these.
+        # print(dfeffect_pivot[f"{var_color}-{x_lev_manip}"])
+        # print(dfeffect_pivot[f"{var_color}-{y_lev_manip}"])
+        # assert np.all(np.isclose(dfeffect_pivot[f"{var_color}-{x_lev_manip}"], dfeffect_pivot[f"{var_color}-{y_lev_manip}"], atol=0.001)), "assuming I can just use one of these columns.."
+    else:
+        dfeffect_pivot["var_color"] = (dfeffect_pivot[f"{var_color}-{x_lev_manip}"] + dfeffect_pivot[f"{var_color}-{y_lev_manip}"])/2
+        color_var = "var_color"
+
+    ### Make scatterplot
+    fig1 = sns.relplot(data=dfeffect_pivot, x=x_var, y=y_var, col=var_subplot,
+                hue=color_var, kind="scatter", height=3.6, 
+                alpha=0.7, palette="flare")
+    # Make 45 deg lines.
+    for ax in fig1.axes.flatten():
+        set_axis_lims_square_bounding_data_45line(ax, dfeffect_pivot[x_var].values, dfeffect_pivot[y_var].values, dotted_lines="unity")
+        set_axis_lims_square_bounding_data_45line(ax, dfeffect_pivot[x_var].values, dfeffect_pivot[y_var].values, dotted_lines="plus")
+    # savefig(fig, f"{savedir}/scatter-data={var_datapt}-colorby={var_color}.pdf")            
+
+    ### Ask how var_color varies as a function of the difference (xvar - yvar)
+    dfeffect_pivot["x_min_y"] = dfeffect_pivot[x_var] - dfeffect_pivot[y_var]
+    fig2 = sns.relplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
+                    col=var_subplot, kind="scatter", height=3.6, alpha=0.7)
+    for ax in fig2.axes.flatten():
+        ax.axvline(0, color="k", alpha=0.5)
+    # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-1.pdf")            
+
+    ### Also plot with regression line
+    fig3 = sns.lmplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
+                    col=var_subplot, height=3.6)
+    for ax in fig3.axes.flatten():
+        ax.axvline(0, color="k", alpha=0.5)
+    # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-2.pdf")       
+
+    return fig1, fig2, fig3     
+    
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
                                            plot_text=True,
@@ -4199,7 +4479,7 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         pcol = color
 
         if map_dataptlev_to_color is not None:
-            colors_each_pt = [map_dataptlev_to_color[lab] for lab in labels]
+            colors_each_pt = [map_dataptlev_to_color[lab] for lab in list_date]
         else:
             colors_each_pt = None
 
@@ -4234,7 +4514,11 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
     #     # add legend to last axis
     #     legend_add_manual(axes.flatten()[-1], _map_lev_to_color.keys(), _map_lev_to_color.values(), alpha=0.7)
     if map_colorlev_to_color is not None:
-        legend_add_manual(ax, map_colorlev_to_color.keys(), map_colorlev_to_color.values())
+        if isinstance(list(map_colorlev_to_color.values())[0], (float, int)):
+            # Then these are scalar values that map to color. Ignore.
+            pass
+        else:
+            legend_add_manual(ax, map_colorlev_to_color.keys(), map_colorlev_to_color.values())
 
     if shareaxes and len(list_xs)>0:
         MIN = min(list_xs + list_ys)
@@ -4265,6 +4549,36 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
 
     return dfres, fig
 
+def plot_45scatter_means_flexible_grouping_color_mapper(df, var_datapt, var_to_color):
+    """
+    If you want to map each point to a different color, based on its <var_to_color> this
+    is a helpr to the the correct params that you can then pass 
+    into plot_45scatter_means_flexible_grouping()
+
+    PARAMS:
+    - var_datapt, str, each class is a datapt.
+    - var_to_color, each class is a color.
+
+    Eg:    
+    var_datapt = "da_cr_sh_12"
+    var_to_color = "chunk_rank_12"
+
+    RETURNS:
+    - map_datapt_lev_to_colorlev, colorlevs_that_exist, which you can pass into
+    plot_45scatter_means_flexible_grouping()
+
+    """
+
+    # Color each pt by chunk_rank
+    map_datapt_lev_to_colorlev = {}
+    for _, row in df.iterrows():
+        if row[var_datapt] not in map_datapt_lev_to_colorlev:
+            map_datapt_lev_to_colorlev[row[var_datapt]] = row[var_to_color]
+        else:
+            assert map_datapt_lev_to_colorlev[row[var_datapt]] == row[var_to_color], "this means that some level of <var_datapt> has different values of <var_to_color>"
+    colorlevs_that_exist = sorted(df[var_to_color].unique())
+
+    return map_datapt_lev_to_colorlev, colorlevs_that_exist
 
 def find_unique_values_with_indices(df, col, tolerance = 1e-3,
         append_column_with_unique_values_colname=None):
@@ -4499,19 +4813,23 @@ from matplotlib.patches import Ellipse
 import pandas as pd
 
 def _make_light_to_color_cmap(base_color, name):
-    """Return a colormap that fades from fully transparent white to the given base color."""
+    """
+    Build a light→color gradient colormap (transparent white to base_color).
+    Accepts base_color as any Matplotlib color spec (name, hex, RGB[A]).
+    """
     r, g, b, _ = to_rgba(base_color)
-    # Start nearly white (low density), end at the base color (high density)
     colors = [
-        (1.0, 1.0, 1.0, 0.0),        # transparent white
-        (r, g, b, 0.35),             # light tint
-        (r*0.9, g*0.9, b*0.9, 0.6),  # mid
-        (r*0.8, g*0.8, b*0.8, 0.8),  # darker
-        (r*0.7, g*0.7, b*0.7, 1.0),  # darkest
+        (1.0, 1.0, 1.0, 0.00),   # transparent white (low density)
+        (r, g, b, 0.35),
+        (r*0.9, g*0.9, b*0.9, 0.60),
+        (r*0.8, g*0.8, b*0.8, 0.80),
+        (r*0.7, g*0.7, b*0.7, 1.00),  # strong base color (high density)
     ]
     return LinearSegmentedColormap.from_list(name, colors)
 
+
 def _cov_ellipse_params(mu, cov, nsig=2.0):
+    """Return width, height, angle(deg) for an nsig covariance ellipse."""
     vals, vecs = np.linalg.eigh(cov)
     order = np.argsort(vals)[::-1]
     vals = vals[order]
@@ -4521,120 +4839,107 @@ def _cov_ellipse_params(mu, cov, nsig=2.0):
     angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
     return width, height, angle
 
+
 def plot_class_kde(
     df,
     x="var1",
     y="var2",
     label="class",
     bandwidth=None,
-    levels=10,
+    levels=8,
     grid_size=250,
     scatter=True,
     normalize="per_class",
-    cmap_per_class=None,
-    alpha=None,
+    cmap_per_class=None,   # {class: color-or-cmap}
+    alpha=None,            # unused; transparency baked into colormap
     xlim=None,
     ylim=None,
     seed=0,
     equalize_xylim=False,
-    ellipses=True,
+    ellipses=False,
     ellipse_nsig=2.0,
     ellipse_kwargs=None,
-    text_labels=True,          # NEW: toggle class text labels
-    text_kwargs=None,           # NEW: kwargs for ax.text
+    text_labels=True,
+    text_kwargs=None,
     ax=None,
+    plot_contours=True,
 ):
     """
-    Plot per-class 2D kernel density estimates (KDE) with graded shading, and optional covariance ellipses.
+    Plot per-class 2D KDE with graded shading, optional covariance ellipses, and class text labels.
 
-    For each class, this function estimates a 2D density via KDE and renders it as
-    filled contour bands using a light→color colormap so shading reflects density.
-    Optionally overlays raw scatter points and draws per-class covariance ellipses
-    at `ellipse_nsig` standard deviations about the class mean.
+    For each class, estimates a 2D density via KDE and renders it as filled contour bands
+    using a light→color gradient (low density is lighter; high is stronger).
+    - Provide per-class styling via `cmap_per_class`:
+        * pass a single COLOR (e.g., "royalblue", "#1f77b4", (r,g,b)) → will build a gradient;
+        * or a Matplotlib COLORMAP (e.g., plt.cm.Blues) → used directly.
 
     Parameters
     ----------
     df : pandas.DataFrame
         Must contain columns `x`, `y`, and `label`.
-    x, y : str, default: "var1", "var2"
-        Column names for the two variables to plot.
-    label : str, default: "class"
-        Column name for class labels (used to group points).
-    bandwidth : float or None, default: None
-        KDE bandwidth. If None, uses Scott's rule per class.
-    levels : int or sequence, default: 12
-        If int: number of evenly spaced contour levels up to the max density.
-        If sequence: explicit contour levels (absolute values or fractions ≤ 1.0
-        of max density depending on `normalize`).
-    grid_size : int, default: 250
-        Resolution of the evaluation grid in each axis.
-    scatter : bool, default: True
-        Whether to overlay raw data points.
-    normalize : {"per_class", "global"}, default: "per_class"
-        - "per_class": scale each class density to its own maximum (good for shape comparison).
-        - "global": scale all densities to a single max (good for absolute density comparison).
-    cmap_per_class : dict or None, default: None
-        Mapping {class: colormap OR color}. If a color is given, a light→color gradient is
-        constructed automatically for that class; if a colormap is given, it is used directly.
-        If None, base colors are drawn from Matplotlib’s default cycle.
-    alpha : float or None, default: None
-        Unused (the gradient transparency is built into the colormap).
-    xlim, ylim : tuple or None, default: None
-        Axis limits; when None, computed from the data with small padding.
-    seed : int, default: 0
-        Random seed (reserved for any stochastic steps you may add).
-    ellipses : bool, default: False
-        If True, draw per-class mean+covariance ellipses.
-    ellipse_nsig : float, default: 2.0
-        The k-sigma radius for the ellipse. For a Gaussian, 1σ ~ 68%, 2σ ~ 95%, 3σ ~ 99.7%.
-    ellipse_kwargs : dict or None, default: None
-        Extra keyword args forwarded to `matplotlib.patches.Ellipse`, e.g.
-        `{"linestyle": "--", "linewidth": 2.0, "edgecolor": "k"}`.
-        If `edgecolor` is not provided, the ellipse uses the class base color.
-    text_labels : bool, default=True
-        Whether to add text labels for each class at the mean position.
-    text_kwargs : dict or None, default=None
-        Extra kwargs passed to ax.text (e.g., fontsize, weight).
-        Color is automatically set to the class color, and a white outline is added for readability.
+    x, y : str
+        Column names for the two variables.
+    label : str
+        Column name for the class labels.
+    bandwidth : float or None
+        KDE bandwidth; if None, uses Scott's rule per class.
+    levels : int or sequence
+        If int: number of evenly spaced contour levels up to max density.
+        If sequence: explicit levels (absolute or fractions ≤ 1.0 depending on `normalize`).
+    grid_size : int
+        Evaluation grid resolution per axis.
+    scatter : bool
+        Overlay raw points.
+    normalize : {"per_class", "global"}
+        "per_class" scales each class to its own max (shape comparison).
+        "global" scales to a single max across classes (absolute density comparison).
+    cmap_per_class : dict or None
+        Mapping {class: color-or-cmap}. Colors are converted to light→color gradients.
+        Colormaps (e.g., plt.cm.Greens) are used as passed.
+    alpha : float or None
+        Unused (transparency handled inside colormap).
+    xlim, ylim : tuple or None
+        Axis limits; if None, computed from data with padding.
+    seed : int
+        RNG seed (reserved).
+    ellipses : bool
+        If True, draw per-class mean+covariance ellipse.
+    ellipse_nsig : float
+        k-sigma radius for ellipse (1≈68%, 2≈95%, 3≈99.7% for Gaussians).
+    ellipse_kwargs : dict or None
+        Extra kwargs for `matplotlib.patches.Ellipse` (e.g., linewidth, linestyle).
+        If edgecolor is not provided, class color is used.
+    text_labels : bool
+        If True, add a class label at the class mean.
+    text_kwargs : dict or None
+        Extra kwargs for `ax.text` (e.g., fontsize, weight). Color auto-set to class color.
+        A white outline is added for legibility.
 
     Returns
     -------
     fig : matplotlib.figure.Figure
-        The created figure.
     ax : matplotlib.axes.Axes
-        The axes with the plot.
-
-    Notes
-    -----
-    - KDE uses `sklearn.neighbors.KernelDensity` (Gaussian kernel).
-    - With very few points (<~20 per class), KDE contours can be noisy; ellipses may be clearer.
-    - Set `levels` higher (e.g., 20) for smoother shading; reduce `grid_size` to speed up.
-
-    Examples
-    --------
-    >>> fig, ax = plot_class_kde(
-    ...     df, x="var1", y="var2", label="class",
-    ...     levels=14, normalize="per_class",
-    ...     scatter=True,
-    ...     ellipses=True, ellipse_nsig=2.0,
-    ...     ellipse_kwargs={"linestyle": "--", "linewidth": 2.0}
-    ... )
-    >>> plt.show()
     """
     import matplotlib.patheffects as path_effects
+    from pythonlib.tools.listtools import sort_mixed_type
 
+    rng = np.random.default_rng(seed)
     classes = df[label].unique()
+    classes = sort_mixed_type(classes)
     cycle_colors = plt.rcParams['axes.prop_cycle'].by_key().get('color', None)
 
+    # Axis limits with padding
     xdata = df[x].to_numpy()
     ydata = df[y].to_numpy()
     if xlim is None:
         xr = np.nanmax(xdata) - np.nanmin(xdata)
-        xpad = 0.05 * xr if np.isfinite(xr) and xr > 0 else 1.0
+        # xpad = 0.05 * xr if np.isfinite(xr) and xr > 0 else 1.0
+        xpad = 0.35 * xr if np.isfinite(xr) and xr > 0 else 1.0
         xlim = (np.nanmin(xdata) - xpad, np.nanmax(xdata) + xpad)
     if ylim is None:
         yr = np.nanmax(ydata) - np.nanmin(ydata)
-        ypad = 0.05 * yr if np.isfinite(yr) and yr > 0 else 1.0
+        # ypad = 0.05 * yr if np.isfinite(yr) and yr > 0 else 1.0
+        ypad = 0.35 * yr if np.isfinite(yr) and yr > 0 else 1.0
         ylim = (np.nanmin(ydata) - ypad, np.nanmax(ydata) + ypad)
 
     if equalize_xylim:
@@ -4669,8 +4974,7 @@ def plot_class_kde(
         bw = np.mean(stds) * factor
         return max(bw, np.finfo(float).eps)
 
-    from numpy.linalg import LinAlgError
-
+    # Fit KDEs + gather stats
     for c in classes:
         sub_df = df[df[label] == c][[x, y]].dropna()
         sub = sub_df.to_numpy()
@@ -4696,35 +5000,48 @@ def plot_class_kde(
         if D is None:
             continue
 
+        # Determine base color or colormap from cmap_per_class (color OR colormap)
         base_color = None
         cmap = None
         if cmap_per_class and c in cmap_per_class:
             cc = cmap_per_class[c]
+            # If it's a matplotlib colormap object, use directly
             if hasattr(cc, 'colors') or hasattr(cc, 'name'):
                 cmap = cc
             else:
+                # Otherwise treat as a color spec and build a gradient
                 base_color = cc
         else:
-            base_color = cycle_colors[i % len(cycle_colors)] if cycle_colors else None
+            base_color = cycle_colors[i % len(cycle_colors)] if cycle_colors else "#1f77b4"
 
         if cmap is None:
-            cmap = _make_light_to_color_cmap(base_color or "#1f77b4", f"cmap_{i}")
+            cmap = _make_light_to_color_cmap(base_color, f"cmap_{i}")
 
         vmax = float(np.nanmax(D)) if normalize == "per_class" else (global_max or 1.0)
         if isinstance(levels, int):
-            level_vals = np.linspace(0.05 * vmax, vmax, levels)
+            level_vals = np.linspace(0.05 * vmax, vmax, levels)  # avoid huge low-density patch
         else:
-            level_vals = [(lv * vmax if lv <= 1.0 else lv) for lv in levels]
+            level_vals = [(lv * vmax if (isinstance(lv, (int, float)) and lv <= 1.0) else lv) for lv in levels]
 
-        ax.contourf(Xgrid, Ygrid, D, levels=level_vals, cmap=cmap, antialiased=True)
-        ax.contour(Xgrid, Ygrid, D, levels=[level_vals[-1]], colors=[base_color] if base_color else None, linewidths=1.6)
-        # ax.contourf(Xgrid, Ygrid, D, levels=level_vals, colors="b", antialiased=True)
-        # ax.contour(Xgrid, Ygrid, D, levels=[level_vals[-1]], colors="b", linewidths=1.6)
+        # Outline the highest-density contour to define the shape
+        outline_color = base_color if base_color is not None else None
+        if plot_contours:
+            # Filled contours with gradient colormap
+            ax.contourf(Xgrid, Ygrid, D, levels=level_vals, cmap=cmap, antialiased=True)
 
+            try:
+                ax.contour(Xgrid, Ygrid, D, levels=[level_vals[-1]], colors=[outline_color] if outline_color else None, linewidths=1.6)
+            except ValueError:
+                # "No contour levels were found within the data range" — skip outline
+                pass
+
+        # Raw scatter (light)
         if scatter:
             sub = df[df[label] == c]
-            ax.scatter(sub[x], sub[y], s=10, alpha=0.45, edgecolors='none', c=base_color)
+            ax.scatter(sub[x], sub[y], s=10, alpha=0.45, edgecolors='none',
+                       color=outline_color if outline_color is not None else "#000000")
 
+        # Covariance ellipse
         if ellipses and c in stats_per_class:
             mu, cov = stats_per_class[c]
             try:
@@ -4732,47 +5049,38 @@ def plot_class_kde(
                 e_kwargs = dict(fill=False, linewidth=2.0, linestyle='--')
                 if ellipse_kwargs:
                     e_kwargs.update(ellipse_kwargs)
-                if 'edgecolor' not in e_kwargs and base_color is not None:
-                    e_kwargs['edgecolor'] = base_color
+                if 'edgecolor' not in e_kwargs and outline_color is not None:
+                    e_kwargs['edgecolor'] = outline_color
                 ell = Ellipse(xy=mu, width=width, height=height, angle=angle, **e_kwargs)
                 ax.add_patch(ell)
-            except LinAlgError:
+            except np.linalg.LinAlgError:
                 pass
 
-        # Optional text label
+        # Text label at class mean
         if text_labels and c in stats_per_class:
             mu, _ = stats_per_class[c]
-            t_kwargs = dict(
-                fontsize=12, weight="bold",
-                ha="center", va="center",
-                color=base_color
-            )
-            # t_kwargs = dict(
-            #     fontsize=12, 
-            #     ha="center", va="center",
-            #     color=base_color
-            # )
+            t_kwargs = dict(fontsize=12, weight="bold", ha="center", va="center",
+                            color=outline_color if outline_color is not None else "#000000")
             if text_kwargs:
                 t_kwargs.update(text_kwargs)
             txt = ax.text(mu[0], mu[1], str(c), **t_kwargs)
-            # add outline for readability
             txt.set_path_effects([
                 path_effects.Stroke(linewidth=2.5, foreground="white"),
                 path_effects.Normal()
             ])
 
+        # Legend handle
         handles.append(Line2D([0], [0], marker='o', linestyle='', markersize=8,
-                              markerfacecolor=base_color if base_color else 'k', alpha=0.9, label=str(c)))
+                              markerfacecolor=outline_color if outline_color is not None else 'k', alpha=0.9, label=str(c)))
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.legend(handles=handles, title=label, frameon=True)
-    ax.set_title("Per-class 2D KDE with graded shading + covariance ellipses")
+    # ax.set_title("Per-class 2D KDE (graded shading) + optional ellipses + labels")
     ax.grid(True, alpha=0.15)
-    plt.tight_layout()
-
+    # plt.tight_layout()
     return fig, ax
 
 def plot_class_kde_example():

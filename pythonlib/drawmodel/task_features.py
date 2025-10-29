@@ -20,7 +20,7 @@ def shapes_n_each_extract(Task, list_shapes, shape_key="shapeabstract"):
     """
 
     tokens = Task.tokens_generate(assert_computed=True)
-    shapes = [t[shape_key] for t in tokens]
+    shapes = [t[shape_key] for t in tokens] # shapes in this task
     
     # ignore order. just count how many A, B, C, ... etc
     nshapes = []

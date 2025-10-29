@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from pythonlib.tools.snstools import rotateLabel
 import pandas as pd
 from pythonlib.tools.plottools import savefig
+import numpy as np
 
 SAVEDIR_ALL = "/lemur2/lucas/analyses/manuscripts/2_syntax"
 
@@ -721,6 +722,274 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D)
     D.Dat["probe_kind"] = [dict_probe_kind[(row["epoch"], row["character"])] if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
     D.Dat["probe_loc_nstrok"] = [get_loc_nstrok(dict_probe_features, row) if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
+
+def fig1_generalize_3_extract_sketchpad_xylim(list_D):
+    """
+    For behavior, get overall min and max for x and y, across all tasks.
+    """
+    import numpy as np
+    xlims = []
+    ylims = []
+    for D in list_D:
+        _xlim, _ylim = D.recomputeSketchpadEdgesXlimYlim("strokes_task")
+        xlims.append(_xlim)
+        ylims.append(_ylim)
+
+    tmp = np.stack(xlims, axis=0)
+    XLIM = (np.min(tmp[:, 0]), np.max(tmp[:, 1]))
+
+    tmp = np.stack(ylims, axis=0)
+    YLIM = (np.min(tmp[:, 0]), np.max(tmp[:, 1]))
+
+    return XLIM, YLIM
+
+def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, window_size = 20, drawing_plot_interval=75):
+    """
+    For behavior, compute and store variables related to variability of unique characters across tasks. Goal is to show that 
+    trials were very varied.
+
+    And also plot timecourses and drawings.
+    NOTE: Best to do both compute and plots or else will be easy to lose mapping between stats (aligned to "index") and
+    drawings after you slide dataset
+
+    PARAMS:
+    - window_size, running window, to score n unique chracters in running window (20)
+    """
+    ### Plots to show variability in tasks
+
+    if PLOT:
+        assert savedir is not None
+
+    ### For each trial, is this a novel task?
+    assert all(sorted(DFALL["index"]) == DFALL["index"])
+    assert all(np.diff(DFALL["index"])==1)
+
+    tasks_done_at_least_once = []
+    novels = []
+    for _, row in DFALL.iterrows():
+        key = (row["epoch"], row["character"])
+        if key in tasks_done_at_least_once:
+            novel_task_this_trial = False
+        else:
+            novel_task_this_trial = True
+            tasks_done_at_least_once.append(key)
+
+        # print(novel_task_this_trial)
+        novels.append(novel_task_this_trial)
+
+    DFALL["novel_epochchar_this_trial"] = novels
+
+    ### Cumulative count of novel tasks
+    DFALL["novel_epochchar_cumsum"] = np.cumsum(DFALL["novel_epochchar_this_trial"])
+
+    ### Running average of the number of unique tasks within a time window
+    # assert window_size%2==1, "thus can define the center index"
+    plot_drawings = False
+    PRINT = False
+    tmp = np.full(len(DFALL), np.nan)
+    map_idxcenter_to_window = {}
+    for i1 in range(len(DFALL) - window_size + 1):
+        i2 = i1 + window_size
+
+        chars = DFALL.iloc[i1:i2]["character"]
+        n_unique_chars = len(set(chars))
+
+        if PRINT:
+            print(i1, i2)
+            print(chars)
+            print(n_unique_chars, window_size)  
+
+        # index, take the center value
+        index = int((i1 + i2-1)/2)
+        assert index == DFALL.iloc[index]["index"], "you should run this on the original DFALL"
+        tmp[index] = n_unique_chars
+        map_idxcenter_to_window[index] = (i1, i2)
+
+        if False:
+            if n_unique_chars==5:
+                plot_drawings = True
+
+            if plot_drawings:
+                strokes_beh = DFALL.iloc[i1:i2]["strokes_beh"].tolist()
+                strokes_task = DFALL.iloc[i1:i2]["strokes_task"].tolist()
+                successes = DFALL.iloc[i1:i2]["success_binary_quick_v2"].tolist()
+
+                D.plotMultStrokes(strokes_beh, titles=successes)
+                D.plotMultStrokes(strokes_task, is_task=True)
+                assert False
+
+        if PLOT:
+            from pythonlib.dataset.dataset import Dataset
+            D = Dataset([])
+            ### PLOT example trials
+            if index%drawing_plot_interval==0:
+                strokes_beh = DFALL.iloc[i1:i2]["strokes_beh"].tolist()
+                strokes_task = DFALL.iloc[i1:i2]["strokes_task"].tolist()
+                successes = DFALL.iloc[i1:i2]["success_binary_quick_v2"].tolist()
+                successes = [bool(s) for s in successes]
+                error_kinds = DFALL.iloc[i1:i2]["sequence_error_kind"].tolist()
+                supervisions = DFALL.iloc[i1:i2]["supervision_online"].tolist()
+                titles2 = [f"sprv={int(superv)}-succ={int(succ)}" for superv, succ in zip(supervisions, successes)]
+
+                figbeh, axes_beh = D.plotMultStrokes(strokes_beh, titles=error_kinds, naked_axes=True, number_from_zero=False)
+                figtask, axes_task = D.plotMultStrokes(strokes_task, is_task=True, titles=titles2, naked_axes=True)
+
+                for ax in axes_beh.flatten():
+                    ax.set_xlim(XLIM)
+                    ax.set_ylim(YLIM)
+
+                for ax in axes_task.flatten():
+                    ax.set_xlim(XLIM)
+                    ax.set_ylim(YLIM)
+
+                savefig(figbeh, f"{savedir}/trialindex={index}-n_uniq_char={n_unique_chars}-BEH.pdf")
+                savefig(figtask, f"{savedir}/trialindex={index}-n_uniq_char={n_unique_chars}-TASK.pdf")
+                
+                plt.close("all")
+
+    DFALL["num_uniq_char_in_sld_wind"] = tmp
+
+    ### Plot
+    # Across entire experiment
+    if False:
+        do_clean = True
+        probe_only = False
+        first_trial = False
+        no_supervision = False
+        dfall = extract_data_subset(do_clean, probe_only, first_trial, no_supervision)
+    else:
+        dfall = DFALL
+
+    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_nstrok", "train_test_class_v2"]:
+
+        fig = sns.relplot(dfall, x="index", y="novel_epochchar_this_trial", row=row, aspect=1.5, alpha=0.2)
+        figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_this_trial-row={row}.pdf")
+
+        fig = sns.relplot(dfall, x="index", y="novel_epochchar_cumsum", row=row, aspect=1.5, kind="line")
+        figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_cumsum-row={row}-1.pdf")
+
+        fig = sns.relplot(dfall, x="index", y="novel_epochchar_cumsum", row=row, aspect=1.5, alpha=0.5)
+        figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_cumsum-row={row}-2.pdf")
+
+        fig  = sns.relplot(dfall, x="index", y="num_uniq_char_in_sld_wind", row=row, aspect=1.5, kind="line")
+        figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
+        for ax in fig.axes.flatten():
+            ax.set_ylim([0, window_size])
+        savefig(fig, f"{savedir}/timecourse-y=num_uniq_char_in_sld_wind-row={row}-1.pdf")
+
+        fig  = sns.relplot(dfall, x="index", y="num_uniq_char_in_sld_wind", row=row, aspect=1.5, alpha=0.5)
+        figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
+        for ax in fig.axes.flatten():
+            ax.set_ylim([0, window_size])
+        savefig(fig, f"{savedir}/timecourse-y=num_uniq_char_in_sld_wind-row={row}-2.pdf")
+
+        plt.close("all")
+
+    return map_idxcenter_to_window
+
+
+def figmod_overlay_date_lines(fig, dfall_this, xvar="index", timevar="datetime_scal"):
+    """
+    Modify timeocurse plots, 
+    by overlay vertical lines at the first trial for each date.
+    """
+    
+    def F(x):
+        index = x.sort_values(timevar, axis=0).iloc[0][xvar]
+        return index
+    
+    dfboundaries = dfall_this.groupby("date").apply(F).reset_index()
+
+    for _, row in dfboundaries.iterrows():
+        date = row["date"]
+        index = row[0]
+
+        for ax in fig.axes.flatten():
+            ax.axvline(index, color="k", alpha=0.4)
+            YLIM = ax.get_ylim()
+            ydelt = YLIM[1] - YLIM[0]
+            ax.text(index, YLIM[0] + 0.9*ydelt, date, color="k")
+
+
+def fig1_generalize_3_plot_task_variability_plot(DFALL, map_idxcenter_to_window, window_size, XLIM, YLIM, savedir):
+    """
+    PLot timecourse showing task variability, 
+    """
+
+    assert False, "moved to fig1_generalize_3_plot_task_variability -- see resaoning there"
+    from pythonlib.dataset.dataset import Dataset
+    D = Dataset([])
+
+    ### Plot
+    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_nstrok", "train_test_class_v2"]:
+
+        fig = sns.relplot(DFALL, x="index", y="novel_epochchar_this_trial", row=row, aspect=1.5, alpha=0.2)
+        figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_this_trial-row={row}.pdf")
+
+        fig = sns.relplot(DFALL, x="index", y="novel_epochchar_cumsum", row=row, aspect=1.5, kind="line")
+        figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_cumsum-row={row}-1.pdf")
+
+        fig = sns.relplot(DFALL, x="index", y="novel_epochchar_cumsum", row=row, aspect=1.5, alpha=0.5)
+        figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")
+        savefig(fig, f"{savedir}/timecourse-y=novel_epochchar_cumsum-row={row}-2.pdf")
+
+        fig  = sns.relplot(DFALL, x="index", y="num_uniq_char_in_sld_wind", row=row, aspect=1.5, kind="line")
+        figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")
+        for ax in fig.axes.flatten():
+            ax.set_ylim([0, window_size])
+        savefig(fig, f"{savedir}/timecourse-y=num_uniq_char_in_sld_wind-row={row}-1.pdf")
+
+        fig  = sns.relplot(DFALL, x="index", y="num_uniq_char_in_sld_wind", row=row, aspect=1.5, alpha=0.5)
+        figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")
+        for ax in fig.axes.flatten():
+            ax.set_ylim([0, window_size])
+        savefig(fig, f"{savedir}/timecourse-y=num_uniq_char_in_sld_wind-row={row}-2.pdf")
+
+        plt.close("all")
+
+    list_trial_index_plot = range(0, DFALL["index"].max(), 75)
+    for trial_index in list_trial_index_plot:
+
+        idx = np.argmin(np.abs(DFALL["index"] - trial_index))
+
+        if idx in map_idxcenter_to_window:
+            i1, i2 = map_idxcenter_to_window[trial_index]
+            # i1 = int(idx - window_size/2)
+            # i2 = int(idx + window_size/2)
+
+            n_unique_chars = DFALL.iloc[idx]["num_uniq_char_in_sld_wind"]
+
+            print(n_unique_chars)
+            strokes_beh = DFALL.iloc[i1:i2]["strokes_beh"].tolist()
+            strokes_task = DFALL.iloc[i1:i2]["strokes_task"].tolist()
+            successes = DFALL.iloc[i1:i2]["success_binary_quick_v2"].tolist()
+            successes = [bool(s) for s in successes]
+            error_kinds = DFALL.iloc[i1:i2]["sequence_error_kind"].tolist()
+            supervisions = DFALL.iloc[i1:i2]["supervision_online"].tolist()
+            chars = DFALL.iloc[idx]["character"].tolist()
+
+            titles2 = [f"sprv={int(superv)}-succ={int(succ)}" for superv, succ in zip(supervisions, successes)]
+
+            figbeh, axes_beh = D.plotMultStrokes(strokes_beh, titles=error_kinds, naked_axes=True, number_from_zero=False)
+            figtask, axes_task = D.plotMultStrokes(strokes_task, is_task=True, titles=titles2, naked_axes=True)
+
+            for ax in axes_beh.flatten():
+                ax.set_xlim(XLIM)
+                ax.set_ylim(YLIM)
+
+            for ax in axes_task.flatten():
+                ax.set_xlim(XLIM)
+                ax.set_ylim(YLIM)
+
+            savefig(figbeh, f"{savedir}/trialindex={trial_index}-n_uniq_char={n_unique_chars}-BEH.pdf")
+            savefig(figtask, f"{savedir}/trialindex={trial_index}-n_uniq_char={n_unique_chars}-TASK.pdf")
+            
+            plt.close("all")
 
 if __name__=="__main__":
     

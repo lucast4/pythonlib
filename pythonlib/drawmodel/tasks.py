@@ -595,7 +595,7 @@ class TaskClass(object):
             return None
 
         # --- TaskNew exists...
-        if (isinstance(self.get_tasknew()["Info"], dict)) and ("MorphParams" in self.get_tasknew()["Info"]):
+        if ("Info" in self.get_tasknew()) and (isinstance(self.get_tasknew()["Info"], dict)) and ("MorphParams" in self.get_tasknew()["Info"]):
             # Then this is morphed, it will not have program
             self.Program = None
         else:
@@ -1197,7 +1197,7 @@ class TaskClass(object):
         if "Strokes" in dat.keys():
             del dat["Strokes"]
 
-        if len(dat["RuleFailureTracker"].shape)==0:
+        if ("RuleFailureTracker" in dat.keys()) and len(dat["RuleFailureTracker"].shape)==0:
             # then is a scalar, put into an array.
             # shape from () --> (1,)
             dat["RuleFailureTracker"] = np.array([dat["RuleFailureTracker"]])

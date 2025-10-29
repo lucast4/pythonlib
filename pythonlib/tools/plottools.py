@@ -174,7 +174,7 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
-def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap=None):
+def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap=None, return_cmap=False):
     """
     Helper to make colors for plotting, mapping from unque item
     in labels to rgba color. Can be continuous or discrete (and will
@@ -213,7 +213,7 @@ def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap
         #     return mcv(vals, valmin, valmax)
         # label_rgbs = map_continuous_var_to_color_range(df[var_color_by])
         _map_lev_to_color = None
-    elif len(labels_color_uniq)>8 and isinstance(labels_color_uniq[0], (np.ndarray, float)):
+    elif len(labels_color_uniq)>4 and isinstance(labels_color_uniq[0], (np.ndarray, float)):
         color_type = "cont"
         _map_lev_to_color = None
     else:
@@ -226,11 +226,19 @@ def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap
 
     # Return the color for each item
     if _map_lev_to_color is None:
-        colors = labels_color_uniq
+        # _map_lev_to_color ={lab:lab for lab in labels_color_uniq} # Hacky
+
+        # Given a continuous range of scalar values, map them to colors
+        rgba_values, cmap = map_continuous_var_to_color_range(labels_color_uniq, min(labels_color_uniq), max(labels_color_uniq), kind="sequential", return_cmap=True)
+        _map_lev_to_color = {lab:rgba for lab, rgba in zip(labels_color_uniq, rgba_values)}
+        colors = rgba_values
     else:
         colors = [_map_lev_to_color[lab] for lab in labels_for_color]
 
-    return _map_lev_to_color, color_type, colors
+    if return_cmap:
+        return _map_lev_to_color, color_type, colors, cmap
+    else:
+        return _map_lev_to_color, color_type, colors
 
 
 def color_make_pallete_categories(df, category_name, cmap="turbo"):
@@ -292,7 +300,7 @@ def makeColors(numcol, alpha=1, cmap=None, ploton=False):
 
     if cmap is None:
         cmap = "turbo"
-        
+    
     if True:
         pcols = getattr(cm, cmap)(np.linspace(0,1, numcol), alpha=alpha)
     else:
@@ -335,7 +343,8 @@ def colorGradient(pos, col1=None, col2=None, cmap="plasma"):
     return (pos*(col2-col1) + col1)[:3]
 
 def map_continuous_var_to_color_range(values, valmin=None, valmax=None,
-                                      kind = "diverge", custom_cmap = "rocket"):
+                                      kind = "diverge", custom_cmap = "rocket",
+                                      return_cmap=False):
     """
     Returns rgba values for each item in values.
     PARAMS:
@@ -373,7 +382,10 @@ def map_continuous_var_to_color_range(values, valmin=None, valmax=None,
     # Convert values to colors
     rgba_values = cmap(norm(values))
 
-    return rgba_values
+    if return_cmap:
+        return rgba_values, cmap
+    else:
+        return rgba_values
 
 def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', edgecolor='none', **kwargs):
     """
@@ -451,7 +463,10 @@ def savefig(fig, path, tight_layout=True):
     """
     if tight_layout:
         fig.tight_layout()
-    fig.savefig(path, bbox_inches="tight")
+    try:
+        fig.savefig(path, bbox_inches="tight")
+    except Exception as err:
+        fig.savefig(path)
     #plt.show(fig, block=False) # can uncomment if bugs with memory leak
 
 def saveMultToPDF(path, figs):
@@ -756,7 +771,12 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
     if colors_each_pt is None:
         # Solid color
         ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color)
+    elif isinstance(colors_each_pt[0], (float, int)):
+        # Inputed scalar values, usually this means continuous color values 
+        ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, mfc="none", mec="none")
+        ax.scatter(x, y, c=colors_each_pt, alpha=alpha, marker=marker, edgecolor=edgecolor)
     else:
+        # Inputed the actual RGB colors
         # Use scatter. need error for the errorbars
         ax.errorbar(x, y, y_errors, x_errors, linestyle="", marker=marker, alpha=alpha, color=color, ecolor=colors_each_pt, mfc="none", mec="none")
         # colors_each_pt = makeColors(len(x))
@@ -819,9 +839,9 @@ def set_axis_lims_square_bounding_data_45line(ax, xs, ys, delta_frac=0.1, dotted
     assert len(xs)==len(ys)
     vals = np.concatenate([xs, ys])
 
-    delta = delta_frac * (np.max(vals)-np.min(vals))
+    delta = delta_frac * (np.nanmax(vals)-np.nanmin(vals))
     
-    lims = [np.min(vals)-delta, np.max(vals)+delta]
+    lims = [np.nanmin(vals)-delta, np.nanmax(vals)+delta]
 
     ax.axis("square")
     if lims[1]>lims[0]:
@@ -1208,21 +1228,61 @@ def move_legend_outside_axes(ax):
     """
     ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
+# def share_axes(axes, which="x"):
+#     """
+#     MAke these axes have shared axis, will be scalred based on the lasrgest axis.
+#     """
+    
+#     if not isinstance(axes, list):
+#         axes = list(axes.flatten())
+
+#     if which=="x":
+#         axes[0].get_shared_x_axes().join(axes[0], *axes[1:])
+#     elif which=="y":
+#         axes[0].get_shared_y_axes().join(axes[0], *axes[1:])
+#     elif which=="both":
+#         axes[0].get_shared_x_axes().join(axes[0], *axes[1:])
+#         axes[0].get_shared_y_axes().join(axes[0], *axes[1:])
+#     else:
+#         print(which)
+#         assert False
+
 def share_axes(axes, which="x"):
     """
-    MAke these axes have shared axis, will be scalred based on the lasrgest axis.
+    Make these axes share their x and/or y axis limits.
+    Scales are unified based on the first axis.
     """
-    
-    if which=="x":
-        axes.flatten()[0].get_shared_x_axes().join(axes.flatten()[0], *axes.flatten()[1:])
-    elif which=="y":
-        axes.flatten()[0].get_shared_y_axes().join(axes.flatten()[0], *axes.flatten()[1:])
-    elif which=="both":
-        axes.flatten()[0].get_shared_x_axes().join(axes.flatten()[0], *axes.flatten()[1:])
-        axes.flatten()[0].get_shared_y_axes().join(axes.flatten()[0], *axes.flatten()[1:])
-    else:
-        print(which)
-        assert False
+    if not isinstance(axes, (list, np.ndarray)):
+        axes = list(axes.flatten())
+
+    ref = axes[0]
+
+    # if which in ["x", "both"]:
+    #     ref.get_shared_x_axes().join(ref, *axes[1:])
+    #     lim = ref.get_xlim()
+    #     for ax in axes:
+    #         ax.set_xlim(lim)
+
+    # if which in ["y", "both"]:
+    #     ref.get_shared_y_axes().join(ref, *axes[1:])
+    #     lim = ref.get_ylim()
+    #     for ax in axes:
+    #         ax.set_ylim(lim)
+
+    if which in ["x", "both"]:
+        ref.get_shared_x_axes().join(ref, *axes[1:])
+        min_x = min(ax.get_xlim()[0] for ax in axes)
+        max_x = max(ax.get_xlim()[1] for ax in axes)
+        for ax in axes:
+            ax.set_xlim(min_x, max_x)        
+
+    if which in ["y", "both"]:
+        ref.get_shared_y_axes().join(ref, *axes[1:])
+        min_y = min(ax.get_ylim()[0] for ax in axes)
+        max_y = max(ax.get_ylim()[1] for ax in axes)
+        for ax in axes:
+            ax.set_ylim(min_y, max_y)        
+
 
 def share_axes_row_or_col_of_subplots(axes, row_or_col, x_or_y):
     """

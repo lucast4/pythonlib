@@ -16,12 +16,56 @@ from pythonlib.tools.listtools import sort_mixed_type
 import seaborn as sns
 import pandas as pd
 
-def generate_clustclass_from_flat_df(dfres, var_row, var_col, var_value, var_labels, PRINT=False):
+
+# def generate_clustclass_from_flat_df_rectangle(dfres, var_row, var_col, var_value, var_labels, PRINT=False):
+#     """
+#     Given dataframe whhere each row is a pair of conditions (i.e., a single cell in Cl), then
+#     generate a new Cl. Must be square, with each condition appearing once in rows and coluns
+#     PARAMS:
+#     - var_labels, list/tuple of strings, mathching length of each item in var_row and var_col.
+#     """
+#     ### Plot heatmap of all r2 scores
+
+#     # Convert to clustclass
+#     rows = sorted(dfres[var_row].unique())
+#     cols = sorted(dfres[var_col].unique())
+#     assert isinstance(rows[0], tuple)
+#     assert isinstance(cols[0], tuple)
+
+#     distmat = np.zeros((len(rows), len(cols))) - np.inf
+#     for row, labrow in enumerate(rows):
+#         for col, labcol in enumerate(cols):
+
+#             tmp = dfres[(dfres[var_row] == labrow) & (dfres[var_col] == labcol)]
+#             if len(tmp)
+#             assert len(tmp)==1
+
+#             distmat[row, col] = tmp[var_value].values[0]
+            
+#             if PRINT:
+#                 print("row:", labrow, "  col:", labcol, " val:", distmat[row, col] )
+
+#     assert np.all(distmat > -np.inf)
+
+#     if PRINT:
+#         print(distmat.shape)
+#         print(len(rows), len(cols))
+    
+#     params = {"label_vars":var_labels, "version_distance":"IGNORE"}
+#     Cl = Clusters(distmat, list_labels, list_labels, "rsa", params)
+    
+#     return Cl
+
+
+def generate_clustclass_from_flat_df(dfres, var_row, var_col, var_value, var_labels, PRINT=False,
+                                     fake_the_diagonal=False):
     """
     Given dataframe whhere each row is a pair of conditions (i.e., a single cell in Cl), then
     generate a new Cl. Must be square, with each condition appearing once in rows and coluns
     PARAMS:
     - var_labels, list/tuple of strings, mathching length of each item in var_row and var_col.
+    - fake_the_diagonal, if True, then diagonal is always given the value <fake_the_diagonal>. Useful if
+    you don't have that data (which is often the case)
     """
     ### Plot heatmap of all r2 scores
 
@@ -34,10 +78,17 @@ def generate_clustclass_from_flat_df(dfres, var_row, var_col, var_value, var_lab
     distmat = np.zeros((len(list_labels), len(list_labels))) - np.inf
     for row, labrow in enumerate(list_labels):
         for col, labcol in enumerate(list_labels):
-            tmp = dfres[(dfres[var_row] == labrow) & (dfres[var_col] == labcol)]
-            assert len(tmp)==1
+            if (row==col) and (fake_the_diagonal is not None):
+                val = fake_the_diagonal
+            else:
+                # print(var_row, var_col, labrow, labcol)
+                # print(sum((dfres[var_row] == labrow)))
+                # print(sum((dfres[var_col] == labcol)))
+                tmp = dfres[(dfres[var_row] == labrow) & (dfres[var_col] == labcol)]
+                assert len(tmp)==1
+                val = tmp[var_value].values[0]
 
-            distmat[row, col] = tmp[var_value].values[0]
+            distmat[row, col] = val
             
             if PRINT:
                 print("row:", labrow, "  col:", labcol, " val:", distmat[row, col] )
@@ -2044,6 +2095,8 @@ class Clusters(object):
                 res.append({
                     "labels_1":grp1,
                     "labels_2":grp2,
+                    # "inds_pa_1":inds1,
+                    # "inds_pa_2":inds2,
                     "dist_mean":np.mean(X),
                     "n_1_2":(len(inds1), len(inds2)),
                 })

@@ -1481,11 +1481,12 @@ def compute_all_pairwise_stats_wrapper(dfscores, vars_grp, var_score, doplots=Fa
 
     return dfres
 
-def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_var, doplots=False, savedir=None):
+def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_var, doplots=False, savedir=None,
+                                          plot_contrast_vars = None, doplots_barplots=False):
     """
     Helper to compute pairwise sign-rank tests across all pairs of levels of <contrast_var>.
     
-    Each datapt is a level of datapt_vars, and this level must have data across both levels of contrast_var.
+    Each datapt is a level of datapt_vars.
     
     Datapts are the unique levels of <datapt_vars> which exist across both levesl of 
     <contrast_var> within each comparison.
@@ -1493,6 +1494,7 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
     Plots do bonferoni correction for signfiicance, and making some plots.
 
     PARAMS:
+    - df, long-form
     - value_var, str, the col holding the values that will comare.
     """
 
@@ -1531,14 +1533,28 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
     dfres = pd.DataFrame(res)
 
     if doplots:
+        # 2. 
         pairwise_stats_plotter(dfres, len(levels), savedir)
-        
+    
+    if doplots_barplots:
+        import seaborn as sns
+        # 1. Plot all the data (catplot, each <contrast_var> level is an x-value)
+        from pythonlib.tools.snstools import rotateLabel
+        fig = sns.catplot(data=df, x=contrast_var, y=value_var, order=plot_contrast_vars)
+        rotateLabel(fig)
+        for ax in fig.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.5)
+        fig = sns.catplot(data=df, x=contrast_var, y=value_var, kind="bar", errorbar="se", order=plot_contrast_vars)
+        rotateLabel(fig)
+
+
     return dfres
 
 
 def pairwise_stats_plotter(dfres, nitems, savedir):
     """
     PARAMS:
+    - dfres, 
     - nitems, n unique levels or grps. Used for computing n comparisons.
     assumes symmetric.
     """
@@ -1548,6 +1564,7 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
     from pythonlib.tools.pandastools import plot_subplots_heatmap
     import seaborn as sns
     from scipy.stats import ranksums
+    from pythonlib.tools.snstools import rotateLabel
 
     dfres["logp"] = np.log10(dfres["pval"])
 
@@ -1568,20 +1585,45 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
         for ax in fig.axes.flatten():
             ax.axhline(np.log10(p))
             ax.text(0, np.log10(p), f"p={p}")
-    savefig(fig, f"{savedir}/catplot-logp.pdf")
+    rotateLabel(fig)
+    if savedir is not None:
+        savefig(fig, f"{savedir}/catplot-logp.pdf")
 
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", None, annotate_heatmap=True)
-    savefig(fig, f"{savedir}/heatmap-logp.pdf")
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-logp.pdf")
 
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", "significant", annotate_heatmap=True)
-    savefig(fig, f"{savedir}/heatmap-logp-significance_bonf.pdf")
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-logp-significance_bonf.pdf")
 
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "n1", None, annotate_heatmap=True)
-    savefig(fig, f"{savedir}/heatmap-n1.pdf")
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-n1.pdf")
 
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "n2", None, annotate_heatmap=True)
-    savefig(fig, f"{savedir}/heatmap-n2.pdf")
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-n2.pdf")
 
     if savedir is not None:
         dfres.to_csv(f"{savedir}/dfres.csv")    
 
+
+def bootstramp_resample(df, vars_conj):
+    """
+    Sample a new df same length as df, bootstrapped within each 
+    level of vars_conj, and then concatneated.
+
+    PARAMS:
+    - vars_conj, list of str. does bootstrap independently for each level of df
+    --- e.g., vars_conj = ["bregion", "date", "effect"]
+    """
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpdict = grouping_append_and_return_inner_items_good(df, vars_conj)
+    list_df =[]
+    for _, inds in grpdict.items():
+        _df = df.iloc[inds]
+        dfrand = _df.sample(len(_df), replace=True, axis=0)
+        list_df.append(dfrand)
+    df_boot = pd.concat(list_df).reset_index(drop=True)
+    return df_boot

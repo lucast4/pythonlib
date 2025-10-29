@@ -868,3 +868,66 @@ def conjunctions_plot(D, DS, savedir, params_anova):
                                                          lenient_allow_data_if_has_n_levels=2)
     if len(DF)>0:
         _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
+
+def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_max = 0.75):
+    """
+    For each (date, epoch) map each shape to a global chunk_rank, determined by checking frequency of 
+    presentation of each shape at each rank.
+    
+    PARAMS:
+    - df, holds data. must have columns: date, epoch, chunk_rank, shape.
+
+    RETURNS:
+    - dfchunkrankmap, each row is a diff "chunk_rank_global", mapped to a (date, epoch, shape).
+    - NOTE: also modifies input to have a new column: chunk_rank_global
+    """
+
+    ### (1) Get the mapping from chunk_rank to shape by taking the most freqeunt shape at each chunkrank
+    def F(x):
+        shapes_ordered = x["shape"].value_counts().index.tolist()
+        counts_ordered = x["shape"].value_counts().values
+        if len(shapes_ordered)>1: # multipel shapes at this cr...
+            assert counts_ordered[1] <= counts_ordered[0]
+            if check_low_freq_second_shape:
+                if counts_ordered[1]/counts_ordered[0]>shape_ratio_max:
+                    print(shapes_ordered, counts_ordered)
+                    print(x)
+                    print(x["shape"].value_counts())
+                    assert False, "do you expect this many secondary shapes in this cr? if so, then skip this failure/"
+        return shapes_ordered[0] # Return the most frequent shape.
+    dfchunkrankmap = df.groupby(["date", "epoch", "chunk_rank"]).apply(F).reset_index(name="shape")
+    
+    ### Sanity checks
+    # (1) Each shape is mapped to just one cr.
+    def F(x):    
+        unique_cr_shapes = set(tuple(this) for this in x.loc[:, ["chunk_rank", "shape"]].values.tolist())
+        if not len(unique_cr_shapes) == len(x["chunk_rank"].unique()):
+            print(unique_cr_shapes)
+            print(x["chunk_rank"].unique())
+            display(x)
+            assert False, "this is major problem. simple - need to create better map"   
+    dfchunkrankmap.groupby(["date", "epoch", "chunk_rank"]).apply(F)
+    
+    # (2) Check that all shapes are used. Do this by checking that there are not more shapes than chunk ranks.
+    # Combined with above check that shapes are not reused across cr, this guarantees all shapes are used
+    def F(x):
+        # display(x)
+        if len(x["chunk_rank"].unique()) < len(x["shape"].unique()):
+            print(x["chunk_rank"].unique())
+            print(x["shape"].unique())
+            print(x)
+            assert False
+    df.groupby(["date", "epoch"]).apply(F)
+
+    # Rename to crglobal
+    dfchunkrankmap = dfchunkrankmap.rename({"chunk_rank":"chunk_rank_global"}, axis=1)
+
+    # Assign to inout df
+    map_DaEpSh_to_crglob = {}
+    for _, row in dfchunkrankmap.iterrows():
+        k = (row["date"], row["epoch"], row["shape"])
+        v = row["chunk_rank_global"]
+        map_DaEpSh_to_crglob[k] = v
+    df[f"chunk_rank_global"] = [map_DaEpSh_to_crglob[(row["date"], row[f"epoch"], row[f"shape"])] for _, row in df.iterrows()]
+
+    return dfchunkrankmap

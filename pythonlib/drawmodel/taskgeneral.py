@@ -572,7 +572,7 @@ class TaskClass(object):
         # print(self.PlanDat["PrimsExtraParams"])
         # assert False
 
-        if "PrimsExtraParams" not in self.PlanDat.keys():
+        if (self.PlanDat is None) or ("PrimsExtraParams" not in self.PlanDat.keys()):
             return None
         elif all([len(x)==0 for x in self.PlanDat["PrimsExtraParams"]]):
             # liek this [{}, {}]
@@ -1075,7 +1075,7 @@ class TaskClass(object):
             get_grid = False
 
             centersthis = []
-            for p in Prims:
+            for p in self.Primitives:
                 prms = p.extract_as("shape")[1]
                 centersthis.append([prms["x"], prms["y"]])
 
@@ -1097,8 +1097,11 @@ class TaskClass(object):
             gridparams = self.get_grid_params()
             # xgrid = gridparams["grid_x"]
             # ygrid = gridparams["grid_y"]
-            xgrid = gridparams["grid_x_actual_after_rel"]
-            ygrid = gridparams["grid_y_actual_after_rel"]
+            if gridparams is not None:
+                xgrid = gridparams["grid_x_actual_after_rel"]
+                ygrid = gridparams["grid_y_actual_after_rel"]
+            else:
+                xgrid, ygrid = None, None
 
             # for key, val in gridparams.items():
             #     print('--', key, val)
@@ -1421,7 +1424,7 @@ class TaskClass(object):
         (e.g. for chunks where care only about grouping not order), then ignore those
         features.
         - hack_is_gridlinecircle, for gridlinecirlce epxeirments, hacked the grid...
-        for both "gridlinecircle", "chunkbyshape2"
+        for both "gridlinecircle", "chunkbyshape2", and "gridlinecircle1" and "gridlinecircle2"
         - input_grid_xy, either None (extracts grid params for this task auto), or a 
         list of two arrays [gridx, gridy] where each array is sorted (incresaing) scalar coordinates
         for each grid location.
@@ -1474,7 +1477,8 @@ class TaskClass(object):
             # print(1)
             # for x in Rels:
             #     print(x)
-            assert len(Prims)==len(self.PlanDat["ShapesAfterConcat"]), "just a sanity check, nothing special about ShapesAfterConcat"
+            if self.PlanDat is not None:
+                assert len(Prims)==len(self.PlanDat["ShapesAfterConcat"]), "just a sanity check, nothing special about ShapesAfterConcat"
             # assert len(Prims)==len(objects), "why mismatch? is one a chunk?"
         # p.Stroke.extract_spatial_dimensions(scale_convert_to_int=True)
 
@@ -1502,10 +1506,17 @@ class TaskClass(object):
         # - was this on grid?
         # grid_ver = self.get_grid_ver()
         if input_grid_xy is None:
+            # print(1)
             xgrid, ygrid, grid_ver = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
+            # print(hack_is_gridlinecircle, input_grid_xy)
+            # print(xgrid, ygrid)
         else:
+            # print(2)
             _, _, grid_ver = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
             assert len(input_grid_xy)==2
+            # print(len(input_grid_xy))
+            # print("HERE:", input_grid_xy)
+            # assert False
             assert isinstance(input_grid_xy, (list, tuple))
             xgrid = input_grid_xy[0]
             ygrid = input_grid_xy[1]
@@ -1514,6 +1525,9 @@ class TaskClass(object):
 
         # always get local grid (ie. this task), for releations
         xgrid_thistask, ygrid_thistask, _ = self.get_grid_xy(hack_is_gridlinecircle=hack_is_gridlinecircle)
+        # print(hack_is_gridlinecircle, input_grid_xy)
+        # print(xgrid, ygrid)
+        # assert False
 
         ################ METHODS (doesnt matter if on grid)
         def _orient(i):
@@ -1675,12 +1689,14 @@ class TaskClass(object):
                             # POssibility 1- actually on grid, but onsets are offset based on the attachpt (e.g,, onset_panch). This
                             # leads to the x y locations off-grid. Look into the original Relations struct to get the 
                             # grid loc.
-                            a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
-                            b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim", "center_prim_sketchpad"] # meaning: is relation rel sketchpad.
-                            c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho", "onset_diego"] # ones where this fails. add to this list.
-                            d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # i.e., (0,0), which means center of page. only coded for this so far, since this was written fro Pancho, and all prims were at center. Assuming this allows me to hard code xind = yind = 0 below.
-                            e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 
-
+                            if self.PlanDat is not None:
+                                a = self.PlanDat["RelsBeforeRescaleToGrid"][i][1]==0 # meaning: is relation rel sketchpad.
+                                b = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][0] in ["center_xylim", "center_prim_sketchpad"] # meaning: is relation rel sketchpad.
+                                c = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][1] in ["onset_pancho", "onset_diego"] # ones where this fails. add to this list.
+                                d = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][0] == 0 # i.e., (0,0), which means center of page. only coded for this so far, since this was written fro Pancho, and all prims were at center. Assuming this allows me to hard code xind = yind = 0 below.
+                                e = self.PlanDat["RelsBeforeRescaleToGrid"][i][2][2][1] == 0 
+                            else:
+                                a, b, c, d, e = None, None, None, None, None
                             if c:
                                 if True:
                                     # Then has no defined gridloc, since is alinged to stroke onset. I previsoly forced it to (0,0) wjhen was doing tasks with all at center,
@@ -1708,6 +1724,9 @@ class TaskClass(object):
                                         #   array(0.),
                                         #   ['center_xylim', 'onset_pancho', array([0., 0.])]]],
                             else:
+                                print("Data: ")
+                                print(xloc, xgrid)
+                                print(yloc, ygrid)
                                 # not sure why failed...
                                 print(self.PlanDat["RelsBeforeRescaleToGrid"])
                                 self.plotStrokes()
