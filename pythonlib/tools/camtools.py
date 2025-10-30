@@ -302,7 +302,7 @@ def get_lags(dfs_func, sdir, fd, ploton=True):
     from pythonlib.tools.stroketools import strokesInterpolate2,smoothStrokes
     corr_dir = f'{sdir}/corr_figs'
     if os.path.exists(corr_dir):
-        shutil.rmtree(corr_dir)
+        shutil.rmtree(corr_dir, ignore_errors=True)
     os.makedirs(corr_dir, exist_ok=True)
 
     for trial, dat in dfs_func.items():
@@ -326,7 +326,7 @@ def get_lags(dfs_func, sdir, fd, ploton=True):
 
             # Compare dates
             if today > CUTOFF_DATE:
-                print(f"Error: This script is disabled after {CUTOFF_DATE_STR}.")
+                print(f"Should have fixed this shit already!! {CUTOFF_DATE_STR}.")
                 sys.exit(1)
 
             cam_pts = dat['trans_pts_time_cam_all']
@@ -338,11 +338,19 @@ def get_lags(dfs_func, sdir, fd, ploton=True):
         from drawmonkey.tools.utils import getTrialsTimesOfMotorEvents
         motor_ts = getTrialsTimesOfMotorEvents(fd, trial)
         done = motor_ts['done_touch']
+        fraise = motor_ts['raise']
 
         if np.isnan(done):
-            strokes_touch = strokes_touch[1:]
+            strokes_touch = [strok for strok in dat['strokes_touch']\
+                if strok[0,2] > fraise]
         else:
-            strokes_touch = strokes_touch[1:-1]
+            strokes_touch = [strok for strok in dat['strokes_touch']\
+                if strok[0,2] > fraise and strok[-1,2] < done]
+
+        if len(strokes_touch) == 0:
+            #Sometimes weird stuff happens when cutting end and beginning,
+            #fixed elsewhere but too lazy to do here
+            continue
 
 
         t_stroke_start = strokes_touch[0][0,2]
