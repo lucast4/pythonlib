@@ -496,6 +496,7 @@ class Tokens(object):
 
         # 2) get ordinal within the chunk
         # e.g [0 0 1 1 1 0] will map to [0 1 0 1 2 0]
+        # assert np.all(np.diff(chunk_rank)>=0), "the below code assuimes it(?)"
         chunk_within_rank = []
         r_prev = None
         for r in chunk_rank:
@@ -909,6 +910,20 @@ class Tokens(object):
             if n_fails/n_tot>MAX_FRAC_FAIL:
                 print(n_fails, n_tot)
                 assert False, "Maybe you expect this many novel prims to fail getting shape semantic? If so, comment this out."
+
+    def index_extract_tok_using_ind_taskstroke_orig(self, ind_taskstroke_orig):
+        """
+        Return the tok (dict) whose value for the key 'ind_taskstroke_orig' equals the
+        inputed <ind_taskstroke_orig>. throws error if it doesnt exist.
+
+        RETURNS:
+        - i, index into self.Tokens
+        - tok, the dict that is self.Tokens[i]
+        """
+        for i, tok in enumerate(self.Tokens):
+            if tok["ind_taskstroke_orig"] == ind_taskstroke_orig:
+                return i, tok
+        assert False, "failed to find it..."
 
     def data_extract_raw(self):
         """ Return as list of dicts, excluding any
