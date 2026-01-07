@@ -9535,6 +9535,35 @@ class Dataset(object):
         map_chunk_rank_global_to_shape = {cr:sh for cr, sh in enumerate(shapes)}
         return map_shape_to_chunk_rank_global, map_chunk_rank_global_to_shape
     
+    def grammarparses_syntax_each_stroke_error_failure(self, ind):
+        """
+        Return array length beh strokes, where 1 means correct and 0 means failure, for this trial.
+        
+        Failed beh strokes are due to etiher:
+        - beh and task strokes are misaligned
+        - beh makes extra strokes, too many, so no task stroke exists.
+        """
+        # For each beh stroke, get whether it was success.
+        TkBeh = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True) # what did
+        TkCorrect = self.grammarparses_task_tokens_correct_order_sequence(ind, return_as_tokensclass=True) # what should have done
+
+        # For each beh stroke, get whether it was success.
+        corrects = []
+        for i, tokbeh in enumerate(TkBeh.Tokens):
+            if i>len(TkCorrect.Tokens)-1:
+                # Then beh has too many strokes. automaticaly call any extra strokes failures.
+                corrects.append(0)
+            else:
+                # Then check if beh and task are the same
+                tokcorr = TkCorrect.Tokens[i]
+                if tokbeh["ind_taskstroke_orig"] == tokcorr["ind_taskstroke_orig"]:
+                    corrects.append(1)
+                else:
+                    corrects.append(0)
+        corrects = np.array(corrects)
+
+        return corrects
+
     def grammarparses_rules_shape_AnBmCk(self):
         """
         For each row, appends column "epoch_is_AnBmCk", bool, indicating
