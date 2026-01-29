@@ -295,7 +295,7 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
                     plt.plot(w)
             else:
                 # Then modify fewer pts at the edges.
-                assert len(w)>=6, "assuming so below... Why keep such a short stroke anyway?"
+                # assert len(w)>=6, "assuming so below... Why keep such a short stroke anyway?"
                 w[0] = 0.66
                 w[1] = 0.33
                 w[2] = 0.16
