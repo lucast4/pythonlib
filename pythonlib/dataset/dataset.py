@@ -173,6 +173,7 @@ class Dataset(object):
         self.GrammarRuleDictEachEpochOrig = None
         self.MapRuleToOrderedShapes = {}
         self.ShapesExist = {}
+        self.GrammarParsesFirstTimeAssignChunk = False
 
         self.ML2_FILEDATA = {}
 
@@ -9225,7 +9226,7 @@ class Dataset(object):
         self.Dat["epoch_is_DIR"] = list_DIR
         print("Appended column: self.Dat[epoch_is_DIR]")
 
-    def grammarparses_task_tokens_correct_order_sequence(self, ind, PLOT=False):
+    def grammarparses_task_tokens_correct_order_sequence(self, ind, PLOT=False, return_as_tokensclass=False):
         """
         Get the task tokens in the correct order it shold be done given the rule of this trial.
         Asserts that only one parse exists.
@@ -9243,11 +9244,17 @@ class Dataset(object):
         parse = tmp[0]
 
         # Convert to tokens
-        tokens = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=False)
-        assert np.all(np.diff([tok["ind_taskstroke_orig"] for tok in tokens])==1), "make this happen, in taskclass_tokens_extract_wrapper"
-        tokens_correct_order = [tokens[i] for i in parse]
+        tokens = self.taskclass_tokens_extract_wrapper(ind, "task", return_as_tokensclass=return_as_tokensclass)
+        if return_as_tokensclass==False:
+            assert np.all(np.diff([tok["ind_taskstroke_orig"] for tok in tokens])==1), "make this happen, in taskclass_tokens_extract_wrapper"
+            tokens_correct_order = [tokens[i] for i in parse]
 
-        return tokens_correct_order
+            return tokens_correct_order
+        else:
+            Tk = tokens.copy() # To avoid reordering Tk
+            assert np.all(np.diff([tok["ind_taskstroke_orig"] for tok in Tk.Tokens])==1), "make this happen, in taskclass_tokens_extract_wrapper"
+            Tk.Tokens = [Tk.Tokens[i] for i in parse]
+            return Tk
 
     def grammarparses_rules_shape_AnBmCk_get_shapekey(self):
         """
@@ -9922,29 +9929,22 @@ class Dataset(object):
         print("CHUNK WITHIN RANK:", [t["chunk_within_rank"] for t in tok])
         print("CHUNK WITHIN RANK FROM LAST:", [t["chunk_within_rank_fromlast"] for t in tok])
 
-    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
-        return_n_in_chunk=False):
+    def _grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind, Tk):
         """
-        For this trial, assign each beh stroke to a chunk index and to index within chunk,
-        based on the matching parse, for the rule of this trial. e.g., lines to circles, 
-        lines, then circle.s 
-        NOTE: if this is a failure trial, could be wierd. recormmended to run:
-        D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
-        NOTE: Fails if:
-        - the length of beh(first touch) is diff from len (beh strokes)\
-        - incorrect beh, so no parses found (then cannot assign chunk)
+        Helper, inner function, works with Tokens directly, to assign to each tok values related to chunks.
+
         RETURNS:
-        - chunks, list of ints, 
-        - chunks_within, list of ints, 
-        - (also modifes tokens for this trial)
-        EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
+        - (Nothing) Modifies Tk.Tokens, adding values to each dict.
         """
+
+        # Skip if this is already run
+        done = all(["chunk_rank" in tok.keys() for tok in Tk.Tokens])
+        if done:
+            return
+
         epoch = self.Dat.iloc[ind]["epoch_orig"]
         rs = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["rulestring"]
-        
-        beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
-        tmp = self.taskclass_tokens_extract_wrapper(ind, which_order="beh_using_task_data")
-        assert len(beh)==len(tmp), "beh_firsttouch doesnt exist beh. cannot do assignment."
+        beh = [tok["ind_taskstroke_orig"] for tok in Tk.Tokens]
 
         try:
             GD = self.grammarparses_grammardict_return(ind)
@@ -9963,9 +9963,114 @@ class Dataset(object):
             C = GD.ParsesGeneratedYokedChunkObjects[rs][idx]
         
         # based on this hier, assign chunks ids to each stroke
-        PLOT = False
-        Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", plot=PLOT, return_as_tokensclass=True)
-        return Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
+        Tk.chunks_update_by_chunksobject(C)
+
+    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke_SANITY(self):
+        """
+        Run this only once, to do sanity check... now using new method.
+        If for any trial the new vs. old assignments differ, this throws error.
+        """
+
+        # If this is the first time running, then do sanity check that new_version gives identical result to old version
+        if self.GrammarParsesFirstTimeAssignChunk:
+
+            # Sanity check that the new method works.
+            # - if trial is success, then this matches the old version perfectly.
+            # - if trial is failure, then by eye this gives the correct chunk_rank values for the failed stroke(s).
+            
+            plot_example_failed_stroke=False # Turn this on to plot and visually inspect trials where monkey failed.
+
+            for ind in range(len(self.Dat)):
+
+                success = self.Dat.iloc[ind]["success_binary_quick"]
+                
+                chunk_rank_new, chunk_within_rank_new, chunk_n_in_chunk_new = self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(
+                    ind, return_n_in_chunk=True, new_version=True)
+                
+                if success:
+                    chunk_rank_old, chunk_within_rank_old, chunk_n_in_chunk_old = self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(
+                        ind, return_n_in_chunk=True, new_version=False)
+                    assert chunk_rank_old == chunk_rank_new
+                    assert chunk_within_rank_old == chunk_within_rank_new
+                    assert chunk_n_in_chunk_old == chunk_n_in_chunk_new
+                else:
+                    if plot_example_failed_stroke:
+                        print(ind)
+                        import random
+                        if random.random()<0.05:
+                            self.grammarparses_print_plot_summarize(ind)
+                            print(chunk_rank_new, chunk_within_rank_new)
+                            assert False
+
+            self.GrammarParsesFirstTimeAssignChunk = False
+
+    def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
+        return_n_in_chunk=False, new_version=True):
+        """
+        For this trial, assign each beh stroke to a chunk index and to index within chunk,
+        based on the matching parse, for the rule of this trial. e.g., lines to circles, 
+        lines, then circle.s 
+        NOTE: if this is a failure trial, could be wierd. recormmended to run:
+        D.preprocessGood(params=["one_to_one_beh_task_strokes", "correct_sequencing_binary_score"])
+        NOTE: Fails if:
+        - the length of beh(first touch) is diff from len (beh strokes)\
+        - incorrect beh, so no parses found (then cannot assign chunk)
+        RETURNS:
+        - chunks, list of ints, 
+        - chunks_within, list of ints, 
+        - (also modifes tokens for this trial)
+        EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
+        """
+
+        # If this is the first time running, then do sanity check that new_version gives identical result to old version
+        self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke_SANITY()
+
+        epoch = self.Dat.iloc[ind]["epoch_orig"]
+        rs = self.grammarparses_rules_extract_info()["ruledict_for_each_rule"][epoch]["rulestring"]
+        
+        # Then use the behavior strokes
+        Tkbeh = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", plot=False, return_as_tokensclass=True)
+
+        # Two methods for assinging chunks to each tok in Tk
+        if new_version==False:
+            # (1) Original, using the tokens directly. This fails if the trial is not success
+            beh = self.grammarparses_extract_beh_taskstroke_inds(ind)
+            assert len(beh)==len(Tkbeh.Tokens), "beh_firsttouch doesnt exist beh. cannot do assignment."
+
+            try:
+                GD = self.grammarparses_grammardict_return(ind)
+            except AssertionError as err:
+                print("Run this?? D.grammarparses_successbinary_score()")
+                raise err
+
+            # get the original chunksclass for this index
+            idx = GD._score_beh_in_parses_find_index_match(beh, rs)
+            if idx is None:
+                print("-----------------")
+                print(idx)
+                print(beh, rs)
+                assert False, "then there is no match... (run this? D.preprocessGood(params=[one_to_one_beh_task_strokes, correct_sequencing_binary_score]))"
+            else:
+                C = GD.ParsesGeneratedYokedChunkObjects[rs][idx]
+
+            return Tkbeh.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
+        else:
+            # (2) New, which uses chunks already assigned to TaskTokens.. Can work even if fails. It assigns 
+            # based on the stroke chosen by monkey (for the failed storke).
+            Tkcorrect = self.grammarparses_task_tokens_correct_order_sequence(ind, return_as_tokensclass=True)
+            self._grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(ind, Tkcorrect)
+
+            # And then add the fields related to chunks
+            Tkbeh.Tokens = [Tkcorrect.index_extract_tok_using_ind_taskstroke_orig(tok["ind_taskstroke_orig"])[1] for tok in Tkbeh.Tokens]
+            chunk_rank = [tok["chunk_rank"] for tok in Tkbeh.Tokens]
+            chunk_within_rank = [tok["chunk_within_rank"] for tok in Tkbeh.Tokens]
+            chunk_n_in_chunk = [tok["chunk_n_in_chunk"] for tok in Tkbeh.Tokens]
+
+            if return_n_in_chunk:
+                return chunk_rank, chunk_within_rank, chunk_n_in_chunk
+            else:
+                return chunk_rank, chunk_within_rank                
+
         # chunks, chunks_within = Tk.chunks_update_by_chunksobject(C, return_n_in_chunk=return_n_in_chunk)
         # print(ind, epoch, beh, C.Hier, Tk.chunks_update_by_chunksobject(C))
         # _chunk_sequence_is_correct(Tk.Tokens, print_chunk_seq=True)        
