@@ -274,36 +274,44 @@ def smoothStrokes(strokes, sample_rate, window_time=0.05, window_type="hanning",
             assert s_raw.shape == s_sm.shape
             npts = s_raw.shape[0]
             w = np.zeros(npts)[:, None]
-            if npts>=10:
-                # For edges, take some of the onset pts.
-                # This done by hand, seems reasonable. The logic is that one should trust the on and off
-                # position for each stroke, bsaed on touchscreen.
-                w[0] = 1.
-                w[1] = 0.66
-                w[2] = 0.33
-                w[3] = 0.16
-                w[4] = 0.08
 
-                w[-5] = 0.08
-                w[-4] = 0.16
-                w[-3] = 0.33
-                w[-2] = 0.66
-                w[-1] = 1.
-
-                if False:
-                    plt.figure()
-                    plt.plot(w)
+            if npts<5:
+                # Skip it, it is too short to smooth
+                s_new = s_raw.copy()
             else:
-                # Then modify fewer pts at the edges.
-                assert len(w)>=6, "assuming so below... Why keep such a short stroke anyway?"
-                w[0] = 0.66
-                w[1] = 0.33
-                w[2] = 0.16
-                w[-3] = 0.16
-                w[-2] = 0.33
-                w[-1] = 0.66
+                if npts>=10:
+                    # For edges, take some of the onset pts.
+                    # This done by hand, seems reasonable. The logic is that one should trust the on and off
+                    # position for each stroke, bsaed on touchscreen.
+                    w[0] = 1.
+                    w[1] = 0.66
+                    w[2] = 0.33
+                    w[3] = 0.16
+                    w[4] = 0.08
 
-            s_new = s_sm*(1-w) + s_raw*w
+                    w[-5] = 0.08
+                    w[-4] = 0.16
+                    w[-3] = 0.33
+                    w[-2] = 0.66
+                    w[-1] = 1.
+
+                    if False:
+                        plt.figure()
+                        plt.plot(w)
+                else:
+                    # Then modify fewer pts at the edges.
+                    if len(w)<5:
+                        print(s_raw)
+                        assert False, "assuming so below... Why keep such a short stroke anyway?"
+                    # assert len(w)>=6, "assuming so below... Why keep such a short stroke anyway?"
+                    w[0] = 0.66
+                    w[1] = 0.33
+                    w[2] = 0.16
+                    w[-3] = 0.16
+                    w[-2] = 0.33
+                    w[-1] = 0.66
+
+                s_new = s_sm*(1-w) + s_raw*w
             
             # Assign the actual values of the times. if take mean, then may run into numerical errors when try to check if is equal...
             if False: # Not needed...
@@ -801,8 +809,15 @@ def sample_rate_from_strokes(strokes, allow_failures=False, allow_outlier_timest
     min_fs = np.min(list_fs)
     med_fs = np.median(list_fs)
     max_fs = np.max(list_fs)
-    assert max_fs<1.02*med_fs
-    assert min_fs>0.98*med_fs
+    try:
+        assert max_fs<1.02*med_fs
+        assert min_fs>0.98*med_fs
+    except Exception as err:
+        print("max_fs: ", max_fs)
+        print("med_fs: ", med_fs)
+        print("min_fs: ", min_fs)
+        print("list_fs: ", list_fs)
+        raise err
     return med_fs
 
     # strok = np.concatenate(strokes[:2], axis=0)
