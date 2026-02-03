@@ -424,7 +424,7 @@ def heatmap(df, ax=None, annotate_heatmap=True, zlims=(None, None),
             row_sums = dfthis.sum(axis=1, skipna=True) # one value for each row
             row_sums[row_sums==0.]=0.001 # So no divide by 0.
             dfthis = dfthis.div(row_sums, axis=0) 
-    elif norm_method=="all_div":
+    elif norm_method in ["all_div", "div_all"]:
         # divide by sum of all counts
         if True:
             assert np.all(dfthis>=0), "cant norm by dividing unless all vallues are >0"

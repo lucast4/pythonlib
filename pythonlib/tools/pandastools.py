@@ -2438,9 +2438,9 @@ def integerify_values(df, col):
     def is_num(x):
         if x is None:
             return False
-        elif np.isnan(x):
-            return False
         elif isinstance(x, str):
+            return False
+        elif np.isnan(x):
             return False
         else:
             return True
@@ -3745,13 +3745,14 @@ def shuffle_dataset_hierarchical_remap(df, var_shuff, grouping_column, col_name_
     """
     Is like shuffle_dataset_hierarchical, but here var_shuff is not shuffled 
     by permuting al row,s but instead is by remapping each unique levle of var_shuff
-    to a new unique level.
-    
+    to a new unique level. The mapping is selected randomly.
+
     Does this separtedly for each level of grouping_column (i.e,, each level has 
-    unique remapping of var_shuff)
+    unique remapping of var_shuff), unless use_same_mapping_across_groups==True, 
+    in which case the mapping is the same for entire df.
 
     RETURNS:
-    - modifes df, adding a column: f'{var_shuff}_remapped' if col_name_shuffed is None
+    - a copy of df, adding a column: f'{var_shuff}_remapped' if col_name_shuffed is None
 
     TO TEST:
     import pandas as pd
@@ -3772,6 +3773,11 @@ def shuffle_dataset_hierarchical_remap(df, var_shuff, grouping_column, col_name_
 
     """
     # Function to remap values within each level of the grouping column
+
+    assert isinstance(var_shuff, str)
+    assert isinstance(grouping_column, str)
+
+    df = df.copy()
 
     if use_same_mapping_across_groups:
         unique_vals = df[var_shuff].unique()
@@ -4195,7 +4201,8 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
                                            plot_error_bars=True,
                                            map_subplot_var_to_new_subplot_var=None,
                                            fontsize=4, xymin_zero=False,
-                                           jitter_value=None):
+                                           jitter_value=None,
+                                           map_datapt_lev_to_colorlev=None):
     """
     Runs plot_45scatter_means_flexible_grouping, but this is wrapper that can take in wideform dataframe,
     does necessary conversion, then calls plot_45scatter_means_flexible_grouping.
@@ -4234,12 +4241,13 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
     lev_manip = "col_from_wide"
     dfres, fig = plot_45scatter_means_flexible_grouping(dflong, lev_manip, x_lev_manip, y_lev_manip, var_subplot, "col_from_wide_value", 
             var_datapt, plot_text, alpha, SIZE, shareaxes, plot_error_bars, map_subplot_var_to_new_subplot_var,
-            fontsize, xymin_zero, jitter_value)
+            fontsize, xymin_zero, jitter_value, map_datapt_lev_to_colorlev=map_datapt_lev_to_colorlev)
     
     return dfres, fig                                                
 
 def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
-                                           var_subplot, var_value, var_datapt, var_color):
+                                           var_subplot, var_value, var_datapt, var_color, 
+                                           return_dfpivot=False):
                                         #    plot_text=True,
                                         #    alpha=0.8, SIZE=3, shareaxes=False,
                                         #    plot_error_bars=True,
@@ -4254,6 +4262,8 @@ def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
     """
     Helper to plot datapts (levels of <var_datapt>) along two axes (x_lev_manip, y_lev_manip, which are levels of
     var_manip) and colored by var_color, which can be continuous or integer (if categorical, use plot_45scatter_means_flexible_grouping)
+
+    ALSO: Makes a plot of var_color vs. difference of y minus x. ANd does regression.
 
     """    
     from pythonlib.tools.plottools import set_axis_lims_square_bounding_data_45line
@@ -4304,7 +4314,10 @@ def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
         ax.axvline(0, color="k", alpha=0.5)
     # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-2.pdf")       
 
-    return fig1, fig2, fig3     
+    if return_dfpivot:
+        return fig1, fig2, fig3, dfeffect_pivot
+    else:
+        return fig1, fig2, fig3     
     
 def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt,
@@ -4338,11 +4351,14 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         "preSMA_a":"preSMA_a",
         "preSMA_p":"preSMA_p",
             }
+    TWO OPTIONS FOR COLORING POINTS:
     - color_by_var_datapt, bool, if True, then diff color for each lev of var_datapt
-    - map_datapt_lev_to_colorlev, dict, mapping from level of var_datapt to a cateorical vriable that defines color.
-    in this code, will make those colors.
-    - colorlevs_that_exist, list of colorlevs, which are used to define the colors that exist.
+    - map_datapt_lev_to_colorlev, dict, mapping from level of var_datapt to a cateorical value that defines color.
+    in this code, will make those colors. This means that coloring only works if you externally map each datapt to a value.
+        eg: map_datapt_lev_to_colorlev = {row[var_datapt]:row[var_color] for _, row in dfthis.iterrows()}
+        Also can input colorlevs_that_exist, list of colorlevs,  which are used to define the colors that exist.
     - map_dataptlev_to_color, directly map from level of var_datapt to a 3-array color.
+    
     EXAMPLE:
     - To compare score during stim 9stim_epoch) vs. during off, one datapt per character...
     separate subplot for each epoch_orig...
@@ -4435,7 +4451,8 @@ def plot_45scatter_means_flexible_grouping(dfthis, var_manip, x_lev_manip, y_lev
         map_colorlev_to_color = None
         assert map_datapt_lev_to_colorlev is None
     elif map_datapt_lev_to_colorlev is not None:
-        assert colorlevs_that_exist is not None
+        if colorlevs_that_exist is None:
+            colorlevs_that_exist = list(set(map_datapt_lev_to_colorlev.values()))
         map_colorlev_to_color, _, _ = color_make_map_discrete_labels(colorlevs_that_exist)
         map_dataptlev_to_color = {dataptlev:map_colorlev_to_color[colorlev] for dataptlev, colorlev in map_datapt_lev_to_colorlev.items()}
     else:
@@ -4840,6 +4857,61 @@ def _cov_ellipse_params(mu, cov, nsig=2.0):
     return width, height, angle
 
 
+def _expand_limits_for_kde(df, x, y, label, classes, bandwidth, scott_bandwidth,
+                          init_xlim, init_ylim, grid_size=250,
+                          boundary_frac=0.01,  # boundary density must be < 1% of max
+                          max_expand_steps=10, expand_factor=1.25):
+    """
+    Iteratively expands xlim/ylim until KDE density on the boundary is small.
+    """
+    xlim = list(init_xlim)
+    ylim = list(init_ylim)
+
+    for _ in range(max_expand_steps):
+        Xgrid, Ygrid = np.meshgrid(
+            np.linspace(*xlim, grid_size),
+            np.linspace(*ylim, grid_size),
+            indexing="xy"
+        )
+        XY = np.column_stack([Xgrid.ravel(), Ygrid.ravel()])
+
+        worst_ratio = 0.0
+
+        for c in classes:
+            sub = df[df[label] == c][[x, y]].dropna().to_numpy()
+            if sub.shape[0] < 2:
+                continue
+
+            bw = bandwidth if bandwidth is not None else scott_bandwidth(sub)
+            kde = KernelDensity(kernel="gaussian", bandwidth=bw).fit(sub)
+            D = np.exp(kde.score_samples(XY)).reshape(grid_size, grid_size)
+
+            dmax = float(np.nanmax(D))
+            if not np.isfinite(dmax) or dmax <= 0:
+                continue
+
+            # boundary = top row, bottom row, left col, right col
+            boundary_max = np.nanmax([
+                np.nanmax(D[0, :]),
+                np.nanmax(D[-1, :]),
+                np.nanmax(D[:, 0]),
+                np.nanmax(D[:, -1]),
+            ])
+            worst_ratio = max(worst_ratio, float(boundary_max / dmax))
+
+        if worst_ratio <= boundary_frac:
+            break  # good enough; boundaries are low density
+
+        # expand both axes symmetrically
+        xmid = 0.5 * (xlim[0] + xlim[1])
+        ymid = 0.5 * (ylim[0] + ylim[1])
+        xhalf = 0.5 * (xlim[1] - xlim[0]) * expand_factor
+        yhalf = 0.5 * (ylim[1] - ylim[0]) * expand_factor
+        xlim = [xmid - xhalf, xmid + xhalf]
+        ylim = [ymid - yhalf, ymid + yhalf]
+
+    return tuple(xlim), tuple(ylim)
+
 def plot_class_kde(
     df,
     x="var1",
@@ -4949,6 +5021,27 @@ def plot_class_kde(
         ylim = np.array([_min, _max])
         print(xlim)
 
+    def scott_bandwidth(X):
+        n, d = X.shape
+        if n <= 1:
+            return 1.0
+        factor = n ** (-1.0 / (d + 4))
+        stds = X.std(axis=0, ddof=1)
+        bw = np.mean(stds) * factor
+        return max(bw, np.finfo(float).eps)
+
+    # NEW: expand until KDE boundary is low density
+    xlim, ylim = _expand_limits_for_kde(
+        df, x, y, label, classes,
+        bandwidth, scott_bandwidth,
+        xlim, ylim,
+        grid_size=min(grid_size, 200),   # cheaper; this is just for bounds
+        boundary_frac=0.01,
+        max_expand_steps=5,
+        expand_factor=1.1)
+        # max_expand_steps=10, # Original
+        # expand_factor=1.25)
+        
     Xgrid, Ygrid = np.meshgrid(
         np.linspace(*xlim, grid_size),
         np.linspace(*ylim, grid_size),
@@ -4965,14 +5058,6 @@ def plot_class_kde(
     stats_per_class = {}
     global_max = -np.inf
 
-    def scott_bandwidth(X):
-        n, d = X.shape
-        if n <= 1:
-            return 1.0
-        factor = n ** (-1.0 / (d + 4))
-        stds = X.std(axis=0, ddof=1)
-        bw = np.mean(stds) * factor
-        return max(bw, np.finfo(float).eps)
 
     # Fit KDEs + gather stats
     for c in classes:
@@ -5072,7 +5157,6 @@ def plot_class_kde(
         # Legend handle
         handles.append(Line2D([0], [0], marker='o', linestyle='', markersize=8,
                               markerfacecolor=outline_color if outline_color is not None else 'k', alpha=0.9, label=str(c)))
-
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.set_xlabel(x)

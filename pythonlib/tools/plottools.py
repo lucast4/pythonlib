@@ -81,6 +81,33 @@ def rotate_y_labels(ax, rotation=45):
     ax.figure.canvas.draw_idle()
     ax.set_yticks(ax.get_yticks(), ax.get_yticklabels(), rotation=rotation)
 
+def rugplot_scatter_hist_on_axis(ax, values, color="c", plot_indiv_values=True, plot_mean_and_std=True):
+    """
+    Plot markers on top of the axis, e.g, 1d observations, following seaborn's rugplot.
+    
+    :param ax: Description
+    :return: Description
+    :rtype: Any
+    """
+
+    if plot_indiv_values:
+        # edach trial
+        sns.rugplot(x = values, alpha=0.01, color=color)
+
+    if plot_mean_and_std:
+        # Coordinate transform for drawing ON the axis spine
+        t = ax.get_xaxis_transform()   # (xdata, yaxis)
+        mu = np.mean(values)
+        sigma = np.std(values)
+        ax.plot(mu, 0, '^', color=color, markersize=8, transform=t, clip_on=False)
+        ax.plot(mu - sigma, 0, '^', color=color, markersize=6, alpha=0.6, transform=t, clip_on=False)
+        ax.plot(mu + sigma, 0, '^', color=color, markersize=6, alpha=0.6, transform=t, clip_on=False)
+        
+        if False:
+            # Make sure x-axis line is visible
+            ax.spines['bottom'].set_position(('outward', 5))
+            # ax.set_ylim(0, 0.3)
+
 def rose_plot(ax, angles, bins=16, density="frequency_radius", offset=0, lab_unit="degrees",
               start_zero=True, fill=False, skip_plot=False, **param_dict):
     """
@@ -174,7 +201,8 @@ def annotate(s, ax=None, color="k"):
         ax.annotate(s, (0.05, 0.9), color=color, size=12, xycoords="axes fraction")
 
 
-def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap=None, return_cmap=False):
+def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap=None, 
+                                   return_cmap=False, force_continuous=False):
     """
     Helper to make colors for plotting, mapping from unque item
     in labels to rgba color. Can be continuous or discrete (and will
@@ -223,6 +251,13 @@ def color_make_map_discrete_labels(labels, which_dim_of_labels_to_use=None, cmap
         _map_lev_to_color = {}
         for lev, pc in zip(labels_color_uniq, pcols):
             _map_lev_to_color[lev] = pc
+
+    if force_continuous:
+        # THen force the type to be continuons.
+        # This matters if you have numbers but they are small set. That would be
+        # called discrete unless you turn this on.
+        color_type = "cont"
+        _map_lev_to_color = None
 
     # Return the color for each item
     if _map_lev_to_color is None:
@@ -363,7 +398,18 @@ def map_continuous_var_to_color_range(values, valmin=None, valmax=None,
         cmap = sns.color_palette("husl", as_cmap=True)
     elif kind == "sequential":
         # purple --> white
-        cmap = sns.color_palette("rocket", as_cmap=True)
+        if False:
+            cmap = sns.color_palette("rocket", as_cmap=True)
+        else:
+            # same, but avoid one end being too white, which is hard to see.
+            from matplotlib.colors import LinearSegmentedColormap
+            base_cmap = sns.color_palette("rocket", as_cmap=True)
+            def truncate_cmap(cmap, minval=0.0, maxval=1.0, n=256):
+                return LinearSegmentedColormap.from_list(
+                    "name_here",
+                    cmap(np.linspace(minval, maxval, n))
+                )
+            cmap = truncate_cmap(base_cmap, minval=0., maxval=0.9)
     elif kind == "custom":
         cmap = sns.color_palette(custom_cmap, as_cmap=True)
     else:
@@ -511,6 +557,12 @@ def shadedErrorBar(x, y, yerr=None, ylowupp = None, ax=None, color="tab:blue",
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     # plt.show()
+
+    # To make sure no white space between plto and y-axis.
+    # ax.set_xlim(-100, x.max())
+    ax.margins(x=0)
+    # plt.tight_layout()
+    # asdsad
     return ax
 
 def plot_y_at_each_x_mean_sem(x, y, ax):
