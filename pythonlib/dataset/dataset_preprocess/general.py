@@ -775,6 +775,7 @@ def _groupingParams(D, expt):
     if grouping_reassign:
         # Rename epochs, applying reassignment methods in order
         for i, grmeth in enumerate(grouping_reassign_methods_in_order):
+            print("grouping_reassign_methods_in_order:", i, grmeth)
             if grmeth=="tasksequencer":
                 # Look into objectclass tasksequencer.
                 print(" ")
@@ -1075,12 +1076,21 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
     if "syntax_concrete" not in D.Dat.columns:
         D.grammarparses_syntax_concrete_append_column()
 
-    # Consider single prims cases to be poart of the shape set.
+    # Invert the dict
     tmp = {}
     for indices, shapeset in map_syntconcr_template_to_shapeset.items():
+        # e.g, (0, 2, 4), 'A'
+        assert indices not in tmp
         tmp[indices] = shapeset
-        for idx in indices:
-            tmp[(idx,)] = shapeset
+        
+        # Also extract the single prims, and consider single prims to be their own shape set (ie epoch)
+        if len(indices)>1:
+            for idx in indices:
+                if (idx,) in tmp:
+                    assert tmp[(idx,)] == "singleprim", "canot be possible..."
+                else:
+                    tmp[(idx,)] = "singleprim"
+
     map_syntconcr_template_to_shapeset = tmp
 
     # AnBm, with two shape ses switching by trail in same day.
@@ -1111,11 +1121,24 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
                 assert False, "Re-enter by hand what the syntax concretes are"
 
             shape_set = map_syntconcr_template_to_shapeset[inds_shapes] # e.g., "A"
-            indices_syntax = map_shapeset_to_indices_syntax[shape_set]
-            # indices_syntax = map_syntconcr_template_to_indices_syntax[inds_shapes] # e.g., "A"
+            if shape_set == "singleprim":
+                # Then these don't exist in the original. No need to do sanity check
+                pass
+                # print("HERE, for singleprim: ", inds_shapes)
+                indices_syntax = inds_shapes
+            else:
+                indices_syntax = map_shapeset_to_indices_syntax[shape_set]
+                # indices_syntax = map_syntconcr_template_to_indices_syntax[inds_shapes] # e.g., "A"
 
-            # print(inds_shapes, indices_syntax)
-            assert tuple(inds_shapes) == tuple(indices_syntax), "sanity check, I dont know why I have both "
+                # print(inds_shapes, indices_syntax)
+
+                if not tuple(inds_shapes) == tuple(indices_syntax):
+                    print(shape_set)
+                    print(map_syntconcr_template_to_shapeset)
+                    print(map_shapeset_to_indices_syntax)
+                    print(tuple(inds_shapes), tuple(indices_syntax))
+                    assert False, "sanity check, I dont know why I have both "
+                # assert tuple(inds_shapes) == tuple(indices_syntax), "sanity check, I dont know why I have both "
 
             epoch_orig = row["epoch_orig"]
             epoch_new = f"{epoch_orig}|{shape_set}"
@@ -1395,19 +1418,19 @@ def epoch_grouping_reassign_by_tasksequencer(D, map_tasksequencer_to_rule):
         return map_tasksequencer_to_rule[(ver, p)]
 
     # For each trial, get its rule
-    if int(D.dates(True)[0]) > 220918:
-        list_rule =[]
-        for ind in range(len(D.Dat)):
-            list_rule.append(_index_to_rule(ind))
-            
-        # Assign rule back into D.Dat
-        D.Dat["epoch"] = list_rule
-        D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
-        print("Modified D.Dat[epoch]")
-        print("These counts for epochs levels: ")
-        print(D.Dat["epoch"].value_counts())
-        print("These counts for epoch_rule_tasksequencer levels: ")
-        print(D.Dat["epoch_rule_tasksequencer"].value_counts())
+    # if int(D.dates(True)[0]) > 220918: # 12/7/25 - uncomneted, since I dont knwo why I added this 2 monghs ago. Keeping it messes up loading for pancho 220909.
+    list_rule =[]
+    for ind in range(len(D.Dat)):
+        list_rule.append(_index_to_rule(ind))
+        
+    # Assign rule back into D.Dat
+    D.Dat["epoch"] = list_rule
+    D.Dat["epoch_rule_tasksequencer"] = list_rule # since epoch _might_ change, save a veresion here.
+    print("Modified D.Dat[epoch]")
+    print("These counts for epochs levels: ")
+    print(D.Dat["epoch"].value_counts())
+    print("These counts for epoch_rule_tasksequencer levels: ")
+    print(D.Dat["epoch_rule_tasksequencer"].value_counts())
     # else:
     #     print(D.Dat["epoch"].unique())
     #     assert False
