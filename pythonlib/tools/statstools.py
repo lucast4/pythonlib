@@ -375,9 +375,88 @@ def coeff_determination_R2(yvals, yvals_pred, doplot=False, return_ss=False):
     else:
         return R2, residuals_pred, residuals_mean   
 
+def statsmodel_linregress_ols_each_conj_grp(dfeffect_pivot, yvar, xvar, var_grp):
+    """
+    For each level of var_grp, do a OLS linear regression of yvar vs. xvar,
+    and then collect the results into a dataframe, each row is one
+    level of var_grp.
+
+    PARAMS:
+    - dfeffect_pivot, wideform with columns <xvar>, <yvar>, <var_grp>
+
+    """
+        
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    grpdict = grouping_append_and_return_inner_items_good(dfeffect_pivot, var_grp)
     
+    res = []
+    for grp, inds in grpdict.items():
+
+        df = dfeffect_pivot.iloc[inds]
+
+        xvals = df[xvar].values.reshape(-1, 1)
+        yvals = df[yvar].values
+        
+        # fit_and_score_regression(xvals, yvals, version="ols", PRINT=True)
+        results, intercept, slope, r2, pvalue = statsmodel_ols(xvals, yvals, return_stats=True)
+                                 
+        # intercept, slope, r2, pvalue = f(df)
+        res.append({
+            "intercept":intercept, 
+            "slope":slope, 
+            "r2":r2, 
+            "pvalue":pvalue,
+            "grp":grp
+        })
+
+    dfres = pd.DataFrame(res)
+    
+    return dfres
+
+    # OLD METHOD, got too clucnky
+    # def f_int(x):
+    #     xvals = x["x_min_y"].values.reshape(-1, 1)
+    #     yvals = x[color_var].values
+    #     results, intercept, slope, r2, pvalue = statsmodel_ols(xvals, yvals, return_stats=True)
+    #     return intercept
+
+    # def f_slope(x):
+    #     xvals = x["x_min_y"].values.reshape(-1, 1)
+    #     yvals = x[color_var].values
+    #     results, intercept, slope, r2, pvalue = statsmodel_ols(xvals, yvals, return_stats=True)
+    #     return slope
+
+    # def f_r2(x):
+    #     xvals = x["x_min_y"].values.reshape(-1, 1)
+    #     yvals = x[color_var].values
+    #     results, intercept, slope, r2, pvalue = statsmodel_ols(xvals, yvals, return_stats=True)
+    #     return r2
+
+
+    # def f_pval(x):
+    #     xvals = x["x_min_y"].values.reshape(-1, 1)
+    #     yvals = x[color_var].values
+    #     results, intercept, slope, r2, pvalue = statsmodel_ols(xvals, yvals, return_stats=True)
+    #     return pvalue
+
+
+    # df1 = dfeffect_pivot.groupby(var_subplot).apply(f_int).reset_index()
+    # df1["intercept"] = df1[0]
+
+    # df2 = dfeffect_pivot.groupby(var_subplot).apply(f_slope).reset_index()
+    # df2["slope"] = df2[0]
+
+    # df3 = dfeffect_pivot.groupby(var_subplot).apply(f_r2).reset_index()
+    # df3["r2"] = df3[0]
+
+    # df4 = dfeffect_pivot.groupby(var_subplot).apply(f_pval).reset_index()
+    # df4["pvalue"] = df4[0]
+
+    # pd.concat([df1, df2, df3, df4], axis=1)
+
 def statsmodel_ols(x, y, PRINT=False, 
-                   overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12):
+                   overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12,
+                   return_stats=False):
     """
     Ordinary least squares regression.
     PARAMS:
@@ -413,7 +492,14 @@ def statsmodel_ols(x, y, PRINT=False,
     if overlay_on_this_ax is not None:
         overlay_on_this_ax.text(overlay_x, overlay_y, f"r2={results.rsquared:.2f}|p={results.pvalues[1]:.3f}|int={results.params[0]:.3f}|slope={results.params[1]:.3f}", color=overlay_color, fontsize=overlay_font_size)
 
-    return results  
+    if return_stats:
+        intercept = results.params[0]
+        slope     = results.params[1]
+        r2        = results.rsquared
+        pvalue    = results.pvalues[1]
+        return results, intercept, slope, r2, pvalue        
+    else:
+        return results  
 
 if False:
     def getStatsOLS(dfthis_teststimonly, colname):
@@ -463,7 +549,8 @@ def empiricalPval(stat_actual, stats_shuff, side="two"):
 
 
 
-def permutationTest(data, funstat, funshuff, N, plot=True, side="two"):
+def permutationTest(data, funstat, funshuff, N, plot=True, side="two",
+                    force_return_stats=False):
     """ generic permutation test function
     - funstat(data) returns a scalar. if funstat returns a tuple (a,b), then 
     treats a as the scalar for statistics, and treats b as values that will collect
@@ -511,11 +598,14 @@ def permutationTest(data, funstat, funshuff, N, plot=True, side="two"):
         plt.title(f"p={p:.3f} | {1-p:.3f}")
     else: 
         fig = None
-    
-    if collect_shuffstats:
-        return p, stat_actual_collected, stats_shuff_collected, fig
+
+    if force_return_stats:
+        return p, stat_actual, stats_shuff, fig
     else:
-        return p, fig
+        if collect_shuffstats:
+            return p, stat_actual_collected, stats_shuff_collected, fig
+        else:
+            return p, fig
 
     if False:
         # fake dataset/experiement to sanity check permutation test and see how it works
@@ -1611,9 +1701,11 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
 
 def bootstramp_resample(df, vars_conj):
     """
-    Sample a new df same length as df, bootstrapped within each 
+    Sample a new df same length as df, randomly sampled within replacmeent within each 
     level of vars_conj, and then concatneated.
 
+    Use this for bootstrapping (run it multipoe times)
+    
     PARAMS:
     - vars_conj, list of str. does bootstrap independently for each level of df
     --- e.g., vars_conj = ["bregion", "date", "effect"]

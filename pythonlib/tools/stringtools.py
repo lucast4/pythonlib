@@ -13,7 +13,12 @@ def decompose_string(s, sep="-"):
     if False:
         assert sep in ["-", "_"], "| did not work in one case not sure wy."
     import re
+    
+    if sep == "|":
+        sep = "\|" 
+
     inds = [m.start() for m in re.finditer(sep, s)]
+
     if len(inds)==0:
         # Then didnt find this
         return []
