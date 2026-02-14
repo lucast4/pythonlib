@@ -1636,7 +1636,7 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
             ax.axhline(0, color="k", alpha=0.5)
         fig = sns.catplot(data=df, x=contrast_var, y=value_var, kind="bar", errorbar="se", order=plot_contrast_vars)
         rotateLabel(fig)
-
+        savefig(fig, f"{savedir}/barplot.pdf")
 
     return dfres
 
