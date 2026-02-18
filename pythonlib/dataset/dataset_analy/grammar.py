@@ -881,7 +881,9 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
     - dfchunkrankmap, each row is a diff "chunk_rank_global", mapped to a (date, epoch, shape).
     - NOTE: also modifies input to have a new column: chunk_rank_global
     """
-
+    
+    assert len(df[(df["chunk_rank"]=="none")])==0, "all cr must be numbers, or else will fail"
+    
     ### (1) Get the mapping from chunk_rank to shape by taking the most freqeunt shape at each chunkrank
     def F(x):
         shapes_ordered = x["shape"].value_counts().index.tolist()
@@ -896,7 +898,7 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
                     assert False, "do you expect this many secondary shapes in this cr? if so, then skip this failure/"
         return shapes_ordered[0] # Return the most frequent shape.
     dfchunkrankmap = df.groupby(["date", "epoch", "chunk_rank"]).apply(F).reset_index(name="shape")
-    
+
     ### Sanity checks
     # (1) Each shape is mapped to just one cr.
     def F(x):    
@@ -913,10 +915,11 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
     def F(x):
         # display(x)
         if len(x["chunk_rank"].unique()) < len(x["shape"].unique()):
-            print(x["chunk_rank"].unique())
-            print(x["shape"].unique())
-            print(x)
+            print("Why are there more shapes than chunk ranks?")
+            print("All unique chunk ranks: ", x["chunk_rank"].unique())
+            print("All unique shapes: ", x["shape"].unique())
             assert False
+    # df[~(df["chunk_rank"]=="none")].groupby(["date", "epoch"]).apply(F) # if none, then this is single prims...
     df.groupby(["date", "epoch"]).apply(F)
 
     # Rename to crglobal
@@ -928,6 +931,544 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
         k = (row["date"], row["epoch"], row["shape"])
         v = row["chunk_rank_global"]
         map_DaEpSh_to_crglob[k] = v
+    for k, v in map_DaEpSh_to_crglob.items():
+        print(k, " -- ", v)
     df[f"chunk_rank_global"] = [map_DaEpSh_to_crglob[(row["date"], row[f"epoch"], row[f"shape"])] for _, row in df.iterrows()]
 
+    # Also add a conjnctive variable
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    df = append_col_with_grp_index(df, ["chunk_rank_global", "shape"], "crg_shape")
+
     return dfchunkrankmap
+
+
+########## STUFF RELATED TO extracting information for each token, regardless of what you did in behavior. ie 
+# using any inputed toekns for this trial. useful e.g, for eye tracking, where you want to get information about
+# fixation events.
+def syntaxconcrete_extract_more_info(syntax_concrete, index_gap, append_99_to_mean_done_button=False):
+    """
+    Given syntax_concrete and a gap index, get more useful information about
+    the current state (i.e, like the state of the drawing agent)
+
+    PARAMS:
+    - gap_index, where 0 means the gap between stroke 0 and 1.
+
+    NOTE: If you pass in index_gap that asks about the last stroke, then this will fail unless
+    you also put append_99_to_mean_done_button==True
+    """
+
+    s_tuple = []
+    for chunk_rank, n_in_chunk in enumerate(syntax_concrete):
+        s_tuple.extend([chunk_rank for _ in range(n_in_chunk)])
+    
+    if index_gap == len(s_tuple)-1:
+        assert append_99_to_mean_done_button==True, "you need to turn on append_99_to_mean_done_button for this to work."
+
+    # To allow indexing into the last gap (ie. between lsat stroke and end)
+    if append_99_to_mean_done_button:
+    # if index_gap == len(s_tuple)-1:
+        s_tuple.append(99)
+    #     do_remove_99=True
+    # else:
+        # do_remove_99 = False
+
+    if index_gap < 0:
+        # Then this is any time before first stroke
+        pre_chunk_rank_global = -1
+        s_post = s_tuple
+        s_pre = tuple([])
+    else:
+        assert index_gap>-1
+        s_post = s_tuple[(index_gap+1):]
+        s_pre = s_tuple[:(index_gap+1)]
+        pre_chunk_rank_global = s_pre[-1]
+    post_chunk_rank_global = s_post[0]
+
+    n_remain_in_chunk = sum([x==post_chunk_rank_global for x in s_post])
+    n_completed_in_chunk = sum([x==post_chunk_rank_global for x in s_pre])
+
+    n_in_chunk = n_completed_in_chunk + n_remain_in_chunk
+
+    post_chunk_within_rank = n_completed_in_chunk
+
+    # Remaining chunk ranks
+    s_post_not_yet_started = [cr for cr in s_post if not cr==pre_chunk_rank_global]
+    chunk_ranks_remain_not_yet_started = list(set(s_post_not_yet_started))
+
+    # Mapping: rank --> chunk_rank
+    map_rank_to_chunk_rank = {}
+    for rank, chunk_rank in enumerate(s_tuple):
+        map_rank_to_chunk_rank[rank] = chunk_rank    
+
+    # Mapping: rank --> rank_within_chunk
+    cr_current = -1
+    map_rank_to_rank_within_chunk = {}
+    for rank, cr in enumerate(s_tuple):
+        if cr!=cr_current:
+            # A new chunk_rank. Do reset.
+            cr_current = cr
+            counter_within_chunk_rank = 0
+        else:
+            counter_within_chunk_rank += 1
+        map_rank_to_rank_within_chunk[rank] = counter_within_chunk_rank
+    map_rank_to_rank_within_chunk.values()    
+
+    # Get the indices where transitions occur (ie.. AAABBC would return [2, 4])
+    n_strokes = len(s_tuple)
+    inds_transition = []
+    counter = -1
+    for x0 in syntax_concrete:
+        counter+=x0
+        if counter>-1 and counter<n_strokes-1:
+            inds_transition.append(counter)
+    inds_transition = sorted(set(inds_transition))
+
+    info = {
+        "syntax_concrete":syntax_concrete,
+        "index_gap":index_gap,
+        "index_gap_is_chunk_switch":post_chunk_rank_global>pre_chunk_rank_global,
+        "s_tuple":s_tuple,
+        "s_tuple_remain":s_post,
+        "chunk_ranks_remain_not_yet_started":chunk_ranks_remain_not_yet_started,
+        "map_rank_to_chunk_rank":map_rank_to_chunk_rank,
+        "map_rank_to_rank_within_chunk":map_rank_to_rank_within_chunk,
+        "pre_chunk_rank_global":pre_chunk_rank_global,
+        "post_chunk_rank_global":post_chunk_rank_global,
+        "n_remain_in_chunk":n_remain_in_chunk,
+        "n_completed_in_chunk":n_completed_in_chunk,
+        "n_in_chunk":n_in_chunk,
+        "post_chunk_within_rank":post_chunk_within_rank,
+        "inds_stroke_before_chunk_transition":inds_transition,
+    }
+    return info
+ 
+def syntaxconcrete_extract_more_info_eye_fixation(syntax_concrete, index_gap, tokens_correct_order, list_fixed_idx_task):
+                                                #   dfgaps, trialcode):
+    """
+    Given syntax_concrete and a gap index, get more useful information about
+    the current state of the eye fixation, ie., the task shape that is currnetly
+    being looked at (fixated).
+
+    PARAMS:
+    - syntax_concrete, e.g, (0, 2, 3) or (2,2,1)
+    - index_gap, int, state of drwing, e.g, where 0 means just finished stroke 0. Note: -1 means the gap before first stroke, which
+    means any/all time before first stroke.
+    - tokens_correct_order, the tokens, in correct order of drwaing. This is required to map from idx_task to 
+    the actual token
+    - fixed_idx_task, int, where you are looking at, ie the index_task. This is the same as tok["ind_taskstroke_orig"]
+    where tok is an item in tokens_correct_order
+    """
+
+    assert index_gap>=-2
+    if index_gap==-2:
+        # This is the code for (between samp -- go)
+        index_gap = -1
+    
+    ### Prep -- get information about this gap
+    # First, get gap information
+    if False:
+        dfrow = dfgaps[(dfgaps["trialcode"]==trialcode) & (dfgaps["index_gap"]==index_gap)]
+        assert len(dfrow)==1
+
+        # gap_chunk_rank_global
+        # diff_chunk_rank_global
+        chunk_pre = dfrow["pre_chunk_rank_global"].values[0]
+        chunk_post = dfrow["post_chunk_rank_global"].values[0]
+        assert dfrow["syntax_concrete"].values[0] == syntax_concrete
+        syntax_concrete = dfrow["syntax_concrete"].values[0]
+    
+    info_gap = syntaxconcrete_extract_more_info(syntax_concrete, index_gap)
+    # assert chunk_pre == info_gap["pre_chunk_rank_global"]
+    # assert chunk_post == info_gap["post_chunk_rank_global"]
+    chunk_pre = info_gap["pre_chunk_rank_global"]
+    chunk_post = info_gap["post_chunk_rank_global"]
+    map_rank_to_chunk_rank = info_gap["map_rank_to_chunk_rank"]
+    map_rank_to_rank_within_chunk = info_gap["map_rank_to_rank_within_chunk"]
+
+    rank_pre = index_gap # ie index_gap = 0 means the gap between rank 0 and rank 1.
+    rank_post = index_gap + 1
+
+    ### For each fixation, get its information, within this gap
+    # Convert task index to rank, this is easier (map from token index, to its rank (in correct sequence))
+    map_taskidx_to_rank = {}
+    for rank, tok in enumerate(tokens_correct_order):
+        idx_orig = tok["ind_taskstroke_orig"]
+        map_taskidx_to_rank[idx_orig] = rank
+
+    list_info_fixation = []
+    for fixed_idx_task in list_fixed_idx_task:
+        info_fixation = {}
+
+        fixed_rank = map_taskidx_to_rank[fixed_idx_task] # the rank in sequence of strokes, for this fixated shape
+
+        # (1) Info related to the fixated chunk_rank
+        fixed_chunk_rank = map_rank_to_chunk_rank[fixed_rank]
+
+        # Number, summarizing
+        info_fixation["chunkrank_fixed"] = fixed_chunk_rank
+        info_fixation["chunkrank_fixed_minus_post"] = fixed_chunk_rank - chunk_post
+        info_fixation["chunkrank_fixed_minus_pre"] = fixed_chunk_rank - chunk_pre
+
+        # Semantic label, related to donness of chunk
+        if fixed_chunk_rank < chunk_pre :
+            assert fixed_chunk_rank < chunk_post, "logically not possible"
+            info_fixation["chunkrank_fixed_status"] = "completed_before_last_stroke"
+        elif (fixed_chunk_rank == chunk_pre) and (fixed_chunk_rank < chunk_post):
+            info_fixation["chunkrank_fixed_status"] = "completed_by_last_stroke"
+        elif (fixed_chunk_rank == chunk_pre) and (fixed_chunk_rank == chunk_post):
+            info_fixation["chunkrank_fixed_status"] = "ongoing"
+        elif (fixed_chunk_rank > chunk_pre) and (fixed_chunk_rank == chunk_post):
+            info_fixation["chunkrank_fixed_status"] = "start_in_next_stroke"
+        elif (fixed_chunk_rank > chunk_pre) and (fixed_chunk_rank > chunk_post):
+            info_fixation["chunkrank_fixed_status"] = "start_after_next_stroke"
+        else:
+            print(fixed_chunk_rank, chunk_pre, chunk_post)
+            assert False
+
+        # Another semantic label, differentiating based on inner rank within chunk.
+        # This is differnet from above, in that it defines "next chunk" to be the one
+        # different from current, even when currently within a chunk. In contrast, above,
+        # next chunk would be the current chunk.
+        current_chunk = chunk_pre
+
+        # Get the actual chunk ranks rthat are upcoming on this trial
+        # Note: if this trial skips a chunk, then next chunk jumps also.
+        # next_chunk = chunk_pre + 1
+        next_chunk, nextnext_chunk, nextnextnext_chunk = None, None, None
+        chunk_ranks_remain_not_yet_started = info_gap["chunk_ranks_remain_not_yet_started"]
+        if len(chunk_ranks_remain_not_yet_started)>0:
+            next_chunk = chunk_ranks_remain_not_yet_started[0] # e.g, [1,3] means these are the following hcunk ranks
+        if len(chunk_ranks_remain_not_yet_started)>1:
+            nextnext_chunk = chunk_ranks_remain_not_yet_started[1] # e.g, [1,3] means these are the following hcunk ranks
+        if len(chunk_ranks_remain_not_yet_started)>2:
+            nextnextnext_chunk = chunk_ranks_remain_not_yet_started[2] # e.g, [1,3] means these are the following hcunk ranks
+        
+        fixed_rank_within_chunk = map_rank_to_rank_within_chunk[fixed_rank]
+        info_fixation["rank_within_chunk_fixed"] = fixed_rank_within_chunk
+        assert fixed_chunk_rank == info_fixation["chunkrank_fixed"]
+
+        # if (fixed_chunk_rank == nextnextnext_chunk) and (fixed_rank_within_chunk==0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxtnxtnxt_chk_first_stk"
+
+        # elif (fixed_chunk_rank == nextnextnext_chunk) and (fixed_rank_within_chunk>0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxtnxtnxt_chk_inner_stk"
+
+        # elif (fixed_chunk_rank == nextnext_chunk) and (fixed_rank_within_chunk==0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxtnxt_chk_first_stk"
+
+        # elif (fixed_chunk_rank == nextnext_chunk) and (fixed_rank_within_chunk>0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxtnxt_chk_inner_stk"
+
+        # elif (fixed_chunk_rank == next_chunk) and (fixed_rank_within_chunk==0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxt_chnk_first_stk"
+
+        # elif (fixed_chunk_rank == next_chunk) and (fixed_rank_within_chunk>0):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "nxt_chnk_inner_stk"
+
+        # elif (fixed_chunk_rank == current_chunk):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "chk_prev_stk"
+
+        # elif (fixed_chunk_rank < current_chunk):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "any_chk_fini_b4_prev_stk"
+
+        # else:
+        #     print(fixed_chunk_rank, fixed_rank_within_chunk)
+        #     print(current_chunk, next_chunk)
+        #     print(info_fixation)
+        #     assert False
+
+        if (fixed_rank == rank_post):
+            # Then looking at next strokes. Important to have this (even thuogh it is the
+            # only one that cares about rank, not chunkrank) beucase it is "null model", what we
+            # expect during non-cr-transitioning gaps)
+            info_fixation["chunkrank_fixed_status_v2"] = "ntx_rank"
+
+        elif (fixed_chunk_rank == nextnextnext_chunk) and (fixed_rank_within_chunk==0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxtnxtnxt_chk_first_stk"
+
+        elif (fixed_chunk_rank == nextnextnext_chunk) and (fixed_rank_within_chunk>0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxtnxtnxt_chk_inner_stk"
+
+        elif (fixed_chunk_rank == nextnext_chunk) and (fixed_rank_within_chunk==0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxtnxt_chk_first_stk"
+
+        elif (fixed_chunk_rank == nextnext_chunk) and (fixed_rank_within_chunk>0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxtnxt_chk_inner_stk"
+
+        elif (fixed_chunk_rank == next_chunk) and (fixed_rank_within_chunk==0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxt_chnk_first_stk"
+
+        elif (fixed_chunk_rank == next_chunk) and (fixed_rank_within_chunk>0):
+            info_fixation["chunkrank_fixed_status_v2"] = "nxt_chnk_inner_stk"
+
+        elif (fixed_chunk_rank == current_chunk) and (fixed_rank < rank_post):
+            info_fixation["chunkrank_fixed_status_v2"] = "chk_prev_stk_past"
+
+        elif (fixed_chunk_rank == current_chunk) and (fixed_rank >= rank_post):
+            info_fixation["chunkrank_fixed_status_v2"] = "chk_prev_stk_future"
+
+        # elif (fixed_chunk_rank == current_chunk):
+        #     info_fixation["chunkrank_fixed_status_v2"] = "chk_prev_stk"
+
+        elif (fixed_chunk_rank < current_chunk):
+            info_fixation["chunkrank_fixed_status_v2"] = "any_chk_fini_b4_prev_stk"
+
+        else:
+            print(fixed_chunk_rank, fixed_rank_within_chunk)
+            print(current_chunk, next_chunk)
+            print(info_fixation)
+            assert False
+
+
+        # (2) Info related to the rank (ignoring chunk)
+        assert rank_pre == rank_post-1
+        # res["rank_fixed_minus_post"] = fixed_rank - rank_post
+        info_fixation["rank_fixed"] = fixed_rank
+        info_fixation["rank_fixed_minus_pre"] = fixed_rank - rank_pre # only need this, beucase rank_pre == rank_post-1
+        # # Is this stroke already done
+
+        # if fixed_rank < rank_pre :
+        #     res["rank_fixed_status"] = "completed_before_last_stroke"
+        # elif (fixed_rank == rank_pre):
+        #     res["rank_fixed_status"] = "completed_by_last_stroke"
+        # elif (fixed_rank == rank_post):
+        #     res["rank_fixed_status"] = "start_in_next_stroke"
+        # elif fixed_rank > rank_post:
+        #     res["rank_fixed_status"] = "start_after_next_stroke"
+        # else:
+        #     print(fixed_rank, rank_pre, rank_post)
+        #     assert False
+
+        list_info_fixation.append(info_fixation)
+
+    # convert to dataframe
+    df_fixations = pd.DataFrame(list_info_fixation)
+
+    return df_fixations, info_gap
+
+def syntaxconcrete_dfmod_postprocess(D, dfthis_long):
+    """
+    MOdifies df, where each row is trialcode, index_gap, index_shape
+    """
+    # Add more data to dflong
+    from neuralmonkey.scripts.analy_syntax_good_gap_durations import syntaxconcrete_extract_more_info
+
+    assert "syntax_concrete" in dfthis_long
+    assert "index_gap" in dfthis_long
+
+    map_shape_to_chunk_rank_global, map_chunk_rank_global_to_shape = D.grammarparses_rules_shape_AnBmCk_get_map_shape_to_chunk_rank()
+
+    tmp = []
+    list_pre_shape = []
+    list_post_shape = []
+    list_n_remain_in_chunk = []
+    for _, row in dfthis_long.iterrows():
+        info = syntaxconcrete_extract_more_info(row["syntax_concrete"], row["index_gap"])
+        tmp.append(info["index_gap_is_chunk_switch"])
+
+        if info["pre_chunk_rank_global"]>-1:
+            # This is during drwaing
+            list_pre_shape.append(map_chunk_rank_global_to_shape[info["pre_chunk_rank_global"]])
+        else:
+            list_pre_shape.append("none")
+
+        list_post_shape.append(map_chunk_rank_global_to_shape[info["post_chunk_rank_global"]])
+
+        list_n_remain_in_chunk.append(info["n_remain_in_chunk"])
+
+    dfthis_long["index_gap_is_chunk_switch"] = tmp
+    dfthis_long["pre_shape"] = list_pre_shape
+    dfthis_long["post_shape"] = list_post_shape
+    dfthis_long["n_remain_in_chunk"] = list_n_remain_in_chunk # remaining in the post chunk.
+
+    # Also recode rank_fixed to be relative to current index_gap
+    dfthis_long["rankfixed_min_idxgap"] = dfthis_long["rank_fixed"] - dfthis_long["index_gap"] # 1 means that you are looking at the next shape
+
+    # Note if looking at something already done
+    dfthis_long["looking_at_already_drawn"] = dfthis_long["rankfixed_min_idxgap"]<=0
+    dfthis_long["looking_at_already_drawn_earlier"] = dfthis_long["rankfixed_min_idxgap"]<=1
+
+
+def syntaxconcrete_extract_wrapper_chunks_future_errors_info(D):
+    """
+    For each beh stroke, get useful info regarding its chunk status, as well as the status of upcoming strokes,
+    including both what subject did (including failures) as well as what he should have done (correct). The main
+    difference from other code (above) is the distinction between whta did and what shoudl have done.
+
+    NOTE: focuses more on the future strokes rather than ucrrect stroke, which is already gotten elsewhere.
+
+    RETURNS:
+    - df, where each row is a beh stroke
+    """
+
+    res = []
+    for ind, row in D.Dat.iterrows():
+        TkBeh = D.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True) # what did
+        TkCorrect = D.grammarparses_task_tokens_correct_order_sequence(ind, return_as_tokensclass=True) # what should have done
+        nstrokes_beh = len(TkBeh.Tokens)
+        nstrokes_correct = len(TkCorrect.Tokens)
+
+        # Trial-level info
+        syntax_concrete = row["syntax_concrete"]
+        trialcode = row["trialcode"]
+        # Was this trial a success?
+        
+        # For each beh stroke, get whether it was success.
+        corrects = D.grammarparses_syntax_each_stroke_error_failure(ind)
+        # corrects = []
+        # for i, tokbeh in enumerate(TkBeh.Tokens):
+        #     tokcorr = TkCorrect.Tokens[i]
+        #     if tokbeh["ind_taskstroke_orig"] == tokcorr["ind_taskstroke_orig"]:
+        #         corrects.append(1)
+        #     else:
+        #         corrects.append(0)
+        # corrects = np.array(corrects)
+
+        # What is the failure mode
+        stroke_quality_abort = row["exclude_because_online_abort"]
+        if False:
+            # Previous method, which works fine, except for when he makes an 
+            # extra stroke at end. This is scored as success==True, but 
+            # not all corrects.
+            success = row["success_binary_quick"]
+            if success:
+                assert np.all(corrects)
+            elif stroke_quality_abort:
+                # Then correct squence, just bad storke
+                assert np.all(corrects)
+            else:
+                # Then is bad sequence
+                assert not np.all(corrects)          
+        else:
+            # Redefine success based on each beh stroke being correct.
+            # This is better, since it solves the above problem by redefining success
+            # based on corrects. 
+            success = [tok["ind_taskstroke_orig"] for tok in TkBeh.Tokens] == [tok["ind_taskstroke_orig"] for tok in TkCorrect.Tokens]
+            # success = np.all(corrects) &
+
+        # What stroke was the first to fail?
+        if success:
+            first_indstroke_that_fails_grammar = "none"
+        elif stroke_quality_abort:
+            # Then no stroke failed sequence
+            first_indstroke_that_fails_grammar = "none"
+        else:
+            # Find the first instance of 0.
+            first_indstroke_that_fails_grammar = int(np.argwhere(corrects==0)[0][0])
+
+
+        # Classify trial 
+        if True:
+            if success==True and stroke_quality_abort==False:
+                sequence_error_string = "allgreat"
+            elif success==False and stroke_quality_abort==True:
+                sequence_error_string = "goodseq_failstroke"
+            elif success==False and stroke_quality_abort==False:
+                sequence_error_string = "badseq"
+            else:
+                print(success, stroke_quality_abort)
+                print("This trial: ", ind)
+                assert False, "Not possible, unless I misunderstand these variables."
+        else:
+            sequence_error_string = D.grammarparses_classify_sequence_error(ind)
+
+        ### For each beh stroke, get inforamtion.
+        for indstroke in range(nstrokes_beh):
+
+            # Did this stroke fail on stroke quality abort?
+            if stroke_quality_abort and indstroke == nstrokes_beh-1:
+                AbortStrokeQuality_ThisStrk_Draw = True
+            else:
+                AbortStrokeQuality_ThisStrk_Draw = False
+
+            # Then this is before the last stroke
+            # from pythonlib.dataset.dataset_analy.grammar import syntaxconcrete_extract_more_info
+            info = syntaxconcrete_extract_more_info(syntax_concrete, indstroke, append_99_to_mean_done_button=True)
+
+            if False: # Ignore, since this is allowed to happen if this is a failed storke
+                print(info)
+                print(indstroke)
+                print(TkBeh.Tokens[indstroke]["chunk_rank"])
+                assert info["chunk_ranks_remain_not_yet_started"][0] > TkBeh.Tokens[indstroke]["chunk_rank"]
+
+            # Get shape and location, as sanity check for linking to other data
+            shape = TkBeh.Tokens[indstroke]["shape"]
+            gridloc = TkBeh.Tokens[indstroke]["gridloc"]
+
+            if indstroke < nstrokes_beh-1:
+                # Then there is at least one more beh stroke
+                    
+                # Next stroke that will be drawn
+                Cr_NextStrk_Draw = TkBeh.Tokens[indstroke+1]["chunk_rank"]
+                RnkWthn_NextStrk_Draw = TkBeh.Tokens[indstroke+1]["chunk_within_rank"]
+                RnkWthnLast_NextStrk_Draw = TkBeh.Tokens[indstroke+1]["chunk_within_rank_fromlast"]
+                
+                # is next stroke correct equence?
+                Success_NextStrk_Draw = corrects[indstroke+1]
+            else:
+                # This is the last beh stroke
+                Cr_NextStrk_Draw = "none"
+                RnkWthn_NextStrk_Draw = "none"
+                RnkWthnLast_NextStrk_Draw = "none"
+
+                Success_NextStrk_Draw = 1 # just give it a dummy
+            
+            # What bout the next correct stroke?
+            if indstroke < nstrokes_correct-1:
+                
+                # Next stroke that will be drawn
+                Cr_NextStrk_Corr = TkCorrect.Tokens[indstroke+1]["chunk_rank"]
+                RnkWthn_NextStrk_Corr = TkCorrect.Tokens[indstroke+1]["chunk_within_rank"]
+                RnkWthnLast_NextStrk_Corr = TkCorrect.Tokens[indstroke+1]["chunk_within_rank_fromlast"]
+
+            else:
+                Cr_NextStrk_Corr = "none"
+                RnkWthn_NextStrk_Corr = "none"
+                RnkWthnLast_NextStrk_Corr = "none"
+
+            dat = {
+                # Info
+                "ind_dat":ind,
+                "ind_stroke":indstroke,
+                "trialcode":trialcode,
+                "shape":shape,
+                "gridloc":gridloc,
+
+                # Success-related info about this trial
+                "trial_stroke_quality_abort":stroke_quality_abort,
+                "trial_first_indstroke_that_fails":first_indstroke_that_fails_grammar,
+                "trial_success":success,
+                "trial_syntax_concrete":syntax_concrete,
+                "trial_corrects":corrects,
+                "trial_sequence_error_string":sequence_error_string,
+
+                # This stroke chunk info
+                "chunk_rank":TkBeh.Tokens[indstroke]["chunk_rank"],
+                "chunk_within_rank":TkBeh.Tokens[indstroke]["chunk_within_rank"],
+                "chunk_within_rank_fromlast":TkBeh.Tokens[indstroke]["chunk_within_rank_fromlast"],
+                "chunk_rank_correct":TkCorrect.Tokens[indstroke]["chunk_rank"],
+                "chunk_within_rank_correct":TkCorrect.Tokens[indstroke]["chunk_within_rank"],
+
+                # Next stroke that will be drawn
+                "Cr_NextStrk_Draw": Cr_NextStrk_Draw,
+                "RnkWthn_NextStrk_Draw": RnkWthn_NextStrk_Draw,
+                "RnkWthnLast_NextStrk_Draw": RnkWthnLast_NextStrk_Draw,
+
+                # Next stroke that is correct
+                "Cr_NextStrk_Corr": Cr_NextStrk_Corr,
+                "RnkWthn_NextStrk_Corr": RnkWthn_NextStrk_Corr,
+                "RnkWthnLast_NextStrk_Corr": RnkWthnLast_NextStrk_Corr,
+
+                # Next chunk
+                "Cr_NextChunk_Corr": info["chunk_ranks_remain_not_yet_started"][0],
+
+                # Was this stroke a failure?
+                "Success_ThisStrk_Draw": corrects[indstroke],
+                "AbortStrokeQuality_ThisStrk_Draw": AbortStrokeQuality_ThisStrk_Draw,
+                # Was this the last stroke bfore a failure?
+                "Success_NextStrk_Draw": Success_NextStrk_Draw,
+            }
+
+            res.append(dat)
+
+    return pd.DataFrame(res)

@@ -715,6 +715,11 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     # NOTE: This does within day, which is probably ok, as the training tasks each day are good representaton of
     # all training up to now (cumulative). There is the potential for this to call some things probes even when
     # they are not.
+
+    # The first shape: is it number of extra
+    max_n_first_shape_in_training = max(D.Dat[D.Dat["probe"]==False]["n_first_shape"])
+    D.Dat["more_n_first_shape_than_training"] = D.Dat["n_first_shape"] > max_n_first_shape_in_training
+
     from pythonlib.dataset.dataset_preprocess.probes import compute_features_each_probe
     def get_loc_nstrok(dict_probe_features, row):
         feats = dict_probe_features[(row["epoch"], row["character"])]
@@ -722,6 +727,9 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D)
     D.Dat["probe_kind"] = [dict_probe_kind[(row["epoch"], row["character"])] if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
     D.Dat["probe_loc_nstrok"] = [get_loc_nstrok(dict_probe_features, row) if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
+    D.Dat["probe_loc_moreNfirstShp"] = [
+        (get_loc_nstrok(dict_probe_features, row)[0], row["more_n_first_shape_than_training"])  if row["probe"] else "not_probe"
+        for _, row in D.Dat.iterrows()] # BETTER -- uses n of first shape, instead of n total strokes.
 
 def fig1_generalize_3_extract_sketchpad_xylim(list_D):
     """
@@ -860,7 +868,7 @@ def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, wi
     else:
         dfall = DFALL
 
-    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_nstrok", "train_test_class_v2"]:
+    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_moreNfirstShp", "train_test_class_v2"]:
 
         fig = sns.relplot(dfall, x="index", y="novel_epochchar_this_trial", row=row, aspect=1.5, alpha=0.2)
         figmod_overlay_date_lines(fig, dfall, "index", timevar="datetime_scal")
@@ -889,6 +897,111 @@ def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, wi
         plt.close("all")
 
     return map_idxcenter_to_window
+
+def fig1_msgood_plots_timecourse(dfall_this, savedir, grp):
+    """
+
+    Good (fancy) plots for manuscript. With specific results for Diego, as 
+    used in the main figures.
+
+    - grp, just for naming files.
+    """
+    # NOTE: first load data for Diego (above), then run below here
+
+    row = "train_test_class_v2"
+    _y = "ntokens-repeat-thisepoch_sm_8"
+    col = "supervision_online"
+    x = "index"
+
+    # Color by n strokes
+    hue_order = sorted(dfall_this["n_first_shape"].unique())
+    palette = sns.color_palette("tab10", n_colors=len(hue_order))
+
+    ### Plot just "train" (cleaner plot, correct size)
+    _dfall_this = dfall_this[
+        (dfall_this["train_test_class_v2"] == "train") & 
+        (dfall_this["date"].astype(int) < 230113)
+        ].reset_index(drop=True)
+
+    fig = sns.relplot(data=_dfall_this, x=x, y=_y, hue="n_first_shape",
+                    row=row, col=col, alpha=0.2, aspect=2, 
+                    hue_order=hue_order, palette=palette,
+                    s=100)
+    rotateLabel(fig)
+    figmod_overlay_date_lines(fig, _dfall_this, x, timevar="datetime_scal")
+    savefig(fig, f"{savedir}/MSgood-summary-relplot-grp={grp}-row={row}-x={x}-y={_y}-train-1.pdf")
+
+    ### Also plot for generalization
+    _dfall_this = dfall_this.reset_index(drop=True)
+
+    row = "train_test_class_v2"
+    _y = "ntokens-repeat-thisepoch_sm_8"
+    col = "supervision_online"
+
+    fig = sns.relplot(data=_dfall_this, x=x, y=_y, hue="n_first_shape",
+                    row=row, col=col, alpha=0.15, aspect=2, 
+                    hue_order=hue_order, palette=palette,
+                    s=60)
+    rotateLabel(fig)
+    figmod_overlay_date_lines(fig, _dfall_this, x, timevar="datetime_scal")
+    savefig(fig, f"{savedir}/MSgood-summary-relplot-grp={grp}-row={row}-x={x}-y={_y}-test-1.pdf")
+
+    plt.close("all")
+
+    ### Summary plot of training timecourse
+    # NOTE: this doesnt look great...
+    from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+    vars_grp = ["train_test_class_v2", "supervision_online", "date", "n_first_shape"]
+    _grpdict = grouping_append_and_return_inner_items_good(_dfall_this, vars_grp)
+
+    _list_df = []
+    for _, _inds in _grpdict.items():
+        _df = _dfall_this.iloc[_inds].reset_index(drop=True)
+
+        # split into first and second half of day
+        vals = sorted(_df["datetime_scal"].values)
+        n = len(vals)
+        mid_val = vals[int(n/2)]
+        _df.loc[_df["datetime_scal"]>=mid_val, "day_split"] = "1_late"
+        _df.loc[_df["datetime_scal"]<mid_val, "day_split"] = "0_early"    
+
+        _list_df.append(_df)
+    _dfall_this = pd.concat(_list_df).reset_index(drop=True)
+
+    # new variable
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+    _dfall_this = append_col_with_grp_index(_dfall_this, ["date", "day_split"], "date_split")
+    fig = sns.catplot(data=_dfall_this, x="date_split", y=_y, hue="n_first_shape",
+                    row=row, col=col, alpha=0.1, aspect=2, 
+                    hue_order=hue_order, palette=palette,
+                    s=60)
+    savefig(fig, f"{savedir}/MSgood-attempt_at_summary-1.pdf")
+
+    fig = sns.catplot(data=_dfall_this, x="date_split", y=_y,
+                    row="n_first_shape", col=col, kind="point", aspect=2, 
+                    hue_order=hue_order, palette=palette,
+                    sharey=False)
+    savefig(fig, f"{savedir}/MSgood-attempt_at_summary-1.pdf")
+
+    ### GOod -- histograms
+    # row = "train_test_class_v2"
+    # _y = "ntokens-repeat-thisepoch_sm_8"
+    # col = "supervision_online"
+    for supervision_online in [False, True]:
+        
+        _dfall_this = dfall_this[
+            (dfall_this["supervision_online"] == supervision_online)
+            ].reset_index(drop=True)
+
+        for stat in ["count", "probability"]:
+
+            fig = sns.displot(data=_dfall_this, y="ntokens-repeat-thisepoch", row="n_first_shape", 
+                        hue="train_test_class_v2", col="date", binwidth=1, height=3.25,
+                        stat=stat, common_norm=False)
+            
+            savefig(fig, f"{savedir}/MSgood-hist-superv={supervision_online}-stat={stat}.pdf")
+
+    plt.close("all")
 
 
 def figmod_overlay_date_lines(fig, dfall_this, xvar="index", timevar="datetime_scal"):
@@ -924,7 +1037,7 @@ def fig1_generalize_3_plot_task_variability_plot(DFALL, map_idxcenter_to_window,
     D = Dataset([])
 
     ### Plot
-    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_nstrok", "train_test_class_v2"]:
+    for row in [None, "epoch", "seqc_nstrokes_task", "probe_loc_moreNfirstShp", "train_test_class_v2"]:
 
         fig = sns.relplot(DFALL, x="index", y="novel_epochchar_this_trial", row=row, aspect=1.5, alpha=0.2)
         figmod_overlay_date_lines(fig, DFALL, "index", timevar="datetime_scal")

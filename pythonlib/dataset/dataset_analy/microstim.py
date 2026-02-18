@@ -107,7 +107,10 @@ def multday_dates_extract(ANIMAL):
         dates_single = [231011, 231101, 231102, 231103, 231106, 231109, 231110]
         dates_multi = [231013, 231018, 231023, 231024, 231026, 231118, 231120, 
                  231121, 231122, 231128, 231129, 231201]
-        
+        # This includes all except:
+        # (i) AnBm vs. RIGHT 
+        # (ii) shapeseqsupstim 
+
         # for each date, note which brain regions.
         map_date_bregion = {
             231011: ("M1", "preSMA"),
@@ -129,24 +132,30 @@ def multday_dates_extract(ANIMAL):
             231128: ("FP",),
             231129: ("FP",),
             231201: ("dlPFC",),
-        }
+        } # Confirmed
         
         DATES_TO_SKIP = [
             231011, # AnBm too easy
             231026, # bad beahvior
             231118, # too strongly biased to DIR rule.
             231128, # didnt work much
-        ]
+        ] # (CONFIRMED these are fair)
+
     elif ANIMAL=="Diego":
         
         dates_single = [
             231101, 231102, 231103, 231106,
             231107, 231108, 231109, 231110, 231113, 231114, 231115,
-            250418, 250421, 250422, 250423, 250424, 250425,
+            250421, 250422, 250423, 250424, 250425,
         ]
         dates_multi = [
             231025, 231026, 231027, 231029,
-        ]
+        ] 
+        # This includes all except:
+        # (i) DIR vs. DIR 
+        # (ii) shapeseqsupstim and 
+        # (iii) AnBmCk (n=6) v. RIGHT
+        # [Confirmed]
         
         # for each date, note which brain regions.
         map_date_bregion = {
@@ -165,15 +174,15 @@ def multday_dates_extract(ANIMAL):
             231113: ("PMd_a", "PMv"),
             231114: ("SMA", "FP"),
             231115: ("M1-PMd_p", "preSMA"),
-            250418: ("M1", "preSMA"),
+            # 250418: ("M1", "preSMA"),
             250421: ("M1", "preSMA"),
             250422: ("dlPFC", "vlPFC"),
             250423: ("PMv", "SMA"),
             250424: ("vlPFC", "FP"),
             250425: ("PMd_a", "dlPFC"),
-        }
+        } # CONFIRMED list
         
-        DATES_TO_SKIP = [231101, 231102, 231103, 231106] # all too easy
+        DATES_TO_SKIP = [231101, 231102, 231103, 231106] # all too easy (CONFIRMED these are fair)
     else:
         assert False
     for v in map_date_bregion.values():

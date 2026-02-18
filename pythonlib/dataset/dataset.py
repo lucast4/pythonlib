@@ -4683,11 +4683,22 @@ class Dataset(object):
         rt = self.Dat.iloc[ind]["motorevents"]["ons"][0] - self.Dat.iloc[ind]["motorevents"]["go_cue"]
 
         return rt
-    # def motor_get_stats_append_columns(self):
-    #     """
-    #     """
-    #     for i in range(len(self.Dat)):
-    #         self.get_motor_stats()
+
+    def motor_get_response_distance_angle(self, ind):
+        """
+        Get distance traveled from finger onset location to onset of first
+        stroke (and also reach angle)
+        RETURNS:
+        - norm, theta
+        """
+        from pythonlib.tools.vectools import cart_to_polar
+
+        pos1 = self.sketchpad_fixation_button_position(ind)
+        pos2 = self.Dat.iloc[ind]["strokes_beh"][0][0,:2]
+        cart = pos2 - pos1
+        theta, norm = cart_to_polar(cart[0], cart[1])
+
+        return norm, theta
 
 
     ################# SPATIAL OPERATIONS
@@ -12725,6 +12736,32 @@ class Dataset(object):
         self.Dat["stroke_on_locs"] = list_on
         self.Dat["stroke_off_locs"] = list_off
 
+    def strokes_distances_angles_gaps(self, ind):
+        """
+        Return list of euclidean distances between end location
+        of prev stroke and on location of next stroke.
+
+        RETURNS:
+        - gap_distances, gap_angles
+
+        """
+        from pythonlib.tools.vectools import cart_to_polar
+
+        onlocs, offlocs = self.strokes_onsets_offsets_location(ind) # locations
+        gap_distances = []
+        gap_angles = []
+        for on, off in zip(onlocs[1:], offlocs[:-1]):
+
+            # also get the vector
+            cart = on-off
+            theta, norm = cart_to_polar(cart[0], cart[1])
+            if False: # This passes
+                d = np.linalg.norm(on-off)
+                assert norm==d
+            gap_distances.append(norm)
+            gap_angles.append(theta)
+
+        return gap_distances, gap_angles
 
     def strokes_durations_gaps(self, ind):
         """ Return duraton of strokes and gaps for this trial

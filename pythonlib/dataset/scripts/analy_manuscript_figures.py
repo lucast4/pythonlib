@@ -3282,6 +3282,150 @@ def revision_eye_fixation_shape_decode(DFallpa, bregion, SAVEDIR_ALL):
             
     return DFSCORES, DFSCORES_AGG
 
+def strokes_cluster_umap_decode_plots(strokes, dflab, SAVEDIR, plot_interim_strokes=False, do_decode=True):
+    """
+    HElper to plot unsupervised clustering of strokes, as well as decoding of strokes.
+    Used for clustering of character strokes.
+
+    NOTE: Did this when Carlos Correa was doing similar for representations in DooD model.
+    """
+    # Compute velocity, normalized
+    from pythonlib.tools.stroketools import strokesVelocity
+    from pythonlib.tools.stroketools import strokesInterpolate2, rescaleStrokes
+    from pythonlib.tools.stroketools import strokesInterpolate2, rescaleStrokes
+    import numpy as np
+
+    # First, get stroke velocities
+    strokes_vels, _ = strokesVelocity(strokes, None, False, fs_allow_outlier_timestamp_intervals=True)
+
+    # Second, normalize, for both positions and velocities
+    strokes = strokesInterpolate2(strokes, ["npts", 50], base="space")
+    strokes = rescaleStrokes(strokes)
+    for s in strokes:
+        s -= s[0,:] 
+    strokes_vels = strokesInterpolate2(strokes_vels, ["npts", 50], base="space")
+    strokes_vels = rescaleStrokes(strokes_vels)
+    for s in strokes_vels:
+        s -= s[0,:] 
+    assert len(strokes)==len(strokes_vels)
+
+    if plot_interim_strokes:
+        DS.plot_multiple_strok(strokes[:10], overlay=False)
+        DS.plot_multiple_strok(strokes_vels[:10], overlay=False)
+
+    ### Different ways of represnetation data
+    for data_version in ["xy", "xyvels", "vels", "clust_sim_vec"]:
+        savedir = f"{SAVEDIR}/data_version={data_version}"
+        os.makedirs(savedir, exist_ok=True)
+
+        if data_version == "xy":
+            # (1) concat x and y
+            strokesxy = [np.concatenate([s[:, 0], s[:, 1]], axis=0) for s in strokes]
+            X = np.stack(strokesxy, axis=0) # (npts, 2*ntime)
+        elif data_version == "xyvels":
+            # (2) Concat x, y, xvel, yvel
+            strokesxyvels = [np.concatenate([s[:, 0], s[:, 1], strokes_vels[i][:, 0], strokes_vels[i][:,1]], axis=0) for i, s in enumerate(strokes)]
+            X = np.stack(strokesxyvels, axis=0) # (npts, 4*ntime)
+        elif data_version == "vels":
+            # (2) Concat x, y, xvel, yvel
+            assert len(strokes)==len(strokes_vels)
+            strokesvels = [np.concatenate([s[:, 0], s[:,1]], axis=0) for s in strokes_vels]
+            X = np.stack(strokesvels, axis=0) # (npts, 2*ntime)
+        elif data_version == "clust_sim_vec":
+            # (2) Using distance vector to basis set
+            X = np.stack(dflab["clust_sim_vec"])
+        else:
+            assert False
+        assert X.shape[0] == len(dflab)
+
+        #######################################################
+        ### UMAP plot
+        from neuralmonkey.analyses.state_space_good import trajgood_plot_colorby_splotby_scalar_WRAPPER, dimredgood_nonlinear_embed_data
+        _Xredu, _ = dimredgood_nonlinear_embed_data(X, "umap")
+        if False:
+            # Get just the good labels...
+            inds_keep = dflab[dflab["FINAL_match"]==True].index.tolist()
+            Xredu_good = Xredu[inds_keep, :]
+            dflab_good = dflab.iloc[inds_keep].reset_index(drop=True)    
+        trajgood_plot_colorby_splotby_scalar_WRAPPER(_Xredu, dflab, "FINAL_shape", savedir, "task_kind", alpha=0.05)
+        trajgood_plot_colorby_splotby_scalar_WRAPPER(_Xredu, dflab, "task_kind", savedir, "FINAL_shape", alpha=0.1)
+
+        if False: # Ignore, ran this once to make sure goes to chance if shuffle labelss, and it does.
+            # Sanity check, try decoding but shuffling all the labels
+            dflab_shuff = dflab.copy()
+            dflab_shuff[var_decode] = np.random.permutation(dflab_shuff[var_decode])
+        
+        #######################################################
+        ### Decoding
+        if do_decode:
+            var_decode = "FINAL_shape"
+            use_shuffled_labels = False
+            
+            # First do PCA
+            if True:
+                from neuralmonkey.analyses.state_space_good import dimredgood_pca
+                Xpcakeep, Xpca, pca = dimredgood_pca(X, plot_pca_explained_var_path=f"{savedir}/explained_var.pdf",
+                            plot_loadings_path=f"{savedir}/loadings.pdf")
+                npcs = 8
+                Xredu = Xpca[:, :npcs]
+            else:
+                Xredu = X
+                
+            ### DECODE METHOD 1
+            savedir_this = f"{savedir}/decode_method_1_default"
+            os.makedirs(savedir_this, exist_ok=True)
+
+            from neuralmonkey.analyses.decode_good import decode_categorical
+            plot_resampled_data_path_nosuff = f"{savedir_this}/upsample"
+            if use_shuffled_labels:
+                dflab_this = dflab_shuff
+            else:
+                dflab_this = dflab
+            RES = decode_categorical(Xredu, dflab_this[var_decode].tolist(), 5, max_nsplits=10,
+                                    do_center=True, do_std=True, plot_resampled_data_path_nosuff=plot_resampled_data_path_nosuff,
+                                                    return_mean_score_over_splits=False, 
+                                                    return_predictions_all_trials=True)
+            dfres = pd.DataFrame(RES)
+
+            labels_predicted = []
+            labels_test = []
+            for i in range(len(dfres)):
+                labels_predicted.extend(dfres["labels_predicted"].values[i])
+                labels_test.extend(dfres["labels_test"].values[i])
+
+            from neuralmonkey.analyses.decode_good import plot_confusion_matrix
+            score, score_adjusted, dfclasses = plot_confusion_matrix(labels_test, labels_predicted, savedir_this)
+
+            ### DECODE METHOD 2 -- do all pairwise cases
+            from neuralmonkey.analyses.decode_good import decode_categorical, decode_categorical_plot_confusion_score_quick, decode_categorical_cross_condition
+            from neuralmonkey.analyses.decode_good import decode_categorical_pairwise
+
+            ### DECODING, pairwise -- For each pair of shapes, do decoding
+            do_std = True
+            savedir_this = f"{savedir}/decode_method_2_pairwise"
+            os.makedirs(savedir_this, exist_ok=True)
+
+            do_across_condition = False
+            N_MIN_TRIALS_PER_SHAPE = 4
+            if use_shuffled_labels:
+                dflab_this = dflab_shuff
+            else:
+                dflab_this = dflab
+
+            DFRES, DFRES_COUNTS, dfres_scores = decode_categorical_pairwise(Xredu, dflab_this, var_decode, N_MIN_TRIALS_PER_SHAPE, savedir_this,
+                                    do_across_condition, do_std=do_std, do_plots=True)
+
+
+            ### Plots
+            dfres_scores["animal"] = "dummy"
+            dfres_scores["date"] = "dummy"
+            dfres_scores["bregion"] = "dummy"
+            dfres_scores["analysis_kind"] = "dummy"
+
+            from neuralmonkey.analyses.decode_good import decode_categorical_pairwise_plots
+            decode_categorical_pairwise_plots(dfres_scores, savedir_this)
+
+
 if __name__=="__main__":
     import sys
 
