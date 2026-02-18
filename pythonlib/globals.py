@@ -38,7 +38,7 @@ elif MACHINE == "lemur":
 	PATH_CODE = f"{HOME}/code"
 	PATH_SAVE_CLUSTERFIX = f"{PATH_DATASET_BEH}/eyetracking_analyses"
 	PATH_PROCESSED_HT_DATA = f"{HOME}/mnt/Freiwald/dhanuska/handtrack_processed"
-
+	PATH_KS_POSTPROCESSED = "/mnt/Freiwald/kgupta/neural_data/postprocess/final_clusters"
 elif MACHINE == "kggs-macbook.rockefeller.edu" or MACHINE == "kggs-macbook.lan" or MACHINE == "kggs-macbook.lan.rockefeller.edu":
 	PATH_DRAWMONKEY_DIR = "/Users/kdu/Desktop/rockefeller/drawmonkey"
 	PATH_DATA_BEHAVIOR_RAW = "/Users/kdu/data2/animals"
