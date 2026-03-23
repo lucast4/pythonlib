@@ -72,10 +72,13 @@ def average_angle(angles, weights=None):
 
 def average_vectors_wrapper(vectors, length_method):
     """
-    Methods for computing average vector:
-    - "sum": vector summation (actually returns the mean)
-    - "dot": square root of the average dot product between all pairs of vectors.   
-    vectors, array (n_data, 2)
+    PARAMS:
+    - vectors, array (n_data, 2)
+    - length_method, str, method for computing average vector:
+    --- "sum": vector summation (actually returns the mean)
+    --- "dot": square root of the average dot product between all pairs of vectors.   
+
+    NOTE: if only one vector, then "sum" is just that vector, while "dot" will return nan for the norm.
     """
 
     assert vectors.shape[1]==2  
@@ -96,17 +99,18 @@ def average_vectors_wrapper(vectors, length_method):
 
         if vectors.shape[0]==1:
             # Need at least 2 rows to do this
+            angle_mean = np.nan
             length = np.nan
-        
-        squared_length_estimates =[]
-        for i, vec1 in enumerate(vectors):
-            for j, vec2 in enumerate(vectors):
-                if j>i:
-                    squared_length_estimates.append(np.dot(vec1, vec2))
+        else:
+            squared_length_estimates =[]
+            for i, vec1 in enumerate(vectors):
+                for j, vec2 in enumerate(vectors):
+                    if j>i:
+                        squared_length_estimates.append(np.dot(vec1, vec2))
 
-        # Convert to eucl distance
-        squared_length = np.mean(squared_length_estimates)
-        length = np.sign(squared_length) * (np.abs(squared_length)**0.5)
+            # Convert to eucl distance
+            squared_length = np.mean(squared_length_estimates)
+            length = np.sign(squared_length) * (np.abs(squared_length)**0.5)
     else:
         assert False
 
