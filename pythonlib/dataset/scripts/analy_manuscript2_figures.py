@@ -676,7 +676,6 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
             """
 
             # Expected value
-            import numpy as np
             # print(i, n_actual, k)
             # print([(i, p(i, n_actual, k)) for i in range(n_actual+1)])
             expected_n = np.sum([i*p(i, n_actual, k) for i in range(n_actual+1)])
@@ -694,7 +693,6 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
             """
 
             # Expected value
-            import numpy as np
             rate = p(n_actual, n_actual, k)
             return rate
 
@@ -735,7 +733,6 @@ def fig1_generalize_3_extract_sketchpad_xylim(list_D):
     """
     For behavior, get overall min and max for x and y, across all tasks.
     """
-    import numpy as np
     xlims = []
     ylims = []
     for D in list_D:
@@ -1103,6 +1100,245 @@ def fig1_generalize_3_plot_task_variability_plot(DFALL, map_idxcenter_to_window,
             savefig(figtask, f"{savedir}/trialindex={trial_index}-n_uniq_char={n_unique_chars}-TASK.pdf")
             
             plt.close("all")
+
+def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SAVEDIR):
+    """
+    # Keep only a specific epoch
+    # HACKY - just was was kept in the syntax manuscript.
+    if animal == "Diego":
+        epoch_keep = "LCr2"
+        n_to_draw = 2 # the max length repeat during trianing
+    elif animal == "Pancho":
+        epoch_keep = "AnBmHV"
+        n_to_draw = 3
+    else:
+        assert False
+    """
+
+    # Prune to just epoch of interest
+    D.Dat = D.Dat[D.Dat["epoch"] == epoch_keep].reset_index(drop=True)
+
+    if len(D.Dat)==0:
+        return
+    
+    # Figure out if there is direction rule
+    ruledict = D.grammarparses_ruledict_rulestring_extract_flexible(epoch_keep)
+    if ruledict["categ_matlab"] == "prot_prims_in_order_AND_directionv2":
+        rule_direction_str = ruledict["params_good"][1]
+    elif ruledict["categ_matlab"] == "prot_prims_chunks_in_order":
+        # Then no direction rule
+        rule_direction_str = None
+    else:
+        print(ruledict)
+        assert False, "how get direction from this?"
+
+    
+    # Get the direction the subject was biased to draw, based on the average movement vector
+    if rule_direction_str is None:
+        from pythonlib.tools.vectools import average_vectors_wrapper, get_angle, average_angle, bin_angle_by_direction
+        from math import pi
+
+        angles = []
+        for ind_trial in range(len(D.Dat)):
+            tokens = D.taskclass_tokens_extract_wrapper(ind_trial, "beh_using_task_data")
+            if len(tokens)>1:
+
+                vectors = []
+                for i in range(len(tokens)-1):
+                    pos1 = np.array(tokens[i]["gridloc"])
+                    pos2 = np.array(tokens[i+1]["gridloc"])
+                    vectors.append(pos2 - pos1)
+
+                vec_mean = average_vectors_wrapper(np.stack(vectors, axis=0), "sum")
+                angle_mean = get_angle(vec_mean)
+
+                angles.append(angle_mean)
+
+        # Get the mean angle
+        angle_mean_alltrials = average_angle(angles)[0]
+        tmp = bin_angle_by_direction([angle_mean_alltrials], -pi/4)[0]
+        rule_direction_str = ["right", "up", "left", "down"][tmp-1]
+        
+
+    ### Models (Sample a sequence by model)
+    # (1) Correct sequence (perfect)
+    def sample_correct(task_canonical_shapeindex_sorteddirection):
+        def f(x):
+            return x[0]
+        seq = sorted(task_canonical_shapeindex_sorteddirection, key=f)
+        # print(task_canonical_shapeindex_sorteddirection)
+        # print(seq)
+        # assert False
+        return seq
+
+    # Random
+    def sample_random(task_canonical_shapeindex_sorteddirection):
+        import random
+        seq = [x for x in task_canonical_shapeindex_sorteddirection]
+        random.shuffle(seq)
+        return seq
+
+    # 2 max
+    def sample_nmax_concrete_syntax(task_canonical_shapeindex_sorteddirection, n_to_draw):
+        """
+        PARAMS:
+        - n_to_draw = 2 # e..g, if max is 2A2B, then make this 2. If A and B are different maxes, then code
+        isn't setup to do that.
+        - task_canonical_shapeindex_sorteddirection, list of (shapeindex, gridloc) sorted already in order
+        expected due to locations.
+        e.g., [(0, (-1, 0)), (1, (-1, 1)), (1, (0, 1)), (0, (0, 0)), (0, (1, 1))]
+        
+        RETURNS:
+        - seq, a copy of task_canonical_shapeindex_sorteddirection, reordered as a drawing sequence
+        """
+
+        assert all([x[0]<2 for x in task_canonical_shapeindex_sorteddirection]), "code below assumes it is AnBm experiment (and not AnBmCk)"
+
+        seq = []
+        inds_done = []
+        def _draw_n_of_this_shape(shapeindex_to_draw, n_to_draw):
+            # Cycle through A, B, picking up to two for each cycle
+            inds_remain = [i for i, sh in enumerate(task_canonical_shapeindex_sorteddirection) if 
+                        (i not in inds_done) and (sh[0]==shapeindex_to_draw)]
+            inds_pop = inds_remain[:n_to_draw] # Get the first <n_to_draw> items
+
+            # Draw them
+            for i in inds_pop:
+                seq.append(task_canonical_shapeindex_sorteddirection[i])
+
+            # Remove them from pool
+            inds_done.extend(inds_pop)
+
+        current_shape_index = 0
+        while len(inds_done)<len(task_canonical_shapeindex_sorteddirection):
+            _draw_n_of_this_shape(current_shape_index, n_to_draw)
+            # Switch to the next shape
+            if current_shape_index==0:
+                current_shape_index = 1
+            elif current_shape_index==1:
+                current_shape_index = 0
+            else:
+                print(current_shape_index)
+                assert False
+
+        return seq
+
+    ### Score based on length of repeat of the initial shape.
+    def score_repeat_length(seq):
+        """
+        [Hacky] Score repeat length at strat of seqeunce, for shape index 0
+        """
+        # Count how many of the initial items were repeated
+        repetitions = 0
+        for s in seq:
+            if s[0]==0:
+                # Matches the desired shape
+                repetitions+=1
+            else:
+                break
+        return repetitions
+
+    # Get monkey's behavior
+    if False: # Devo
+        TkTask = D.taskclass_tokens_extract_wrapper(indtrial, "task", plot=True, return_as_tokensclass=True)
+        D.grammarparses_extract_beh_taskstroke_inds(indtrial)
+
+    # Iterate thru all trials, and collect score based on each model
+    D.grammarparses_syntax_concrete_append_column()
+    shape_key = D.grammarparses_rules_shape_AnBmCk_get_shapekey()
+    
+    if False:
+        # get the rule for this day, to know what A, B, C etc are.
+        rule_shape_order = D.grammarparses_rules_shape_AnBmCk_get_shape_order()
+        map_shape_to_shapeindex = {sh:i for i, sh in enumerate(rule_shape_order)}
+    else:
+        if animal=="Diego" and epoch_keep=="LCr2":
+            map_shape_to_shapeindex = {"line":0, "circle":1}
+        elif animal=="Diego" and epoch_keep=="CLr2":
+            map_shape_to_shapeindex = {"circle":0, "line":1}
+        elif animal == "Pancho" and epoch_keep == "AnBmHV":
+            map_shape_to_shapeindex = {"line-11-1-0":0, "line-11-2-0":1}
+        else:
+            assert False
+
+    # Remove trials that include shapes not part of shape order
+    inds_keep = []
+    for ind in range(len(D.Dat)):
+        shapes = D.taskclass_shapes_extract(ind, shape_kind=shape_key)
+        if all([sh in map_shape_to_shapeindex.keys() for sh in shapes]):
+            inds_keep.append(ind)
+        else:
+            print("Throwing out trial that has non-canonical shapes: ", ind)
+    D.Dat = D.Dat.iloc[inds_keep].reset_index(drop=True)
+
+    # Helper to sort sequence to match direction rule
+    if rule_direction_str == "right":
+        # To sort sequence by spatial order
+        def f_sort_direction(x):
+            return x[1][0]
+    elif rule_direction_str is None:
+        # sample a random integer, since there is no prescripted order
+        import random
+        def f_sort_direction(x):
+            return random.randint(0, 10000)
+    else:
+        print(rule_direction_str)
+        print(ruledict)
+        assert False
+
+    res = []
+    for indtrial in range(len(D.Dat)):
+        TkTask = D.taskclass_tokens_extract_wrapper(indtrial, "task", plot=False, return_as_tokensclass=True)
+
+        # Get task in different representations
+        task_canonical = [(tk[shape_key], tk["gridloc"]) for tk in TkTask.Tokens]
+        task_canonical_shapeindex = [(map_shape_to_shapeindex[x[0]], x[1]) for x in task_canonical]
+        task_canonical_shapeindex_sorteddirection = sorted(task_canonical_shapeindex, key=f_sort_direction)
+        
+        # Get scores, sampled under differnet models
+        seq = sample_correct(task_canonical_shapeindex_sorteddirection)
+        score_correct = score_repeat_length(seq)
+
+        # Sample many randoms and average
+        _scores = []
+        for _ in range(100):
+            _seq = sample_random(task_canonical_shapeindex_sorteddirection)
+            _scores.append(score_repeat_length(_seq))
+        score_random = np.mean(_scores)
+            
+        seq = sample_nmax_concrete_syntax(task_canonical_shapeindex_sorteddirection, n_to_draw=n_to_draw)
+        score_max2 = score_repeat_length(seq)
+
+        # Behavior
+        # tokens_beh = D.grammarparses_extract_beh_taskstroke_inds(indtrial, return_as_tokens=True)
+        tokens_beh = D.taskclass_tokens_extract_wrapper(indtrial, "beh_grammar_allow_mult_task_strokes_per_beh_stroke", return_as_tokensclass=True).Tokens
+        seq_beh = [(map_shape_to_shapeindex[tk[shape_key]], tk["gridloc"]) for tk in tokens_beh]
+        score_beh = score_repeat_length(seq_beh)
+
+        # Save data
+        for score, model in [
+            (score_correct, "correct"),
+            (score_random, "random"),
+            (score_max2, "max2"),
+            (score_beh, "behavior"),
+            ]:
+            res.append({
+                "indtrial":indtrial,
+                "score":score,
+                "model":model,
+                "syntax_concrete":D.Dat.iloc[indtrial]["syntax_concrete"],
+                "nstrokes_tot":np.sum(D.Dat.iloc[indtrial]["syntax_concrete"]),
+                "nstrokes_A":D.Dat.iloc[indtrial]["syntax_concrete"][0],
+                "nstrokes_B":D.Dat.iloc[indtrial]["syntax_concrete"][1],
+                "trialcode":D.Dat.iloc[indtrial]["trialcode"],
+            })
+
+    dfres = pd.DataFrame(res)
+
+    # Save it
+    dfres.to_pickle(f"{SAVEDIR}/{animal}-{date}-{epoch_keep}.pkl")
+
+    return dfres
 
 if __name__=="__main__":
     

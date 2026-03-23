@@ -2591,6 +2591,11 @@ class Dataset(object):
                 else:
                     Tk = self.TokensStrokesBehUsingTaskStrokes_FirstTouch[tc]
                     assert Tk is not None, "I put None there for characters... you shouldn't ask for beh_firsttouch if this is character"
+            elif which_order=="beh_grammar_allow_mult_task_strokes_per_beh_stroke":
+                # [GOOD -- used for syntax ms, beucas for Pancho this allows counting multiple
+                # task strokes if he uses a single beh stroke over them] 
+                # Helper to remember what I used for grammar
+                return self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch", plot, return_as_tokensclass)
             elif which_order == "task":
                 assert self.TokensTask is not None, "run tokens_generate_replacement_from_raw_helper()"
                 Tk = self.TokensTask[tc]
@@ -9941,14 +9946,26 @@ class Dataset(object):
         parses = g.parses_extract_generated(rs)
         return parses
 
-    def grammarparses_extract_beh_taskstroke_inds(self, ind):
+    def grammarparses_extract_beh_taskstroke_inds(self, ind, return_as_tokens=False):
         """ Return the beh strokes, in format of taskstroke indices.
         as list of ints, same len as beh, based oint he order in which each
         taskstroke ind was first touchhed! So might be shorter than the num beh strokes...
+
+        NOTE: This only assigns ONE task stroke from each beh stroke, even if multiple taskstrokes were touched by
+        a single stroke.
         """
         taskstroke_inds_beh_order = self.behclass_extract_taskstroke_inds_in_beh_order(ind)
+
+        if return_as_tokens:
+            TkTask = self.taskclass_tokens_extract_wrapper(ind, "task", plot=False, return_as_tokensclass=True)
+            tokens_beh_order = [TkTask.index_extract_tok_using_ind_taskstroke_orig(i)[1] for i in taskstroke_inds_beh_order]
+            return tokens_beh_order
+
         if False:
             # not true any more, since is using first_touch_using_max_align
+            # i.e., beh_firsttouch can get: a single beh stroke could get multiple taskstrokes,. but that doesnt happen with above.
+            # print(taskstroke_inds_beh_order)
+            # print([tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")])
             assert taskstroke_inds_beh_order == [tok["ind_taskstroke_orig"] for tok in self.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")]
         return taskstroke_inds_beh_order
 
@@ -10224,20 +10241,26 @@ class Dataset(object):
 
         # Get data
         _, gaps = self.strokes_durations_gaps(ind)
+        distances, angles = self.strokes_distances_angles_gaps(ind)
         Tk = self.taskclass_tokens_extract_wrapper(ind, "beh_using_task_data", return_as_tokensclass=True)
 
         assert len(gaps) == len(Tk.Tokens)-1
+        assert len(distances) == len(Tk.Tokens)-1
+        assert len(angles) == len(Tk.Tokens)-1
 
         # Collect data across gaps.
         res = [] # length num gaps
         
-        # First, get "response time" (on of first storke minus go)
+        # First, get from "fixation" to first stroke ("response time" is on of first storke minus go)
         if also_get_response_time:
-            rt = self.motor_get_response_time(ind)
+            rt = self.motor_get_response_time(ind) # Time
+            distance, angle = self.motor_get_response_distance_angle(ind)
             dat = {
                 "index_trial":ind,
                 "index_gap":-1,
                 "gap_dur":rt,
+                "gap_dist":distance,
+                "gap_angle":angle
             }
             for feat in ["chunk_rank", "chunk_within_rank", "shape"]:
                 dat[f"gap_{feat}"] = (None, Tk.Tokens[0][feat])
@@ -10252,12 +10275,13 @@ class Dataset(object):
 
             # Transition information: shape and location
             dat["gap_dur"] = gaps[i]
+            dat["gap_dist"] = distances[i]
+            dat["gap_angle"] = angles[i]
 
             # Transition information: chunks
             for feat in ["chunk_rank", "chunk_within_rank", "shape"]:
                 dat[f"gap_{feat}"] = (tok1[feat], tok2[feat])
 
-                
             res.append(dat)
         
         return pd.DataFrame(res)

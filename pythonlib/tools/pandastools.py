@@ -4090,6 +4090,9 @@ def plot_subplots_heatmap(df, varrow, varcol, val_name, var_subplot,
         # maxs = []
         groupmeans = []
         for grp, inds in grpdict.items():
+            # print(df.iloc[inds][val_name])
+            # print(val_name)
+            # print(grp)
             groupmeans.append(np.mean(df.iloc[inds][val_name])) 
         zmin = min(groupmeans)
         zmax = max(groupmeans)
