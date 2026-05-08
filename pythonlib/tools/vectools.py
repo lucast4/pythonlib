@@ -144,6 +144,53 @@ def get_dot_between_unit_vectors(u, v):
     return c
     
 
+
+def _helper_compute_dot_products(vectors_1, vectors_2):
+    """
+    Compute all pairwise vectors between two sets of vectors.
+    PARAMS:
+    - Vectors, array of row vectors... (ntrials, ndims)
+    RETUNS:
+    - flatterned arrays of dot products, all pairwise, all selfs. Note that
+    selfs will only be those that are not the same trial
+    """
+    # dot_products = vectors_1 @ vectors_2.T # (n1, n2)
+    dot_products = (vectors_1 @ vectors_2.T).flatten() # (n1, n2)
+    assert len(dot_products) == len(vectors_1) * len(vectors_2)
+
+    if False:
+        # SKIP THIS, not using it.
+        # Compute all dot products (across) and norms (within)
+        _, _, _dot_products, _, norms_a, norms_b = compute_weighted_alignment(vectors_1, vectors_2, 
+                                                                    do_reweight=False, PLOT=False)
+        assert np.allclose(_dot_products, dot_products)
+
+    if False:
+        print(dot_products.flatten().shape, norms_a.flatten().shape, norms_b.flatten().shape)
+    # get dot products within vectors_1, in cross-validated manner
+
+    dot_products_1 = vectors_1 @ vectors_1.T
+    # Mask out the diagonal (self-comparison) to avoid bias
+    diag_mask = np.triu(~np.eye(dot_products_1.shape[0], dtype=bool))
+    dot_products_1 = (dot_products_1[diag_mask]).flatten()
+    assert len(dot_products_1) == len(vectors_1) * (len(vectors_1)-1) / 2
+
+    dot_products_2 = vectors_2 @ vectors_2.T
+    # Mask out the diagonal (self-comparison) to avoid bias
+    diag_mask = np.triu(~np.eye(dot_products_2.shape[0], dtype=bool))
+    dot_products_2 = (dot_products_2[diag_mask]).flatten()
+    assert len(dot_products_2) == len(vectors_2) * (len(vectors_2)-1) / 2
+
+    # Store it                                 
+    # Store a single value, so that each (grp, lev1, lev2) has a single value. 
+    # Makes it easy to balance data later on.
+    if False:
+        print("----")
+        print(vectors_1.shape, vectors_2.shape, dot_products.shape, dot_products_1.shape, dot_products_2.shape)
+
+    return dot_products, dot_products_1, dot_products_2
+
+
 # def get_projection_along_diagonal(x,y):
 #     # if x,y is vector with origin at top left, with positive values pointing towards bottom right, then
 #     # this gives projection along diagonal. 0 means is at top-left. 1 means is at bottom right.
@@ -505,3 +552,109 @@ def cosine_similarity(vector_a, vector_b):
 
     # Return cosine distance
     return cosine_similarity
+
+
+import numpy as np
+
+def compute_weighted_alignment(set_a, set_b=None, do_reweight=True, PLOT=False):
+    """
+    Computes weighted cosine similarity. 
+    If set_b is None, it computes within-set similarity for set_a.
+    If set_b is provided, it computes across-set similarity.
+
+    PARAMS:
+    - set_a, set of vectors (ndata, ndims)
+
+        # --- Example Usage ---
+    # Generate dummy data: 100-dimensional neural vectors
+    # Set 1: Ground truth direction + noise
+    # Set 2: Different ground truth direction + noise
+    n_dims = 100
+    n_samples = 50
+
+    set1 = 2*np.random.randn(20, n_dims) + -1  # Centered around a "signal"
+    set2 = 1*np.random.randn(30, n_dims) + 0.2  # Lower signal-to-noise
+
+    # Calculate metrics
+    print(compute_weighted_alignment(set1)[0])
+    print(compute_weighted_alignment(set2)[0])
+    print(compute_weighted_alignment(set1, set2)[0])
+
+    """
+    import seaborn as sns
+    
+    # 1. Compute Magnitudes (L2 Norms)
+    norms_a = np.linalg.norm(set_a, axis=1, keepdims=True)
+    
+    if set_b is None:
+        # Within-set: Compare set_a with itself
+        # Dot product of all pairs
+        dot_products = set_a @ set_a.T
+        # Weights: Product of magnitudes for every pair
+        weights = norms_a @ norms_a.T
+        
+        # Mask out the diagonal (self-comparison) to avoid bias
+        diag_mask = ~np.eye(dot_products.shape[0], dtype=bool)
+        diag_mask = diag_mask & np.triu(diag_mask, 0) # 
+        dot_products = dot_products[diag_mask]
+        # print(dot_products)
+        # assert False
+        weights = weights[diag_mask]
+        # print("sadsad", diag_mask)
+    else:
+        # Across-set: Compare set_a with set_b
+        norms_b = np.linalg.norm(set_b, axis=1, keepdims=True) # (ndata, 1)
+        dot_products = set_a @ set_b.T # (n1, n2)
+        weights = norms_a @ norms_b.T # (n1, n2)
+
+    # 2. Compute Cosine Similarity (Dot product / product of norms)
+    # We add a tiny epsilon to weights to avoid division by zero
+    similarities = dot_products / (weights + 1e-9)
+    # print(dot_products.shape)
+    # print(weights.shape)
+    # print(similarities.shape)
+    # assert False
+    
+    # 3. Compute Weighted Average
+    # Vectors with larger magnitudes have more influence on the final alignment score
+    if not do_reweight:
+        weights = np.ones_like(weights)
+
+    weighted_mean_sim = np.sum(similarities * weights) / np.sum(weights)
+
+    if PLOT:
+        fig, axes = plt.subplots(2,2, figsize=(8, 8))
+
+        ax = axes.flatten()[0]
+        sns.histplot(similarities.flatten(), ax=ax)
+        ax.set_xlabel("similarities")
+
+        ax = axes.flatten()[1]
+        sns.histplot(dot_products.flatten(), ax=ax)
+        ax.set_xlabel("dot_products")
+
+        ax = axes.flatten()[2]
+        sns.histplot(weights.flatten(), ax=ax)
+        ax.set_xlabel("weights")
+
+        ax = axes.flatten()[3]
+        sns.scatterplot(x=dot_products.flatten(), y=weights.flatten(), ax=ax, alpha=0.3)
+        ax.set_xlabel("dot_products")
+        ax.set_ylabel("weights")        
+
+    return weighted_mean_sim, similarities, dot_products, weights, norms_a, norms_b
+
+def cosine_similarity_from_dot_products(dot_ab, dot_aa, dot_bb):
+    """
+    Given already computed dot products betweeen two vectors (and with themselves -- ie 
+    the squared norms), compute the cosine.
+
+    RETURNS:
+    - theta, in degrees (0 to 180)
+    - cosine_sim, ie cos(theta)
+    """
+    cosine_sim = dot_ab / (np.sqrt(dot_aa) * np.sqrt(dot_bb))
+    cosine_sim = np.clip(cosine_sim, -1.0, 1.0) # otherwise gets nans
+    theta_deg = np.degrees(np.arccos(cosine_sim))
+    return theta_deg, cosine_sim
+

@@ -524,7 +524,7 @@ if False:
         
         return res_dict
 
-def empiricalPval(stat_actual, stats_shuff, side="two"):
+def empiricalPval(stat_actual, stats_shuff, side="two", plot=False):
     """ p value, useful for permutation tests.
     - side, if "two" then two sided (uses absolute value), 
     if "left" then hypothesize that actual is small, if 'right' then large.
@@ -545,7 +545,16 @@ def empiricalPval(stat_actual, stats_shuff, side="two"):
     nn = len(stats_shuff) + 1
     p = n/nn
 
-    return p
+    if plot:
+        fig = plt.figure()
+        plt.hist(stats_shuff)
+        plt.axvline(x=stat_actual, color="r")
+        plt.title(f"p={p:.3f} | {1-p:.3f}")
+    else: 
+        fig = None
+
+
+    return p, fig
 
 
 
@@ -588,16 +597,16 @@ def permutationTest(data, funstat, funshuff, N, plot=True, side="two",
             stats_shuff.append(funstat(data_shuff))
     
     # p value
-    p = empiricalPval(stat_actual, stats_shuff, side=side)
+    p, fig = empiricalPval(stat_actual, stats_shuff, side=side, plot=plot)
 
-    # plot 
-    if plot:
-        fig = plt.figure()
-        plt.hist(stats_shuff)
-        plt.axvline(x=stat_actual, color="r")
-        plt.title(f"p={p:.3f} | {1-p:.3f}")
-    else: 
-        fig = None
+    # # plot 
+    # if plot:
+    #     fig = plt.figure()
+    #     plt.hist(stats_shuff)
+    #     plt.axvline(x=stat_actual, color="r")
+    #     plt.title(f"p={p:.3f} | {1-p:.3f}")
+    # else: 
+    #     fig = None
 
     if force_return_stats:
         return p, stat_actual, stats_shuff, fig
