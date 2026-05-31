@@ -2299,7 +2299,7 @@ def split_strokes2_to_align_to_strokes1(strokes1, strokes2, DEBUG=False):
 
     if DEBUG:
         print("for each cam stroke, which dataset stroke does it match: ", matches)
-        print(np.   diff(matches))
+        print(np.diff(matches))
 
     ### Get the cam stroke that skips an index
     if False:
