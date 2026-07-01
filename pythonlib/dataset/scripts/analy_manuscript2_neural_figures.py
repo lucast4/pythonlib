@@ -1478,6 +1478,232 @@ def alignment_dot_products_scatterplot(DFRES_DOT_AGG, savedir):
 
             plt.close("all")
 
+def toygrammar_preprocess(DF_ALL, remove_max2_model=False):
+    """
+    Helper to do all preprocessing for DF_ALL
+    """
+    from pythonlib.tools.pandastools import append_col_with_grp_index
+
+    DF_ALL["score_diff_abs"] = [np.abs(row[1]["score"] - row[1]["nstrokes_A"]) for row in DF_ALL.iterrows()]
+
+    DF_ALL = append_col_with_grp_index(DF_ALL, ["animal", "epoch", "model"], "condition")
+    DF_ALL = append_col_with_grp_index(DF_ALL, ["animal", "model"], "")
+    DF_ALL = append_col_with_grp_index(DF_ALL, ["animal", "epoch"], "aniepoch")
+    # Splint into two plots, for training and generalization.
+
+    if remove_max2_model:
+        # This is not that useful, so remove it. Also, it affects the bonferonni stuff.
+        DF_ALL = DF_ALL[~(DF_ALL["model"]=="max2")].reset_index(drop=True)
+
+    # GOOD
+    def is_trial_train_or_generalization(x):
+        if x["animal"] == "toygrammar":
+            # train = [0, 3]; test = [4+]
+            if x["nstrokes_A"] in [2, 3]:
+                return "train"
+            elif x["nstrokes_A"] in [5]:
+                return "test"
+            else:
+                return "ignore"
+        elif x["animal"] == "Diego":
+            # train = [0, 2]; test = [3+]
+            if x["nstrokes_A"] in [2]:
+                return "train"
+            elif x["nstrokes_A"] in [5]:
+                return "test"
+            else:
+                return "ignore"
+        elif x["animal"] == "Pancho":
+            # train = [0, 3]; test = [4+]
+            if x["nstrokes_A"] in [2, 3]:
+                return "train"
+            elif x["nstrokes_A"] in [5]:
+                return "test"
+            else:
+                return "ignore"
+        else:
+            print(x)
+            assert False
+    DF_ALL["train_or_test"] = DF_ALL.apply(is_trial_train_or_generalization, axis=1)
+
+    ### Prepping for figures.
+    # (1) Prune models
+    models_keep = ["random", "behavior", "max2", 31, 42, 44, 37, 51, 53]
+    DF_ALL = DF_ALL[DF_ALL["model"].isin(models_keep)].reset_index(drop=True)
+
+    # (2) Rename models with a semantic name
+    map_modelint_to_modelstr = {
+        31:"rnn_baseline_256",
+        42:"rnn_baseline_fb_256",
+        44:"rnn_bottleneck_13_384",
+        37:"rnn_programs_v2_384",
+        51:"rnn_programs_v2_256",
+        53:"rnn_bottleneck_7_256",
+    }
+    def remap_model_name(model):
+        if isinstance(model, str):
+            return model
+        elif isinstance(model, int):
+            return map_modelint_to_modelstr[model]
+        else:
+            print(model)
+            assert False
+    DF_ALL["model_str"] = DF_ALL["model"].apply(remap_model_name)
+
+    ### Define what is the datapt (that goes into final agg plots)
+    # Datapt1: the high-level datapt
+    def f(x):
+        if x["animal"] == "toygrammar":
+            # Model kind, like "rnn_bottleneck" or "rnn_programs_v2"
+            return x["model_str"] # 
+        elif x["animal"] in ["Pancho", "Diego"]:
+            # 
+            return  (x["animal"], x["epoch"], x["model"])
+        else:
+            print(x)
+            assert False
+    DF_ALL["datapt1"] = DF_ALL.apply(f, axis=1)
+
+    # Datapt2: the low-level datapt
+    def f(x):
+        if x["animal"] == "toygrammar":
+            # for models, each datapt is a single run
+            # ... epoch = timestamp (each model run)
+            # ... epoch = timestamp (each model run)
+            return x["epoch"] # 
+        elif x["animal"] in ["Pancho", "Diego"]:
+            # for animals, each datapt is a single trialcode
+            return x["trialcode"]
+        else:
+            print(x)
+            assert False
+    DF_ALL["datapt2"] = DF_ALL.apply(f, axis=1)
+
+    return DF_ALL
+
+def toygrammar_agg_datapts(DF_ALL):
+    """
+    ### Final agg, to make the final summary plots
+    # Low level datapts are different for animal vs. model.
+    """
+    from pythonlib.tools.pandastools import aggregGeneral
+
+    # Animal -- each trial is a low level datapt
+    DF_ALL_ANIMAL = DF_ALL[DF_ALL["animal"].isin(["Pancho", "Diego"])].reset_index(drop=True)
+    DF_ALL_ANIMAL_AGG = aggregGeneral(DF_ALL_ANIMAL, ["animal", "model_str", "syntax_concrete", "nstrokes_tot", "nstrokes_A", "nstrokes_B", 
+        "datapt1", "datapt2"], 
+        ["score", "score_diff_abs"], nonnumercols=["train_or_test"])
+
+    # Model -- each run is a single datapt.
+    DF_ALL_RNN = DF_ALL[DF_ALL["animal"].isin(["toygrammar"]).reset_index(drop=True)]
+    DF_ALL_RNN_AGG = aggregGeneral(DF_ALL_RNN, ["animal", "model_str", "nstrokes_A", "datapt1", "datapt2"], 
+        ["score", "score_diff_abs"], nonnumercols=["train_or_test"])
+    # And then agg again, so one datapt per (modelrun, trainortest)
+    DF_ALL_RNN_AGG_TRAINTEST = aggregGeneral(DF_ALL_RNN_AGG, ["animal", "model_str", "train_or_test", "datapt1", "datapt2"], 
+        ["score", "score_diff_abs"])
+        
+    # Merge Animal and RNN
+    DF_ALL_AGG = pd.concat([DF_ALL_ANIMAL_AGG, DF_ALL_RNN_AGG], axis=0).reset_index(drop=True)
+    DF_ALL_AGG_TRAINTEST = pd.concat([DF_ALL_ANIMAL_AGG, DF_ALL_RNN_AGG_TRAINTEST], axis=0).reset_index(drop=True)
+
+    from pythonlib.tools.pandastools import stringify_values
+    DF_ALL_STR = stringify_values(DF_ALL)
+    DF_ALL_AGG_STR = stringify_values(DF_ALL_AGG)
+    DF_ALL_AGG_TRAINTEST_STR = stringify_values(DF_ALL_AGG_TRAINTEST)
+
+    if False:
+        # Ignore, this doesnt make sesne
+        df_tmp = aggregGeneral(DF_ALL_ANIMAL, ["animal", "nstrokes_A", "datapt1", "train_or_test", "model_str"], 
+            ["score", "score_diff_abs"])
+
+        DF_ALL_AGG_TRAINTEST_FORSTATS = pd.concat([df_tmp, DF_ALL_RNN_AGG_TRAINTEST], axis=0).reset_index(drop=True)
+        DF_ALL_AGG_TRAINTEST_FORSTATS    
+
+    return DF_ALL_STR, DF_ALL_AGG_STR, DF_ALL_AGG_TRAINTEST_STR
+
+def toygrammar_agg_figures(DF_ALL, DF_ALL_AGG_STR, DF_ALL_AGG_TRAINTEST_STR, SAVEDIR):
+    """
+    ALl plots summarizing results for RNN and monkey.
+    """
+    ### FIGURES
+    from pythonlib.tools.snstools import rotateLabel
+    from pythonlib.tools.statstools import signrank_wilcoxon_from_df, compute_all_pairwise_signrank_wrapper, compute_all_pairwise_stats_wrapper
+
+    ### All the data
+    fig = sns.relplot(data=DF_ALL, x="nstrokes_A", y="score_diff_abs", hue="aniepoch", kind="line", col="model", 
+                    col_wrap = 8, errorbar="se")
+    savefig(fig, f"{SAVEDIR}/overview.pdf")
+
+    # Plot each expt
+    fig = sns.relplot(data=DF_ALL, x="nstrokes_A", y="score_diff_abs", col="aniepoch", hue="model", col_wrap=8, kind="line",
+        errorbar="se")
+    savefig(fig, f"{SAVEDIR}/overview-each_expt.pdf")
+
+    ## Plots that plot as function of nstrokes
+    fig = sns.relplot(data=DF_ALL_AGG_STR, x="nstrokes_A", y="score_diff_abs", hue="datapt1", kind="line", col="model_str", 
+                    col_wrap = 8, errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.axhline(0, color="k", alpha=0.5)
+    savefig(fig, f"{SAVEDIR}/overview-vs_nstrokes_A-agg.pdf")
+
+    fig = sns.relplot(data=DF_ALL_AGG_STR, x="nstrokes_A", y="score_diff_abs", hue="model_str", col="animal", kind="line", errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.axhline(0, color="k", alpha=0.5)
+    savefig(fig, f"{SAVEDIR}/overview-vs_nstrokes_A-agg-2.pdf")
+
+    fig = sns.relplot(data=DF_ALL_AGG_STR, x="nstrokes_A", y="score_diff_abs", hue="model_str", kind="line", errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.axhline(0, color="k", alpha=0.5)
+    savefig(fig, f"{SAVEDIR}/overview-vs_nstrokes_A-agg-3.pdf")
+
+    if False:
+        # Final all, one datapt per expt
+        DF_ALL_AGG_AGG = aggregGeneral(DF_ALL_AGG, ["nstrokes_A", "datapt1", "model_str", "animal", "train_or_test"], ["score", "score_diff_abs"])
+
+    ## Plots that split into train/test
+    fig = sns.catplot(data= DF_ALL_AGG_TRAINTEST_STR, x="datapt1", y="score_diff_abs", col="train_or_test", 
+        kind="point", join=False, errorbar="se")
+    rotateLabel(fig)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([-0.2, 5])
+    savefig(fig, f"{SAVEDIR}/overview-traintest-1.pdf")
+
+    fig = sns.catplot(data=DF_ALL_AGG_TRAINTEST_STR, x="model_str", y="score_diff_abs", col="train_or_test", alpha=0.5)
+    rotateLabel(fig)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([-0.2, 5])
+    savefig(fig, f"{SAVEDIR}/overview-traintest-2.pdf")
+
+    fig = sns.catplot(data=DF_ALL_AGG_TRAINTEST_STR, x="model_str", y="score_diff_abs", col="train_or_test", 
+        kind="point", join=False, errorbar="se")
+    rotateLabel(fig)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([-0.2, 5])        
+    savefig(fig, f"{SAVEDIR}/overview-traintest-3.pdf")
+
+    fig = sns.catplot(data=DF_ALL_AGG_TRAINTEST_STR, x="model_str", y="score_diff_abs", col="train_or_test", 
+        kind="bar", errorbar="se")
+    rotateLabel(fig)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([-0.2, 5])            
+    savefig(fig, f"{SAVEDIR}/overview-traintest-4.pdf")
+
+    plt.close("all")
+
+    # Stats 
+    for train_or_test in ["train", "test"]:
+
+        _savedir = f"{SAVEDIR}/stats_pairwise_ttest-{train_or_test}"
+        os.makedirs(_savedir, exist_ok=True)
+
+        dfthis = DF_ALL_AGG_TRAINTEST_STR[DF_ALL_AGG_TRAINTEST_STR["train_or_test"] == train_or_test].reset_index(drop=True)
+        # dfthis = DF_ALL_AGG_TRAINTEST_FORSTATS[DF_ALL_AGG_TRAINTEST_FORSTATS["train_or_test"] == train_or_test].reset_index(drop=True)
+
+        dfres = compute_all_pairwise_stats_wrapper(dfthis, ["model_str"], "score_diff_abs", True, _savedir)
+
+        plt.close("all")
+
+
 if __name__=="__main__":
     
     pass
