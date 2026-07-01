@@ -64,12 +64,12 @@ def alignmentcompute_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_
     - dfdist, pruned.
     """
     # Strict version -- only compare vectors with same controlled for everything
-    from pythonlib.tools.vectools import compute_weighted_alignment
-    from neuralmonkey.analyses.euclidian_distance import dfdist_variables_generate_constrast_strings, dfdist_variables_generate_var_same
+    # from pythonlib.tools.vectools import compute_weighted_alignment
+    from neuralmonkey.analyses.euclidian_distance import dfdist_variables_generate_var_same
     from neuralmonkey.analyses.euclidian_distance import dfdist_variables_effect_extract_helper
 
     for v in vars_others:
-        assert v in vars_control
+        assert v in vars_control, "this is important, or else you can't assume assume that the vectors being compared are from the same group."
     vars_included = [var_effect] + vars_dont_care + vars_control
     if not sorted(vars_included) == sorted(euclidean_label_vars):
         print(sorted(vars_included))
@@ -92,12 +92,13 @@ def alignmentcompute_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_
     assert len(dfdist) > 0, "no data left"
 
     # 1. Keep only cases where var_effect is increasing
-    dfdist = dfdist[dfdist[f"{var_effect}_2"] > dfdist[f"{var_effect}_1"]].reset_index(drop=True)
+    _n = len(dfdist); dfdist = dfdist[dfdist[f"{var_effect}_2"] > dfdist[f"{var_effect}_1"]].reset_index(drop=True); 
+    assert len(dfdist)==_n, "this must be the case..."
 
     # 2. Keep only cases with correct contrast
     # Note: vars_control is all the leftover variables, so this does work.
     dfdist = dfdist_variables_effect_extract_helper(dfdist, colname_conj_same, euclidean_label_vars, 
-                                                        [var_effect], vars_dont_care)
+                                                        [var_effect], vars_dont_care, contrasts_same=vars_control)
     return dfdist
 
 def compute_dot_product_distributions_helper(dfdist, var_effect, vars_dont_care, vars_control, 
@@ -128,6 +129,9 @@ def compute_dot_product_distributions_helper(dfdist, var_effect, vars_dont_care,
     grp_others_all = []
     # norms_a_all = []
     # norms_b_all = []
+
+    for v in vars_others:
+        assert all(dfdist_this[f"{v}_1"] == dfdist_this[f"{v}_2"])
 
     _vars_others = [f"{v}_1" for v in vars_others] # can use 1 or 2, they are equal
     grpdict_others = grouping_append_and_return_inner_items_good(dfdist_this, _vars_others)
@@ -198,12 +202,15 @@ def compute_dot_product_distributions_helper_across_grpother(dfdist,
     # vars_others_2 = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
 
     only_if_different_grpothers = True # To ensure is across levels of grpothers.
+    only_keep_if_both_12_have_mult_level_pairs = False # Or else most dates have no data for Pancho.
     dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper_two_vareffects(
                                                                 dfdist, 
                                                                 var_effect, vars_dont_care, vars_control, vars_others,
                                                                 var_effect, vars_dont_care, vars_control, vars_others,
                                                                 euclidean_label_vars,
-                                                                only_if_different_grpothers=only_if_different_grpothers)
+                                                                only_keep_if_both_12_have_mult_level_pairs=only_keep_if_both_12_have_mult_level_pairs,
+                                                                only_if_different_grpothers=only_if_different_grpothers,
+                                                                debug_print_all_comparisons=False)
 
     # Becuase this does both directions, its values are reproduced. So take just the first half
     _n = len(dot_products_all)
@@ -260,6 +267,11 @@ def compute_dot_product_distributions_helper_two_vareffects(dfdist,
     n_each_all = []
     effect_lev_pairs_all = []
     grp_others_all = []
+
+    for v in vars_others_1:
+        assert all(dfdist_1[f"{v}_1"] == dfdist_1[f"{v}_2"])
+    for v in vars_others_2:
+        assert all(dfdist_2[f"{v}_1"] == dfdist_2[f"{v}_2"])
 
     _var_effect_1 = f"{var_effect_1}_12"
     _var_effect_2 = f"{var_effect_2}_12"
@@ -332,13 +344,13 @@ def alignmentcompute_wrapper_single_session(
         # n_iter_splits = 4 # What was used originally
 
     """
-    from glob import glob
+    # from glob import glob
     from neuralmonkey.classes.session import _REGIONS_IN_ORDER_COMBINED
-    from neuralmonkey.analyses.euclidian_distance import dfdist_extract_label_vars_specific
-    from pythonlib.tools.pandastools import replace_None_with_string, stringify_values
-    from pythonlib.tools.pandastools import aggregGeneral
-    from pythonlib.tools.pandastools import append_col_with_grp_index
-    from neuralmonkey.scripts.analy_euclidian_dist_pop_script_MULT import load_preprocess_get_dates
+    # from neuralmonkey.analyses.euclidian_distance import dfdist_extract_label_vars_specific
+    # from pythonlib.tools.pandastools import replace_None_with_string, stringify_values
+    # from pythonlib.tools.pandastools import aggregGeneral
+    # from pythonlib.tools.pandastools import append_col_with_grp_index
+    # from neuralmonkey.scripts.analy_euclidian_dist_pop_script_MULT import load_preprocess_get_dates
     import pickle
     from neuralmonkey.analyses.euclidian_distance import compute_vector_between_conditions
     import numpy as np
@@ -535,12 +547,10 @@ def alignmentcompute_wrapper_single_session(
                 ####################################################### 
                 ######################## V2 -- USING DOT PRODUCTS DIRECTLY
                 ### Within rank
-                var_effect = "chunk_within_rank"
-                vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
+                var_effect = "chunk_within_rank" # Each vector is between two adjacent levels of this
+                vars_dont_care = ["chunk_within_rank_semantic"] # Allow pairs to have different values of this
                 vars_control = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
                                 'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-                # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-                # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
                 if strict:
                     vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
                 else:
@@ -607,6 +617,7 @@ def alignmentcompute_wrapper_single_session(
                                 "grp_others":grp_others,
                             })
 
+                ##########################################################################
                 ### Effect of chunk_within_rank, comparing across chunk_rank
                 var_effect = "chunk_within_rank"
                 vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
@@ -751,7 +762,7 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
         # n_iter_splits = 4 # What was used originally
 
     """
-    from glob import glob
+    # from glob import glob
     # from neuralmonkey.classes.session import _REGIONS_IN_ORDER_COMBINED
     # from neuralmonkey.analyses.euclidian_distance import dfdist_extract_label_vars_specific
     # from pythonlib.tools.pandastools import replace_None_with_string, stringify_values
@@ -779,8 +790,8 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
     # min_n_trials = 4 # to use a contrast.
     
     if DEBUG:
-        ANIMALS =  ["Diego"]
-        DATES = [230726]
+        ANIMALS =  ["Pancho"]
+        DATES = [230810]
         # date = 230913
 
         # animal = "Pancho"
@@ -821,18 +832,15 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
         #         run, n_iter_splits, SKIP_IF_DONE, DEBUG, DEBUG_BREAK, 
         #         DEBUG_FORCE_RETURN)
 
-        MULTIPROCESS_N_CORES = 8
+        MULTIPROCESS_N_CORES = 24
         with Pool(MULTIPROCESS_N_CORES) as pool:
             pool.starmap(alignmentcompute_wrapper_single_session,
                 zip(
                     list_animal,
                     list_date,
                     repeat(SAVEDIR),
-                    repeat(HACK_SKIP_FAILED_DATE_FOR_NOW),
                     repeat(run),
                     repeat(n_iter_splits),
-                    repeat(SKIP_IF_DONE),
-                    repeat(DEBUG),
                     repeat(DEBUG_BREAK),
                     repeat(DEBUG_FORCE_RETURN)))
     else:
@@ -840,482 +848,10 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
         # skipped_paths = []
         # error_cases = []
         for animal, date in zip(list_animal, list_date):
-        # for animal in ANIMALS:
-
-        #     if DATES is None:
-        #         list_dates, _, _, _ = load_preprocess_get_dates(animal, save_suffix)
-        #     else:
-        #         list_dates = DATES
-            
-        #     for date in list_dates:
-
-        #         if HACK_SKIP_FAILED_DATE_FOR_NOW:
-        #             if (animal, date) == ("Diego", 230915):
-        #                 # This failed beucase of need to reextract this dataset for run30.
-        #                 print(f"Skipping {animal}-{date} because it failed")
-        #                 continue
-        #             if (animal, date) == ("Pancho", 230824):
-        #                 # This failed beucase of need to reextract this dataset for run30.
-        #                 print(f"Skipping {animal}-{date} because it failed")
-        #                 continue
-        #             if (animal, date) == ("Pancho", 230829):
-        #                 # This failed beucase of need to reextract this dataset for run30.
-        #                 print(f"Skipping {animal}-{date} because it failed")
-        #                 continue
-
-        #         if SKIP_IF_DONE:
-        #             path_check = f"{SAVEDIR}/dfres_dot-{animal}-{date}.pkl"
-        #             if os.path.exists(path_check):
-        #                 print(f"Skipping {animal}-{date} because it already exists")
-        #                 continue
                         
             _, _ = alignmentcompute_wrapper_single_session(animal, date, SAVEDIR,
                 run, n_iter_splits, DEBUG_BREAK, 
                 DEBUG_FORCE_RETURN)
-
-            # ### Do this animal
-            # print(f"Processing {animal}-{date}")
-            # try:
-            #     RES = []
-            #     RES_DOT = []
-            #     for _iter in range(n_iter_splits):
-            #         for bregion in _REGIONS_IN_ORDER_COMBINED:
-
-            #             # Load dataset for devo
-            #             path = f"/lemur2/lucas/analyses/recordings/main/syntax_good/targeted_dim_redu_v2/run{run}/{animal}-{date}-q=RULE_ANBMCK_STROKE/bregion={bregion}/FITTING_subspc=('epoch', 'gridloc', 'DIFF_gridloc', 'chunk_rank', 'shape', 'rank_conj')-iter={_iter}/pa_subspace.pkl"
-
-            #             with open(path, "rb") as f:
-            #                 pa_subspace = pickle.load(f)
-
-            #             pa_subspace = pa_subspace.slice_by_dim_indices_wrapper("chans", list(range(_npcs_keep_euclidean)))
-            #             pa_subspace = pa_subspace.slice_by_labels_filtdict({"task_kind":["prims_on_grid"]})
-
-            #             # TODO: Remove effect of first stroke. (DONE)
-            #             # TODO: Do targeted PCA to convert to top 2 PCs... For below code, which uses theta... (IGNORE, targeted PC already done)
-            #             # TODO: Even better, don't convert to theta. Just take angle between vectors directly. (DONE)
-            #             var_effect = "chunk_within_rank"
-            #             vars_others = ["chunk_within_rank_semantic", "task_kind", "epoch", "chunk_rank_global", "chunk_rank", "shape", 
-            #                         "gridloc", "CTXT_loc_prev", "chunk_n_in_chunk"]
-            #             dfdist, euclidean_label_vars = alignmentcompute_prepare_dataset(pa_subspace, var_effect, vars_others, min_n_trials=min_n_trials)
-
-            #             ### Clean up dfdist
-            #             # from neuralmonkey.analyses.euclidian_distance import dfdist_variables_generate_var_same
-            #             # colname_conj_same = dfdist_variables_generate_var_same(euclidean_label_vars)
-
-            #             # Clean up
-            #             dfdist["n1"] = [x[0] for x in dfdist["n_1_2"]]
-            #             dfdist["n2"] = [x[1] for x in dfdist["n_1_2"]]
-            #             dfdist = dfdist[(dfdist["n1"] >= min_n_trials) & (dfdist["n2"] >= min_n_trials)].reset_index(drop=True)
-
-            #             if False:
-            #                 # Only
-            #                 n1 = sum(dfdist["chunk_rank_global_12"] == dfdist["chunk_rank_12"])
-            #                 n2 = len(dfdist["chunk_rank_global_12"] == dfdist["chunk_rank_12"])
-            #                 assert n1>0.7*n2, "why so many misaligned? might be fine to continue"
-            #                 dfdist = dfdist[dfdist["chunk_rank_global_12"] == dfdist["chunk_rank_12"]].reset_index(drop=True)
-                        
-            #             ### Get vectors between all conditions
-            #             # Get X for (0,1), (1,2), ... within each (chunk_rank).
-            #             # Get (A, B), (B, C) -- across chunk ranks.
-            #             dfanglevecs = compute_vector_between_conditions(pa_subspace, dfdist, var_effect, vars_others)
-            #             assert np.all(dfanglevecs["labels_1"] == dfdist["labels_1"])
-            #             assert np.all(dfanglevecs["labels_2"] == dfdist["labels_2"])
-            #             dfdist["vector"] = dfanglevecs["vector"]
-
-            #             # Return dfdist for debugging.
-            #             if DEBUG_FORCE_RETURN:
-            #                 return dfdist, euclidean_label_vars
-
-            #             ### Good version                        
-            #             for strict in list_strict:
-                            
-            #                 if False:
-            #                     assert False, "havent carefully chcekd this recently. Is prob fine, but prob wont work."
-            #                     ####################################################### 
-            #                     ######################## V1 -- USING COSINE DISTANCE
-            #                     ### Within rank
-            #                     var_effect = "chunk_within_rank"
-            #                     vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
-            #                     vars_control = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
-            #                                     'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-            #                     # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-            #                     # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                     if strict:
-            #                         vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                     else:
-            #                         vars_others = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-
-            #                     weighted_mean_sim, similarities, weights = compute_alignment_helper(dfdist, var_effect, vars_dont_care, vars_control, vars_others)
-            #                     if similarities is not None:
-            #                         RES.append({
-            #                             "animal": animal,
-            #                             "date": date,
-            #                             "bregion": bregion,
-            #                             "_iter": _iter,
-            #                             "weighted_mean_sim": weighted_mean_sim,
-            #                             "effect_kind": "chunk_within_rank",
-            #                             "similarities":similarities,
-            #                             "weights":weights,
-            #                             "var_effect": var_effect,
-            #                             "vars_dont_care": tuple(vars_dont_care),
-            #                             "vars_control": tuple(vars_control),
-            #                             "vars_others": tuple(vars_others),
-            #                             "strict":strict,
-            #                         })
-
-            #                     ### Across chunk rank
-            #                     var_effect = "chunk_rank_global"
-            #                     vars_dont_care = ["chunk_rank", "shape"] # Generally, correlated with var_effect
-            #                     vars_control = [ 'task_kind', 'epoch', 'gridloc', 'CTXT_loc_prev', 'chunk_n_in_chunk', 
-            #                         'chunk_within_rank', 'chunk_within_rank_semantic'] # These must be identical within each pair (ie each row)
-            #                     # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-            #                     # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                     if strict:
-            #                         vars_others = ["epoch", "chunk_within_rank_semantic"] # Computing vector alignment is done separately for each level of this
-            #                     else:
-            #                         vars_others = ["epoch"] # Computing vector alignment is done separately for each level of this
-
-            #                     weighted_mean_sim, similarities, weights = compute_alignment_helper(dfdist, var_effect, vars_dont_care, vars_control, vars_others)
-            #                     if similarities is not None:
-            #                         RES.append({
-            #                             "animal": animal,
-            #                             "date": date,
-            #                             "bregion": bregion,
-            #                             "_iter": _iter,
-            #                             "weighted_mean_sim": weighted_mean_sim,
-            #                             "effect_kind": "chunk_rank_global",
-            #                             "similarities":similarities,
-            #                             "weights":weights,
-            #                             "var_effect": var_effect,
-            #                             "vars_dont_care": tuple(vars_dont_care),
-            #                             "vars_control": tuple(vars_control),
-            #                             "vars_others": tuple(vars_others),
-            #                             "strict":strict,
-            #                         })
-
-            #                     ### Across (within and shapes)
-            #                     # ================ (1) Within
-            #                     var_effect = "chunk_within_rank"
-            #                     vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
-            #                     vars_control = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
-            #                                     'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-            #                     if strict:
-            #                         vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                     else:
-            #                         vars_others = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-            #                     dfdist_within = compute_alignment_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars)
-
-            #                     # ================ (2) Across
-            #                     var_effect = "chunk_rank_global"
-            #                     vars_dont_care = ["chunk_rank", "shape"] # Generally, correlated with var_effect
-            #                     vars_control = [ 'task_kind', 'epoch', 'gridloc', 'CTXT_loc_prev', 'chunk_n_in_chunk', 'chunk_within_rank', 'chunk_within_rank_semantic'] # These must be identical within each pair (ie each row)
-            #                     if strict:
-            #                         vars_others = ["epoch", "chunk_within_rank_semantic"] # Computing vector alignment is done separately for each level of this
-            #                     else:
-            #                         vars_others = ["epoch"] # Computing vector alignment is done separately for each level of this                    
-            #                     dfdist_across = compute_alignment_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars)
-
-            #                     # - Out
-            #                     if len(dfdist_within) > 0 and len(dfdist_across) > 0:
-
-            #                         vectors_within = np.stack(dfdist_within["vector"])
-            #                         vectors_across = np.stack(dfdist_across["vector"])
-
-            #                         # ============= COMPUTE
-            #                         weighted_mean_sim, similarities, dot_products, weights, _, _ = compute_weighted_alignment(vectors_within, vectors_across, PLOT=False)
-            #                         if similarities is not None:
-            #                             RES.append({
-            #                                 "animal": animal,
-            #                                 "date": date,
-            #                                 "bregion": bregion,
-            #                                 "_iter": _iter,
-            #                                 "weighted_mean_sim": weighted_mean_sim,
-            #                                 "effect_kind": "across_variables",
-            #                                 "similarities":similarities,
-            #                                 "weights":weights,
-            #                                 "var_effect": "ignore",
-            #                                 "vars_dont_care": "ignore",
-            #                                 "vars_control": "ignore",
-            #                                 "vars_others": "ignore",
-            #                                 "strict":strict,
-            #                             })
-
-
-            #                 ####################################################### 
-            #                 ######################## V2 -- USING DOT PRODUCTS DIRECTLY
-            #                 ### Within rank
-            #                 var_effect = "chunk_within_rank"
-            #                 vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
-            #                 vars_control = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
-            #                                 'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 if strict:
-            #                     vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 else:
-            #                     vars_others = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-                            
-            #                 dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper(
-            #                         dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars)
-            #                 if dot_products_all is not None:
-            #                     for dot, dot_1, dot_2, n_each, effect_lev_pair, grp_others in zip(dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all):
-            #                         for value_name, value in zip(["dot", "dot_1", "dot_2"], [dot, dot_1, dot_2]):
-            #                             RES_DOT.append({
-            #                                 "animal": animal,
-            #                                 "date": date,
-            #                                 "bregion": bregion,
-            #                                 "_iter": _iter,
-            #                                 "effect_kind": "chunk_within_rank",
-            #                                 "var_effect": var_effect,
-            #                                 "vars_dont_care": tuple(vars_dont_care),
-            #                                 "vars_control": tuple(vars_control),
-            #                                 "vars_others": tuple(vars_others),
-            #                                 "strict":strict,
-            #                                 "value_name":value_name,
-            #                                 "value":value,
-            #                                 "n_each":n_each,
-            #                                 "effect_lev_pair":effect_lev_pair,
-            #                                 "grp_others":grp_others,
-            #                             })
-
-            #                 if DEBUG_BREAK:
-            #                     assert False
-
-            #                 ### Across chunk rank
-            #                 var_effect = "chunk_rank_global"
-            #                 vars_dont_care = ["chunk_rank", "shape"] # Generally, correlated with var_effect
-            #                 vars_control = [ 'task_kind', 'epoch', 'gridloc', 'CTXT_loc_prev', 'chunk_n_in_chunk', 
-            #                     'chunk_within_rank', 'chunk_within_rank_semantic'] # These must be identical within each pair (ie each row)
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 if strict:
-            #                     vars_others = ["epoch", "chunk_within_rank_semantic"] # Computing vector alignment is done separately for each level of this
-            #                 else:
-            #                     vars_others = ["epoch"] # Computing vector alignment is done separately for each level of this
-
-            #                 dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper(
-            #                         dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars)
-            #                 if dot_products_all is not None:
-            #                     for dot, dot_1, dot_2, n_each, effect_lev_pair, grp_others in zip(dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all):
-            #                         for value_name, value in zip(["dot", "dot_1", "dot_2"], [dot, dot_1, dot_2]):
-            #                             RES_DOT.append({
-            #                                 "animal": animal,
-            #                                 "date": date,
-            #                                 "bregion": bregion,
-            #                                 "_iter": _iter,
-            #                                 "effect_kind": "chunk_rank_global",
-            #                                 "var_effect": var_effect,
-            #                                 "vars_dont_care": tuple(vars_dont_care),
-            #                                 "vars_control": tuple(vars_control),
-            #                                 "vars_others": tuple(vars_others),
-            #                                 "strict":strict,
-            #                                 "value_name":value_name,
-            #                                 "value":value,
-            #                                 "n_each":n_each,
-            #                                 "effect_lev_pair":effect_lev_pair,
-            #                                 "grp_others":grp_others,
-            #                             })
-
-            #                 ### Effect of chunk_within_rank, comparing across chunk_rank
-            #                 var_effect = "chunk_within_rank"
-            #                 vars_dont_care = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
-            #                 vars_control = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
-            #                                 'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk", "gridloc"] # Computing vector alignment is done separately for each level of this
-            #                 # vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 if strict:
-            #                     vars_others = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 else:
-            #                     vars_others = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-
-            #                 dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper_across_grpother(
-            #                                                                             dfdist, 
-            #                                                                             var_effect, vars_dont_care, vars_control, vars_others,
-            #                                                                             euclidean_label_vars)
-            #                 if dot_products_all is not None:
-            #                     for dot, dot_1, dot_2, n_each, effect_lev_pair, grp_others in zip(dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all):
-            #                         for value_name, value in zip(["dot", "dot_1", "dot_2"], [dot, dot_1, dot_2]):
-            #                             RES_DOT.append({
-            #                                 "animal": animal,
-            #                                 "date": date,
-            #                                 "bregion": bregion,
-            #                                 "_iter": _iter,
-            #                                 "effect_kind": "chunk_within_rank_ACROSS",
-            #                                 "var_effect": var_effect,
-            #                                 "vars_dont_care": tuple(vars_dont_care),
-            #                                 "vars_control": tuple(vars_control),
-            #                                 "vars_others": tuple(vars_others),
-            #                                 "strict":strict,
-            #                                 "value_name":value_name,
-            #                                 "value":value,
-            #                                 "n_each":n_each,
-            #                                 "effect_lev_pair":effect_lev_pair,
-            #                                 "grp_others":grp_others,
-            #                             })
-
-            #                 # ***************8 Two options for getting "across"
-            #                 # OPTION 1: Strict. Only use grps with at least two level pairs, just as in the above for "within"
-            #                 # ie this throws out cases where (i) only two chunk_ranks exist; and (ii) for Pancho, two shape sets
-            #                 # computes stuff only within each epoch.
-            #                 var_effect_1 = "chunk_within_rank"
-            #                 vars_dont_care_1 = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
-            #                 vars_control_1 = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
-            #                                 'CTXT_loc_prev', 'chunk_n_in_chunk'] # These must be identical within each pair (ie each row)
-            #                 if strict:
-            #                     vars_others_1 = ["chunk_rank_global", "chunk_n_in_chunk"] # Computing vector alignment is done separately for each level of this
-            #                 else:
-            #                     vars_others_1 = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-
-            #                 # ================ (2) Across
-            #                 var_effect_2 = "chunk_rank_global"
-            #                 vars_dont_care_2 = ["chunk_rank", "shape"] # Generally, correlated with var_effect
-            #                 vars_control_2 = [ 'task_kind', 'epoch', 'gridloc', 'CTXT_loc_prev', 'chunk_n_in_chunk', 'chunk_within_rank', 'chunk_within_rank_semantic'] # These must be identical within each pair (ie each row)
-            #                 if strict:
-            #                     vars_others_2 = ["epoch", "chunk_within_rank_semantic"] # Computing vector alignment is done separately for each level of this
-            #                 else:
-            #                     vars_others_2 = ["epoch"] # Computing vector alignment is done separately for each level of this                    
-
-            #                 dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper_two_vareffects(
-            #                                                                             dfdist, 
-            #                                                                             var_effect_1, vars_dont_care_1, vars_control_1, vars_others_1,
-            #                                                                             var_effect_2, vars_dont_care_2, vars_control_2, vars_others_2,
-            #                                                                             euclidean_label_vars)
-            #                 for dot, dot_1, dot_2, n_each, effect_lev_pair, grp_others in zip(dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all):
-            #                     for value_name, value in zip(["dot", "dot_1", "dot_2"], [dot, dot_1, dot_2]):
-            #                         RES_DOT.append({
-            #                             "animal": animal,
-            #                             "date": date,
-            #                             "bregion": bregion,
-            #                             "_iter": _iter,
-            #                             "effect_kind": "across_variables_strict",
-            #                             "var_effect": "ignore",
-            #                             "vars_dont_care": "ignore",
-            #                             "vars_control": "ignore",
-            #                             "vars_others": "ignore",
-            #                             "strict":strict,
-            #                             "value_name":value_name,
-            #                             "value":value,
-            #                             "n_each":n_each,
-            #                             "effect_lev_pair":effect_lev_pair,
-            #                             "grp_others":grp_others,
-            #                         })
-
-            #                 # ********* Option 2: Lenient, score something even for cases with two chunk ranks
-            #                 var_effect_1 = "chunk_within_rank"
-            #                 vars_dont_care_1 = ["chunk_within_rank_semantic", "chunk_rank"] # Generally, correlated with var_effect
-            #                 vars_control_1 = [ 'task_kind', 'chunk_rank_global', 'gridloc', 
-            #                                 'CTXT_loc_prev', 'chunk_n_in_chunk', "epoch", "shape"] # These must be identical within each pair (ie each row)
-            #                 vars_others_1 = ["chunk_rank_global"] # Computing vector alignment is done separately for each level of this
-
-            #                 # ================ (2) Across
-            #                 var_effect_2 = "chunk_rank_global"
-            #                 vars_dont_care_2 = ["chunk_rank", "shape", "chunk_n_in_chunk", "chunk_within_rank"] # Generally, correlated with var_effect
-            #                 vars_control_2 = [ 'task_kind', 'gridloc', 'epoch', 'CTXT_loc_prev', 'chunk_within_rank_semantic'] # These must be identical within each pair (ie each row)
-            #                 vars_others_2 = ["task_kind"] # Computing vector alignment is done separately for each level of this                    
-
-            #                 dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper_two_vareffects(dfdist, 
-            #                                                                             var_effect_1, vars_dont_care_1, vars_control_1, vars_others_1,
-            #                                                                             var_effect_2, vars_dont_care_2, vars_control_2, vars_others_2,
-            #                                                                             euclidean_label_vars,
-            #                                                                             only_keep_if_both_12_have_mult_level_pairs=False)
-            #                 for dot, dot_1, dot_2, n_each, effect_lev_pair, grp_others in zip(dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all):
-            #                     for value_name, value in zip(["dot", "dot_1", "dot_2"], [dot, dot_1, dot_2]):
-            #                         RES_DOT.append({
-            #                             "animal": animal,
-            #                             "date": date,
-            #                             "bregion": bregion,
-            #                             "_iter": _iter,
-            #                             "effect_kind": "across_variables_lenient",
-            #                             "var_effect": "ignore",
-            #                             "vars_dont_care": "ignore",
-            #                             "vars_control": "ignore",
-            #                             "vars_others": "ignore",
-            #                             "strict":strict,
-            #                             "value_name":value_name,
-            #                             "value":value,
-            #                             "n_each":n_each,
-            #                             "effect_lev_pair":effect_lev_pair,
-            #                             "grp_others":grp_others,
-            #                         })
-
-
-            #     dfres_this = pd.DataFrame(RES)
-            #     dfres_this.to_pickle(f"{SAVEDIR}/dfres-{animal}-{date}.pkl")
-
-            #     dfres_this_dot = pd.DataFrame(RES_DOT)
-            #     dfres_this_dot.to_pickle(f"{SAVEDIR}/dfres_dot-{animal}-{date}.pkl")
-
-            # except Exception as err:
-            #     error_cases.append((animal, date, err))
-            #     raise err
-            #     if DEBUG:
-            #         assert False
-            #     continue
-
-    # assert len(skipped_paths)==0, "figure out why skipped"
-
-
-
-# def compute_alignment_helper(dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars):
-#     """
-#     """
-
-#     ### Good version
-#     from pythonlib.tools.vectools import compute_weighted_alignment
-#     # Strict version -- only compare vectors with same controlled for everything
-
-#     dfdist_this = compute_alignment_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_control, vars_others, euclidean_label_vars)
-
-#     ######## OLD VERSION, THROWS OUT TOO MUCH DATA
-#     #     # For each of (0,1), (1,2), (2,3), ... get a single vector
-#     #     def f(x):
-#     #         return np.mean(np.stack(x), axis=0)
-
-#     #     _var_effect = f"{var_effect}_12"
-#     #     # levs_exist = sorted(dfdist_this_others[_var_effect].unique())
-
-#     #     # for lev in levs_exist:
-            
-#     #     # vectors_all is (npairs, ndim), where each row of npairs is one of (0,1), (1,2), ..., where each of those have taken mean over all cases
-#     #     vectors_all = np.stack((dfdist_this_others.groupby([_var_effect])["vector"].apply(f))) 
-    
-#     # SECOND, get vector alignment for var_effect, WITHIN each level of vars_others
-#     _var_effect = f"{var_effect}_12"
-#     similarities_all = []
-#     weights_all = []
-
-#     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
-#     _vars_others = [f"{v}_1" for v in vars_others] # can use 1 or 2, they are equal
-#     grpdict_others = grouping_append_and_return_inner_items_good(dfdist_this, _vars_others)
-#     n_levs = []
-#     for _, inds_others in grpdict_others.items():
-#         dfdist_this_others = dfdist_this.iloc[inds_others]
-
-#         levs_exist = sorted(dfdist_this_others[_var_effect].unique())
-#         n_levs.append(len(levs_exist))
-#         for _i, lev1 in enumerate(levs_exist):
-#             for _j, lev2 in enumerate(levs_exist):
-#                 if _j>_i:
-
-#                     vectors_1 = np.stack(dfdist_this_others[dfdist_this_others[_var_effect] == lev1]["vector"])
-#                     vectors_2 = np.stack(dfdist_this_others[dfdist_this_others[_var_effect] == lev2]["vector"])
-
-#                     _, similarities, _, weights, _, _ = compute_weighted_alignment(vectors_1, vectors_2, 
-#                                                                                 do_reweight=True, PLOT=False)
-#                     similarities_all.append(similarities.flatten())
-#                     weights_all.append(weights.flatten())
-
-#     if len(similarities_all) == 0:
-#         assert all([_x==1 for _x in n_levs]), "figure out why didnt collect any results"
-#         return None, None, None
-#     else:
-#         similarities = np.concatenate(similarities_all, axis=0) # flat 
-#         weights = np.concatenate(weights_all, axis=0) # flat
-
-#         weighted_mean_sim = np.sum(similarities * weights) / np.sum(weights)
-
-#         return weighted_mean_sim, similarities, weights
-
 
 def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_version, levels_var_required,
         HACK_SKIP_FAILED_DATE_FOR_NOW=False, ANIMALS=None, DATES=None):
