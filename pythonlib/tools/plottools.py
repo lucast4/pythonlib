@@ -882,31 +882,41 @@ def plotScatter45(x, y, ax, plot_string_ind=False, dotted_lines="unity",
         set_axis_lims_square_bounding_data_45line(ax, x, y, 0.1, dotted_lines)
         # ax.set_aspect('equal', adjustable='datalim')
 
-def set_axis_lims_square_bounding_data_45line(ax, xs, ys, delta_frac=0.1, dotted_lines="unity"):
+def set_axis_lims_square_bounding_data_45line(ax, xs=None, ys=None, delta_frac=0.1, dotted_lines="unity", alpha=0.5):
     """
-    """
-    if len(xs)==0:
-        return 
-    
-    assert len(xs)==len(ys)
-    vals = np.concatenate([xs, ys])
+    Square x/y limits and optionally draw unity or zero reference lines.
 
-    delta = delta_frac * (np.nanmax(vals)-np.nanmin(vals))
-    
-    lims = [np.nanmin(vals)-delta, np.nanmax(vals)+delta]
+    If xs/ys are given, limits are computed from those values (legacy behavior).
+    If omitted, limits are taken from the current axis xlim/ylim union (max window).
+    """
+    if xs is None and ys is None:
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        lims = [min(xlim[0], ylim[0]), max(xlim[1], ylim[1])]
+    else:
+        if len(xs) == 0:
+            return
+
+        assert len(xs) == len(ys)
+        vals = np.concatenate([xs, ys])
+        lims = [np.nanmin(vals), np.nanmax(vals)]
+
+    if delta_frac and lims[1] > lims[0]:
+        delta = delta_frac * (lims[1] - lims[0])
+        lims = [lims[0] - delta, lims[1] + delta]
 
     ax.axis("square")
-    if lims[1]>lims[0]:
+    if lims[1] > lims[0]:
         ax.set_xlim(lims)
         ax.set_ylim(lims)
 
-    if dotted_lines=="unity":
-        ax.plot(lims, lims, '--k', alpha=0.5)
-    elif dotted_lines=="plus":
-        ax.plot([0, 0], lims, '--k', alpha=0.5)
-        ax.plot(lims, [0, 0], '--k', alpha=0.5)
+    if dotted_lines == "unity":
+        ax.plot(lims, lims, '--k', alpha=alpha)
+    elif dotted_lines == "plus":
+        ax.plot([0, 0], lims, '--k', alpha=alpha)
+        ax.plot(lims, [0, 0], '--k', alpha=alpha)
     else:
-        assert dotted_lines=="none", "what you want?"
+        assert dotted_lines == "none", "what you want?"
 
 def hist_with_means(ax, vals, **kwargs):
     """ same, but overlays line for mean

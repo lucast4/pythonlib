@@ -455,7 +455,7 @@ def statsmodel_linregress_ols_each_conj_grp(dfeffect_pivot, yvar, xvar, var_grp)
     # pd.concat([df1, df2, df3, df4], axis=1)
 
 def statsmodel_ols(x, y, PRINT=False, 
-                   overlay_on_this_ax=None, overlay_x=0, overlay_y=-0.1, overlay_color=None, overlay_font_size=12,
+                   overlay_on_this_ax=None, overlay_x=None, overlay_y=None, overlay_color=None, overlay_font_size=12,
                    return_stats=False):
     """
     Ordinary least squares regression.
@@ -463,6 +463,7 @@ def statsmodel_ols(x, y, PRINT=False,
     - x, (ndat, nfeat), or (ndat,)
     - y, (ndat,)
     - overlay_on_this_ax, bool, then overlays text of regression summary on axis.
+    - overlay_x, overlay_y, optional floats in [0, 1] as axes-fraction coords; if None, upper-left corner.
     """ 
     import statsmodels.api as sm
 
@@ -490,7 +491,16 @@ def statsmodel_ols(x, y, PRINT=False,
             assert False, "why"
 
     if overlay_on_this_ax is not None:
-        overlay_on_this_ax.text(overlay_x, overlay_y, f"r2={results.rsquared:.2f}|p={results.pvalues[1]:.3f}|int={results.params[0]:.3f}|slope={results.params[1]:.3f}", color=overlay_color, fontsize=overlay_font_size)
+        if overlay_x is None or overlay_x < 0 or overlay_x_>1:
+            overlay_x = 0.02
+        if overlay_y is None or overlay_y < 0 or overlay_y>1:
+            overlay_y = 0.98
+        overlay_on_this_ax.text(
+            overlay_x, overlay_y,
+            f"r2={results.rsquared:.2f}|p={results.pvalues[1]:.3f}|int={results.params[0]:.3f}|slope={results.params[1]:.3f}",
+            color=overlay_color, fontsize=overlay_font_size,
+            transform=overlay_on_this_ax.transAxes, va="top",
+        )
 
     if return_stats:
         intercept = results.params[0]
@@ -1570,7 +1580,8 @@ def compute_all_pairwise_stats_wrapper(dfscores, vars_grp, var_score, doplots=Fa
                     "grp2":grp2,
                     "n1":len(values1),
                     "n2":len(values2),
-                    "pval":res_this.pvalue
+                    "pval":res_this.pvalue,
+                    "diff_2min1":np.mean(values2) - np.mean(values1)
                 })
                 
     dfres = pd.DataFrame(res)
@@ -1660,10 +1671,12 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
     from pythonlib.tools.statstools import signrank_wilcoxon, signrank_wilcoxon_from_df, ttest_unpaired
     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
     from math import factorial, comb
-    from pythonlib.tools.pandastools import plot_subplots_heatmap
+    from pythonlib.tools.pandastools import plot_subplots_heatmap, stringify_values
     import seaborn as sns
     from scipy.stats import ranksums
     from pythonlib.tools.snstools import rotateLabel
+
+    dfres = stringify_values(dfres) # Othewiese can fail.
 
     dfres["logp"] = np.log10(dfres["pval"])
 
@@ -1688,6 +1701,17 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
     if savedir is not None:
         savefig(fig, f"{savedir}/catplot-logp.pdf")
 
+    fig = sns.catplot(data=dfres, x="grp1", y="logp", hue="grp2", kind="bar")
+    for p in [0.05, 0.005, alpha_bonf]:
+        for ax in fig.axes.flatten():
+            ax.axhline(np.log10(p))
+            ax.text(0, np.log10(p), f"p={p}")
+    rotateLabel(fig)
+    for ax in fig.axes.flatten():
+        ax.set_ylim([-10, 0])    
+    if savedir is not None:
+        savefig(fig, f"{savedir}/catplot-logp.pdf")
+
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", None, annotate_heatmap=True)
     if savedir is not None:
         savefig(fig, f"{savedir}/heatmap-logp.pdf")
@@ -1695,6 +1719,14 @@ def pairwise_stats_plotter(dfres, nitems, savedir):
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "logp", "significant", annotate_heatmap=True)
     if savedir is not None:
         savefig(fig, f"{savedir}/heatmap-logp-significance_bonf.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "diff_2min1", None, annotate_heatmap=True, diverge=True)
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-diff_2min1.pdf")
+
+    fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "diff_2min1", "significant", annotate_heatmap=True, diverge=True)
+    if savedir is not None:
+        savefig(fig, f"{savedir}/heatmap-diff_2min1-significance_bonf.pdf")
 
     fig, _ = plot_subplots_heatmap(dfres, "grp1", "grp2", "n1", None, annotate_heatmap=True)
     if savedir is not None:

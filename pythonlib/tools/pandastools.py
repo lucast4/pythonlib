@@ -6,6 +6,7 @@ will check that the output df is same as input (for matching columns).
 - if does change size, then will reset indices.
 """
 
+# from typing import Any
 import pandas as pd
 import numpy as np
 from pythonlib.tools.listtools import sort_mixed_type
@@ -3383,6 +3384,8 @@ def extract_with_levels_of_conjunction_vars(df, var, vars_others, levels_var=Non
     if len(df)==0:
         return pd.DataFrame([]), {}
 
+    assert var not in vars_others, "this will throw out all data..."
+    
     if n_min_across_all_levs_var is None:
         # assume you mean to be fully leneint
         n_min_across_all_levs_var = 1
@@ -3778,26 +3781,30 @@ def shuffle_dataset_hierarchical_remap(df, var_shuff, grouping_column, col_name_
     assert isinstance(grouping_column, str)
 
     df = df.copy()
-
-    if use_same_mapping_across_groups:
-        unique_vals = df[var_shuff].unique()
-        new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
-        mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
-
-        def remap_values(group, col):
-            return group[col].map(mapping)
-    else:
-        def remap_values(group, col):
-            unique_vals = group[col].unique()
-            new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
-            mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
-            return group[col].map(mapping)
-
-    # Apply the remapping function group-wise
     if col_name_shuffed is None:
         col_name_shuffed =  f'{var_shuff}_remapped'
-    df[col_name_shuffed] = df.groupby(grouping_column, group_keys=False).apply(remap_values, col=var_shuff)
+    
+    if len(df[grouping_column].unique())==1:
+        # Then this will fail. Just shuffle non hiearchially
+        df_shuff = shuffle_dataset_singlevar(df, var_shuff, maintain_block_temporal_structure=False)
+        df[col_name_shuffed] = df_shuff[var_shuff]
+    else:
+        if use_same_mapping_across_groups:
+            unique_vals = df[var_shuff].unique()
+            new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
+            mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
 
+            def remap_values(group, col):
+                return group[col].map(mapping)
+        else:
+            def remap_values(group, col):
+                unique_vals = group[col].unique()
+                new_vals = np.random.permutation(unique_vals)  # Shuffle the unique values
+                mapping = dict(zip(unique_vals, new_vals))     # Create a mapping from old to new labels
+                return group[col].map(mapping)
+
+        # Apply the remapping function group-wise
+        df[col_name_shuffed] = df.groupby(grouping_column, group_keys=False).apply(remap_values, col=var_shuff)
     return df
 
 # shuffle_dataset_singlevar_hierarchical
