@@ -1322,14 +1322,35 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
             (score_max2, "max2"),
             (score_beh, "behavior"),
             ]:
+            
+            syntax_concrete = D.Dat.iloc[indtrial]["syntax_concrete"]
+            nstrokes_tot = np.sum(D.Dat.iloc[indtrial]["syntax_concrete"])
+
+            # Hacky, can be either len 3, like (2, 2, 0), or len 4, like (2, 0, 4, 0). 
+            # - assume so, but do sanity check so that if not, then will definitely fail.
+            if len(syntax_concrete)==3:
+                assert syntax_concrete[2] == 0
+                nstrokes_A = syntax_concrete[0]
+                nstrokes_B = syntax_concrete[1]
+            elif len(syntax_concrete)==4:
+                assert syntax_concrete[3] == 0
+                nstrokes_A = syntax_concrete[0]
+                nstrokes_B = syntax_concrete[2]
+            else:
+                print(syntax_concrete)
+                print(D.Dat["syntax_concrete"].value_counts())
+                assert False, "hard code this case..."
+            
+            assert nstrokes_A + nstrokes_B == nstrokes_tot, f"Did you miss something from synt concrete? {syntax_concrete}"
+            
             res.append({
                 "indtrial":indtrial,
                 "score":score,
                 "model":model,
                 "syntax_concrete":D.Dat.iloc[indtrial]["syntax_concrete"],
-                "nstrokes_tot":np.sum(D.Dat.iloc[indtrial]["syntax_concrete"]),
-                "nstrokes_A":D.Dat.iloc[indtrial]["syntax_concrete"][0],
-                "nstrokes_B":D.Dat.iloc[indtrial]["syntax_concrete"][1],
+                "nstrokes_tot":nstrokes_tot,
+                "nstrokes_A":nstrokes_A,
+                "nstrokes_B":nstrokes_B,
                 "trialcode":D.Dat.iloc[indtrial]["trialcode"],
             })
 
@@ -1339,6 +1360,356 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
     dfres.to_pickle(f"{SAVEDIR}/{animal}-{date}-{epoch_keep}.pkl")
 
     return dfres
+
+def _final_plots_cleanup_data(DF_BEH, DF_NULLS):
+    """
+    """
+    import numpy as np
+
+    ### Compare old and new datasets
+    from pythonlib.tools.pandastools import slice_by_row_label
+
+    dfnulls_beh = DF_NULLS[DF_NULLS["model"] == "behavior"].reset_index(drop=True)
+
+    # remove the rare trial that isn't in models.
+    list_tc = DF_BEH["trialcode"].tolist() # All trials that plotted in analysis.
+    n1 = len(list_tc)
+    list_tc = [tc for tc in list_tc if tc in dfnulls_beh["trialcode"].tolist()]
+    n2 = len(list_tc)
+    print(n1, n2)
+    assert n1 - n2 < 8, "why missing so much data?"
+    DF_BEH = DF_BEH[DF_BEH["trialcode"].isin(list_tc)].reset_index(drop=True)
+
+    # Check that beh scores match in the two dataframes
+    list_tc = DF_BEH["trialcode"].tolist()
+    dfnulls_beh_slice = slice_by_row_label(dfnulls_beh, "trialcode", list_tc, assert_exactly_one_each=True)
+    assert dfnulls_beh_slice["trialcode"].tolist() == DF_BEH["trialcode"].tolist()
+    for i, (x, y) in enumerate(zip(dfnulls_beh_slice["score"], DF_BEH["ntokens-repeat-thisepoch"])):
+        if x!=y:
+            print("----")
+            print(i, DF_BEH.iloc[i]["trialcode"], dfnulls_beh_slice.iloc[i]["trialcode"])
+            print(x, y)
+            assert False, "why they got different answers?"
+            # Use this to debug: D.plotSingleTrial(266)
+        assert x==y
+
+    # Prune nulls to match the trials in beh dataset
+    DF_NULLS = DF_NULLS[DF_NULLS["trialcode"].isin(list_tc)].reset_index(drop=True)
+
+    ### Solve problem due to old bug in fig2_generalize_score_null_models, where nstrokes_B was not accurate
+    # since it assumed syntax_concrete was formated as (nA, nB, ...) but it sometimes was (nA, 0, nB, ..)
+    # Here, just re-extract everything
+    list_tot = []
+    list_A = []
+    list_B = []
+
+    for indtrial in range(len(DF_NULLS)):
+        syntax_concrete = DF_NULLS.iloc[indtrial]["syntax_concrete"]
+        nstrokes_tot = np.sum(syntax_concrete)
+
+        # Hacky, can be either len 3, like (2, 2, 0), or len 4, like (2, 0, 4, 0). 
+        # - assume so, but do sanity check so that if not, then will definitely fail.
+        if len(syntax_concrete)==3:
+            assert syntax_concrete[2] == 0
+            nstrokes_A = syntax_concrete[0]
+            nstrokes_B = syntax_concrete[1]
+        elif len(syntax_concrete)==4:
+            assert syntax_concrete[3] == 0
+            nstrokes_A = syntax_concrete[0]
+            nstrokes_B = syntax_concrete[2]
+        else:
+            print(syntax_concrete)
+            print(D.Dat["syntax_concrete"].value_counts())
+            assert False, "hard code this case..."
+        
+        assert nstrokes_A + nstrokes_B == nstrokes_tot, f"Did you miss something from synt concrete? {syntax_concrete}"
+
+        list_tot.append(nstrokes_tot)
+        list_A.append(nstrokes_A)
+        list_B.append(nstrokes_B)
+
+    assert DF_NULLS["nstrokes_tot"].tolist() == list_tot
+    DF_NULLS["nstrokes_A"] = list_A
+    DF_NULLS["nstrokes_B"] = list_B
+
+    ### Sanity check, to print a random trial's syntax concrete and its actual shapes
+    if False:
+        ind = 1485
+        import random
+        ind = random.sample(range(len(DF_NULLS)), 1)[0]
+        tc = DF_NULLS.iloc[ind]["trialcode"]
+        syntax_concrete = DF_NULLS.iloc[ind]["syntax_concrete"]
+        taskconfig_shp = DF_BEH[DF_BEH["trialcode"] == tc]["taskconfig_shp"].tolist()
+        print(tc, syntax_concrete, taskconfig_shp)    
+
+    ### Some preprocessing
+    DF_NULLS["score_jitter"] = (DF_NULLS["score"] + 0.4*(np.random.rand(len(DF_NULLS))-0.5)).astype(float)
+
+    ### Only keep trials that are not just only one stroke kind
+    k = len(DF_NULLS)
+    DF_NULLS = DF_NULLS[(DF_NULLS["nstrokes_A"] > 0) & (DF_NULLS["nstrokes_B"] > 0)].reset_index(drop=True)
+    assert k == len(DF_NULLS)
+    
+    return DF_BEH, DF_NULLS
+
+def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
+    """
+    Make final plots
+    """
+    
+    import numpy as np
+
+    DF_BEH, DF_NULLS = _final_plots_cleanup_data(DF_BEH, DF_NULLS)
+
+    # ### Compare old and new datasets
+    # from pythonlib.tools.pandastools import slice_by_row_label
+
+    # dfnulls_beh = DF_NULLS[DF_NULLS["model"] == "behavior"].reset_index(drop=True)
+
+    # # remove the rare trial that isn't in models.
+    # list_tc = DF_BEH["trialcode"].tolist() # All trials that plotted in analysis.
+    # n1 = len(list_tc)
+    # list_tc = [tc for tc in list_tc if tc in dfnulls_beh["trialcode"].tolist()]
+    # n2 = len(list_tc)
+    # print(n1, n2)
+    # assert n1 - n2 < 8, "why missing so much data?"
+    # DF_BEH = DF_BEH[DF_BEH["trialcode"].isin(list_tc)].reset_index(drop=True)
+
+    # # Check that beh scores match in the two dataframes
+    # list_tc = DF_BEH["trialcode"].tolist()
+    # dfnulls_beh_slice = slice_by_row_label(dfnulls_beh, "trialcode", list_tc, assert_exactly_one_each=True)
+    # assert dfnulls_beh_slice["trialcode"].tolist() == DF_BEH["trialcode"].tolist()
+    # for i, (x, y) in enumerate(zip(dfnulls_beh_slice["score"], DF_BEH["ntokens-repeat-thisepoch"])):
+    #     if x!=y:
+    #         print("----")
+    #         print(i, DF_BEH.iloc[i]["trialcode"], dfnulls_beh_slice.iloc[i]["trialcode"])
+    #         print(x, y)
+    #         assert False, "why they got different answers?"
+    #         # Use this to debug: D.plotSingleTrial(266)
+    #     assert x==y
+
+    # # Prune nulls to match the trials in beh dataset
+    # DF_NULLS = DF_NULLS[DF_NULLS["trialcode"].isin(list_tc)].reset_index(drop=True)
+
+    # ### Some preprocessing
+    # DF_NULLS["score_jitter"] = (DF_NULLS["score"] + 0.4*(np.random.rand(len(DF_NULLS))-0.5)).astype(float)
+
+    ### Plot old beh data the old way, confirm is what get in paper
+    # Simply reproduce the main plots
+    hue = None
+    col = "epoch"
+    row = None
+    y = "ntokens-repeat-thisepoch"
+
+    # kind = "violin"
+    # errorbar = None
+    ylim_style = "45"
+    fig = sns.relplot(data=DF_BEH, x="n_first_shape", y=y, hue=hue, 
+                        col=col, row=row, kind="line", errorbar="se")
+    if ylim_style=="01":
+        for ax in fig.axes.flatten():
+            ax.set_ylim([0, 1])
+    elif ylim_style=="45":
+        for ax in fig.axes.flatten():
+            ax.plot([0, 5], [0, 5], color="k", alpha=0.5)
+    else:
+        assert False
+    savefig(fig, f"{savedir}/REPRODUCE_OLDER-replot_behavior.pdf")
+    plt.close("all")
+
+    ### Distribtuion of tasks
+    fig = sns.displot(data=DF_NULLS, x="nstrokes_A", y = "nstrokes_B")
+    savefig(fig, f"{savedir}/task_nstrokes_distributions-1.pdf")
+
+    fig = sns.displot(data=DF_NULLS, x="nstrokes_A", y = "nstrokes_B", col="nstrokes_tot")
+    savefig(fig, f"{savedir}/task_nstrokes_distributions-2.pdf")
+
+    ### Correlation between behavior and each of the models.
+    LIMS = (0-0.5, DF_NULLS["nstrokes_A"].max()+0.5)
+
+    fig = sns.displot(data=DF_NULLS, x="nstrokes_A", y="score", col="model")
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/displot-1.pdf")
+
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score_jitter", col="model", marker="o", alpha=0.1)
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/replot-1.pdf")
+
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score", col="model", marker="o", alpha=0.5, kind="line", 
+                      hue="nstrokes_B", errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/replot-2.pdf")
+
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score", marker="o", alpha=0.5, kind="line", hue="model", errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/replot-3.pdf")
+
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score", marker="o", alpha=0.5, kind="line", hue="model", col="nstrokes_tot", errorbar="se")
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/replot-4.pdf")
+
+    fig = sns.lmplot(data=DF_NULLS, x="nstrokes_A", y="score", col="model", markers="x")
+    for ax in fig.axes.flatten():
+        ax.set_xlim(LIMS)
+        ax.set_ylim(LIMS)
+    savefig(fig, f"{savedir}/lmplot-1.pdf")
+
+    ### Correlate scores between behavior and model (separately for each model)
+    for generalization_only in [False, True]:
+        if generalization_only:
+            # Then just do for n strokes in generalization
+            DF_NULLS_GEN = DF_NULLS[DF_NULLS["nstrokes_A"]>n_to_draw].reset_index(drop=True)
+        else:
+            DF_NULLS_GEN = DF_NULLS
+
+        # First do pivot table
+        from pythonlib.tools.pandastools import pivot_table
+        dfres_wide = pivot_table(DF_NULLS_GEN, ["indtrial"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
+
+        models = DF_NULLS_GEN["model"].unique().tolist()
+        models = [m for m in models if not m=="behavior"]
+        print("These modesl exist: ", models)
+
+        res = []
+        for mod in models:
+
+            x = dfres_wide["score-behavior"].values
+            y = dfres_wide[f"score-{mod}"].values
+            
+            # correlation
+            corr = np.corrcoef(x, y)[0,1]
+
+            res.append({
+                "model":mod,
+                "corr_pearson":corr
+            })
+
+        dfcorr = pd.DataFrame(res)
+
+        fig = sns.catplot(data=dfcorr, x="model", y="corr_pearson", kind="bar")
+        savefig(fig, f"{savedir}/corrcoeff-generalization_only={generalization_only}.pdf")
+
+    ### TODO:Do stats on correlation coeff (permutation test)
+
+    ### Compare beh to each model, at each nstrokes_A value.
+    from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+    res = []
+    for mod in models:
+        for nstrokes_A in DF_NULLS["nstrokes_A"].unique():
+            if nstrokes_A>1:
+                dfres_this = DF_NULLS[DF_NULLS["nstrokes_A"] == nstrokes_A].reset_index(drop=True)
+                
+                out = signrank_wilcoxon_from_df(dfres_this, ["indtrial"], "model", [mod, "behavior"], "score", PLOT=False)[0]
+
+                res.append({
+                    "p":out["p"],
+                    "nstrokes_A":nstrokes_A,
+                    "model":mod,
+                })
+    dfpvals = pd.DataFrame(res)
+    dfpvals["logp"] = np.log10(dfpvals["p"])
+    dfpvals.to_csv(f"{savedir}/signed_rank_each_n-pvals.csv")
+
+    # cap it (for plotting)
+    dfpvals.loc[dfpvals["logp"]<-10, "logp"] = -10
+    
+    fig = sns.catplot(data=dfpvals, x="nstrokes_A", y="logp", hue="model")
+    for ax in fig.axes.flatten():
+        for p in [0.05, 0.005]:
+            ax.axhline(np.log10(p), color="k", alpha=0.5)
+    savefig(fig, f"{savedir}/signed_rank_each_n-pvals.pdf")
+
+    plt.close("all")\
+
+    ### Signed rank, just generalization
+    dfres_this = DF_NULLS[DF_NULLS["nstrokes_A"]>n_to_draw].reset_index(drop=True)
+    res = []
+    for mod in models:    
+        out = signrank_wilcoxon_from_df(dfres_this, ["indtrial"], "model", [mod, "behavior"], "score", PLOT=False)[0]
+        res.append({
+            "p":out["p"],
+            "model":mod,
+        })
+
+    dfpvals = pd.DataFrame(res)
+    dfpvals.to_csv(f"{savedir}/signed_rank_each_n-pvals-GEN.csv")
+    
+    dfpvals["logp"] = np.log10(dfpvals["p"])
+    # cap it (for plotting)
+    dfpvals.loc[dfpvals["logp"]<-10, "logp"] = -10
+
+    fig = sns.catplot(data=dfpvals, x="model", y="logp")
+    for ax in fig.axes.flatten():
+        for p in [0.05, 0.005]:
+            ax.axhline(np.log10(p), color="k", alpha=0.5)
+    savefig(fig, f"{savedir}/signed_rank_each_n-pvals-GEN.pdf")
+
+    plt.close("all")
+
+
+    ### Compare beh to each model by taking abs diff in repeat length.
+    from pythonlib.tools.pandastools import pivot_table
+    import numpy as np
+    from pythonlib.tools.pandastools import convert_wide_to_long
+    from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
+    from pythonlib.tools.statstools import compute_all_pairwise_signrank_wrapper
+
+    for generalization_only in [False, True]:
+
+        _savedir = f"{savedir}/absdiff_btw_beh_model-generalization={generalization_only}"
+        os.makedirs(_savedir, exist_ok=True)
+
+        if generalization_only:
+            # Then just do for n strokes in generalization
+            DF_NULLS_GEN = DF_NULLS[DF_NULLS["nstrokes_A"]>n_to_draw].reset_index(drop=True)
+        else:
+            DF_NULLS_GEN = DF_NULLS
+
+        # First do pivot table
+        dfres_wide = pivot_table(DF_NULLS_GEN, ["indtrial"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
+
+        models = DF_NULLS_GEN["model"].unique().tolist()
+        models = [m for m in models if not m=="behavior"]
+        print("These modesl exist: ", models)
+
+        columns = []
+        for mod in models:
+
+            col = f"diff-{mod}"
+            dfres_wide[col] = np.abs(dfres_wide["score-behavior"] - dfres_wide[f"score-{mod}"])
+            
+            
+            # col = f"diffsquared-{mod}"
+            # dfres_wide[col] = (dfres_wide["score-behavior"] - dfres_wide[f"score-{mod}"])**2
+            
+            columns.append(col)
+
+        dfres_long = convert_wide_to_long(dfres_wide, columns, vars_extra=["indtrial", "nstrokes_A-behavior"], 
+                                        new_col_name_level="model", new_col_name_value="diff")
+        
+        _, fig = plot_45scatter_means_flexible_grouping(dfres_long, "model", "diff-correct", 
+                                                            "diff-max2", None, "diff", "indtrial", False, alpha=0.05);
+        
+        if fig is None:
+            print()
+        savefig(fig, f"{_savedir}/diff-scatter.pdf")
+        compute_all_pairwise_signrank_wrapper(dfres_long, ["indtrial"], "model", "diff", True, _savedir, None, True)
+
+        plt.close("all")
+
+    return DF_BEH, DF_NULLS
+
+
 
 if __name__=="__main__":
     
