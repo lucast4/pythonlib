@@ -15,7 +15,7 @@ def shapes_n_each_extract(Task, list_shapes, shape_key="shapeabstract"):
     PARAMS;
     - list_shapes, list of str.
     RETURNS;
-    - list_n, list of int, how often each shape occur,
+    - list_n, list of int, how often each shape occur, ordered as in list_shapes
     - n_left_over, int, how many shapes in Task were not detected?
     """
 

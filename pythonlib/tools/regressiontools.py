@@ -580,6 +580,8 @@ def formula_string_construct(var_response, variables, variables_is_cat, exclude_
     - exclude_var_response, if True, then returns string like: 'motor_onsetx +  motor_onsety +  gap_from_prev_x +  gap_from_prev_y +  velmean_x +  velmean_y +  C(gridloc) +  C(DIFF_gridloc) +  C(chunk_rank) +  C(shape) +  C(chunk_within_rank_fromlast)'
     Is like:
     'frate ~ motor_onsetx +  motor_onsety +  gap_from_prev_x +  gap_from_prev_y +  velmean_x +  velmean_y +  C(gridloc) +  C(DIFF_gridloc) +  C(chunk_rank) +  C(shape) +  C(chunk_within_rank_fromlast)'
+
+    LT CHECKED
     """
     ### Construct formula string
     # list_feature_names = []
@@ -600,8 +602,8 @@ def formula_string_construct(var_response, variables, variables_is_cat, exclude_
     # remove the + at the end
     func = func[:-3]
     
-    # Remove empty space
     if exclude_var_response:
+        # Remove empty space
         func = func[1:]
         
     return func

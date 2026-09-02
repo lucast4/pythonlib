@@ -150,9 +150,15 @@ def _helper_compute_dot_products(vectors_1, vectors_2):
     Compute all pairwise vectors between two sets of vectors.
     PARAMS:
     - Vectors, array of row vectors... (ntrials, ndims)
+    
     RETUNS:
-    - flatterned arrays of dot products, all pairwise, all selfs. Note that
-    selfs will only be those that are not the same trial
+    - dot_products, flatterned arrays of dot products, all pairwise, 
+    of shape (ntrials1, ntrials2)
+
+    - dot_products_1/2, same but vectors_1 vs iteslef.
+    These will exclude vectors dotted with themselves.
+
+    LT CHECKED    
     """
     # dot_products = vectors_1 @ vectors_2.T # (n1, n2)
     dot_products = (vectors_1 @ vectors_2.T).flatten() # (n1, n2)
@@ -644,7 +650,7 @@ def compute_weighted_alignment(set_a, set_b=None, do_reweight=True, PLOT=False):
 
     return weighted_mean_sim, similarities, dot_products, weights, norms_a, norms_b
 
-def cosine_similarity_from_dot_products(dot_ab, dot_aa, dot_bb):
+def cosine_similarity_from_dot_products(dot_ab, dot_aa, dot_bb, return_nan_if_fail=False):
     """
     Given already computed dot products betweeen two vectors (and with themselves -- ie 
     the squared norms), compute the cosine.
@@ -652,7 +658,15 @@ def cosine_similarity_from_dot_products(dot_ab, dot_aa, dot_bb):
     RETURNS:
     - theta, in degrees (0 to 180)
     - cosine_sim, ie cos(theta)
-    """
+    """ 
+
+    # if dot_aa<=0 or dot_bb<=0:
+    #     if return_nan_if_fail:
+    #         return np.nan, np.nan
+    #     else:
+    #         print(dot_ab, dot_aa, dot_bb)
+    #         assert False, "not defined"
+
     cosine_sim = dot_ab / (np.sqrt(dot_aa) * np.sqrt(dot_bb))
     cosine_sim = np.clip(cosine_sim, -1.0, 1.0) # otherwise gets nans
     theta_deg = np.degrees(np.arccos(cosine_sim))

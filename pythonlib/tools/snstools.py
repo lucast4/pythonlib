@@ -5,6 +5,236 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+
+def mirrorhistplot(data, x, y, hue=None, col=None, row=None,
+                   order=None, hue_order=None, row_order=None, col_order=None,
+                   bins=20, binrange=None, stat="probability", max_width=0.5, dodge=True,
+                   height=5, aspect=None, palette=None, color=None, alpha=0.75,
+                   sharex=True, sharey=True, legend=True, legend_out=True,
+                   ax=None):
+    """ FacetGrid-style mirror histogram plot (boxen layout, full distributions).
+
+    Like sns.catplot, but draws symmetric horizontal histograms around a vertical
+    axis at each x category.
+
+    Colors encode hue only. When hue is not set, all histograms use a single color.
+
+    PARAMS:
+    - data, dataframe
+    - x, categorical column for x-axis positions (e.g. "model")
+    - y, numeric column for the distribution (e.g. "score_frac")
+    - hue, optional grouping for color (dodged at each x when x is also set)
+    - col, row, optional facet variables (like sns.catplot)
+    - order, hue_order, row_order, col_order, category orders
+    - bins, binrange, histogram binning (binrange e.g. (0, 1))
+    - stat, "probability" (default; bin probabilities sum to 1, encoded in
+      horizontal bar extent, not y-bin width) or "density" (peak-normalized PDF)
+    - max_width, scale for horizontal bar extent (for stat="probability", the
+      bin probabilities sum to max_width after scaling)
+    - dodge, if True and hue is set, dodge hue groups at each x
+    - height, aspect, FacetGrid size params
+    - palette, seaborn palette name, list of colors, or dict mapping hue levels
+      to colors (first entry used when hue is not set)
+    - color, single color when hue is not set
+    - ax, if provided, draw on this axes and return it (no faceting)
+
+    RETURNS:
+    - sns.FacetGrid (or matplotlib Axes if ax is provided)
+    """
+
+    ### HELPER FUNCTIONS
+    def _resolve_var_order(data, var, order):
+        if var is None:
+            return None
+        if order is not None:
+            return list(order)
+        if pd.api.types.is_categorical_dtype(data[var]):
+            return list(data[var].cat.categories)
+        return list(pd.unique(data[var]))
+
+
+    def _resolve_hue_color_map(hue_order, palette):
+        """Map hue levels to colors; palette may be a seaborn name, list, or dict."""
+        n = len(hue_order)
+        if palette is None:
+            pal = sns.color_palette("deep", n_colors=n)
+        elif isinstance(palette, dict):
+            fallback = sns.color_palette("deep", n_colors=n)
+            return {lev: palette.get(lev, fallback[i]) for i, lev in enumerate(hue_order)}
+        elif isinstance(palette, str):
+            pal = sns.color_palette(palette, n_colors=n)
+        else:
+            pal = list(palette)
+            if len(pal) < n:
+                extra = sns.color_palette("deep", n_colors=n - len(pal))
+                pal = pal + list(extra)
+        return {lev: pal[i] for i, lev in enumerate(hue_order)}
+
+
+    def _compute_mirrorhist_bin_edges(data, y, bins, binrange):
+        if binrange is not None:
+            return np.linspace(binrange[0], binrange[1], bins + 1)
+        vals = data[y].dropna().values
+        if len(vals) == 0:
+            return np.linspace(0, 1, bins + 1)
+        return np.histogram_bin_edges(vals, bins=bins)
+
+
+    def _draw_mirror_hist_bars(ax, vals, x_center, color, bin_edges, max_width,
+                            stat="density", alpha=0.75, edgecolor="white",
+                            linewidth=0.3):
+        """Draw one symmetric mirror histogram centered at x_center."""
+        bin_width = bin_edges[1] - bin_edges[0]
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        bar_height = bin_width * 0.95
+
+        counts, _ = np.histogram(vals, bins=bin_edges, density=False)
+        if stat == "probability":
+            if counts.sum() > 0:
+                values = counts / counts.sum()
+            else:
+                values = counts.astype(float)
+            values = values * max_width
+        elif stat == "density":
+            values, _ = np.histogram(vals, bins=bin_edges, density=True)
+            if values.max() > 0:
+                values = values / values.max() * max_width
+        else:
+            raise ValueError(f"stat must be 'density' or 'probability', got {stat!r}")
+
+        for y, w in zip(bin_centers, values):
+            if w <= 0:
+                continue
+            ax.barh(y, w, height=bar_height, left=x_center, color=color, alpha=alpha,
+                    edgecolor=edgecolor, linewidth=linewidth)
+            ax.barh(y, -w, height=bar_height, left=x_center, color=color, alpha=alpha,
+                    edgecolor=edgecolor, linewidth=linewidth)
+
+
+    def _mirrorhist_on_ax(ax, data, x, y, hue=None, order=None, hue_order=None,
+                        bin_edges=None, max_width=0.4, dodge=True, palette=None,
+                        stat="density", alpha=0.75, draw_axis_lines=True, color=None):
+        """Draw mirror histograms for one facet onto ax."""
+        if x is None and hue is None:
+            raise ValueError("mirrorhistplot requires at least one of x or hue")
+
+        if x is None:
+            x_var = hue
+            x_order = _resolve_var_order(data, hue, hue_order)
+            color_var = hue
+            color_order = x_order
+        else:
+            x_var = x
+            x_order = _resolve_var_order(data, x, order)
+            color_var = hue
+            color_order = _resolve_var_order(data, hue, hue_order) if hue else None
+
+        if color_var is not None and color_var == x_var and x is not None:
+            raise ValueError("x and hue must be different variables")
+
+        n_x = len(x_order)
+        if color_var is None:
+            if color is not None:
+                bar_color = color
+            elif palette is None:
+                bar_color = sns.color_palette("deep")[0]
+            elif isinstance(palette, str):
+                bar_color = palette
+            elif isinstance(palette, dict):
+                bar_color = next(iter(palette.values()))
+            else:
+                bar_color = palette[0]
+            color_map = None
+        else:
+            color_map = _resolve_hue_color_map(color_order, palette)
+            bar_color = None
+
+        if color_var is None:
+            for i, xval in enumerate(x_order):
+                vals = data.loc[data[x_var] == xval, y].dropna().values
+                if len(vals) == 0:
+                    continue
+                _draw_mirror_hist_bars(ax, vals, i, bar_color, bin_edges,
+                                    max_width, stat=stat, alpha=alpha)
+                if draw_axis_lines:
+                    ax.axvline(i, color="0.85", lw=1, zorder=0)
+        elif x is not None:
+            n_color = len(color_order)
+            slot_width = 0.8 / n_color if dodge else 0.8
+            group_max_width = max_width * slot_width if dodge else max_width / n_color
+            for i, xval in enumerate(x_order):
+                if draw_axis_lines:
+                    ax.axvline(i, color="0.85", lw=1, zorder=0)
+                for j, cval in enumerate(color_order):
+                    vals = data.loc[(data[x_var] == xval) & (data[color_var] == cval), y].dropna().values
+                    if len(vals) == 0:
+                        continue
+                    x_center = i + (j - (n_color - 1) / 2) * slot_width if dodge else i
+                    _draw_mirror_hist_bars(ax, vals, x_center, color_map[cval], bin_edges,
+                                        group_max_width, stat=stat, alpha=alpha)
+        else:
+            for i, cval in enumerate(color_order):
+                vals = data.loc[data[x_var] == cval, y].dropna().values
+                if len(vals) == 0:
+                    continue
+                _draw_mirror_hist_bars(ax, vals, i, color_map[cval], bin_edges,
+                                    max_width, stat=stat, alpha=alpha)
+                if draw_axis_lines:
+                    ax.axvline(i, color="0.85", lw=1, zorder=0)
+
+        ax.set_xlabel(x_var)
+        ax.set_ylabel(y)
+        if n_x == 0:
+            ax.set_xticks([])
+            ax.set_xlim(-0.5, 0.5)
+            return
+        ax.set_xticks(range(n_x))
+        ax.set_xticklabels(x_order)
+        ax.set_xlim(-0.5, n_x - 0.5)
+
+    ### RUN
+    order_resolved = _resolve_var_order(data, x, order) if x is not None else None
+    hue_order_resolved = _resolve_var_order(data, hue, hue_order) if hue is not None else None
+
+    if ax is not None:
+        if row is not None or col is not None:
+            raise ValueError("Pass either ax or row/col faceting, not both")
+        bin_edges = _compute_mirrorhist_bin_edges(data, y, bins, binrange)
+        _mirrorhist_on_ax(ax, data, x, y, hue=hue, order=order_resolved,
+                          hue_order=hue_order_resolved,
+                          bin_edges=bin_edges, max_width=max_width, dodge=dodge,
+                          palette=palette, color=color, stat=stat, alpha=alpha)
+        return ax
+
+    if aspect is None:
+        x_order = order_resolved if x is not None else hue_order_resolved
+        aspect = max(1.0, 0.25 * len(x_order))
+
+    bin_edges = _compute_mirrorhist_bin_edges(data, y, bins, binrange)
+
+    def _plot_facet(data, **kwargs):
+        _mirrorhist_on_ax(plt.gca(), data, x, y, hue=hue,
+                          order=order_resolved, hue_order=hue_order_resolved,
+                          bin_edges=bin_edges, max_width=max_width, dodge=dodge,
+                          palette=palette, color=color, stat=stat, alpha=alpha)
+
+    g = sns.FacetGrid(data, row=row, col=col, height=height, aspect=aspect,
+                      row_order=row_order, col_order=col_order,
+                      sharex=sharex, sharey=sharey,
+                      legend_out=legend_out)
+    g.map_dataframe(_plot_facet)
+
+    if legend and hue is not None:
+        color_map = _resolve_hue_color_map(hue_order_resolved, palette)
+        from matplotlib.patches import Patch
+        handles = [Patch(color=color_map[lev], label=str(lev)) for lev in hue_order_resolved]
+        leg = g.figure.legend(handles=handles, title=hue, bbox_to_anchor=(1.02, 0.5),
+                              loc="center left")
+        if legend_out:
+            g.figure.subplots_adjust(right=0.85)
+
+    return g
+
 def rotateLabel(ax, rotation=45, horizontalalignment="right"):
     """ seaborn, maek sure to add labels for catplot
     ax = sns.catplot(...)

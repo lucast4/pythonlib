@@ -2197,6 +2197,8 @@ def extract_first_trial_each_level(df, var, sort_var):
     e.g., if want first trial (sort_var=tval) for each shape (var=shape)
 
     RETURNS: copy
+
+    LT CHECKED
     """
 
     # First, sort by var
@@ -4253,11 +4255,13 @@ def plot_45scatter_means_flexible_grouping_from_wideform(dfwide, x_lev_manip, y_
             var_datapt, plot_text, alpha, SIZE, shareaxes, plot_error_bars, map_subplot_var_to_new_subplot_var,
             fontsize, xymin_zero, jitter_value, map_datapt_lev_to_colorlev=map_datapt_lev_to_colorlev)
     
-    return dfres, fig                                                
+    return dfres, fig                                                 
 
 def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                            var_subplot, var_value, var_datapt, var_color, 
-                                           return_dfpivot=False):
+                                           return_dfpivot=False, height=3.6,
+                                           overlay_color_means=False, alpha=0.7,
+                                           palette=None):
                                         #    plot_text=True,
                                         #    alpha=0.8, SIZE=3, shareaxes=False,
                                         #    plot_error_bars=True,
@@ -4271,58 +4275,136 @@ def plot_45scatter_color_by_var(dfthis, var_manip, x_lev_manip, y_lev_manip,
                                         #    edgecolor='none'):
     """
     Helper to plot datapts (levels of <var_datapt>) along two axes (x_lev_manip, y_lev_manip, which are levels of
-    var_manip) and colored by var_color, which can be continuous or integer (if categorical, use plot_45scatter_means_flexible_grouping)
+    var_manip) and colored by var_color (continuous/integer or categorical).
 
-    ALSO: Makes a plot of var_color vs. difference of y minus x. ANd does regression.
+    ALSO: Makes a plot of var_color vs. difference of y minus x. For numeric color, does regression;
+    for categorical color, makes strip/box plots of the difference by color level.
 
+    PARAMS:
+    - overlay_color_means, bool, if True and var_color is categorical, overlay on the 45-scatter
+      the mean (x, y) for each color group, with SEM error bars on both axes.
+    - palette, dict or None, optional mapping from color level -> color (e.g. map_bregion_to_color).
+      If None and categorical, uses default seaborn palette.
     """    
     from pythonlib.tools.plottools import set_axis_lims_square_bounding_data_45line
+    from scipy.stats import sem as scipy_sem
+
+    is_color_numeric = pd.api.types.is_numeric_dtype(dfthis[var_color])
+    # mean fails for categorical/object color; take first (assumed constant per datapt)
+    aggfunc = "mean" if is_color_numeric else {var_value: "mean", var_color: "first"}
+
+    # Each datapt needs to be conjunction, to catch cases where a given level of var_datapt has multiple potential 
+    # levels of var_color
+    dfthis =append_col_with_grp_index(dfthis, [var_datapt, var_color], "_var_datapt")
+    var_datapt = "_var_datapt"
+
+    if var_subplot is None:
+        dfthis["_dummy"] = "_dummy"
+        var_subplot = "_dummy"
 
     # Get columns for each level of var_manip
-    dfeffect_pivot = pivot_table(dfthis, [var_subplot, var_datapt], var_manip, [var_value, var_color], flatten_col_names=True)
+    dfeffect_pivot = pivot_table(dfthis, [var_subplot, var_datapt], var_manip, [var_value, var_color],
+                                 flatten_col_names=True, aggfunc=aggfunc)
 
     x_var = f"{var_value}-{x_lev_manip}"
     y_var = f"{var_value}-{y_lev_manip}"
     # remove cases with na
     dfeffect_pivot = dfeffect_pivot[~(dfeffect_pivot.loc[:, [x_var, y_var]].isna().any(axis=1))].reset_index(drop=True)
 
-    if False:
-        # This fails, as I assuemd that the two columns are same, but they can actually differ, therefore take their average to get the color value
-        # color_var = f"{var_color}-{x_lev_manip}"
-        color_var = f"{var_color}-{y_lev_manip}"
-
-        # # Sanity check that indeed could be etiher of these.
-        # print(dfeffect_pivot[f"{var_color}-{x_lev_manip}"])
-        # print(dfeffect_pivot[f"{var_color}-{y_lev_manip}"])
-        # assert np.all(np.isclose(dfeffect_pivot[f"{var_color}-{x_lev_manip}"], dfeffect_pivot[f"{var_color}-{y_lev_manip}"], atol=0.001)), "assuming I can just use one of these columns.."
+    color_x = f"{var_color}-{x_lev_manip}"
+    color_y = f"{var_color}-{y_lev_manip}"
+    if is_color_numeric:
+        # The two columns can differ; take their average
+        dfeffect_pivot["var_color"] = (dfeffect_pivot[color_x] + dfeffect_pivot[color_y])/2
     else:
-        dfeffect_pivot["var_color"] = (dfeffect_pivot[f"{var_color}-{x_lev_manip}"] + dfeffect_pivot[f"{var_color}-{y_lev_manip}"])/2
-        color_var = "var_color"
+        dfeffect_pivot["var_color"] = dfeffect_pivot[color_x].where(
+            dfeffect_pivot[color_x].notna(), dfeffect_pivot[color_y])
+        both = dfeffect_pivot[color_x].notna() & dfeffect_pivot[color_y].notna()
+        if both.any():
+            assert (dfeffect_pivot.loc[both, color_x].astype(str).values
+                    == dfeffect_pivot.loc[both, color_y].astype(str).values).all(), \
+                "var_color differs between x and y levels of var_manip"
+    color_var = "var_color"
 
     ### Make scatterplot
+    list_subplot = sort_mixed_type(dfeffect_pivot[var_subplot].unique().tolist())
+    if is_color_numeric:
+        scatter_kws = dict(palette="flare")
+        color_levels = None
+        map_color_to_rgb = None
+    else:
+        color_levels = sort_mixed_type(dfeffect_pivot[color_var].unique().tolist())
+        if palette is not None:
+            # Prefer caller order when palette is a dict (e.g. map_bregion_to_color).
+            if isinstance(palette, dict):
+                color_levels = [lev for lev in palette if lev in color_levels] + [
+                    lev for lev in color_levels if lev not in palette]
+                map_color_to_rgb = {lev: palette.get(lev, "gray") for lev in color_levels}
+            else:
+                map_color_to_rgb = palette
+        else:
+            map_color_to_rgb = dict(zip(color_levels, sns.color_palette(n_colors=len(color_levels))))
+        scatter_kws = dict(hue_order=color_levels, palette=map_color_to_rgb)
     fig1 = sns.relplot(data=dfeffect_pivot, x=x_var, y=y_var, col=var_subplot,
-                hue=color_var, kind="scatter", height=3.6, 
-                alpha=0.7, palette="flare")
-    # Make 45 deg lines.
-    for ax in fig1.axes.flatten():
+                hue=color_var, kind="scatter", height=height, col_order=list_subplot,
+                alpha=alpha, **scatter_kws)
+    # Make 45 deg lines (and optional per-color-group mean ± SEM overlays).
+    for ax, subplot_lev in zip(fig1.axes.flatten(), list_subplot):
         set_axis_lims_square_bounding_data_45line(ax, dfeffect_pivot[x_var].values, dfeffect_pivot[y_var].values, dotted_lines="unity")
         set_axis_lims_square_bounding_data_45line(ax, dfeffect_pivot[x_var].values, dfeffect_pivot[y_var].values, dotted_lines="plus")
+
+        if overlay_color_means and (not is_color_numeric):
+            dfsub = dfeffect_pivot[dfeffect_pivot[var_subplot] == subplot_lev]
+            for color_lev in color_levels:
+                dfcol = dfsub[dfsub[color_var] == color_lev]
+                if len(dfcol) == 0:
+                    continue
+                xvals = dfcol[x_var].values
+                yvals = dfcol[y_var].values
+                x_mean = np.mean(xvals)
+                y_mean = np.mean(yvals)
+                x_sem = float(scipy_sem(xvals)) if len(xvals) > 1 else 0.0
+                y_sem = float(scipy_sem(yvals)) if len(yvals) > 1 else 0.0
+                if np.isnan(x_sem):
+                    x_sem = 0.0
+                if np.isnan(y_sem):
+                    y_sem = 0.0
+                c = map_color_to_rgb[color_lev]
+                ax.errorbar(x_mean, y_mean, xerr=x_sem, yerr=y_sem,
+                            fmt="o", color=c, ecolor=c, elinewidth=2.5, capsize=0,
+                            markersize=8, markeredgecolor="k", markeredgewidth=0.8,
+                            zorder=10)
     # savefig(fig, f"{savedir}/scatter-data={var_datapt}-colorby={var_color}.pdf")            
 
     ### Ask how var_color varies as a function of the difference (xvar - yvar)
     dfeffect_pivot["x_min_y"] = dfeffect_pivot[x_var] - dfeffect_pivot[y_var]
-    fig2 = sns.relplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
-                    col=var_subplot, kind="scatter", height=3.6, alpha=0.7)
-    for ax in fig2.axes.flatten():
-        ax.axvline(0, color="k", alpha=0.5)
-    # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-1.pdf")            
+    if is_color_numeric:
+        fig2 = sns.relplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
+                        col=var_subplot, kind="scatter", height=3.6, alpha=0.7)
+        for ax in fig2.axes.flatten():
+            ax.axvline(0, color="k", alpha=0.5)
+        # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-1.pdf")            
 
-    ### Also plot with regression line
-    fig3 = sns.lmplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
-                    col=var_subplot, height=3.6)
-    for ax in fig3.axes.flatten():
-        ax.axvline(0, color="k", alpha=0.5)
-    # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-2.pdf")       
+        ### Also plot with regression line
+        fig3 = sns.lmplot(data=dfeffect_pivot, x="x_min_y", y=color_var, 
+                        col=var_subplot, height=3.6)
+        for ax in fig3.axes.flatten():
+            ax.axvline(0, color="k", alpha=0.5)
+        # savefig(fig, f"{savedir}/scatter-data={var_datapt}-x={x_var}_MIN_{y_var}-2.pdf")       
+    else:
+        cat_kws = dict(order=color_levels, hue=color_var, hue_order=color_levels,
+                       palette=map_color_to_rgb, legend=False)
+        fig2 = sns.catplot(data=dfeffect_pivot, x=color_var, y="x_min_y",
+                        col=var_subplot, kind="strip", height=3.6, alpha=0.7, **cat_kws)
+        for ax in fig2.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.5)
+            ax.tick_params(axis="x", labelrotation=45)
+
+        fig3 = sns.catplot(data=dfeffect_pivot, x=color_var, y="x_min_y",
+                        col=var_subplot, kind="box", height=3.6, **cat_kws)
+        for ax in fig3.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.5)
+            ax.tick_params(axis="x", labelrotation=45)
 
     if return_dfpivot:
         return fig1, fig2, fig3, dfeffect_pivot

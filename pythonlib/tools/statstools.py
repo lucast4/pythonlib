@@ -50,6 +50,7 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
     """
     from pythonlib.tools.pandastools import pivot_table 
     from pythonlib.tools.statstools import signrank_wilcoxon, plotmod_pvalues
+    from pythonlib.tools.pandastools import append_col_with_grp_index
 
     assert len(contrast_levels) in [1,2]
 
@@ -80,6 +81,9 @@ def signrank_wilcoxon_from_df(df, datapt_vars, contrast_var, contrast_levels, va
     if len(dfpivot)==0:
         return None
     
+    # GIve new column, which is conjunction of data var levels
+    dfpivot = append_col_with_grp_index(dfpivot, datapt_vars, "datapt_level")
+
     if len(contrast_levels)==2:
         res = signrank_wilcoxon(dfpivot[var1], dfpivot[var2])
     elif len(contrast_levels)==1:
@@ -1277,8 +1281,10 @@ def split_stratified_constrained(y, fraction_constrained_set, n_constrained, lis
     ################## SANITY CHECKS
     # Which labels must have at least n trials, or throw error?
     # list_labels_need_n = [('arcdeep-4-1-0', (0, 0), 'rig3_3x3_big')]
+    # Minor cleanups
     if list_labels_need_n is not None:
         for lab_check in list_labels_need_n:
+            assert False, "due to bug in code, this doesnt actualy do anything. Should replace with n = sum(lab == lab_check for lab in constrained_labels)"
             n = len([lab==lab_check for lab in constrained_labels])
             if n< n_constrained:
                 print(lab_check)
@@ -1596,10 +1602,11 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
     """
     Helper to compute pairwise sign-rank tests across all pairs of levels of <contrast_var>.
     
-    Each datapt is a level of datapt_vars.
-    
-    Datapts are the unique levels of <datapt_vars> which exist across both levesl of 
-    <contrast_var> within each comparison.
+    Each datapt is a level of datapt_vars. Datapts are the unique levels of <datapt_vars> 
+    which exist across both levesl of <contrast_var> within each comparison.
+
+    In other words, to do a test between each pair of brain regions, make contrast_var = "bregion",
+    where the sign rank DOF is the number of levels of <datapt_vars>
 
     Plots do bonferoni correction for signfiicance, and making some plots.
 
@@ -1607,6 +1614,9 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
     - df, long-form
     - value_var, str, the col holding the values that will comare.
     """
+
+    if plot_contrast_vars is not None:
+        assert isinstance(plot_contrast_vars, list), "this is a list of labels, the order"
 
     levels = df[contrast_var].unique()
     res = []
@@ -1629,6 +1639,20 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
             else:
                 continue
 
+            if vs_0:
+                values2 = out["dfpivot"][out["var1"]]
+                values1 = np.array([0.])
+            else:
+                values2 = out["dfpivot"][out["var2"]]
+                values1 = out["dfpivot"][out["var1"]]
+
+                # display(out)
+                # print(lev1, lev2)
+                # print(vs_0)
+                # print(out["dfpivot"][out["var1"]])
+                # print(out["dfpivot"][out["var2"]])
+                # assert False
+
             plt.close("all")
 
             res.append({
@@ -1638,7 +1662,8 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
                 "res":out["res"],
                 "n1":len(out['dfpivot']),
                 "n2":len(out['dfpivot']),
-                "vs_0":vs_0
+                "vs_0":vs_0,
+                "diff_2min1":np.mean(values2) - np.mean(values1),
             })
     dfres = pd.DataFrame(res)
 
@@ -1656,7 +1681,8 @@ def compute_all_pairwise_signrank_wrapper(df, datapt_vars, contrast_var, value_v
             ax.axhline(0, color="k", alpha=0.5)
         fig = sns.catplot(data=df, x=contrast_var, y=value_var, kind="bar", errorbar="se", order=plot_contrast_vars)
         rotateLabel(fig)
-        savefig(fig, f"{savedir}/barplot.pdf")
+        if savedir is not None:
+            savefig(fig, f"{savedir}/barplot.pdf")
 
     return dfres
 
@@ -1750,6 +1776,8 @@ def bootstramp_resample(df, vars_conj):
     PARAMS:
     - vars_conj, list of str. does bootstrap independently for each level of df
     --- e.g., vars_conj = ["bregion", "date", "effect"]
+
+    LT CHECKED
     """
     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
     grpdict = grouping_append_and_return_inner_items_good(df, vars_conj)
