@@ -646,6 +646,7 @@ def _groupingParams(D, expt):
         mapper_auto_rename_probe_taskgroups = True        
 
     elif ("grampancho3" in expt) or ("gramdiego2" in expt) or ("gramdiego3" in expt) or ("gramdiego4" in expt) or (expt in ["gramdiego5", "gramdiego5b", "gramdiego5c"]):
+        # interleaved-AB
         # These are AnBmCk cases with multiple shape sets in same day (interleaved, not crossed)
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_AnBm_hack"]
@@ -686,9 +687,18 @@ def _groupingParams(D, expt):
 
         map_shapeset_to_indices_syntax = {v:list(k) for k, v in map_syntconcr_template_to_shapeset.items()}
 
+    elif (expt in ["gramdiego5d", "gramdiego5e", "gramdiego5f"]):
+        # cross-AB
+        # AnBmCk cases with cross-AB (that is, single trials can have both A and B shape sets) 
+
+        grouping_reassign = True
+        grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction", "syntax_crossAB_merge"]
+        traintest_reassign_method = "supervision_except_color"
+        mapper_auto_rename_probe_taskgroups = True        
+
     elif ("gramdiego5" in expt):
         # AnBmCk cross sets 
-
+        assert False, "decide if this is interleaved-AB or cross-AB and slide into one of two slots above"
         grouping_reassign = True
         grouping_reassign_methods_in_order = ["tasksequencer", "color_instruction"]
         traintest_reassign_method = "supervision_except_color"
@@ -848,7 +858,25 @@ def _groupingParams(D, expt):
                 # Preivously skipped here and running in anova_params. Not sure why...
                 # Hacky, split epoch into <epoch>|A and <epoch>|B based on which shape set was used,
                 # is AnBm with two sets today.
-                epoch_grouping_reassign_AnBmCk_mult_shape_sets(D, map_syntconcr_template_to_shapeset, map_shapeset_to_indices_syntax)
+                if False:
+                    epoch_grouping_reassign_AnBmCk_mult_shape_sets(D, map_syntconcr_template_to_shapeset, map_shapeset_to_indices_syntax)
+                else:
+                    D.grammarparses_syntax_concrete_append_column()
+                    epoch_grouping_reassign_AnBmCk_mult_shape_sets(D, map_syntconcr_template_to_shapeset, map_shapeset_to_indices_syntax)
+
+            elif grmeth=="syntax_crossAB_merge":
+                # See doc within 
+
+                assert "syntax_AnBm_hack" not in grouping_reassign_methods_in_order, "Do one or the other"
+                assert "syntax_concrete" not in D.Dat.columns, "make sure this only once, otherwise gets confusing if youve arlady done crossAB merge"
+                assert D._LockSyntaxConcrete == False
+
+                # print(set(D.Dat["syntax_concrete"]))
+                D.grammarparses_syntax_concrete_append_column(do_crossAB_merge=True)
+                # D.grammarparses_syntax_concrete_crossAB_merge()
+                # print(set(D.Dat["syntax_concrete"]))
+                # assert False
+
             else:
                 print(grmeth)
                 assert False
@@ -1072,10 +1100,10 @@ def epoch_grouping_reassign_AnBmCk_mult_shape_sets(D,
         "B":[1,3,5],
     }
     """
-    assert D._LockSyntaxConcrete == False
-    if "syntax_concrete" not in D.Dat.columns:
-        D.grammarparses_syntax_concrete_append_column()
 
+    assert "syntax_concrete" in D.Dat.columns
+    D._LockSyntaxConcrete = False
+    
     # Invert the dict
     tmp = {}
     for indices, shapeset in map_syntconcr_template_to_shapeset.items():

@@ -869,7 +869,46 @@ def conjunctions_plot(D, DS, savedir, params_anova):
     if len(DF)>0:
         _conjunctions_print_plot_all(DF, LIST_VAR, LIST_VARS_CONJUNCTION, sdir, globals_nmin, D)
 
-def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_max = 0.75):
+
+def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_max = 0.75, return_as_dict=False):
+    """
+    Helper to get global chunk rank, and to do so wrapped with initial step of 
+    splitting up df by PIG and SP data, get chunk_rank_global just for PIG, and then conbine again.
+
+    RETURNS:
+    - Adds column in place to df
+    """
+
+    from pythonlib.tools.pandastools import _check_index_reseted
+    _check_index_reseted(df)
+    df["_index"] = df.index
+
+    # Split into PIG and SP data
+    df_pig = df[df["task_kind"] == "prims_on_grid"].reset_index(drop=True)
+    df_sp = df[df["task_kind"] == "prims_single"].reset_index(drop=True)
+    if not (len(df_pig) + len(df_sp) == len(df)):
+        print(df["task_kind"].value_counts())
+        assert False, "are the other task kinds SP or PIG?"
+
+    # Get values for PIG 
+    out = _chunk_rank_global_extract(df_pig, check_low_freq_second_shape, shape_ratio_max, return_as_dict)
+    # Fake the SP as "none"
+    df_sp["chunk_rank_global"] = "none"
+
+    # Merge
+    df_new = pd.concat([df_pig, df_sp], axis=0).reset_index(drop=True)
+    df_new = df_new.sort_values("_index", axis=0) # sort back into original order
+    
+    # put values back into df
+    assert df_new["_index"].tolist() == df["_index"].tolist()
+    # display(df[:5])
+    # display(df_new[:5])
+    df["chunk_rank_global"] = df_new["chunk_rank_global"]
+
+    return out
+
+def _chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_max = 0.75,
+        return_as_dict=False):
     """
     For each (date, epoch) map each shape to a global chunk_rank, determined by checking frequency of 
     presentation of each shape at each rank.
@@ -880,10 +919,22 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
     RETURNS:
     - dfchunkrankmap, each row is a diff "chunk_rank_global", mapped to a (date, epoch, shape).
     - NOTE: also modifies input to have a new column: chunk_rank_global
+
+    NOTE: The input MUST have all cr be integer in range [0,4], and must be prims_on_grid, or else
+    can get error, as this assumes the following possibilities:
+    
+    1. Normal --> each (epoch, chunk_rank) has one associated shape
+    2. interleaved-AB --> each (epoch, chunk_rank) has exactly two associated shapes (ie shape sets are in different epochs)
+    2. cross-AB --> each (epoch, chunk_rank) has two associated shapes (ie shape sets are in SAME epochs)
+
     """
     
+    assert all(df["task_kind"].isin(["prims_on_grid"])), "This can fail if you pass in SP, somtimes these are their own epoch, like gramD4|singleprim, then this code will try to assign chunk rank within this epoch, but all shapes are the same chunk_rank, so it will fail."
     assert len(df[(df["chunk_rank"]=="none")])==0, "all cr must be numbers, or else will fail"
-    
+    if max(df["chunk_rank"])>4:
+        print(df["chunk_rank"].value_counts())
+        assert False, "I dont expect this. is this a cross-AB date that failed to be split into two epochs?"
+
     ### (1) Get the mapping from chunk_rank to shape by taking the most freqeunt shape at each chunkrank
     def F(x):
         shapes_ordered = x["shape"].value_counts().index.tolist()
@@ -892,35 +943,79 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
             assert counts_ordered[1] <= counts_ordered[0]
             if check_low_freq_second_shape:
                 if counts_ordered[1]/counts_ordered[0]>shape_ratio_max:
-                    print(shapes_ordered, counts_ordered)
+                    print(shapes_ordered, counts_ordered, counts_ordered[1]/counts_ordered[0])
                     print(x)
                     print(x["shape"].value_counts())
                     assert False, "do you expect this many secondary shapes in this cr? if so, then skip this failure/"
         return shapes_ordered[0] # Return the most frequent shape.
     dfchunkrankmap = df.groupby(["date", "epoch", "chunk_rank"]).apply(F).reset_index(name="shape")
 
-    ### Sanity checks
-    # (1) Each shape is mapped to just one cr.
-    def F(x):    
-        unique_cr_shapes = set(tuple(this) for this in x.loc[:, ["chunk_rank", "shape"]].values.tolist())
-        if not len(unique_cr_shapes) == len(x["chunk_rank"].unique()):
-            print(unique_cr_shapes)
-            print(x["chunk_rank"].unique())
-            display(x)
-            assert False, "this is major problem. simple - need to create better map"   
-    dfchunkrankmap.groupby(["date", "epoch", "chunk_rank"]).apply(F)
+    ################################
+    # For some days, each chunk rank has two shapes. These are the cross-AB two-shape-set dates, which so far have only been
+    # done on Diego. Hackily solve this by allowing each crg to have two shapes.
+    # - First, detect if its this expt. Expect 6 shapes total, each being decent frequency
     
-    # (2) Check that all shapes are used. Do this by checking that there are not more shapes than chunk ranks.
-    # Combined with above check that shapes are not reused across cr, this guarantees all shapes are used
-    def F(x):
-        # display(x)
-        if len(x["chunk_rank"].unique()) < len(x["shape"].unique()):
-            print("Why are there more shapes than chunk ranks?")
-            print("All unique chunk ranks: ", x["chunk_rank"].unique())
-            print("All unique shapes: ", x["shape"].unique())
-            assert False
-    # df[~(df["chunk_rank"]=="none")].groupby(["date", "epoch"]).apply(F) # if none, then this is single prims...
-    df.groupby(["date", "epoch"]).apply(F)
+    ### Determine if this is cross-AB vs. interleaved-AB
+    # The signature of cross-AB is that there exist epochs with more shapes than chunk ranks.
+    def _f(x):
+        # print(set(x["chunk_rank"]))
+        # print(set(x["shape"]))            
+        n_cr = len(set(x["chunk_rank"]))
+        n_sh = len(set(x["shape"]))
+        print("epoch, n_cr, n_sh : ", x["epoch"].unique(), n_sh, n_cr)
+        return n_sh > n_cr
+    is_cross_AB = any(df.groupby(["date", "epoch"]).apply(_f))
+    
+    # vals = df["shape"].value_counts().values
+    # a = len(vals)==6
+    # b = min(vals)>20
+    # c = min(vals)/max(vals)>0.2
+    # if a and b and c:
+    if is_cross_AB:
+        # Then update dfchunkrankmap to also how rows for the second set of shapes
+        print("[chunk_rank_global_extract] Detected that this is cross_AB!!")
+        def F(x):
+            shapes_ordered = x["shape"].value_counts().index.tolist()
+            # counts_ordered = x["shape"].value_counts().values
+            if len(shapes_ordered)==1:
+                pd.to_pickle(df, "/tmp/df.pkl")
+                assert False, "check why"
+            return shapes_ordered[1] # Return the second most frequent shape.
+        dfchunkrankmap2 = df.groupby(["date", "epoch", "chunk_rank"]).apply(F).reset_index(name="shape")
+        dfchunkrankmap = pd.concat([dfchunkrankmap, dfchunkrankmap2], axis=0).reset_index(drop=True)
+    else:
+        # Then this is default, for all detes that don't have cross-AB with 6 total shae
+        ### Sanity checks
+        # (1) The number of cr equals the number of shapes.
+        def F(x):    
+            unique_cr_shapes = set(tuple(this) for this in x.loc[:, ["chunk_rank", "shape"]].values.tolist())
+            if not len(unique_cr_shapes) == len(x["chunk_rank"].unique()):
+                print(unique_cr_shapes)
+                print(x["chunk_rank"].unique())
+                print(x)
+                assert False, "this is major problem. simple - need to create better map"   
+        dfchunkrankmap.groupby(["date", "epoch", "chunk_rank"]).apply(F)
+    
+        # (2) Check that all shapes are used. Do this by checking that there are not more shapes than chunk ranks.
+        # Combined with above check that shapes are not reused across cr, this guarantees all shapes are used
+        def F(x):
+            # display(x)
+            if len(x["chunk_rank"].unique()) < len(x["shape"].unique()):
+                print("Why are there more shapes than chunk ranks?")
+                print("All unique chunk ranks: ", x["chunk_rank"].unique())
+                print("All unique shapes: ", x["shape"].unique())
+                pd.to_pickle(df, "/tmp/df.pkl")
+                pd.to_pickle(dfchunkrankmap, "/tmp/dfchunkrankmap.pkl")
+                print(check_low_freq_second_shape, shape_ratio_max)
+                assert False
+        # df[~(df["chunk_rank"]=="none")].groupby(["date", "epoch"]).apply(F) # if none, then this is single prims...
+        df.groupby(["date", "epoch"]).apply(F)
+
+    # A better way to check that all shapes are used
+    if not all(df["shape"].isin(dfchunkrankmap["shape"].unique().tolist())):
+        print(dfchunkrankmap)
+        print(df["shape"].unique())
+        assert False
 
     # Rename to crglobal
     dfchunkrankmap = dfchunkrankmap.rename({"chunk_rank":"chunk_rank_global"}, axis=1)
@@ -932,14 +1027,24 @@ def chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio_
         v = row["chunk_rank_global"]
         map_DaEpSh_to_crglob[k] = v
     for k, v in map_DaEpSh_to_crglob.items():
-        print(k, " -- ", v)
+        print("date-epoch-shape to cr: ", k, " -- ", v)
     df[f"chunk_rank_global"] = [map_DaEpSh_to_crglob[(row["date"], row[f"epoch"], row[f"shape"])] for _, row in df.iterrows()]
 
     # Also add a conjnctive variable
     from pythonlib.tools.pandastools import append_col_with_grp_index
     df = append_col_with_grp_index(df, ["chunk_rank_global", "shape"], "crg_shape")
 
-    return dfchunkrankmap
+    print("[chunk_rank_global_extract] Final dfchunkrankmap:")
+    print(dfchunkrankmap)
+
+    if return_as_dict:
+        map_epoch_shape_to_crg = {}
+        for _, row in dfchunkrankmap.iterrows():
+            k = (row["epoch"], row["shape"])
+            map_epoch_shape_to_crg[k] = row["chunk_rank_global"]
+        return map_epoch_shape_to_crg
+    else:
+        return dfchunkrankmap
 
 
 ########## STUFF RELATED TO extracting information for each token, regardless of what you did in behavior. ie 
@@ -955,6 +1060,10 @@ def syntaxconcrete_extract_more_info(syntax_concrete, index_gap, append_99_to_me
 
     NOTE: If you pass in index_gap that asks about the last stroke, then this will fail unless
     you also put append_99_to_mean_done_button==True
+
+    # NOTE: This ASSUMES that sc is of form (a,b) or (a,b,c) or (a,b,0) or (a,b,c,0) only.
+
+    LT CHECKED
     """
 
     s_tuple = []
@@ -972,13 +1081,16 @@ def syntaxconcrete_extract_more_info(syntax_concrete, index_gap, append_99_to_me
     # else:
         # do_remove_99 = False
 
-    if index_gap < 0:
-        # Then this is any time before first stroke
+    if index_gap < -1:
+        print(syntax_concrete, index_gap, append_99_to_mean_done_button)
+        assert False, "not sure what you are asking..."
+    elif index_gap ==-1 :
+        # Then this is from START to first stroke
         pre_chunk_rank_global = -1
         s_post = s_tuple
         s_pre = tuple([])
     else:
-        assert index_gap>-1
+        # assert index_gap>-1
         s_post = s_tuple[(index_gap+1):]
         s_pre = s_tuple[:(index_gap+1)]
         pre_chunk_rank_global = s_pre[-1]

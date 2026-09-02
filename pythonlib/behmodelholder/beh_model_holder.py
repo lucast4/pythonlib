@@ -73,9 +73,9 @@ class BehModelHolder(object):
         this = grouping_print_n_samples(self.DatLong, ["score_name", "agent_rule", "agent_kind"])
         # Map_rule_to_colname = {}
         for x in this.keys():
-            sn = x[0]
-            r = x[1]
-            ag = x[2]
+            # sn = x[0]
+            # r = x[1]
+            # ag = x[2]
             colname = "|".join(x)
             map_score_rule_agent_to_colname[x]=colname
             # if r in Map_rule_to_colname.keys():

@@ -1840,7 +1840,7 @@ def _rules_related_rulestrings_extract_auto(list_rules, DEBUG=False):
 
 #################### CATEGORIZE TASKS BASED ON SEQUENCE FEATURES
 # e..g, ngram (AABBB)
-def tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=False):
+def _tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=False):
     """
     Assign each task to a category, where cats are defined (hard coded) based on rules, 
     e.g,,m for repeat tasks, categorize tasks based on n repeats.
@@ -1857,7 +1857,6 @@ def tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=Fals
 
     """
     # Extract for each rule each tasks' categroyes
-    from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule, rules_map_rule_to_ruledict_extract_auto
     from pythonlib.tools.pandastools import applyFunctionToAllRows
 
     # Get list of rules
@@ -1879,7 +1878,7 @@ def tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=Fals
     all_combined = [[] for _ in range(len(D.Dat))]
     for rule in list_rule:
 
-        list_vals = tasks_categorize_based_on_rule(D, rule)
+        list_vals = _tasks_categorize_based_on_rule(D, rule)
         # print("ASDASD", list_rule)
         # print(rule)
         # print(list_vals)
@@ -1909,7 +1908,7 @@ def tasks_categorize_based_on_rule_mult(D, list_rule=None, return_list_rule=Fals
     if return_list_rule:
         return list_rule
 
-def tasks_categorize_based_on_rule(D, rule, HACK=True):
+def _tasks_categorize_based_on_rule(D, rule, HACK=True):
     """ fore ach task, categorize it based on a given rule and on its
     features, such as what shapes are invovled. Is liek a more detaield 
     (and rule-dependent) version of taskgorups. e.g, if
@@ -2087,6 +2086,60 @@ def tasks_categorize_based_on_rule(D, rule, HACK=True):
             OUT.append(tuple(nshapes))
             # colname = "ss-shapes_ngram"
             # OUT[ind][colname] = 
+
+        if False:
+            # IGNORE THIS -- I thought of doing this here, but never actually did.
+            # Now this is now done in grammarparses_syntax_concrete_crossAB_merge()
+            ############ SOMETIMES, CONSOLDIATE SC (this applies for cross-AB dates only)
+            if D.animals(True)[0]=="Diego" and int(D.dates(True)[0]) in (250321, 250416, 250417):
+                # These are the dates with cross-AB: ie sets A and B or not different "Epochs", but instead
+                # can be mixed.
+                do_consolidate = True
+                for sc in OUT:
+                    assert len(sc)==6+1 # +1 becyuase there is 'leftover'
+            else:
+                # Then sanity check that sc is shoud bnot be longer than 4 (ABCD)
+                do_consolidate = False
+                for sc in OUT:
+                    if len(sc)>4+1:
+                        print(sc)
+                        assert False
+
+            if do_consolidate:
+                def _syntax_concrete_consolidate(sc):
+                    """
+                    For cross-AB days, to make the anlaysis compatbile with reast of code.
+                    Given sc of (0, 0, 5, 0, 0, 1, 0), where this is really (a1, a2, b1, b2, c1, c2)
+                    where a1 means role a for shape set 1, then convert it to:
+                    (0, 5, 1), and do sanity check that you never have both a1 and a2 in the same trial
+                    (and so on for the other roles)
+
+                    Is currently hard coded for 6 shapes (3 roles). But would be easy to modify
+                    
+                    """
+                    assert len(sc)==6+1
+                    assert sc[6]==0 # no leftover
+                    _sum_in = sum(sc)
+                    x = sc
+
+                    # Sanity check that you never have two items assigned the same chunk rank actually
+                    # turn up int he same trial. e.g., (a, b, c, d, e, f) if syntax conceret, then
+                    # never have trial with both a and b.
+                    assert sum((x[0]==0, x[1]==0))>0
+                    assert sum((x[2]==0, x[3]==0))>0
+                    assert sum((x[4]==0, x[5]==0))>0
+
+                    # Becuae the above passes, you can use sum to do the below.
+                    sc_new = (sum([x[0], x[1]]), sum([x[2], x[3]]), sum([x[4], x[5]]))
+
+                    # Sanity check
+                    _sum_out = sum(sc_new)
+                    assert _sum_in == _sum_out
+
+                    return sc_new
+
+                OUT = [_syntax_concrete_consolidate(sc) for sc in OUT]
+
     elif rd["categ"] == "ch":
         # Count the chunks
         if HACK:
