@@ -673,7 +673,9 @@ class DatStrokes(object):
 
         ############## EXTRACT KEYS FROM TOKENS_TASK
         # Expand out datseg keys each into its own column (for easy filtering/plotting later)
-        EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", "ind_behstrokes"]
+        # THis is where chunk_rank is inputed.
+        EXCLUDE = ["width", "height", "diag", "max_wh", "Prim", "rel_from_prev", "start", "h_v_move_from_prev", "start", 
+            "ind_behstrokes"]
         EXCLUDE += keys_gotten
         for DAT in DAT_BEHPRIMS:
             for k, v in DAT["datseg"].items():

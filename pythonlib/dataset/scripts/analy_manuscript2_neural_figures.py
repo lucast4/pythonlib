@@ -22,9 +22,11 @@ SAVEDIR_ALL = "/lemur2/lucas/analyses/manuscripts/2_syntax"
 def alignmentcompute_prepare_dataset(pa_subspace, var_effect, vars_others, min_n_trials):
     """
     Extract dfdist, after adding in chunk_rank_global to pa
-    NOTE: dfdist is missing actual values, just useful for subsequently looking for those pairs.
+    NOTE: dfdist is missing actual values, it's just useful as a tool for subsequently looking for those pairs.
     RETURNS:
     - dfdist, missing the values. 
+
+    LT checked
     """
     from pythonlib.dataset.dataset_analy.grammar import chunk_rank_global_extract
     from neuralmonkey.analyses.euclidian_distance import timevarying_compute_fast_to_scalar
@@ -60,8 +62,13 @@ def alignmentcompute_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_
     Given dfdist, prune to just pairs which are useful for subsequently computing alginemnt between pairs.
     Things like: each pair must have increaseing values of <var_effect>
 
+    Keeps only pairs whose levels for <var_effect> are succesive (e.g., 0|1)
+
+    Keeps only rows that are contrasting <var_effect> while same for <vars_control>
     RETURNS:
     - dfdist, pruned.
+
+    LT Checked
     """
     # Strict version -- only compare vectors with same controlled for everything
     # from pythonlib.tools.vectools import compute_weighted_alignment
@@ -91,8 +98,9 @@ def alignmentcompute_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_
     dfdist = dfdist[dfdist[f"{var_effect}_12"].isin(lev_pairs_allowed)]
     assert len(dfdist) > 0, "no data left"
 
-    # 1. Keep only cases where var_effect is increasing
-    _n = len(dfdist); dfdist = dfdist[dfdist[f"{var_effect}_2"] > dfdist[f"{var_effect}_1"]].reset_index(drop=True); 
+    # 1. Keep only cases where var_effect is increasing (sanity check. This must be true given the above already)
+    _n = len(dfdist)
+    dfdist = dfdist[dfdist[f"{var_effect}_2"] > dfdist[f"{var_effect}_1"]].reset_index(drop=True); 
     assert len(dfdist)==_n, "this must be the case..."
 
     # 2. Keep only cases with correct contrast
@@ -105,17 +113,33 @@ def compute_dot_product_distributions_helper(dfdist, var_effect, vars_dont_care,
         vars_others, euclidean_label_vars):
     """
     GOOD, helper to get pairwise dot products across pairs of var_effect, and also within-level dot products.
+
+    First, gets vectors:
+        Ensures that all distances are "diff" (and consecurive) for var_effect 
+        and "same" for <vars_control> and "either" for <vars_dont_care>
+
+    Then, gets dot product betwene vectors:
+        Does this sepraately for each grouping level of <vars_others>
+
+        Does this only for successive vector pairs.
+
     RETURNS:
-    - dot_products_all, array of mean dot products, each a mean over multiple
-    vector pairs, for a specific pair of levels of var_effect (e.,g, 0|1 vs. 1|2 is one pair)
+    - dot_products_all, one value for each level of vars_control x levpair1 x levpair2. For example, (crg=0, 0-->1, 1-->2) would 
+    give one dot product, where 0-->1 means ordinal position 0 to 1. This dot product is itself a mean over dot products for
+    all pairs of vectors (where each pair is a unique levle of <vars_control>, such as (gridloc, loc_prev)).
+
     - dot_products_1_all, dot_products_2_all, same as above, but for dot products of vectors with themselves
+    
     - n_each_all, array of sample sizes, each a mean over multiple vector pairs, for a specific pair of levels of var_effect
+
+    LT CHECKED
     """
     ### Good version
     from pythonlib.tools.vectools import compute_weighted_alignment, _helper_compute_dot_products
     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
     # Strict version -- only compare vectors with same controlled for everything
 
+    # Prune to relevant data
     dfdist_this = compute_alignment_helper_prune_data(dfdist, var_effect, vars_dont_care, vars_control, 
         vars_others, euclidean_label_vars)
 
@@ -148,6 +172,7 @@ def compute_dot_product_distributions_helper(dfdist, var_effect, vars_dont_care,
                 
                     print(lev1, lev2)
 
+                    # These will be vectors across variation in 
                     vectors_1 = np.stack(dfdist_this_others[dfdist_this_others[_var_effect] == lev1]["vector"])
                     vectors_2 = np.stack(dfdist_this_others[dfdist_this_others[_var_effect] == lev2]["vector"])
 
@@ -156,7 +181,7 @@ def compute_dot_product_distributions_helper(dfdist, var_effect, vars_dont_care,
                     # Store sample size for the number of dot products
                     n_each = (len(dot_products), len(dot_products_1), len(dot_products_2))
                     n_each_all.append(n_each)
-                    dot_products_all.append(dot_products.mean())
+                    dot_products_all.append(dot_products.mean()) # Take mean over dot products
                     dot_products_1_all.append(dot_products_1.mean())
                     dot_products_2_all.append(dot_products_2.mean())
                     effect_lev_pairs_all.append((lev1, lev2))
@@ -203,6 +228,7 @@ def compute_dot_product_distributions_helper_across_grpother(dfdist,
 
     only_if_different_grpothers = True # To ensure is across levels of grpothers.
     only_keep_if_both_12_have_mult_level_pairs = False # Or else most dates have no data for Pancho.
+    only_if_grp2_greater_than_grp1 = True # To ensure that you dont get duplicate data. ie if you have grp pairs for crg (0, 1), then make sure you dont take grp pairs (1,0)
     dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all = compute_dot_product_distributions_helper_two_vareffects(
                                                                 dfdist, 
                                                                 var_effect, vars_dont_care, vars_control, vars_others,
@@ -210,16 +236,23 @@ def compute_dot_product_distributions_helper_across_grpother(dfdist,
                                                                 euclidean_label_vars,
                                                                 only_keep_if_both_12_have_mult_level_pairs=only_keep_if_both_12_have_mult_level_pairs,
                                                                 only_if_different_grpothers=only_if_different_grpothers,
-                                                                debug_print_all_comparisons=False)
+                                                                debug_print_all_comparisons=False,
+                                                                only_if_grp2_greater_than_grp1=only_if_grp2_greater_than_grp1)
 
-    # Becuase this does both directions, its values are reproduced. So take just the first half
-    _n = len(dot_products_all)
-    dot_products_all = dot_products_all[:int(_n/2)]
-    dot_products_1_all = dot_products_1_all[:int(_n/2)]
-    dot_products_2_all = dot_products_2_all[:int(_n/2)]
-    n_each_all = n_each_all[:int(_n/2)]
-    effect_lev_pairs_all = effect_lev_pairs_all[:int(_n/2)]
-    grp_others_all = grp_others_all[:int(_n/2)]
+    if False:
+        # DONT DO THIS anymore. This is solved by setting only_if_grp2_greater_than_grp1=True
+        # Becuase this does both directions, its values are reproduced. So take just the first half
+        if len(set([xx for x in grp_others_all for xx in x]))>2:
+            print(set([xx for x in grp_others_all for xx in x]))
+            print("Break here and check if the below is correct")
+            assert False
+        _n = len(dot_products_all)
+        dot_products_all = dot_products_all[:int(_n/2)]
+        dot_products_1_all = dot_products_1_all[:int(_n/2)]
+        dot_products_2_all = dot_products_2_all[:int(_n/2)]
+        n_each_all = n_each_all[:int(_n/2)]
+        effect_lev_pairs_all = effect_lev_pairs_all[:int(_n/2)]
+        grp_others_all = grp_others_all[:int(_n/2)]
 
     return dot_products_all, dot_products_1_all, dot_products_2_all, n_each_all, effect_lev_pairs_all, grp_others_all
 
@@ -230,7 +263,8 @@ def compute_dot_product_distributions_helper_two_vareffects(dfdist,
                                                             euclidean_label_vars,
                                                             only_keep_if_both_12_have_mult_level_pairs=True,
                                                             only_if_different_grpothers=False,
-                                                            debug_print_all_comparisons=False):
+                                                            debug_print_all_comparisons=False,
+                                                            only_if_grp2_greater_than_grp1=False):
     """
     GOOD, like compute_dot_product_distributions_helper, but 
     only gets dot-products "ACROSS" two variables. I used this for comparing angles of <chunk_within_rank> vs.
@@ -268,14 +302,14 @@ def compute_dot_product_distributions_helper_two_vareffects(dfdist,
     effect_lev_pairs_all = []
     grp_others_all = []
 
+    _var_effect_1 = f"{var_effect_1}_12"
+    _var_effect_2 = f"{var_effect_2}_12"
+
     for v in vars_others_1:
         assert all(dfdist_1[f"{v}_1"] == dfdist_1[f"{v}_2"])
     for v in vars_others_2:
         assert all(dfdist_2[f"{v}_1"] == dfdist_2[f"{v}_2"])
-
-    _var_effect_1 = f"{var_effect_1}_12"
-    _var_effect_2 = f"{var_effect_2}_12"
-    _vars_others_1 = [f"{v}_1" for v in vars_others_1] # can use 1 or 2, they are equal
+    _vars_others_1 = [f"{v}_1" for v in vars_others_1] # can use 1 or 2, they are equal, due to the check above.
     _vars_others_2 = [f"{v}_1" for v in vars_others_2] # 
 
     grpdict_others_1 = grouping_append_and_return_inner_items_good(dfdist_1, _vars_others_1)
@@ -296,11 +330,18 @@ def compute_dot_product_distributions_helper_two_vareffects(dfdist,
                 for _grp_others_2, inds_others_2 in grpdict_others_2.items():
                     dfdist_2_others = dfdist_2.iloc[inds_others_2]  
                     levs_exist_2 = sorted(dfdist_2_others[_var_effect_2].unique())
+
                     if len(levs_exist_2) >= min_n_lev_pairs:
                         for lev2 in levs_exist_2:
 
                             if only_if_different_grpothers:
                                 if _grp_others_1 == _grp_others_2:
+                                    continue
+
+                            # Do this if you grp1 and grp2 are from the same set of groups, and you want to only get
+                            # unique group pairs
+                            if only_if_grp2_greater_than_grp1:
+                                if _grp_others_1 > _grp_others_2:
                                     continue
                             
                             if debug_print_all_comparisons:
@@ -309,6 +350,7 @@ def compute_dot_product_distributions_helper_two_vareffects(dfdist,
                             vectors_1 = np.stack(dfdist_1_others[dfdist_1_others[_var_effect_1] == lev1]["vector"])
                             vectors_2 = np.stack(dfdist_2_others[dfdist_2_others[_var_effect_2] == lev2]["vector"])
 
+                            ############################ STOPPED HERE.
                             dot_products, dot_products_1, dot_products_2 = _helper_compute_dot_products(
                                 vectors_1, vectors_2)
 
@@ -343,14 +385,10 @@ def alignmentcompute_wrapper_single_session(
         # run = 30
         # n_iter_splits = 4 # What was used originally
 
+    LT CHECKED
     """
     # from glob import glob
     from neuralmonkey.classes.session import _REGIONS_IN_ORDER_COMBINED
-    # from neuralmonkey.analyses.euclidian_distance import dfdist_extract_label_vars_specific
-    # from pythonlib.tools.pandastools import replace_None_with_string, stringify_values
-    # from pythonlib.tools.pandastools import aggregGeneral
-    # from pythonlib.tools.pandastools import append_col_with_grp_index
-    # from neuralmonkey.scripts.analy_euclidian_dist_pop_script_MULT import load_preprocess_get_dates
     import pickle
     from neuralmonkey.analyses.euclidian_distance import compute_vector_between_conditions
     import numpy as np
@@ -403,7 +441,6 @@ def alignmentcompute_wrapper_single_session(
             ### Clean up dfdist
             # from neuralmonkey.analyses.euclidian_distance import dfdist_variables_generate_var_same
             # colname_conj_same = dfdist_variables_generate_var_same(euclidean_label_vars)
-
             # Clean up
             dfdist["n1"] = [x[0] for x in dfdist["n_1_2"]]
             dfdist["n2"] = [x[1] for x in dfdist["n_1_2"]]
@@ -659,6 +696,9 @@ def alignmentcompute_wrapper_single_session(
                 # OPTION 1: Strict. Only use grps with at least two level pairs, just as in the above for "within"
                 # ie this throws out cases where (i) only two chunk_ranks exist; and (ii) for Pancho, two shape sets
                 # computes stuff only within each epoch.
+                
+                # USED THIS IN MS
+
                 var_effect_1 = "chunk_within_rank"
                 vars_dont_care_1 = ["chunk_within_rank_semantic"] # Generally, correlated with var_effect
                 vars_control_1 = [ 'task_kind', 'epoch', 'chunk_rank_global', 'chunk_rank', 'shape', 'gridloc', 
@@ -761,6 +801,8 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
         # run = 30
         # n_iter_splits = 4 # What was used originally
 
+    RETURNS:
+    - Saves dfres_dot.pkl
     """
     # from glob import glob
     # from neuralmonkey.classes.session import _REGIONS_IN_ORDER_COMBINED
@@ -790,8 +832,9 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
     # min_n_trials = 4 # to use a contrast.
     
     if DEBUG:
-        ANIMALS =  ["Pancho"]
-        DATES = [230810]
+        ANIMALS =  ["Diego"]
+        # DATES = [230810]
+        DATES = [230913]
         # date = 230913
 
         # animal = "Pancho"
@@ -832,7 +875,7 @@ def alignmentcompute_wrapper(HACK_SKIP_FAILED_DATE_FOR_NOW,
         #         run, n_iter_splits, SKIP_IF_DONE, DEBUG, DEBUG_BREAK, 
         #         DEBUG_FORCE_RETURN)
 
-        MULTIPROCESS_N_CORES = 24
+        MULTIPROCESS_N_CORES = 16
         with Pool(MULTIPROCESS_N_CORES) as pool:
             pool.starmap(alignmentcompute_wrapper_single_session,
                 zip(
@@ -857,6 +900,8 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
         HACK_SKIP_FAILED_DATE_FOR_NOW=False, ANIMALS=None, DATES=None):
     """
     Load pre-computed dot products using alignmentcompute_wrapper(), and  then preprocess in various ways.
+
+    LT CHECKED
     """
     from neuralmonkey.scripts.analy_euclidian_dist_pop_script_MULT import load_preprocess_get_dates
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
@@ -888,10 +933,19 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
         for date in list_dates:
             
             if HACK_SKIP_FAILED_DATE_FOR_NOW:
-                if (animal, date) == ("Diego", 250321):
+                if (animal, date) in (("Diego", 250321), ("Diego", 250416), ("Diego", 250417)):
                     # This failed beucase of need to reextract this dataset for run30.
                     print(f"Skipping {animal}-{date} because it failed")
                     continue
+                # if (animal, date) in [("Pancho", 220908), ("Pancho", 230810), ("Pancho", 230811), ("Pancho", 240830)]:
+                if (animal, date) in [("Pancho", 220908), ("Pancho", 240830)]:
+                # if (animal, date) in [("Pancho", 240830)]:
+                    # This failed beucase of need to reextract this dataset for run30.
+                    print(f"Skipping {animal}-{date} because it failed")
+                    continue
+                # if animal == "Pancho" and date not in (230810, 230811, 231116, 240830):
+                #     # Dates that have all four conditions.
+                #     continue
                 # if (animal, date) == ("Pancho", 250322):
                 #     # This failed beucase of need to reextract this dataset for run30.
                 #     print(f"Skipping {animal}-{date} because it failed")
@@ -999,6 +1053,7 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
 
         DFRES_DOT = DFRES_DOT[DFRES_DOT["too_few_trials"]==False].reset_index(drop=True)
     elif prune_trial_version == "highlev_expt":
+        # MS USED THIS.
         # Then remove at level of (animal, date, bregion), if it is missing any of the desired conditions.
         
         # First, do this, remove rows that have na.
@@ -1007,16 +1062,24 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
         # These two steps only keeps experiments that have at least one datapt for each of the 9 cases (3 effect_kind x 3 value_name)
         # (NOTE: couldbe different from 9 if you have <levels_var_required> that is not those 3 effect kind)
         # - First, keep only levels of effect_kind (e.g., "across_variables") that has all three value_name
-        # print(len(DFRES_DOT))
-        DFRES_DOT, _ = extract_with_levels_of_conjunction_vars_helper(DFRES_DOT, "value_name", 
-            ["strict", "date", "animal", "bregion", "effect_kind"], 
-            levels_var=["dot", "dot_1", "dot_2"])
-        # print(len(DFRES_DOT))
+        print("Pruning. Start: ", len(DFRES_DOT))
+        if True:
+            DFRES_DOT, _ = extract_with_levels_of_conjunction_vars_helper(DFRES_DOT, "value_name", 
+                ["strict", "date", "animal", "bregion", "effect_kind"], 
+                levels_var=["dot", "dot_1", "dot_2"])
+            # print(len(DFRES_DOT))
+        else:
+            # This is more stringent -- better?
+            DFRES_DOT, _ = extract_with_levels_of_conjunction_vars_helper(DFRES_DOT, "value_name", 
+                ["strict", "date", "animal", "bregion", "effect_kind", "effect_lev_pair", "grp_others"], 
+                levels_var=["dot", "dot_1", "dot_2"])
+            print("1: ", len(DFRES_DOT))
+
         # - Second, keep only expts which have all required effect_kind
         DFRES_DOT, _ = extract_with_levels_of_conjunction_vars_helper(DFRES_DOT, "effect_kind", 
             ["strict", "date", "animal", "bregion"], 
             levels_var=levels_var_required)
-        # print(len(DFRES_DOT))
+        print("2: ", len(DFRES_DOT))
 
     elif prune_trial_version is None:
         # Then remove only the specific value (e.g., dot, dot1, or dot2). This leads to imbalance.
@@ -1107,7 +1170,7 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
                         ["value"])
     print("Afteragg over iter: ", len(DFRES_DOT))
 
-    ### Only keep (animal, bregion) that have all cases of desired effect kind, 
+    ### Only keep (animal, date, bregion) that have all cases of desired effect kind, 
     # such as (within_rank, chunk_rank, across)
     from pythonlib.tools.pandastools import extract_with_levels_of_conjunction_vars_helper
     n1 = len(DFRES_DOT)
@@ -1115,9 +1178,20 @@ def alignment_load_extracted_dot_products(SAVEDIR, across_version, prune_trial_v
         ["animal", "date", "bregion", "strict"], 1, "/tmp/counts.pdf", levels_var= levels_var_required, 
         plot_counts_also_before_prune_path="/tmp/counts_pre.pdf")
     n2 = len(DFRES_DOT)
-    print(n1, n2)
-    assert n2/n1 > 0.2  
+    print(n1, n2, n2/n1)
+    assert n2/n1 > 0.15
     
+    ### Only keep (animal, date, bregion) that have all cases of desired effect kind, 
+    # such as (within_rank, chunk_rank, across)
+    n1 = len(DFRES_DOT)
+    DFRES_DOT, _ = extract_with_levels_of_conjunction_vars_helper(DFRES_DOT, "value_name", 
+        ["animal", "date", "bregion", "strict", "effect_lev_pair", "var_effect", "effect_kind", "grp_others"], 1, 
+        "/tmp/counts2.pdf", levels_var= ["dot", "dot_1", "dot_2"], 
+        plot_counts_also_before_prune_path="/tmp/counts2_pre.pdf")
+    n2 = len(DFRES_DOT)
+    print(n1, n2, n2/n1)
+    assert n2/n1 > 0.15
+
     #### Agg so that each expt is a single point (ie agg over var_effect pairs)
     # print(len(DFRES_DOT))
     DFRES_DOT_AGG = aggregGeneral(DFRES_DOT, ["animal", "date", "bregion", "effect_kind", "var_effect", 
@@ -1296,9 +1370,22 @@ def alignment_score_cosine_sim_wrapper(DFRES_DOT, PLOT=True,
     Low-level function for scoring cosine similarity using the mean dot products
     across all cases for a given (animal). 
 
+    NOTE: Point of contention. It takes avearge of dots across expts BEFORE converting to 
+    dot product. This means that expts with very different scale of dot products will
+    contribute differently to final outocme. But this is probably the best, as the alterantives
+    aren't good:
+    1. Get cosine for each date, then average the cosine. This fails beucase some dates have negative 
+    squared norm estimtes (dot1, dot2), in which case you get nan.
+    2. Normalize the dots to be similar scale across dates, but there isn't an obvious way to do this
+    without making other kinds of assumptions.
+
+    So, best to stick with this appraoch. The scale of dots is not that different anyways.
+
     Will also compute <effect_2> - <effect_1>
     PARAMS:
     - 
+
+    LT CHECKED
     """
     from pythonlib.tools.vectools import cosine_similarity_from_dot_products
     from pythonlib.tools.pandastools import aggregGeneral
@@ -1310,7 +1397,7 @@ def alignment_score_cosine_sim_wrapper(DFRES_DOT, PLOT=True,
     if False:
         print(len(DFRES_DOT))
         print(len(DFRES_DOT_AGG))
-
+    
     # (2) For each (bregion", "effect_kind", "animal) get its effect kinds along columns. 
     assert all(DFRES_DOT_AGG["strict"] == False), "assuming so. oterwise need to add 'strict' to list of index below"
     DFRES_DOT_AGG_FINAL_PIVOT = pivot_table(DFRES_DOT_AGG, ["bregion", "effect_kind", "animal"], ["value_name"], ["value"], 
@@ -1353,8 +1440,29 @@ def alignment_score_cosine_sim_wrapper(DFRES_DOT, PLOT=True,
         #     ax.axhline(0, color="k", alpha=0.5)
         #     ax.set_ylim([-1, 1])
 
+        ### Also plot cosinesim for each date. Problem is that this can throw out much data, if cosinesim 
+        # calculation gives nan
+        # (2) For each (bregion", "effect_kind", "animal) get its effect kinds along columns. 
+        DFRES_DOT_AGG_FINAL_PIVOT_DATE = pivot_table(DFRES_DOT_AGG, ["bregion", "effect_kind", "animal", "date"], ["value_name"], ["value"], 
+            flatten_col_names=True)
+        DFRES_DOT_AGG_FINAL_PIVOT_DATE = DFRES_DOT_AGG_FINAL_PIVOT_DATE.dropna().reset_index(drop=True) # Clean up.
+
+        # (3) Compute angles
+        def f(x):
+            _, cosine_sim = cosine_similarity_from_dot_products(x["value-dot"], x["value-dot_1"], x["value-dot_2"], return_nan_if_fail=True)
+            return cosine_sim
+        DFRES_DOT_AGG_FINAL_PIVOT_DATE["cosine_sim"] = DFRES_DOT_AGG_FINAL_PIVOT_DATE.apply(f, axis=1)
+
+        fig4 = sns.catplot(data=DFRES_DOT_AGG_FINAL_PIVOT_DATE, x="bregion", y="cosine_sim", hue="effect_kind", 
+            row="animal", col="date", kind="bar", errorbar="se")
+        for ax in fig4.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.5)
+            ax.set_ylim([-1, 1])
+
+        # DFRES_DOT_AGG_FINAL_PIVOT_DATE.to_csv("/tmp/test.csv")
+
     if PLOT:
-        return DFRES_DOT_AGG_FINAL_PIVOT, dfsummaryflat, fig1, fig2, fig3
+        return DFRES_DOT_AGG_FINAL_PIVOT, dfsummaryflat, fig1, fig2, fig3, fig4
     else:
         return DFRES_DOT_AGG_FINAL_PIVOT, dfsummaryflat
 
@@ -1372,6 +1480,7 @@ def alignment_score_cosine_sim_permutation_test(DFRES_DOT, N = 10, animal=None, 
     effect_2 = "chunk_rank_global"
     bregion = "preSMA"
 
+    LT CHECKED
     """
     # Plot summary of permutation test
     from pythonlib.tools.statstools import permutationTest
@@ -1387,14 +1496,44 @@ def alignment_score_cosine_sim_permutation_test(DFRES_DOT, N = 10, animal=None, 
         # Get both animals.
         assert animal is None
 
+    # DFRES_DOT.to_csv("/tmp/DFRES_DOT.txt")
+
+    # sadsa
     # Create new variable useful for shuffling.
     # the logic here is that each level of effect_kind needs to keep its (dot, dot1, dot2) together. So this
     # does thist (ie you shuffle each effect_kind case (var, var_other)
-    _vars_datapt = ["bregion", "grp_others", "var_effect", "date", "strict", "effect_lev_pair", "effect_kind", "animal"]
+    # NOTE: effect_lev_pair is specific, such as (0|1, 1|2) that averages over other vars like (gridloc, loc_prev).
+    
+    # Original
+    # _vars_datapt = ["bregion", "grp_others", "var_effect", "date", "strict", "effect_lev_pair", "effect_kind", "animal"]
+    # _vars_grp = ["bregion", "strict", "date", "animal"]
+    
+    # Bad - null has very wide spread
+    # _vars_datapt = ["bregion", "grp_others", "var_effect", "date", "strict", "effect_lev_pair", "value_name", "effect_kind", "animal"]
+    # _vars_grp = ["bregion", "strict", "date", "animal"]
+
+    # Identical to Original (OK) [0.14] [0.12]
+    _vars_datapt = ["grp_others", "var_effect", "effect_kind", "effect_lev_pair"]
+    _vars_grp = ["bregion", "strict", "date",  "animal"]
+
+    # # Original (OK) [0.27 if exclude 2 dates] [0.22 if include]
+    # _vars_datapt = ["grp_others", "var_effect", "effect_kind", "effect_lev_pair"]
+    # _vars_grp = ["bregion", "strict", "date",  "animal", "value_name"]
+
+    # Not great (0.289)
+    # _vars_datapt = ["value_name"]
+    # _vars_grp = ["bregion", "strict", "date",  "animal", "grp_others", "var_effect", "effect_kind", "effect_lev_pair"]
+    # assert False, "to do this, change (i) comemnt out this  assert _vars_datapt[-2] ==... and (ii) df_shuff["value_name"] = [x[-1]"
+
     DFRES_DOT = append_col_with_grp_index(DFRES_DOT, _vars_datapt, "_var_datapt", use_strings=False)
+    if False: # This isnt actualyl true, at sucha  low level of (grp_others, effect_lev_pair)
+        for _lev in DFRES_DOT["_var_datapt"].unique():
+            if not len(DFRES_DOT[DFRES_DOT["_var_datapt"] == _lev])==3:
+                print(DFRES_DOT[DFRES_DOT["_var_datapt"] == _lev])
+                print(len(DFRES_DOT[DFRES_DOT["_var_datapt"] == _lev]))
+                assert False, "should be dot, dot1, dot2"
 
     # This makes sure shuffleing is done only within each level of _var_grp
-    _vars_grp = ["bregion", "strict", "date", "animal"]
     DFRES_DOT = append_col_with_grp_index(DFRES_DOT, _vars_grp, "_var_grp")
 
     if False:
@@ -1405,9 +1544,22 @@ def alignment_score_cosine_sim_permutation_test(DFRES_DOT, N = 10, animal=None, 
     # Shuffle function
     assert _vars_datapt[-2] == "effect_kind", "the function below is wrong."
     def funshuff(df):
-        df_shuff = shuffle_dataset_hierarchical_remap(df, "_var_datapt", "_var_grp")
-        # Extract the new effect kind
-        df_shuff["effect_kind"] = [x[-2] for x in df_shuff["_var_datapt_remapped"]]
+        if True:
+            # Original
+            df_shuff = shuffle_dataset_hierarchical_remap(df, "_var_datapt", "_var_grp")
+            # Extract the new effect kind
+            df_shuff["effect_kind"] = [x[-2] for x in df_shuff["_var_datapt_remapped"]]
+            # df_shuff["value_name"] = [x[-1] for x in df_shuff["_var_datapt_remapped"]]
+
+            # # Also shuffle values within 
+            # df_shuff = shuffle_dataset_hierarchical(df_shuff, ["value_name"], ["bregion", "animal", "effect_lev_pair", "var_effect", "effect_kind", "date", "grp_others"])
+            
+        else:
+            df_shuff = shuffle_dataset_hierarchical(df, ["_var_datapt"], ["_var_grp"])
+
+        # df_shuff.to_csv("/tmp/DFRES_DOT_shuff.txt")
+        # assert False
+
         return df_shuff
 
     # def funstat(df):
@@ -1423,10 +1575,11 @@ def alignment_score_cosine_sim_permutation_test(DFRES_DOT, N = 10, animal=None, 
     #     return val_both, val
 
     def funstat(df):
+        # Return cosine_sim for effect_2 minus effect_1
         _, dfsummaryflat = alignment_score_cosine_sim_wrapper(df, PLOT=False, effect_1=effect_1, effect_2=effect_2)
         # assert len(dfsummaryflat[(dfsummaryflat["bregion"] == bregion)]["value"])==1
 
-        val = dfsummaryflat[(dfsummaryflat["bregion"] == bregion)]["value"].mean()
+        val = dfsummaryflat[(dfsummaryflat["bregion"] == bregion)]["value"].mean() # the difference in cosine sim
         # display(dfsummaryflat)
         # print(val)
         # asd
@@ -1436,7 +1589,10 @@ def alignment_score_cosine_sim_permutation_test(DFRES_DOT, N = 10, animal=None, 
         # Plot cosine similarity (for actual data)
         _, dfsummaryflat = alignment_score_cosine_sim_wrapper(DFRES_DOT, PLOT=True, effect_1=effect_1, effect_2=effect_2)
 
-    p, fig = permutationTest(DFRES_DOT, funstat, funshuff, N, side=side)        
+    # Finally, keep just the effect_kinds that are involved in this comparison
+    _dfres_dot = DFRES_DOT[DFRES_DOT["effect_kind"].isin([effect_1, effect_2])].reset_index(drop=True)
+
+    p, fig = permutationTest(_dfres_dot, funstat, funshuff, N, side=side)        
 
     return p, fig
 

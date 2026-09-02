@@ -1951,7 +1951,7 @@ class Dataset(object):
         self.Dat["Tkbeh_stktask"] = list_Tk_beh_2
         self.Dat["Tktask"] = list_Tk_task
 
-    def tokens_extract_variables_as_dataframe(self, list_var, tk_ver="beh_using_beh_data",
+    def tokens_extract_variables_as_dataframe(self, list_var=None, tk_ver="beh_using_beh_data",
                                               list_var_dataset=None):
         """
         Generate a dataframe where each row is a set of variables extracted from token.
@@ -1962,17 +1962,13 @@ class Dataset(object):
         :return: dataframe
         """
 
-        assert isinstance(list_var, (list, tuple))
+        if list_var is not None:
+            assert isinstance(list_var, (list, tuple))
         
         res = []
         for i, row in self.Dat.iterrows():
             Tk = self.taskclass_tokens_extract_wrapper(i, tk_ver, return_as_tokensclass=True)
             for j, tok in enumerate(Tk.Tokens):
-                # print("---")
-                # print(tok["ind_behstrokes"], j)
-                # print(len(Tk.Tokens))
-                # assert len(tok["ind_behstrokes"])==1
-                # assert tok["ind_behstrokes"][0] == j, "just sanityc chekc that this old varaible makes sense"
                 res.append({
                     "trialcode":row["trialcode"],
                     "ind_taskstroke_orig":tok["ind_taskstroke_orig"],
@@ -1983,11 +1979,18 @@ class Dataset(object):
 
                 # print(tok.keys())
                 # assert False
-                for var in list_var:
-                    if var in tok.keys():
+                if list_var is None:
+                    # Then just get all the vars (ie columns of token)
+                    for var in tok.keys():
                         res[-1][var] = tok[var]
-                    else:
-                        res[-1][var] = row[var]
+                else:
+                    for var in list_var:
+                        if var in tok.keys():
+                            # Token level
+                            res[-1][var] = tok[var]
+                        else:
+                            # Dataframe level
+                            res[-1][var] = row[var]
 
                 if list_var_dataset is not None:
                     for var in list_var_dataset:
@@ -9256,7 +9259,9 @@ class Dataset(object):
         
         # Get the correct sequence parse
         tmp = self.grammarparses_parses_extract_trial(ind)
-        assert len(tmp)==1, "only codede for deterministic rule"
+        if len(tmp)!=1:
+            print(tmp)
+            assert False, "only codede for deterministic rule"
         parse = tmp[0]
 
         # Convert to tokens
@@ -9264,7 +9269,6 @@ class Dataset(object):
         if return_as_tokensclass==False:
             assert np.all(np.diff([tok["ind_taskstroke_orig"] for tok in tokens])==1), "make this happen, in taskclass_tokens_extract_wrapper"
             tokens_correct_order = [tokens[i] for i in parse]
-
             return tokens_correct_order
         else:
             Tk = tokens.copy() # To avoid reordering Tk
@@ -9546,6 +9550,21 @@ class Dataset(object):
         Return mapping from shape to chunk rank (global, in that each sahpe has same rank regardless of a
         what is in a given tsak)
         """
+
+        self.grammarparses_chunk_syntax_extract_wrapper()
+
+        # First, get chunk_rank_global information
+        DFTOKENS = self.tokens_extract_variables_as_dataframe(tk_ver="task", list_var_dataset=["task_kind", "date", "epoch"])
+        # - Get global chunk rank
+        from pythonlib.dataset.dataset_analy.grammar import chunk_rank_global_extract
+        # DFTOKENS["task_kind"] = "prims_on_grid"
+        assert len(DFTOKENS["date"].unique()) == 1
+        map_epoch_shape_to_crg2 = chunk_rank_global_extract(DFTOKENS, return_as_dict=True)
+        # # - Account for Start button
+        # for epoch in DFTOKENS["epoch"].unique():
+        #     map_epoch_shape_to_crg2[(epoch, None)] = -1
+
+        assert False, "dont use this. Replace this by map_epoch_shape_to_crg2 above (main diff, should use epoch-shape as key, not shape)"
         shapes = self.grammarparses_rules_shape_AnBmCk_get_shape_order(keep_only_existing_shapes=keep_only_existing_shapes)
         map_shape_to_chunk_rank_global = {sh:cr for cr, sh in enumerate(shapes)}
         map_chunk_rank_global_to_shape = {cr:sh for cr, sh in enumerate(shapes)}
@@ -10042,11 +10061,11 @@ class Dataset(object):
                 success = self.Dat.iloc[ind]["success_binary_quick"]
                 
                 chunk_rank_new, chunk_within_rank_new, chunk_n_in_chunk_new = self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(
-                    ind, return_n_in_chunk=True, new_version=True)
+                    ind, return_n_in_chunk=True, force_new_version=True)
                 
                 if success:
                     chunk_rank_old, chunk_within_rank_old, chunk_n_in_chunk_old = self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(
-                        ind, return_n_in_chunk=True, new_version=False)
+                        ind, return_n_in_chunk=True, force_new_version=False)
                     assert chunk_rank_old == chunk_rank_new
                     assert chunk_within_rank_old == chunk_within_rank_new
                     assert chunk_n_in_chunk_old == chunk_n_in_chunk_new
@@ -10061,8 +10080,30 @@ class Dataset(object):
 
             self.GrammarParsesFirstTimeAssignChunk = False
 
+    def grammarparses_do_multiple_parses_exist(self):
+        """
+        Returns True if any trial has more than one parse, where parse is a sequence
+        that satisfies rule for this trial.
+        """
+        
+        if hasattr(self, "_grammarparses_do_multiple_parses_exist") and isinstance(self._grammarparses_do_multiple_parses_exist, bool) and (self._grammarparses_do_multiple_parses_exist_trialcodes == sorted(self.Dat["trialcode"].unique())):
+            # Then use cached version
+            pass
+        else:
+            # Recompute it and store in cache
+            list_n_parses = []
+            for ind in range(len(self.Dat)):
+                if self.Dat.iloc[ind]["epoch"] in ["base"]:
+                    continue
+                else:
+                    list_n_parses.append(len(self.grammarparses_parses_extract_trial(ind)))
+            # list_n_parses = [len(self.grammarparses_parses_extract_trial(ind)) for ind in range(len(self.Dat))]
+            self._grammarparses_do_multiple_parses_exist = any([n>1 for n in list_n_parses])
+            self._grammarparses_do_multiple_parses_exist_trialcodes = sorted(self.Dat["trialcode"].unique())
+        return self._grammarparses_do_multiple_parses_exist
+    
     def grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(self, ind,
-        return_n_in_chunk=False, new_version=True):
+        return_n_in_chunk=False, force_new_version=None):
         """
         For this trial, assign each beh stroke to a chunk index and to index within chunk,
         based on the matching parse, for the rule of this trial. e.g., lines to circles, 
@@ -10078,6 +10119,19 @@ class Dataset(object):
         - (also modifes tokens for this trial)
         EG: ([0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1])
         """
+
+        if force_new_version is not None:
+            assert isinstance(force_new_version, bool)
+            new_version = force_new_version
+        else:
+            multiple_parses_exist = self.grammarparses_do_multiple_parses_exist()
+            if multiple_parses_exist:
+                # Then the new version will fail.
+                # Instead, use the old version, in which you use the actual beh sequence. But this
+                # only works if you have pruned to good 1-to-1 sequences
+                new_version = False
+            else:
+                new_version = True
 
         # If this is the first time running, then do sanity check that new_version gives identical result to old version
         self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke_SANITY()
@@ -10232,11 +10286,53 @@ class Dataset(object):
             res[rs] = GD._score_beh_in_parses(taskstroke_inds_beh_order, rs)
         return res
 
+    def grammarparses_chunk_syntax_extract_wrapper(self):
+        """
+        Wrapper to do all the things related to extracting information about chunk and chunk_rank_within,
+        and then assign this information to tokens. 
+
+        This is the standard pipeline used in grammmar MS.
+
+        RETURNS:
+        - Extracts chunk information and stores this in Tokens.
+        - 
+        """
+        # multiple_parses_exist = self.grammarparses_do_multiple_parses_exist()
+
+        # if multiple_parses_exist:
+        #     # Then the new version will fail.
+        #     # Instead, use the old version, in which you use the actual beh sequence. But this
+        #     # only works if you have pruned to good 1-to-1 sequences
+        #     new_version = False
+        # else:
+        #     new_version = True
+
+        for i in range(len(self.Dat)):
+            self.grammarparses_taskclass_tokens_assign_chunk_state_each_stroke(i)
+
+        # Also extract "syntax parse" e.g., (3,1,1) for A3B1C1.
+        # Also called "taskcat_by_rule"
+        self.grammarparses_classify_tasks_categorize_based_on_rule()
+        print("These are the taskcat_by_rule:")
+        print(self.Dat["taskcat_by_rule"].value_counts())
+
+        ###################################################
+        ################# SNTAX-RELATED VARIABLES...
+        # And extract syntax_concrete column
+        self.grammarparses_syntax_concrete_append_column()
+        print("These are the syntax_concrete:")
+        print(self.Dat["syntax_concrete"].value_counts())
+
+        # For each token, assign a new key called "syntax role" -- good.
+        self.grammarparses_syntax_role_append_to_tokens()
+
     def grammarparses_chunk_transitions_gaps_extract(self, ind, also_get_response_time=False):
         """
         REturn info for each gap between strokes (transition), realted to chunk transitions, gap durations etc.
         Useful for analyzing how gap duration relates to chunk transitions.
         :return:
+
+        LT CHECKED
         """
 
         # Get data
@@ -10295,13 +10391,17 @@ class Dataset(object):
         - self.Dat, addes columns like "chunkgap_(0, 1)_durbin" holding the bin/class for gap durations
         that trnaiston bwetween (0,1) chunks, for that trial, usually 0,1 (string) bins for short and long
         gap.
+
+        LT CHECKED: except binned gap durations and plots.
         """
         from pythonlib.tools.pandastools import append_col_with_grp_index
         import seaborn as sns
 
+        # Remove cases that are single prim
+        self.preprocessGood(params=["task_strokes_more_than_one"])
+
         # And extract syntax_concrete column
-        if "syntax_concrete" not in self.Dat.columns:
-            self.grammarparses_syntax_concrete_append_column()
+        self.grammarparses_syntax_concrete_append_column()
 
         # This only can run if this day has shape rules
         if len(self.grammarparses_rules_involving_shapes())>0:
@@ -10316,7 +10416,6 @@ class Dataset(object):
                 if "behseq_locs" in self.Dat:
                     df["behseq_locs"] = [self.Dat.iloc[ind]["behseq_locs"] for _ in range(len(df))]
                     df["behseq_shapes"] = [self.Dat.iloc[ind]["behseq_shapes"] for _ in range(len(df))]
-                
                 list_df.append(df)
             dfgaps = pd.concat(list_df).reset_index(drop=True)
 
@@ -10332,22 +10431,71 @@ class Dataset(object):
             dfgaps = append_col_with_grp_index(dfgaps, ["behseq_shapes", "behseq_locs"], "sh_lo")
             dfgaps["gap_chunk_rank_str"] = ["".join([str(xx) for xx in x]) for x in dfgaps["gap_chunk_rank"]]
 
-            # Get chunk using global shapes order
+            ### Get chunk using global shapes order
+
+            # First, get chunk_rank_global information
+            DFTOKENS = self.tokens_extract_variables_as_dataframe(tk_ver="beh_using_task_data", list_var_dataset=["task_kind", "date", "epoch"])
+            # - Get global chunk rank
+            from pythonlib.dataset.dataset_analy.grammar import chunk_rank_global_extract
+            # DFTOKENS["task_kind"] = "prims_on_grid"
+            assert len(DFTOKENS["date"].unique()) == 1
+            map_epoch_shape_to_crg = chunk_rank_global_extract(DFTOKENS, return_as_dict=True, shape_ratio_max=1.0)
+            # - Account for Start button
+            for epoch in DFTOKENS["epoch"].unique():
+                map_epoch_shape_to_crg[(epoch, None)] = -1
+
             if len(self.Dat["epoch"].unique())==1:
                 # Then this will not fail
-                shapes = self.grammarparses_rules_shape_AnBmCk_get_shape_order(keep_only_existing_shapes=True)
-                map_sh_to_chunk_global = {sh:i for i, sh in enumerate(shapes)}
-                map_sh_to_chunk_global[None] = -1
-                tmp = []
-                for gap_shape in dfgaps["gap_shape"]:
-                    tmp.append(tuple([map_sh_to_chunk_global[sh] for sh in gap_shape]))
-                dfgaps["gap_chunk_rank_global"] = tmp   
+
+                if False: 
+                # -- Method 1 (older, not necessarily good)
+                # THis fails for cross-AB, I alrady confirmed it works for otherwise.
+                    shapes = self.grammarparses_rules_shape_AnBmCk_get_shape_order(keep_only_existing_shapes=True)
+                    map_sh_to_chunk_global = {sh:i for i, sh in enumerate(shapes)}
+                    map_sh_to_chunk_global[None] = -1
+                    epoch = self.Dat["epoch"].values[0]
+                    
+                    # -- Sanity check that methods 1 and 2 give the same answer
+                    map_epoch_shape_to_crg2 = {(epoch, k):v for k, v in map_sh_to_chunk_global.items()}
+                    if not map_epoch_shape_to_crg == map_epoch_shape_to_crg2:
+                        print(map_epoch_shape_to_crg)
+                        print(map_epoch_shape_to_crg2)
+                        assert False
+                    # If so, then the below code is good to go.
+
+                    tmp = []
+                    for gap_shape in dfgaps["gap_shape"]:
+                        assert len(gap_shape)==2, "sanity check"
+                        tmp.append(tuple([map_sh_to_chunk_global[sh] for sh in gap_shape]))
+                    dfgaps["gap_chunk_rank_global"] = tmp   
+                    
+                # Better version of above.
+                def f(x):
+                    # k = (, x["gap_shape"])
+                    epoch = x["epoch"]
+                    gap_shape = x["gap_shape"]
+                    gap_crg = tuple([map_epoch_shape_to_crg[(epoch, sh)] for sh in gap_shape])
+                    return gap_crg
+                dfgaps["gap_chunk_rank_global"] = dfgaps.apply(f, axis=1)
+
             else:
-                # Then the above would fail.
-                dfgaps["gap_chunk_rank_global"] = dfgaps["gap_chunk_rank"]   
+                if False: # This is old method (before 8/27/26)
+                    # Then the above would fail.
+                    dfgaps["gap_chunk_rank_global"] = dfgaps["gap_chunk_rank"]   
+                else:
+                    ### NEW (8/27) getting correct crg global even when multiple epochs.
+                    # -- Sanity check that methods 1 and 2 give the same answer
+
+                    # Better version of above.
+                    def f(x):
+                        # k = (, x["gap_shape"])
+                        epoch = x["epoch"]
+                        gap_shape = x["gap_shape"]
+                        gap_crg = tuple([map_epoch_shape_to_crg[(epoch, sh)] for sh in gap_shape])
+                        return gap_crg
+                    dfgaps["gap_chunk_rank_global"] = dfgaps.apply(f, axis=1)
 
             ### Additional processed parameters
-
             # 3. Classify gaps as short or long. (Bin all gaps)
             # NOTE: This may leave many or most rows without a bin (in which case they are bin -1) because it conditions
             # on somethign very specific (so will fail if too much variability).
@@ -10362,7 +10510,7 @@ class Dataset(object):
                                                                                   "behseq_shapes", "behseq_locs", "index_gap"],
                                                              2, 1, "gap_dur_bin", bin_by_rank=True).reset_index(drop=True)
 
-            if PLOT:
+            if PLOT and plot_savedir is not None:
                 # Plot, showing gap durations all, coloring by if is high bin
                 fig = sns.catplot(data=dfgaps, x="index_gap", y="gap_dur", col="epoch_syntax", col_wrap=3, alpha=0.25,
                             hue="gap_dur_bin")
@@ -10431,7 +10579,8 @@ class Dataset(object):
             dfgaps_this, _ = extract_with_levels_of_conjunction_vars(dfgaps, "epoch", ["behseq_locs", "behseq_shapes"],
                                                     n_min_across_all_levs_var=2, lenient_allow_data_if_has_n_levels=2,
                                                     prune_levels_with_low_n=True, plot_counts_heatmap_savepath=plot_counts_heatmap_savepath)
-            if PLOT:
+            
+            if PLOT and plot_counts_heatmap_savepath is not None:
                 if len(dfgaps_this)>0:
                     fig = sns.catplot(data=dfgaps_this, x="index_gap", y="gap_dur", hue="epoch", col="syntax_concrete", col_wrap=5, height=4, alpha=0.25)
                     savefig(fig, f"{plot_savedir}/gap_dur_vs_index-epochs-1.pdf")
@@ -10586,7 +10735,7 @@ class Dataset(object):
 
         print("DOne! added key to tokens(beh_using_task_data) : syntax_role")
 
-    def grammarparses_syntax_concrete_append_column(self, PRINT=False):
+    def grammarparses_syntax_concrete_append_column(self, PRINT=False, do_crossAB_merge=False):
         """
         Append column hoklding syntax (e.g.,, (1,3,2))
         based on the epoch_orig
@@ -10597,10 +10746,14 @@ class Dataset(object):
         :return: appends column "syntax_concrete" to self.Dat, holding
         either tuple of ints or (if no shape rules today)  or ("IGNORE")
         (i.e, item will alwyas be tuple)
+
+        NOTE: THis is the ONLY place that syntax_concrete will be updated. It
+        must be run once and thne locked.
         """
         
         if self._LockSyntaxConcrete:
-            # Check that it exists, then return
+            # Check that it exists, then return.
+            # This is important as sometimes I do post-processing of SC, don't want to overwtite that.
             assert "syntax_concrete" in self.Dat.columns
             return
 
@@ -10628,14 +10781,74 @@ class Dataset(object):
         if PRINT:
             self.grouping_print_conjunctions_summary_good(["syntax_concrete", "taskcat_by_rule"], PRINT=True)
 
+        ### Any postporcessing to update syntax concrete, add all here
+        if do_crossAB_merge:
+            self._grammarparses_syntax_concrete_crossAB_merge()
+
+        ### Lock it
+        self._LockSyntaxConcrete = True 
+
+    def _grammarparses_syntax_concrete_crossAB_merge(self):
+        """
+        For dates with cross-AB, where there are two sahpe sets, for AnBmCk, and these are
+        mixed even within the same trial, then you need to run this right after running 
+        self.grammarparses_syntax_concrete_append_column()
+
+        NOTE: You should only run this once. If you try to run it twice, it will fail, as it will look for 6+1 slots, wheras
+        after you run it, there wil be 3 slots. But this is not the most foolproof way to make sure you only run once.
+        """
+
+        def _syntax_concrete_consolidate(sc):
+            """
+            For cross-AB days, to make the anlaysis compatbile with reast of code.
+            Given sc of (0, 0, 5, 0, 0, 1, 0), where this is really (a1, a2, b1, b2, c1, c2)
+            where a1 means role a for shape set 1, then convert it to:
+            (0, 5, 1), and do sanity check that you never have both a1 and a2 in the same trial
+            (and so on for the other roles)
+
+            Is currently hard coded for 6 shapes (3 roles). But would be easy to modify
+            
+            """
+            assert len(sc)==6+1
+            assert sc[6]==0 # no leftover
+            _sum_in = sum(sc)
+            x = sc
+
+            # Sanity check that you never have two items assigned the same chunk rank actually
+            # turn up int he same trial. e.g., (a, b, c, d, e, f) if syntax conceret, then
+            # never have trial with both a and b.
+            assert sum((x[0]==0, x[1]==0))>0
+            assert sum((x[2]==0, x[3]==0))>0
+            assert sum((x[4]==0, x[5]==0))>0
+
+            # Becuae the above passes, you can use sum to do the below.
+            sc_new = (sum([x[0], x[1]]), sum([x[2], x[3]]), sum([x[4], x[5]]))
+
+            # Sanity check
+            _sum_out = sum(sc_new)
+            assert _sum_in == _sum_out
+
+            return sc_new
+
+        list_sc_new = []
+        for sc in self.Dat["syntax_concrete"]:
+            if sc == ("IGNORE",):
+                sc_new = sc
+            else:
+                sc_new = _syntax_concrete_consolidate(sc)
+            list_sc_new.append(sc_new)
+
+        self.Dat["syntax_concrete"] = list_sc_new
+
+
     def grammarparses_classify_tasks_syntax_based_on_rule(self):
         """
         Get list of syntaxes (tuples of ints), one for each trial,
         which is concrete syntax for each rule. Returns
-        dict epoch_orig --> syntax
+        dict epoch_orig --> syntax (list same length as n trials)
         :return: dict (see above) or None (if no shapes rules exist)
         """
-        from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule
+        from pythonlib.dataset.modeling.discrete import _tasks_categorize_based_on_rule
 
         # rs_using_shape = self.grammarparses_rules_involving_shapes()
         # if len(rs_using_shape)==0:
@@ -10674,20 +10887,41 @@ class Dataset(object):
             if epoch_orig in ["base", "baseline"]:
                 map_epoch_orig_to_list_syntax[epoch_orig] = None
             else:
-                list_syntax = tasks_categorize_based_on_rule(self, epoch_orig)
+                list_syntax = _tasks_categorize_based_on_rule(self, epoch_orig)
                 list_syntax = [_tupleize(s) if not isinstance(s, tuple) else s for s in list_syntax]
                 map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
+        # else:
+        #     assert False, "This is wrong"
+        #     map_epoch_orig_to_list_syntax = {}
+        #     if "epoch_orig" in self.Dat.columns:
+        #         epoch_key = "epoch_orig"
+        #     else:
+        #         epoch_key = "epoch"
+            
+        #     from pythonlib.tools.pandastools import grouping_append_and_return_inner_items_good
+        #     grpdict = grouping_append_and_return_inner_items_good(self.Dat, [epoch_key])
+        #     for grp, inds in grpdict.items():
+        #         epoch_orig = grp[0]
+        #         if epoch_orig in ["base", "baseline"]:
+        #             map_epoch_orig_to_list_syntax[epoch_orig] = None
+        #         else:
+        #             list_syntax = self.Dat.iloc[inds]["syntax_concrete"].tolist()
+        #             list_syntax = [_tupleize(s) if not isinstance(s, tuple) else s for s in list_syntax]
+        #             map_epoch_orig_to_list_syntax[epoch_orig] = list_syntax
+
         return map_epoch_orig_to_list_syntax
 
-    def grammarparses_classify_tasks_categorize_based_on_rule(self):
+    def grammarparses_classify_tasks_categorize_based_on_rule(self, return_list_rule=False):
         """
         Wrapper for methods to classify each task based on something like a "syntax parse"
         # e.g., ((3, 1, 1, 0),) means for AnBmCk, you have n=3, m=1, k=1.
         # The last 0 means no leftover items.
         :return: Modifes self.Dat adding new column taskcat_by_rule (flexible type, usualyl tuple of ints)
         """
-        from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule_mult
-        tasks_categorize_based_on_rule_mult(self)
+        from pythonlib.dataset.modeling.discrete import _tasks_categorize_based_on_rule_mult
+        list_rule = _tasks_categorize_based_on_rule_mult(self)
+        if return_list_rule:
+            return list_rule
 
     def grammarparses_classify_sequence_error(self, ind, PRINT_PLOT=False,
                                               shape_key = "shape"):
@@ -12792,6 +13026,8 @@ class Dataset(object):
         RETURNS:
             - list of stroke durations, sec
             - gap duratiosn
+
+        LT CHECKED
         """
         ons, offs = self.strokes_onsets_offsets(ind)
         gap_durations = [onthis - offthis for onthis, offthis in zip(ons[1:], offs[:-1])]
@@ -12804,6 +13040,8 @@ class Dataset(object):
         RETURNS:
         - onsets, list of nums, time in sec, onsets of strokes
         - offsets, list ofn ums
+        
+        LT CHECKED
         """
 
         strokes_beh = self.Dat.iloc[ind]["strokes_beh"]

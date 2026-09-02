@@ -35,21 +35,24 @@ def fig1_generalize_wrapper(animal, date):
     Example:
         animal = "Diego"
         date = 230118 # ss
+
+    LT CHECKED
     """
 
     # (1) Load data
     D = load_dataset_daily_helper(animal, date)
     
-    # (2) Preprocess and extract
+    # (2) Preprocess and extract all scores for different motifs (e.g., repeat)
     bm, DM, SDIR = fig1_generalize_1_extract_preprocess(D)
 
-    # (3) Merge into D
+    # (3) Merge into D (take the scores from bm and put into D)
     fig1_generalize_1b_merge_with_D(D, bm, DM)
 
     # Save things
     D.save(SDIR)
 
     # (4) Plots
+    # NOTE: These are not actully used in the MS
     fig1_generalize_2_plot(D, bm, DM, SDIR)
 
 
@@ -57,152 +60,71 @@ def fig1_generalize_1_extract_preprocess(D):
     """
     Extract scores (diff kinds, eg, n circles), for monkey and
     different models. 
+
+    LT CHEKCED
     """
     from pythonlib.drawmodel.task_features import shapes_has_separated_cases_of_shape
     from pythonlib.tools.pandastools import applyFunctionToAllRows
-    from pythonlib.dataset.modeling.discrete import tasks_categorize_based_on_rule_mult
-    import os
     from pythonlib.tools.pandastools import stringify_values_column
-    from pythonlib.behmodelholder.preprocess import generate_scored_beh_model_data_matlabrule, generate_scored_beh_model_data_long, generate_diagnostic_model_data
+    from pythonlib.behmodelholder.preprocess import generate_diagnostic_model_data
     from pythonlib.tools.expttools import writeDictToYaml, writeDictToTxtFlattened
 
     SDIR = D.make_savedir_for_analysis_figures("diagnostic_model")
     animal = D.animals(force_single=True)[0]
-    expt = D.expts(force_single=True)[0]
-    if False:
-        if animal=="Diego" and "gridlinecircle3" in expt:
-            list_rule_across_dates = ["LCr2", "CLr2", "LolDR"]
-            shape_key = "shapeabstract"
-        elif animal == "Pancho" and ("grammar2" in expt):
-            list_rule_across_dates = ["(AB)n", "AnBm1a", "AnBm2", "AnBmHV"]
-            shape_key = "shape"
-        else:
-            print(animal)
-            print(expt)
-            assert False
-    else:
-        # Decided to not try to use rules from across dates, as this leads to a maess.
-        list_rule_across_dates = None
-        shape_key = D.grammarparses_rules_shape_AnBmCk_get_shapekey()
+    # expt = D.expts(force_single=True)[0]
 
-    # shapes_across_dates = D.grammarparses_rules_shape_AnBmCk_get_shapes_UNORDERED(list_rule_across_dates)    
-    
+    # Decided to not try to use rules from across dates, as this leads to a maess.
+    # list_rule_across_dates = None
+
     # Get rules infor for this date
+    shape_key = D.grammarparses_rules_shape_AnBmCk_get_shapekey() # 
     rulesinfo = D.grammarparses_rules_shapes_summary_simple()
     list_rule_this_dates = rulesinfo["rules"]
-    # shapes_this_date = rulesinfo["shapes_used"]
+
     # Only score for the shapes that at some point act as the first shape
     # Get the sahpes that play role of "A" (ie first shape in sequence)
-    # first_shapes_this_date = []
-    # for rule in list_rule_this_dates:
-    #     shapes = D._grammarparses_rules_shape_AnBmCk_get_shape_order(rule)
-    #     first_shapes_this_date.append(shapes[0])
-    if False:
-        first_shapes_this_date = rulesinfo["shapes_used_first_in_seq"]
-    else:
-        # This works better generally. For two-shape epochs, gets both epochs, while above just gets one.
-        first_shapes_this_date = []
-        for ep in D.Dat["epoch"].unique().tolist():
-            shapes = D._grammarparses_rules_shape_AnBmCk_get_shape_order(ep)
-            first_shapes_this_date.append(shapes[0])
+    # This works better generally. For two-shape epochs, gets both epochs, while above just gets one.
+    first_shapes_this_date = []
+    for ep in D.Dat["epoch"].unique().tolist():
+        shapes = D._grammarparses_rules_shape_AnBmCk_get_shape_order(ep)
+        first_shapes_this_date.append(shapes[0])
 
     writeDictToYaml(rulesinfo, f"{SDIR}/rules_info.yaml")
     writeDictToTxtFlattened(rulesinfo, f"{SDIR}/rules_info.txt")
 
     ### PREPROCESS
-    ### Figure out if lines and circles are separated in space (e..g, 2 lines, separated by circle)
-    # For each task, give it flag for whether it has separated shapes
-    if False:
-        # This becomes unwieldy with more than 2 shapes, which is the case if I automticaly input the shapes from above.
-        # I don't use it, so just ignpre for now.
-        for shape_to_check, shape_jump_over in [
-            ("line", "circle"),
-            ("circle", "line"),
-            ]:
-            def F(x):
-                Task = x["Task"]
-                # return shapes_has_separated_cases_of_this_shape(Task, shape_to_check)
-                return shapes_has_separated_cases_of_shape(Task, shape_to_check, [shape_jump_over], ploton=False, shape_key=shape_key)
-            D.Dat = applyFunctionToAllRows(D.Dat, F, f"shape_separated_{shape_to_check}")
 
     ## GrammarDat class, all things below
     # Categorize tasks based on rules
-    list_rule_across_dates = tasks_categorize_based_on_rule_mult(D, list_rule_across_dates, return_list_rule=True)
+    # NOTE: dont skip this! need it to get column: taskcat_by_rule 
+    list_rule_across_dates = D.grammarparses_classify_tasks_categorize_based_on_rule(return_list_rule=True)
 
     ### EXTRACT DATA
     # First, rename character so that it uses the actual (shape, loc) config
     # - this helps in that "random" tasks will be given real names
     D.Dat["character_orig"] = D.Dat["character"]
     D.Dat["character"] = D.Dat["taskconfig_shploc"]
-    stringify_values_column(D.Dat, "character"
-                            )
+    stringify_values_column(D.Dat, "character")
+
+    # Sanity check that characters are not duplicated.
+    for x in D.Dat["taskconfig_shploc"]:
+        assert x == tuple(sorted(x)), "the same actual character will be given different string names."
+
     # Which models to use in diagnostic model?
     # Which motifs to use?
-    if False: # Entered by hand
-        # LIST_MOTIFS = [
-        #     ("repeat", {"shapekey":"shape",
-        #                  "shape":"line-8-4-0",
-        #                  "nmin":1,
-        #                  "nmax":6,
-        #                  "allowed_rank_first_token":[0]
-        #                }),
-        #     ("repeat", {"shapekey":"shape",
-        #                  "shape":"line-8-3-0",
-        #                  "nmin":1,
-        #                  "nmax":6,
-        #                  "allowed_rank_last_token":[-1]
-        #                }),
-        #     ("repeat", {"shapekey":"shape",
-        #                  "shape":"line-11-1-0",
-        #                  "nmin":1,
-        #                  "nmax":6,
-        #                  "allowed_rank_first_token":[0]
-        #                }),
-        #     ("repeat", {"shapekey":"shape",
-        #                  "shape":"line-11-2-0",
-        #                  "nmin":1,
-        #                  "nmax":6,
-        #                  "allowed_rank_last_token":[-1]
-        #                })
-        # ]
-
-        LIST_MOTIFS = [
-            ("repeat", {"shapekey":shape_key,
-                        "shape":"line",
-                        "nmin":1,
-                        "nmax":6,
-                        "allowed_rank_first_token":[0]
-                    }),
-        #     ("repeat", {"shapekey":shape_key,
-        #                  "shape":"line",
-        #                  "nmin":1,
-        #                  "nmax":6,
-        #                  "allowed_rank_last_token":[-1]
-        #                }),
-            ("repeat", {"shapekey":shape_key,
-                        "shape":"circle",
-                        "nmin":1,
-                        "nmax":6,
-                        "allowed_rank_first_token":[0]
-                    }),
-            ("lolli", {"list_orientation":["right", "down"],
-                        "list_first_shape":["line"]}),
-        ]
-
-    else:
-        # Get motifs automatically
-        LIST_MOTIFS = []
-        # for sh in shapes_this_date:
-        for sh in first_shapes_this_date:
-            LIST_MOTIFS.append((
-                "repeat",
-                {"shapekey":shape_key,
-                "shape":sh,
-                "nmin":1,
-                "nmax":7,
-                "allowed_rank_first_token":[0]
-                }
-            ))
+    # Get motifs automatically
+    LIST_MOTIFS = []
+    # for sh in shapes_this_date:
+    for sh in first_shapes_this_date:
+        LIST_MOTIFS.append((
+            "repeat",
+            {"shapekey":shape_key,
+            "shape":sh,
+            "nmin":1,
+            "nmax":7,
+            "allowed_rank_first_token":[0]
+            }
+        ))
         
         # Append more motifs (ie scores)
         if animal=="Diego":
@@ -212,17 +134,13 @@ def fig1_generalize_1_extract_preprocess(D):
             )
 
     # Define the models (i.e., the rulestrings.)
-    if True: # 
-        list_rulestring = []
-        for rule in list_rule_this_dates:
-            rd = D.grammarparses_ruledict_rulestring_extract_flexible(rule)
-            list_rulestring.append(rd["rulestring"])    
-        LIST_MODELS = list_rulestring + ["rand-null-uni"]
-        if animal=="Diego":
-            LIST_MODELS = LIST_MODELS + ["ss-rankdir_nmax2-LCr2", "chmult-dirdir-LolDR"]
-    else:
-        # Hand-coded, older.
-        LIST_MODELS = ["ss-rankdir-CLr2", "ss-rankdir-LCr2", "ss-rankdir_nmax2-LCr2", "chmult-dirdir-LolDR", "rand-null-uni"]
+    list_rulestring = []
+    for rule in list_rule_this_dates:
+        rd = D.grammarparses_ruledict_rulestring_extract_flexible(rule)
+        list_rulestring.append(rd["rulestring"])    
+    LIST_MODELS = list_rulestring + ["rand-null-uni"]
+    if animal=="Diego":
+        LIST_MODELS = LIST_MODELS + ["ss-rankdir_nmax2-LCr2", "chmult-dirdir-LolDR"]
 
     COLS_TO_KEEP = ["taskcat_by_rule"]
     # COLS_TO_KEEP = ["taskcat_by_rule", "shape_separated_line", "shape_separated_circle"]
@@ -234,59 +152,23 @@ def fig1_generalize_1_extract_preprocess(D):
     writeDictToYaml(LIST_MOTIFS, f"{SDIR}/LIST_MOTIFS.yaml")
     writeDictToYaml(DM.Params, f"{SDIR}/DIAGNOSTIC_MODEL_PARAMS.yaml")
 
-    # Debuggin
-    if False:
-        g = D.GrammarDict["230118-1-3"]
-        from pythonlib.dataset.modeling.discrete import rules_map_rulestring_to_ruledict
-        rules_map_rulestring_to_ruledict("ss-rankdir-CLr2")
-        g.ChunksListClassAll = {}
-        g.parses_generate("ss-rankdir-CLr2")
-        g.print_plot_summary()
-        g.print_plot_summary()
-        rs = "ss-rankdir-CLr2"
-        D._grammarparses_parses_extract(0, [rs])
-        D.grammarparses_print_plot_summarize(0)
-        bm.DatLong[(bm.DatLong["agent"] == "model-ss-rankdir-CLr2") & (bm.DatLong["score_name"] == "ntokens-repeat-circle")]
-
-    if False: # THis fails, unless you input all the rules in the above step of tasks_categorize_based_on_rule_mult()
-        if animal=="Diego" and "gridlinecircle3" in expt:
-            ### Further preprocessing, hand-coded
-            # Extract n circles, lines, lollis.
-            from pythonlib.tools.pandastools import applyFunctionToAllRows  
-
-            def F(x):
-                nline = x["taskcat_by_rule"][0][0]
-                return nline
-            bm.DatLong = applyFunctionToAllRows(bm.DatLong, F, "nline")
-
-            def F(x):
-                ncir = x["taskcat_by_rule"][0][2]
-                return ncir
-            bm.DatLong = applyFunctionToAllRows(bm.DatLong, F, "ncircle")
-
-
-            def F(x):
-                nlolli = x["taskcat_by_rule"][2]
-                return nlolli
-            bm.DatLong = applyFunctionToAllRows(bm.DatLong, F, "nlolli")
-
-
-
     return bm, DM, SDIR
 
 def fig1_generalize_1b_merge_with_D(D, bm, DM):
     """
     RETURNS:
     - (noting) Modifies D.Dat
+
+    LT CHECKED
     """
     from pythonlib.tools.pandastools import slice_by_row_label
 
-    animal = D.animals(force_single=True)[0]
-    expt = D.expts(force_single=True)[0]
+    # animal = D.animals(force_single=True)[0]
+    # expt = D.expts(force_single=True)[0]
 
     # Extract useful things into D.Dat (so that you dont need BM to make pltos)
     # [Plots using D.Dat] [not using agents]
-    D.grammarparses_successbinary_score_wrapper(False)
+    D.grammarparses_successbinary_score_wrapper()
 
     # Get n circ and n lines
     # Get scores (just for monk)
@@ -314,6 +196,8 @@ def fig1_generalize_1b_merge_with_D(D, bm, DM):
 def fig1_generalize_2_plot(D, bm, DM, SDIR):
     """
     Plot results
+
+    LT SKIPPED since this is not used in MS
     """
     from pythonlib.tools.pandastools import stringify_values
 
@@ -360,9 +244,9 @@ def fig1_generalize_2_plot(D, bm, DM, SDIR):
     nmod = len(list_agent_model)
     nscor = len(list_score_name)
     SIZE=2.8
-    xs = []
-    ys = []
     for monk in list_agent_monk:
+        xs = []
+        ys = []
         fig, axes = plt.subplots(nmod, nscor, sharex=True, sharey=True, figsize=(nscor*SIZE, nmod*SIZE), squeeze=False)
         for i, model in enumerate(list_agent_model):
             for j, scorename in enumerate(list_score_name):
@@ -475,9 +359,13 @@ def fig1_generalize_2_plot(D, bm, DM, SDIR):
     ### Plot examples, scores, parses for a single character
     DM.plotwrapper_example_allcharacter(SDIR)
 
-def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_two_shapes_each_day=False):
+def fig1_generalize_3_postprocess_D(D, savedir, plot_examples, expect_max_two_shapes_each_day,
+        max_n_first_shape_in_training):
     """
     Modifies D to store useful things related to grammar behavior.
+
+    def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_two_shapes_each_day=False,
+            max_n_first_shape_in_training):
 
     PARAMS:
     - expect_max_two_shapes_each_day, bool, hacky, forcig you to voluterailty turn this True. If true, then 
@@ -485,10 +373,12 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     and also gets all task shapes. This gets hihgher scores than success_binary_quick.
     expect_max_two_shapes_each_day is like AABBB. If this day also has AAABBC, then cannot do this. Need to solve by then asking
     if got all As and Bs in order.
-    """
     # NOTE: Confirmed that <exclude_because_online_abort> means that aborted even though sequence was correct so far.
 
-    assert expect_max_two_shapes_each_day==True, "see docs"
+    LT CHECKED (skimmed)
+    """
+    assert expect_max_two_shapes_each_day==True, "see docs, so far assuming this"
+
     shape_key = D.grammarparses_rules_shape_AnBmCk_get_shapekey()
     info = D.grammarparses_rules_shapes_summary_simple()
 
@@ -511,10 +401,7 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     for i, row in D.Dat.iterrows():    
         # errordict = D.grammarparses_classify_sequence_error(i, shape_key=shape_key)
 
-        # Deter
-        # print(i)
-        # n_parses = D.grammarparses_parses_extract_trial(i)
-        rule_includes_location = D.grammarparses_rules_shape_AnBmCk_locationmatters(ind)
+        rule_includes_location = D.grammarparses_rules_shape_AnBmCk_locationmatters(i)
 
         if row["success_binary_quick"] == True:
             # No error
@@ -574,6 +461,7 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
 
     def F(x):
         score_name = map_epoch_to_scorename[x["epoch"]]
+        assert score_name == x["scorename_this_epoch"], "confused"
         try:
             return x[score_name]
         except Exception as err:
@@ -600,14 +488,16 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     
     from pythonlib.tools.datetools import trialcode_to_scalar
     D.Dat["trialcode_scal"] = [trialcode_to_scalar(tc) for tc in D.Dat["trialcode"]]
-    D.Dat["supervision_stage_concise"].value_counts()
+    # D.Dat["supervision_stage_concise"].value_counts()
     
     # Group conditions based on whether they are success/fail considering shapes, or others (which are more ambigous)
     from pythonlib.tools.pandastools import append_col_with_grp_index
     def F(row):
         if row["sequence_error_kind"] in ["success", "shape_wrong"]:
+            # This includes "success" cases, they should be included in the calcuation as correct/incorrect
             sequence_error_kind_v2="shape"
         elif row["sequence_error_kind"] in ["abort_stroke_quality", "shape_correct_location_wrong"]:
+            # This essentialyl means ignroe these csaes./
             sequence_error_kind_v2=row["sequence_error_kind"]
         else:
             print(row["sequence_error_kind"])
@@ -633,13 +523,6 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
         ### Get the first instance of each (epoch, character)
         from pythonlib.tools.pandastools import append_col_with_grp_index
         D.Dat = append_col_with_grp_index(D.Dat, ["epoch", "character"], "epoch_char")
-
-        # import numpy as np
-        # assert np.all(np.diff(D.Dat["datetime_scal"])>0)
-        # assert np.all(np.diff(D.Dat["trialcode_scal"])>0)
-        # D.Dat["index"] = D.Dat.index
-
-        from pythonlib.tools.pandastools import append_col_with_grp_index
         D.Dat = append_col_with_grp_index(D.Dat, ["n_first_shape", "seqc_nstrokes_task"], "nfirst_ntot")
 
         D.Dat["seqc_nstrokes_task_gotten"] = [len(D.taskclass_tokens_extract_wrapper(ind, "beh_firsttouch")) for ind in range(len(D.Dat))]
@@ -651,8 +534,8 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
         if expect_max_two_shapes_each_day:
             successes = []
             for _, row in D.Dat.iterrows():
-                rule = row["epoch"]
-                shapes_ordered = D._grammarparses_rules_shape_AnBmCk_get_shape_order(rule)
+                # rule = row["epoch"]
+                # shapes_ordered = D._grammarparses_rules_shape_AnBmCk_get_shape_order(rule)
                 # succ = (len(shapes_ordered)==2) & (row["success_binary_got_all_firstshape"]) & (row["success_binary_got_all_taskstrokes"])
                 succ = (row["success_binary_got_all_firstshape"]) & (row["success_binary_got_all_taskstrokes"])
                 successes.append(succ)
@@ -685,7 +568,7 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
 
         def expected_success_rate(n_actual, k):
             """
-            Expected value of n, if you sample randomly with replacement, and
+            Expected value of n, if you sample randomly without replacement, and
             you count how many draws you make at the start
             PARAMS:
             - n_actual, the number of items of this shape in the image
@@ -715,14 +598,20 @@ def fig1_generalize_3_postprocess_D(D, savedir, plot_examples=False, expect_max_
     # they are not.
 
     # The first shape: is it number of extra
-    max_n_first_shape_in_training = max(D.Dat[D.Dat["probe"]==False]["n_first_shape"])
+    max_n_first_shape_in_training_data = max(D.Dat[D.Dat["probe"]==False]["n_first_shape"])
+    
+    # Hacky sanity check just for manuscript.
+    assert max_n_first_shape_in_training_data <= max_n_first_shape_in_training, f"I expect this for the dates used in MS. If not, {max_n_first_shape_in_training}, then need to combine across dates correctly"
     D.Dat["more_n_first_shape_than_training"] = D.Dat["n_first_shape"] > max_n_first_shape_in_training
 
     from pythonlib.dataset.dataset_preprocess.probes import compute_features_each_probe
+    
     def get_loc_nstrok(dict_probe_features, row):
         feats = dict_probe_features[(row["epoch"], row["character"])]
         return (feats["novel_location_shape_combo"], feats["more_n_strokes"])
+    
     dict_probe_features, dict_probe_kind, list_tasks_probe = compute_features_each_probe(D)
+
     D.Dat["probe_kind"] = [dict_probe_kind[(row["epoch"], row["character"])] if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
     D.Dat["probe_loc_nstrok"] = [get_loc_nstrok(dict_probe_features, row) if row["probe"] else "not_probe" for _, row in D.Dat.iterrows()]
     D.Dat["probe_loc_moreNfirstShp"] = [
@@ -759,6 +648,8 @@ def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, wi
 
     PARAMS:
     - window_size, running window, to score n unique chracters in running window (20)
+
+    LT CHECKED
     """
     ### Plots to show variability in tasks
 
@@ -851,11 +742,9 @@ def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, wi
                 savefig(figtask, f"{savedir}/trialindex={index}-n_uniq_char={n_unique_chars}-TASK.pdf")
                 
                 plt.close("all")
-
     DFALL["num_uniq_char_in_sld_wind"] = tmp
 
-    ### Plot
-    # Across entire experiment
+    ### Plot timeocures stats, Across entire experiment
     if False:
         do_clean = True
         probe_only = False
@@ -897,11 +786,12 @@ def fig1_generalize_3_plot_task_variability(DFALL, PLOT, savedir, XLIM, YLIM, wi
 
 def fig1_msgood_plots_timecourse(dfall_this, savedir, grp):
     """
-
     Good (fancy) plots for manuscript. With specific results for Diego, as 
     used in the main figures.
 
     - grp, just for naming files.
+
+    LT OK, but didnt check closely.
     """
     # NOTE: first load data for Diego (above), then run below here
 
@@ -919,6 +809,8 @@ def fig1_msgood_plots_timecourse(dfall_this, savedir, grp):
         (dfall_this["train_test_class_v2"] == "train") & 
         (dfall_this["date"].astype(int) < 230113)
         ].reset_index(drop=True)
+
+    assert len(_dfall_this)>0, "Problem, you probably inputed data that is missing dates before 230113"
 
     fig = sns.relplot(data=_dfall_this, x=x, y=_y, hue="n_first_shape",
                     row=row, col=col, alpha=0.2, aspect=2, 
@@ -968,17 +860,18 @@ def fig1_msgood_plots_timecourse(dfall_this, savedir, grp):
     # new variable
     from pythonlib.tools.pandastools import append_col_with_grp_index
     _dfall_this = append_col_with_grp_index(_dfall_this, ["date", "day_split"], "date_split")
-    fig = sns.catplot(data=_dfall_this, x="date_split", y=_y, hue="n_first_shape",
-                    row=row, col=col, alpha=0.1, aspect=2, 
-                    hue_order=hue_order, palette=palette,
-                    s=60)
-    savefig(fig, f"{savedir}/MSgood-attempt_at_summary-1.pdf")
 
     fig = sns.catplot(data=_dfall_this, x="date_split", y=_y,
                     row="n_first_shape", col=col, kind="point", aspect=2, 
                     hue_order=hue_order, palette=palette,
                     sharey=False)
     savefig(fig, f"{savedir}/MSgood-attempt_at_summary-1.pdf")
+    
+    fig = sns.catplot(data=_dfall_this, x="date_split", y=_y, hue="n_first_shape",
+                    row=row, col=col, alpha=0.1, aspect=2, 
+                    hue_order=hue_order, palette=palette,
+                    s=60)
+    savefig(fig, f"{savedir}/MSgood-attempt_at_summary-2.pdf")
 
     ### GOod -- histograms
     # row = "train_test_class_v2"
@@ -1113,9 +1006,12 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
         n_to_draw = 3
     else:
         assert False
+
+    LT CHECKED
     """
 
     # Prune to just epoch of interest
+    D = D.copy()
     D.Dat = D.Dat[D.Dat["epoch"] == epoch_keep].reset_index(drop=True)
 
     if len(D.Dat)==0:
@@ -1131,7 +1027,6 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
     else:
         print(ruledict)
         assert False, "how get direction from this?"
-
     
     # Get the direction the subject was biased to draw, based on the average movement vector
     if rule_direction_str is None:
@@ -1163,24 +1058,26 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
     ### Models (Sample a sequence by model)
     # (1) Correct sequence (perfect)
     def sample_correct(task_canonical_shapeindex_sorteddirection):
+        # Sort by shape order (ignore location)
         def f(x):
             return x[0]
         seq = sorted(task_canonical_shapeindex_sorteddirection, key=f)
-        # print(task_canonical_shapeindex_sorteddirection)
-        # print(seq)
-        # assert False
         return seq
 
     # Random
     def sample_random(task_canonical_shapeindex_sorteddirection):
+        # Get a random shuffle
         import random
-        seq = [x for x in task_canonical_shapeindex_sorteddirection]
+        seq = [x for x in task_canonical_shapeindex_sorteddirection] # Make a new list
         random.shuffle(seq)
         return seq
 
     # 2 max
     def sample_nmax_concrete_syntax(task_canonical_shapeindex_sorteddirection, n_to_draw):
         """
+        
+        Drawer that takes 2A, then 2B, then 2A, etc.
+
         PARAMS:
         - n_to_draw = 2 # e..g, if max is 2A2B, then make this 2. If A and B are different maxes, then code
         isn't setup to do that.
@@ -1221,6 +1118,18 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
                 print(current_shape_index)
                 assert False
 
+        return seq
+
+    # Direction (spatial order)
+    def sample_direction(task_canonical_shapeindex):
+        """
+        Sort by spatial direction (rule_direction_str). Break ties randomly
+        (e.g. same column for a "right" drawer) by shuffling then stable-sorting.
+        """
+        import random
+        seq = list(task_canonical_shapeindex)
+        random.shuffle(seq)
+        seq = sorted(seq, key=f_sort_direction)
         return seq
 
     ### Score based on length of repeat of the initial shape.
@@ -1269,18 +1178,24 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
             inds_keep.append(ind)
         else:
             print("Throwing out trial that has non-canonical shapes: ", ind)
+    assert len(inds_keep)/len(D.Dat) > 0.9, "why lost so many trials?"
     D.Dat = D.Dat.iloc[inds_keep].reset_index(drop=True)
 
     # Helper to sort sequence to match direction rule
+    # gridloc is (x, y); matches discrete._get_sequence_on_dir conventions.
     if rule_direction_str == "right":
-        # To sort sequence by spatial order
         def f_sort_direction(x):
+            # eg x = (<shape>, (0,1))
             return x[1][0]
-    elif rule_direction_str is None:
-        # sample a random integer, since there is no prescripted order
-        import random
+    elif rule_direction_str == "left":
         def f_sort_direction(x):
-            return random.randint(0, 10000)
+            return -x[1][0]
+    elif rule_direction_str == "up":
+        def f_sort_direction(x):
+            return x[1][1]
+    elif rule_direction_str == "down":
+        def f_sort_direction(x):
+            return -x[1][1]
     else:
         print(rule_direction_str)
         print(ruledict)
@@ -1304,8 +1219,10 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
         for _ in range(100):
             _seq = sample_random(task_canonical_shapeindex_sorteddirection)
             _scores.append(score_repeat_length(_seq))
+        assert len(set(_scores))>1, "sanity check"
         score_random = np.mean(_scores)
-            
+
+        # Drawer that takes 2A, then 2B, then 2A, etc.            
         seq = sample_nmax_concrete_syntax(task_canonical_shapeindex_sorteddirection, n_to_draw=n_to_draw)
         score_max2 = score_repeat_length(seq)
 
@@ -1315,16 +1232,25 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
         seq_beh = [(map_shape_to_shapeindex[tk[shape_key]], tk["gridloc"]) for tk in tokens_beh]
         score_beh = score_repeat_length(seq_beh)
 
+        # Drawer that goes by spatial direction (average over random tie-breaks)
+        _scores = []
+        for _ in range(100):
+            _seq = sample_direction(task_canonical_shapeindex)
+            _scores.append(score_repeat_length(_seq))
+        score_direction = np.mean(_scores)
+        
         # Save data
         for score, model in [
             (score_correct, "correct"),
             (score_random, "random"),
             (score_max2, "max2"),
+            (score_direction, "direction"),
             (score_beh, "behavior"),
             ]:
             
             syntax_concrete = D.Dat.iloc[indtrial]["syntax_concrete"]
             nstrokes_tot = np.sum(D.Dat.iloc[indtrial]["syntax_concrete"])
+            assert nstrokes_tot == len(task_canonical), "sanity check"
 
             # Hacky, can be either len 3, like (2, 2, 0), or len 4, like (2, 0, 4, 0). 
             # - assume so, but do sanity check so that if not, then will definitely fail.
@@ -1341,6 +1267,10 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
                 print(D.Dat["syntax_concrete"].value_counts())
                 assert False, "hard code this case..."
             
+            # print(nstrokes_A, nstrokes_B, nstrokes_tot, syntax_concrete, " --- ", task_canonical_shapeindex_sorteddirection)
+            # Sanity checks that counted shapes correctly.
+            assert nstrokes_A == sum([x[0]==0 for x in task_canonical_shapeindex_sorteddirection])
+            assert nstrokes_B == sum([x[0]==1 for x in task_canonical_shapeindex_sorteddirection])
             assert nstrokes_A + nstrokes_B == nstrokes_tot, f"Did you miss something from synt concrete? {syntax_concrete}"
             
             res.append({
@@ -1363,12 +1293,21 @@ def fig2_generalize_score_null_models(D, animal, date, epoch_keep, n_to_draw, SA
 
 def _final_plots_cleanup_data(DF_BEH, DF_NULLS):
     """
-    """
-    import numpy as np
+    Minaly sanity checks that the old and new dataset for beh are the same. 
+    
+    And making sure nstrokesA and nstrokesB are correct.
 
-    ### Compare old and new datasets
+    PARAMS:
+    - DF_BEH, old anlaysis, including beh thats plotted
+    - DF_NULLS, model scores.
+
+    LT CHECKED
+    """
+
+    ### Compare old and new datasets (sanity check)
     from pythonlib.tools.pandastools import slice_by_row_label
 
+    assert len(DF_NULLS["animal"].unique())==1, "some code uses trialcode as index, so it assumes data has only one animal"
     dfnulls_beh = DF_NULLS[DF_NULLS["model"] == "behavior"].reset_index(drop=True)
 
     # remove the rare trial that isn't in models.
@@ -1419,7 +1358,7 @@ def _final_plots_cleanup_data(DF_BEH, DF_NULLS):
             nstrokes_B = syntax_concrete[2]
         else:
             print(syntax_concrete)
-            print(D.Dat["syntax_concrete"].value_counts())
+            # print(D.Dat["syntax_concrete"].value_counts())
             assert False, "hard code this case..."
         
         assert nstrokes_A + nstrokes_B == nstrokes_tot, f"Did you miss something from synt concrete? {syntax_concrete}"
@@ -1450,49 +1389,29 @@ def _final_plots_cleanup_data(DF_BEH, DF_NULLS):
     DF_NULLS = DF_NULLS[(DF_NULLS["nstrokes_A"] > 0) & (DF_NULLS["nstrokes_B"] > 0)].reset_index(drop=True)
     assert k == len(DF_NULLS)
     
+    DF_NULLS["score_frac"] = DF_NULLS["score"]/DF_NULLS["nstrokes_A"]
+
     return DF_BEH, DF_NULLS
 
-def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
+def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir, n_to_draw, use_tough_generalization=False):
     """
-    Make final plots
-    """
+    Make final plots comparing behaviir to null models.
+
+    PARAMS:
+    - n_to_draw, max repeat lenght for the first shape kind (A) in training tasks.
     
-    import numpy as np
+    LT CHECKED (not super carefully).
+    """
+    # import numpy as np
+    from pythonlib.tools.snstools import rotateLabel, mirrorhistplot
 
     DF_BEH, DF_NULLS = _final_plots_cleanup_data(DF_BEH, DF_NULLS)
+    DF_NULLS["is_generalization"] = DF_NULLS["nstrokes_A"] > n_to_draw
 
-    # ### Compare old and new datasets
-    # from pythonlib.tools.pandastools import slice_by_row_label
-
-    # dfnulls_beh = DF_NULLS[DF_NULLS["model"] == "behavior"].reset_index(drop=True)
-
-    # # remove the rare trial that isn't in models.
-    # list_tc = DF_BEH["trialcode"].tolist() # All trials that plotted in analysis.
-    # n1 = len(list_tc)
-    # list_tc = [tc for tc in list_tc if tc in dfnulls_beh["trialcode"].tolist()]
-    # n2 = len(list_tc)
-    # print(n1, n2)
-    # assert n1 - n2 < 8, "why missing so much data?"
-    # DF_BEH = DF_BEH[DF_BEH["trialcode"].isin(list_tc)].reset_index(drop=True)
-
-    # # Check that beh scores match in the two dataframes
-    # list_tc = DF_BEH["trialcode"].tolist()
-    # dfnulls_beh_slice = slice_by_row_label(dfnulls_beh, "trialcode", list_tc, assert_exactly_one_each=True)
-    # assert dfnulls_beh_slice["trialcode"].tolist() == DF_BEH["trialcode"].tolist()
-    # for i, (x, y) in enumerate(zip(dfnulls_beh_slice["score"], DF_BEH["ntokens-repeat-thisepoch"])):
-    #     if x!=y:
-    #         print("----")
-    #         print(i, DF_BEH.iloc[i]["trialcode"], dfnulls_beh_slice.iloc[i]["trialcode"])
-    #         print(x, y)
-    #         assert False, "why they got different answers?"
-    #         # Use this to debug: D.plotSingleTrial(266)
-    #     assert x==y
-
-    # # Prune nulls to match the trials in beh dataset
-    # DF_NULLS = DF_NULLS[DF_NULLS["trialcode"].isin(list_tc)].reset_index(drop=True)
-
-    # ### Some preprocessing
-    # DF_NULLS["score_jitter"] = (DF_NULLS["score"] + 0.4*(np.random.rand(len(DF_NULLS))-0.5)).astype(float)
+    if use_tough_generalization:
+        assert 3>=n_to_draw
+        n_to_draw = 3
+        DF_NULLS["is_generalization"] = DF_NULLS["nstrokes_A"] > n_to_draw
 
     ### Plot old beh data the old way, confirm is what get in paper
     # Simply reproduce the main plots
@@ -1546,7 +1465,8 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
         ax.set_ylim(LIMS)
     savefig(fig, f"{savedir}/replot-2.pdf")
 
-    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score", marker="o", alpha=0.5, kind="line", hue="model", errorbar="se")
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score", marker="o", alpha=0.5, kind="line", 
+        hue="model", errorbar="se")
     for ax in fig.axes.flatten():
         ax.set_xlim(LIMS)
         ax.set_ylim(LIMS)
@@ -1564,6 +1484,85 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
         ax.set_ylim(LIMS)
     savefig(fig, f"{savedir}/lmplot-1.pdf")
 
+    ################ GOOD COMPARISONS OF BEH TO MODELS, GROUPING DATA INTO TRAIN VS. TEST
+    ### [GOOD] SCORE COMPARING BEH TO MODEL (AS FRACTION OF PERFECT SCORE)
+    # Normalize score to max
+    fig = sns.relplot(data=DF_NULLS, x="nstrokes_A", y="score_frac", marker="o", alpha=0.5, kind="line", 
+        hue="model", errorbar="se")
+    savefig(fig, f"{savedir}/scorefrac_good-1.pdf")
+
+    fig = sns.catplot(data=DF_NULLS, x="model", col="is_generalization", y="score_frac", kind="violin")
+    savefig(fig, f"{savedir}/scorefrac_good-2.pdf")
+
+    fig = sns.catplot(data=DF_NULLS, x="model", col="is_generalization", y="score_frac", kind="bar", errorbar="se")
+    savefig(fig, f"{savedir}/scorefrac_good-3.pdf")
+
+    fig = sns.catplot(data=DF_NULLS, x="model", col="is_generalization", y="score_frac", jitter=True, alpha=0.5)
+    savefig(fig, f"{savedir}/scorefrac_good-4.pdf")
+
+    for isgen in [False, True]:
+        df = DF_NULLS[DF_NULLS["is_generalization"] == isgen]
+        fig = sns.displot(data=df, hue="model", col="model", y="score_frac", aspect=0.4)    
+        savefig(fig, f"{savedir}/scorefrac_good-5-isgen={isgen}.pdf")
+
+        fig = mirrorhistplot(data=df, x="model", y="score_frac", bins=10, binrange=(0, 1),
+                            stat="probability", color="k", max_width=0.6)
+        rotateLabel(fig)
+        for ax in fig.axes.flatten():
+            ax.axhline(0)
+            ax.axhline(1)
+        savefig(fig, f"{savedir}/scorefrac_good-6-isgen={isgen}.pdf")
+
+    plt.close("all")
+
+    ### [GOOD] Compute difference between beh and model
+    from pythonlib.tools.pandastools import summarize_featurediff
+    for yvar in ["score", "score_frac"]:
+        res = []
+        for modelstr in ["direction", "max2", "random"]:
+            dfsummary, dfsummaryflat, COLNAMES_NOABS, COLNAMES_ABS, COLNAMES_DIFF, dfpivot = summarize_featurediff(
+                DF_NULLS, "model", [modelstr, "behavior"], [yvar], ["animal", "is_generalization", "trialcode"], 
+                return_dfpivot=True)
+            dfsummaryflat["model"] = modelstr
+            res.append(dfsummaryflat)
+        dfscorediff = pd.concat(res).reset_index(drop=True)
+        
+        fig = sns.catplot(data=dfscorediff, x="is_generalization", y="value", hue="model", kind="violin")
+        for ax in fig.axes.flatten(): 
+            ax.axhline(0, color="k", alpha=0.3)
+        savefig(fig, f"{savedir}/catplot-beh_vs_mod-yvar={yvar}-1.pdf")
+
+        fig = sns.catplot(data=dfscorediff, x="is_generalization", y="value", hue="model", kind="bar", errorbar="se")
+        for ax in fig.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.3)
+        savefig(fig, f"{savedir}/catplot-beh_vs_mod-yvar={yvar}-2.pdf")
+
+        fig = sns.catplot(data=dfscorediff, x="is_generalization", y="value", hue="model", jitter=True, alpha=0.3)
+        for ax in fig.axes.flatten():
+            ax.axhline(0, color="k", alpha=0.3)
+        savefig(fig, f"{savedir}/catplot-beh_vs_mod-yvar={yvar}-3.pdf")
+    plt.close("all")
+
+    ### Compare beh to each model, at each nstrokes_A value.
+    from pythonlib.tools.statstools import signrank_wilcoxon_from_df
+    yvar = "score_frac"
+    res = []
+    for mod in ["direction", "max2", "random"]:
+        for is_generalization in [False, True]:
+            dfres_this = DF_NULLS[DF_NULLS["is_generalization"] == is_generalization].reset_index(drop=True)
+            out = signrank_wilcoxon_from_df(dfres_this, ["trialcode"], "model", [mod, "behavior"], yvar, PLOT=False, 
+                save_text_path=f"{savedir}/catplot-beh_vs_mod-signedrank-beh_vs-{mod}-gen={is_generalization}.txt")[0]
+            res.append({
+                "p":out["p"],
+                "is_generalization":is_generalization,
+                "model":mod,
+            })
+    dfpvals = pd.DataFrame(res)
+    dfpvals["logp"] = np.log10(dfpvals["p"])
+    dfpvals.to_csv(f"{savedir}/catplot-beh_vs_mod-signedrank-beh_vs-ALL.csv")
+
+    ################ done: GOOD COMPARISONS OF BEH TO MODELS, GROUPING DATA INTO TRAIN VS. TEST
+
     ### Correlate scores between behavior and model (separately for each model)
     for generalization_only in [False, True]:
         if generalization_only:
@@ -1574,7 +1573,7 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
 
         # First do pivot table
         from pythonlib.tools.pandastools import pivot_table
-        dfres_wide = pivot_table(DF_NULLS_GEN, ["indtrial"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
+        dfres_wide = pivot_table(DF_NULLS_GEN, ["trialcode"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
 
         models = DF_NULLS_GEN["model"].unique().tolist()
         models = [m for m in models if not m=="behavior"]
@@ -1609,7 +1608,7 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
             if nstrokes_A>1:
                 dfres_this = DF_NULLS[DF_NULLS["nstrokes_A"] == nstrokes_A].reset_index(drop=True)
                 
-                out = signrank_wilcoxon_from_df(dfres_this, ["indtrial"], "model", [mod, "behavior"], "score", PLOT=False)[0]
+                out = signrank_wilcoxon_from_df(dfres_this, ["trialcode"], "model", [mod, "behavior"], "score", PLOT=False)[0]
 
                 res.append({
                     "p":out["p"],
@@ -1635,7 +1634,7 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
     dfres_this = DF_NULLS[DF_NULLS["nstrokes_A"]>n_to_draw].reset_index(drop=True)
     res = []
     for mod in models:    
-        out = signrank_wilcoxon_from_df(dfres_this, ["indtrial"], "model", [mod, "behavior"], "score", PLOT=False)[0]
+        out = signrank_wilcoxon_from_df(dfres_this, ["trialcode"], "model", [mod, "behavior"], "score", PLOT=False)[0]
         res.append({
             "p":out["p"],
             "model":mod,
@@ -1657,9 +1656,8 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
     plt.close("all")
 
 
-    ### Compare beh to each model by taking abs diff in repeat length.
+    ### Compare beh to each model by taking abs diff in repeat length (simialr to plots made for RNN)
     from pythonlib.tools.pandastools import pivot_table
-    import numpy as np
     from pythonlib.tools.pandastools import convert_wide_to_long
     from pythonlib.tools.pandastools import plot_45scatter_means_flexible_grouping
     from pythonlib.tools.statstools import compute_all_pairwise_signrank_wrapper
@@ -1676,7 +1674,7 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
             DF_NULLS_GEN = DF_NULLS
 
         # First do pivot table
-        dfres_wide = pivot_table(DF_NULLS_GEN, ["indtrial"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
+        dfres_wide = pivot_table(DF_NULLS_GEN, ["trialcode"], ["model"], values=["score", "nstrokes_A"], flatten_col_names=True)
 
         models = DF_NULLS_GEN["model"].unique().tolist()
         models = [m for m in models if not m=="behavior"]
@@ -1694,16 +1692,16 @@ def _final_plots_compare_beh_null_models(DF_BEH, DF_NULLS, savedir):
             
             columns.append(col)
 
-        dfres_long = convert_wide_to_long(dfres_wide, columns, vars_extra=["indtrial", "nstrokes_A-behavior"], 
+        dfres_long = convert_wide_to_long(dfres_wide, columns, vars_extra=["trialcode", "nstrokes_A-behavior"], 
                                         new_col_name_level="model", new_col_name_value="diff")
         
         _, fig = plot_45scatter_means_flexible_grouping(dfres_long, "model", "diff-correct", 
-                                                            "diff-max2", None, "diff", "indtrial", False, alpha=0.05);
+                                                            "diff-max2", None, "diff", "trialcode", False, alpha=0.05);
         
         if fig is None:
             print()
         savefig(fig, f"{_savedir}/diff-scatter.pdf")
-        compute_all_pairwise_signrank_wrapper(dfres_long, ["indtrial"], "model", "diff", True, _savedir, None, True)
+        compute_all_pairwise_signrank_wrapper(dfres_long, ["trialcode"], "model", "diff", True, _savedir, None, True)
 
         plt.close("all")
 
