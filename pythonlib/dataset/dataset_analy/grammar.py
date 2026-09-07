@@ -957,6 +957,9 @@ def _chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio
     
     ### Determine if this is cross-AB vs. interleaved-AB
     # The signature of cross-AB is that there exist epochs with more shapes than chunk ranks.
+    # This only works if you actually have epoch as a field.
+    assert "epoch" in df
+    assert "none" not in df["epoch"].unique().tolist(), "needs to be actual epoch, not a dummy filler value."
     def _f(x):
         # print(set(x["chunk_rank"]))
         # print(set(x["shape"]))            
@@ -965,7 +968,12 @@ def _chunk_rank_global_extract(df, check_low_freq_second_shape=True, shape_ratio
         print("epoch, n_cr, n_sh : ", x["epoch"].unique(), n_sh, n_cr)
         return n_sh > n_cr
     is_cross_AB = any(df.groupby(["date", "epoch"]).apply(_f))
-    
+
+    # from pythonlib.tools.pandastools import grouping_print_n_samples
+    # grouping_print_n_samples(df, ["animal", "date", "epoch", "chunk_rank", "shape"])
+    # display(df[:2])
+    # print(is_cross_AB)
+
     # vals = df["shape"].value_counts().values
     # a = len(vals)==6
     # b = min(vals)>20
